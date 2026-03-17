@@ -54,7 +54,7 @@ async def background_hydrate_assets():
                 remark=a["remark"],
                 protocol=a["protocol"],
                 extra_args=a["extra_args"],
-                group_name=a.get("tags", ["未分组"])[0] if a.get("tags") else "未分组",
+                tags=a.get("tags", ["未分组"]),
                 lazy=True,
             )
             hydrate_status["success"] += 1

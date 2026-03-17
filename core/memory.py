@@ -84,7 +84,6 @@ class MemoryDB:
                         agent_profile TEXT,
                         extra_args_json TEXT,
                         skills_json TEXT,
-                        group_name TEXT DEFAULT '未分组',
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                     )
                 """)

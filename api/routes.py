@@ -27,7 +27,7 @@ class ConnectionRequest(BaseModel):
     remark: Optional[str] = ""  # [新功能] 连接备注/别名
     protocol: str = "ssh"  # [新功能] 资产协议类型 (ssh, telnet, db, api, winrm)
     extra_args: dict = {}  # [新功能] 扩展参数，比如 db_name, api_key 等
-    group_name: Optional[str] = "未分组"  # [新功能] 资产组别
+    tags: list[str] = ["未分组"]  # [新功能] 资产组别
 
 
 class CommandRequest(BaseModel):
@@ -242,7 +242,7 @@ async def create_ssh_connection(req: ConnectionRequest):
         remark=req.remark,  # 透传备注
         protocol=req.protocol,  # 透传协议
         extra_args=req.extra_args,  # 透传扩展凭证 (API Key, DB Name 等)
-        group_name=req.group_name,  # 传递分组
+        tags=req.tags,  # 传递分组标签
     )
 
     if result["success"]:
@@ -259,9 +259,7 @@ async def create_ssh_connection(req: ConnectionRequest):
             agent_profile=req.agent_profile,
             extra_args=req.extra_args,
             skills=req.active_skills,
-            tags=[req.group_name]
-            if req.group_name and req.group_name != "未分组"
-            else ["未分组"],
+            tags=req.tags,
         )
 
     if not result["success"]:
@@ -928,7 +926,7 @@ async def get_active_sessions():
             "protocol": info.get("protocol"),
             "extra_args": info.get("extra_args", {}),
             "heartbeatEnabled": info.get("heartbeat_enabled", False),
-            "group_name": info.get("group_name", "未分组"),
+            "tags": info.get("tags", ["未分组"]),
         }
     return ResponseModel(status="success", data={"sessions": sessions_data})
 
@@ -1195,7 +1193,7 @@ class BatchAssetImportItem(BaseModel):
     agent_profile: str = "default"
     extra_args: dict = {}
     skills: list[str] = []
-    group_name: Optional[str] = "未分组"
+    tags: list[str] = ["未分组"]
 
 
 @router.post("/assets/batch_import", response_model=ResponseModel)
@@ -1218,9 +1216,7 @@ async def batch_import_assets(items: list[BatchAssetImportItem]):
                 agent_profile=item.agent_profile,
                 extra_args=item.extra_args,
                 skills=item.skills,
-                tags=[item.group_name]
-                if item.group_name and item.group_name != "未分组"
-                else ["未分组"],
+                tags=item.tags,
             )
             imported += 1
         except Exception as e:
