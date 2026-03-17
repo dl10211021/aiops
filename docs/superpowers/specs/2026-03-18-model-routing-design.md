@@ -1,25 +1,29 @@
 # Model Routing and Configuration Design
 
 ## Objective
-Implement a multi-provider, multi-protocol model routing system similar to `opencode`. This allows users to select different models during a session, and the system dynamically routes the request to the correct provider (OpenAI, Anthropic, Google, local models) using the appropriate protocol.
+Implement a multi-provider, multi-protocol model routing system similar to `opencode`. This allows users to select different models during a session, and the system dynamically routes the request to the correct provider (OpenAI, Anthropic, Google, local models like Ollama/vLLM) using the appropriate protocol. It will also support configurable "thinking modes" (low, medium, high, off) for reasoning models.
 
 ## Architecture
 
 1.  **Configuration Management (`models.json`)**:
     *   A central JSON file at the project root (`models.json`) will store all available model configurations.
-    *   Each entry will define the model ID, provider, protocol (e.g., `openai`, `anthropic`, `gemini`), base URL, and the environment variable name for the API key.
-    *   This makes adding or removing models as simple as editing a JSON file.
+    *   Each entry will define the model ID, provider, protocol (e.g., `openai`, `anthropic`), base URL, environment variable for the API key, and specific capability flags (like `supports_thinking`).
+    *   This naturally supports local providers (Ollama, vLLM) by simply setting `provider: "local"` and pointing `base_url` to the local endpoint (e.g., `http://localhost:11434/v1`).
 
 2.  **Client Factory (`core/llm_factory.py`)**:
     *   A new module responsible for instantiating the correct asynchronous client based on the requested `model_name`.
-    *   It reads `models.json` on startup (or on demand) and caches the configurations.
-    *   When a request comes in for `model_name="claude-3-5-sonnet"`, the factory checks the config, sees it uses the `anthropic` protocol, fetches the API key from the environment, and returns an `AsyncAnthropic` client instance.
-    *   If a model uses the `openai` protocol (like many compatibility layers for Qwen, DeepSeek, Google, etc.), it returns an `AsyncOpenAI` client pointing to the specific `base_url`.
+    *   When a request comes in for `model_name="claude-3-7-sonnet"`, the factory checks the config, uses the `anthropic` protocol, fetches the API key, and returns an `AsyncAnthropic` client instance.
+    *   If a model uses the `openai` protocol (including Qwen, Google, Ollama, vLLM), it returns an `AsyncOpenAI` client pointing to the specific `base_url`.
 
-3.  **Unified Execution Layer (`core/llm_execution.py` or updated `core/agent.py`)**:
-    *   Different SDKs have different method signatures (e.g., `client.chat.completions.create` vs `client.messages.create`).
-    *   We will introduce a thin wrapper/adapter layer that takes a standard message format (list of dicts with `role` and `content`) and translates it into the specific format required by the chosen protocol.
-    *   This layer will handle streaming responses and yield chunks in a unified format back to the `chat_stream_agent`.
+3.  **Unified Execution Layer (`core/llm_execution.py`)**:
+    *   Provides a unified wrapper `execute_chat_stream(model_name, messages, thinking_mode)`.
+    *   **Thinking Mode Implementation**: 
+        *   Accepts `thinking_mode` ("off", "low", "medium", "high").
+        *   For Anthropic (Claude 3.7): translates this to specific `budget_tokens` if enabled.
+        *   For OpenAI-compatible reasoning models (like `o1`, `o3-mini`, `deepseek-r1`): maps to `reasoning_effort` ("low", "medium", "high").
+        *   If the model configuration says `supports_thinking: false`, it ignores the thinking mode.
+    *   Translates the standard message format into the provider's required format.
+    *   Yields streaming chunks uniformly back to `chat_stream_agent`.
 
 ## Components
 
@@ -27,51 +31,58 @@ Implement a multi-provider, multi-protocol model routing system similar to `open
 
 ```json
 {
+  "default_model": "gemini-2.5-flash",
   "models": {
     "gemini-2.5-flash": {
       "provider": "google",
       "protocol": "openai",
       "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-      "api_key_env": "GOOGLE_API_KEY"
+      "api_key_env": "GOOGLE_API_KEY",
+      "supports_thinking": false
     },
-    "claude-3-5-sonnet": {
+    "claude-3-7-sonnet-20250219": {
       "provider": "anthropic",
       "protocol": "anthropic",
-      "api_key_env": "ANTHROPIC_API_KEY"
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "supports_thinking": true
     },
-    "gpt-4o": {
+    "o3-mini": {
       "provider": "openai",
       "protocol": "openai",
       "base_url": "https://api.openai.com/v1",
-      "api_key_env": "OPENAI_API_KEY"
+      "api_key_env": "OPENAI_API_KEY",
+      "supports_thinking": true
     },
-    "qwen-max": {
-      "provider": "aliyun",
+    "ollama-deepseek-r1": {
+      "provider": "local",
       "protocol": "openai",
-      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "api_key_env": "DASHSCOPE_API_KEY"
+      "base_url": "http://localhost:11434/v1",
+      "api_key_env": "",
+      "supports_thinking": true
+    },
+    "vllm-llama3": {
+      "provider": "local",
+      "protocol": "openai",
+      "base_url": "http://localhost:8000/v1",
+      "api_key_env": "",
+      "supports_thinking": false
     }
-  },
-  "default_model": "gemini-2.5-flash"
+  }
 }
 ```
 
 ### Changes Required
 
-1.  **Create `models.json`**: Initialize with current Google Gemini settings via OpenAI compatibility.
-2.  **Create `core/llm_factory.py`**: Implement configuration loading and client instantiation logic.
-3.  **Refactor `core/agent.py`**:
-    *   Remove the global `client` variable.
-    *   Update `chat_stream_agent` to use the factory to get the correct execution adapter based on the `model_name`.
-    *   Update `get_available_models` to read from `models.json`.
-4.  **Refactor `api/routes.py`**:
-    *   Update `/config/llm` endpoints to handle modifying `models.json` if dynamic updating via UI is still desired, or deprecate/change them to reflect the new file-based approach. Currently, they update global state.
-5.  **Refactor `core/memory.py` & `core/rag.py`**: Ensure embedding generation also uses the factory if different embedding models/providers are needed, or keep it simple for now if embeddings remain constant.
+1.  **Create `models.json`**: Add configurations for Google, Anthropic, OpenAI, Ollama, and vLLM.
+2.  **Create `core/llm_factory.py`**: Implement configuration loading and client instantiation.
+3.  **Create `core/llm_execution.py`**: 
+    *   Implement adapter logic (`format_messages`, `extract_chunk`).
+    *   Implement **Thinking Mode Logic**: map "low/medium/high" to `reasoning_effort` (OpenAI style) or `thinking: {"type": "enabled", "budget_tokens": ...}` (Anthropic style).
+4.  **Refactor `core/agent.py`**:
+    *   Remove global `client`.
+    *   Update `chat_stream_agent` to accept `thinking_mode` parameter.
+    *   Call `llm_execution.execute_chat_stream` instead of calling `client` directly.
+5.  **Refactor `api/routes.py`**:
+    *   Update chat endpoints to accept and parse a `thinking_mode` field from the frontend.
+    *   Update `get_available_models` to serve the list from `models.json`.
 
-## Error Handling & Fallbacks
-*   If a requested model is not found in `models.json`, fallback to the `default_model` specified in the config.
-*   If the API key is missing from the environment for a selected provider, raise a clear error to the user indicating which environment variable needs to be set.
-
-## Testing
-*   Unit tests for `llm_factory.py` to ensure correct client types are returned.
-*   Integration tests with mock API keys to verify the adapter layer correctly formats requests for both `openai` and `anthropic` protocols.
