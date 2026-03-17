@@ -575,7 +575,7 @@ async def migrate_skill(req: MigrateRequest):
         return ResponseModel(status="error", message=str(e))
 
 
-@router.get("/config/models", response_model=ResponseModel)
+@router.get("/models", response_model=ResponseModel)
 async def get_models():
     # Dynamic fetch of models
     from core.agent import get_available_models
