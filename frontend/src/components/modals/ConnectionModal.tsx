@@ -202,37 +202,59 @@ export default function ConnectionModal() {
 
           {/* Asset Taxonomy selector */}
           {form.target_scope !== 'global' && (
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap gap-2">
-                {ASSET_CATEGORIES.map((c) => (
-                  <button key={c.id} 
-                    onClick={() => {
-                      const firstSub = ASSET_SUB_TYPES[c.id][0]
-                      setForm({ ...form, category: c.id, sub_type: firstSub.id, protocol: firstSub.protocol, port: firstSub.defaultPort })
-                    }}
-                    className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${form.category === c.id ? 'bg-ops-accent/20 text-ops-accent' : 'bg-ops-surface0 text-ops-subtext hover:text-ops-text'}`}>
-                    {c.label}
-                  </button>
-                ))}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-ops-subtext mb-1 block">资产类别</label>
+                <select 
+                  value={form.category}
+                  onChange={(e) => {
+                    const newCat = e.target.value;
+                    const firstSub = ASSET_SUB_TYPES[newCat][0];
+                    setForm({ 
+                      ...form, 
+                      category: newCat, 
+                      sub_type: firstSub.id, 
+                      protocol: firstSub.protocol, 
+                      port: firstSub.defaultPort,
+                      extra_args: {
+                        ...form.extra_args,
+                        category: newCat,
+                        sub_type: firstSub.id,
+                        ...(newCat === 'db' ? { db_type: firstSub.id } : {})
+                      }
+                    });
+                  }}
+                  className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent appearance-none"
+                >
+                  {ASSET_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
               </div>
-              
-              {ASSET_SUB_TYPES[form.category] && (
-                <div className="flex flex-wrap gap-2">
-                  {ASSET_SUB_TYPES[form.category].map((s) => (
-                    <button key={s.id} 
-                      onClick={() => setForm({ 
-                        ...form, 
-                        sub_type: s.id, 
-                        protocol: s.protocol, 
-                        port: s.defaultPort,
-                        extra_args: form.category === 'db' ? { ...form.extra_args, db_type: s.id } : form.extra_args
-                      })}
-                      className={`text-xs px-3 py-1.5 rounded-lg transition-colors border ${form.sub_type === s.id ? 'bg-ops-accent/10 border-ops-accent text-ops-accent' : 'border-ops-surface1 bg-transparent text-ops-subtext hover:text-ops-text hover:border-ops-surface2'}`}>
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div>
+                <label className="text-xs text-ops-subtext mb-1 block">连接类型</label>
+                <select
+                  value={form.sub_type}
+                  onChange={(e) => {
+                    const newSubId = e.target.value;
+                    const subInfo = ASSET_SUB_TYPES[form.category].find(s => s.id === newSubId);
+                    if (subInfo) {
+                      setForm({
+                        ...form,
+                        sub_type: newSubId,
+                        protocol: subInfo.protocol,
+                        port: subInfo.defaultPort,
+                        extra_args: {
+                          ...form.extra_args,
+                          sub_type: newSubId,
+                          ...(form.category === 'db' ? { db_type: newSubId } : {})
+                        }
+                      });
+                    }
+                  }}
+                  className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent appearance-none"
+                >
+                  {ASSET_SUB_TYPES[form.category]?.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+              </div>
             </div>
           )}
 
@@ -253,12 +275,14 @@ export default function ConnectionModal() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-ops-subtext">用户名</label>
-                  <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
-                    className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
-                </div>
-                <div>
+                {form.sub_type !== 'redis' && (
+                  <div>
+                    <label className="text-xs text-ops-subtext">用户名</label>
+                    <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
+                      className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+                  </div>
+                )}
+                <div className={form.sub_type === 'redis' ? 'col-span-2' : ''}>
                   <label className="text-xs text-ops-subtext">密码</label>
                   <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
                     className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
