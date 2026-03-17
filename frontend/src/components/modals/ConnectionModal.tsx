@@ -72,13 +72,30 @@ export default function ConnectionModal() {
     if (prefill) {
       try {
         const a = JSON.parse(prefill)
-          setForm({
-            host: a.host || '', port: a.port || 22, username: a.username || 'root',
-            password: a.password || '', remark: a.remark || '', protocol: a.protocol || 'ssh',
-            agent_profile: a.agent_profile || 'default', group_name: (a.tags && a.tags[0]) || '未分组',
-            allow_modifications: false, target_scope: 'asset', extra_args: a.extra_args || {},
-            category: a.category || 'os', sub_type: a.sub_type || 'linux',
-          })
+        const extraArgs = a.extra_args || {}
+        let category = extraArgs.category || a.category
+        let sub_type = extraArgs.sub_type || a.sub_type
+
+        if (!category || !sub_type) {
+          const p = a.protocol || 'ssh'
+          for (const [cat, subs] of Object.entries(ASSET_SUB_TYPES)) {
+            const match = subs.find(s => s.protocol === p)
+            if (match) {
+              category = cat
+              sub_type = match.id
+              break
+            }
+          }
+          if (!category || !sub_type) { category = 'os'; sub_type = 'linux' }
+        }
+
+        setForm({
+          host: a.host || '', port: a.port || 22, username: a.username || 'root',
+          password: a.password || '', remark: a.remark || '', protocol: a.protocol || 'ssh',
+          agent_profile: a.agent_profile || 'default', group_name: (a.tags && a.tags[0]) || '未分组',
+          allow_modifications: false, target_scope: 'asset', extra_args: extraArgs,
+          category, sub_type,
+        })
         if (a.skills) setSelectedSkills(new Set(a.skills))
       } catch { /* ignore */ }
       sessionStorage.removeItem('prefill_asset')
