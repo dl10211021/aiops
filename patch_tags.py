@@ -92,8 +92,10 @@ def migrate():
                 INSERT INTO assets_new (id, remark, host, port, username, password, protocol, agent_profile, extra_args_json, skills_json, created_at)
                 SELECT id, remark, host, port, username, password, protocol, agent_profile, extra_args_json, skills_json, created_at FROM assets
             """)
+            cursor.execute("PRAGMA foreign_keys = OFF")
             cursor.execute("DROP TABLE assets")
             cursor.execute("ALTER TABLE assets_new RENAME TO assets")
+            cursor.execute("PRAGMA foreign_keys = ON")
             print("Successfully dropped group_name via table recreation.")
 
         conn.commit()

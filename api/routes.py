@@ -19,15 +19,19 @@ class ConnectionRequest(BaseModel):
     host: str
     port: int = 22
     username: str
-    password: Optional[str] = None
-    private_key_path: Optional[str] = None
+    password: str | None = None
+    private_key_path: str | None = None
     allow_modifications: bool = False
     active_skills: list[str] = []  # 增加用户动态勾选的技能包 ID 列表
     agent_profile: str = "default"  # [OpenClaw] Agent 身份/工作区
-    remark: Optional[str] = ""  # [新功能] 连接备注/别名
+    remark: str | None = ""  # [新功能] 连接备注/别名
     protocol: str = "ssh"  # [新功能] 资产协议类型 (ssh, telnet, db, api, winrm)
     extra_args: dict = {}  # [新功能] 扩展参数，比如 db_name, api_key 等
     tags: list[str] = ["未分组"]  # [新功能] 资产组别
+    target_scope: str = "asset"  # 作用域：global, group, asset
+    scope_value: str | None = (
+        None  # 如果 scope 为 group，则为 tag 名称；如果为 asset，为 host/id；global 为空
+    )
 
 
 class CommandRequest(BaseModel):
@@ -243,6 +247,8 @@ async def create_ssh_connection(req: ConnectionRequest):
         protocol=req.protocol,  # 透传协议
         extra_args=req.extra_args,  # 透传扩展凭证 (API Key, DB Name 等)
         tags=req.tags,  # 传递分组标签
+        target_scope=req.target_scope,
+        scope_value=req.scope_value,
     )
 
     if result["success"]:
@@ -304,7 +310,7 @@ class PermissionUpdateRequest(BaseModel):
 
 class HeartbeatUpdateRequest(BaseModel):
     heartbeat_enabled: bool
-    master_interval: Optional[int] = None
+    master_interval: int | None = None
 
 
 class SkillsUpdateRequest(BaseModel):
@@ -378,8 +384,8 @@ class CreateSkillRequest(BaseModel):
     skill_id: str
     description: str
     instructions: str
-    script_name: Optional[str] = None
-    script_content: Optional[str] = None
+    script_name: str | None = None
+    script_content: str | None = None
 
 
 @router.post("/skills/create", response_model=ResponseModel)
@@ -1125,8 +1131,8 @@ class CronAddRequest(BaseModel):
     host: str
     username: str
     agent_profile: str = "default"
-    password: Optional[str] = None
-    private_key_path: Optional[str] = None
+    password: str | None = None
+    private_key_path: str | None = None
 
 
 @router.post("/cron/add", response_model=ResponseModel)
@@ -1184,11 +1190,11 @@ async def get_hydrate_status():
 
 
 class BatchAssetImportItem(BaseModel):
-    remark: Optional[str] = ""
+    remark: str | None = ""
     host: str
     port: int = 22
     username: str = ""
-    password: Optional[str] = ""
+    password: str | None = ""
     protocol: str = "ssh"
     agent_profile: str = "default"
     extra_args: dict = {}
@@ -1203,24 +1209,13 @@ async def batch_import_assets(items: list[BatchAssetImportItem]):
 
     imported = 0
     errors = []
-    for i, item in enumerate(items):
-        try:
-            await asyncio.to_thread(
-                memory_db.save_asset,
-                remark=item.remark,
-                host=item.host,
-                port=item.port,
-                username=item.username,
-                password=item.password,
-                protocol=item.protocol,
-                agent_profile=item.agent_profile,
-                extra_args=item.extra_args,
-                skills=item.skills,
-                tags=item.tags,
-            )
-            imported += 1
-        except Exception as e:
-            errors.append(f"Row {i}: {item.host} - {str(e)}")
+    try:
+        await asyncio.to_thread(
+            memory_db.save_assets_batch, [item.model_dump() for item in items]
+        )
+        imported = len(items)
+    except Exception as e:
+        errors.append(str(e))
 
     msg = f"成功导入 {imported}/{len(items)} 条资产。"
     if errors:

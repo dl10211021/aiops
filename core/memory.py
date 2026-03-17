@@ -114,6 +114,74 @@ class MemoryDB:
             logger.error(f"初始化数据库失败: {e}")
 
     # -------- 资产持久化管理 --------
+    def save_assets_batch(self, items: list[dict]):
+        try:
+            with self._db_lock, sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                for item in items:
+                    host = item["host"]
+                    protocol = item["protocol"]
+                    tags = item.get("tags") or ["未分组"]
+
+                    cursor.execute(
+                        "SELECT id FROM assets WHERE host = ? AND protocol = ?",
+                        (host, protocol),
+                    )
+                    row = cursor.fetchone()
+                    if row:
+                        asset_id = row[0]
+                        cursor.execute(
+                            """
+                            UPDATE assets SET remark=?, port=?, username=?, password=?, agent_profile=?, extra_args_json=?, skills_json=? WHERE id=?
+                        """,
+                            (
+                                item["remark"],
+                                item["port"],
+                                item["username"],
+                                item["password"],
+                                item["agent_profile"],
+                                json.dumps(item["extra_args"], ensure_ascii=False),
+                                json.dumps(item["skills"], ensure_ascii=False),
+                                asset_id,
+                            ),
+                        )
+                    else:
+                        cursor.execute(
+                            """
+                            INSERT INTO assets (remark, host, port, username, password, protocol, agent_profile, extra_args_json, skills_json)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                            (
+                                item["remark"],
+                                host,
+                                item["port"],
+                                item["username"],
+                                item["password"],
+                                protocol,
+                                item["agent_profile"],
+                                json.dumps(item["extra_args"], ensure_ascii=False),
+                                json.dumps(item["skills"], ensure_ascii=False),
+                            ),
+                        )
+                        asset_id = cursor.lastrowid
+
+                    cursor.execute(
+                        "DELETE FROM asset_tags WHERE asset_id = ?", (asset_id,)
+                    )
+                    for tag in tags:
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,)
+                        )
+                        cursor.execute("SELECT id FROM tags WHERE name = ?", (tag,))
+                        tag_id = cursor.fetchone()[0]
+                        cursor.execute(
+                            "INSERT INTO asset_tags (asset_id, tag_id) VALUES (?, ?)",
+                            (asset_id, tag_id),
+                        )
+        except Exception as e:
+            logger.error(f"批量保存资产失败: {e}")
+            raise e
+
     def save_asset(
         self,
         remark,

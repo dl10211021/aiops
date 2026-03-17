@@ -26,16 +26,18 @@ class SSHConnectionManager:
         host: str,
         port: int,
         username: str,
-        password: str = None,
-        key_filename: str = None,
+        password: str | None = None,
+        key_filename: str | None = None,
         allow_modifications: bool = False,
-        active_skills: list[str] = None,
+        active_skills: list[str] | None = None,
         agent_profile: str = "default",
         remark: str = "",
         protocol: str = "ssh",
-        extra_args: dict = None,
+        extra_args: dict | None = None,
         lazy: bool = False,
-        tags: list[str] = None,
+        tags: list[str] | None = None,
+        target_scope: str = "asset",
+        scope_value: str | None = None,
     ) -> dict:
         """建立一个新的 SSH 连接或虚拟资产凭据会话"""
         if not tags:
@@ -82,6 +84,8 @@ class SSHConnectionManager:
                         "protocol": protocol,
                         "extra_args": extra_args,
                         "tags": tags,
+                        "target_scope": target_scope,
+                        "scope_value": scope_value,
                         "is_virtual": True,
                         "heartbeat_enabled": False,
                         "last_active": time.time(),
@@ -115,6 +119,8 @@ class SSHConnectionManager:
                         "protocol": "ssh",
                         "extra_args": extra_args,
                         "tags": tags,
+                        "target_scope": target_scope,
+                        "scope_value": scope_value,
                         "is_virtual": False,
                         "heartbeat_enabled": False,
                         "last_active": time.time() - 1000,  # 初始化为较早时间
@@ -161,6 +167,8 @@ class SSHConnectionManager:
                         "protocol": "ssh",
                         "extra_args": extra_args,
                         "tags": tags,
+                        "target_scope": target_scope,
+                        "scope_value": scope_value,
                         "is_virtual": False,
                         "heartbeat_enabled": False,
                         "last_active": time.time(),
@@ -180,7 +188,7 @@ class SSHConnectionManager:
     def connect_local(
         self,
         agent_profile: str = "default",
-        active_skills: list[str] = None,
+        active_skills: list[str] | None = None,
         remark: str = "",
     ) -> dict:
         """【本地总控】建立一个本地虚拟会话，不需要 SSH 目标机器。专供跑监控脚本的大模型使用。"""
@@ -300,7 +308,6 @@ class SSHConnectionManager:
             stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
 
             # 引入非阻塞的超时循环等待机制，防止 AI 运行 top 等挂起命令导致线程池死锁
-            import time
 
             start_time = time.time()
             while not stdout.channel.exit_status_ready():
