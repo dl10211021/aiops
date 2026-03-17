@@ -33,7 +33,7 @@ class MemoryDB:
                 ),  # Configurable embedding dimension
             ]
         )
-        
+
         # 初始化加解密
         try:
             self.key_path = os.path.join(self.root_dir, ".fernet.key")
@@ -49,7 +49,15 @@ class MemoryDB:
             logger.warning(f"Failed to init Fernet encryption: {e}")
             self._fernet = None
 
-        self.sensitive_keys = ['bearer_token', 'kubeconfig', 'api_token', 'v3_auth_pass', 'v3_priv_pass', 'community_string', 'enable_pass']
+        self.sensitive_keys = [
+            "bearer_token",
+            "kubeconfig",
+            "api_token",
+            "v3_auth_pass",
+            "v3_priv_pass",
+            "community_string",
+            "enable_pass",
+        ]
 
         self.init_db()
 
@@ -146,7 +154,9 @@ class MemoryDB:
                 elif v and self._fernet:
                     if isinstance(v, str):
                         try:
-                            args_copy[k] = self._fernet.encrypt(v.encode('utf-8')).decode('utf-8')
+                            args_copy[k] = self._fernet.encrypt(
+                                v.encode("utf-8")
+                            ).decode("utf-8")
                         except Exception as e:
                             logger.error(f"Encryption failed for {k}: {e}")
         return args_copy
@@ -160,7 +170,9 @@ class MemoryDB:
                 v = args_copy[k]
                 if v and self._fernet and isinstance(v, str):
                     try:
-                        args_copy[k] = self._fernet.decrypt(v.encode('utf-8')).decode('utf-8')
+                        args_copy[k] = self._fernet.decrypt(v.encode("utf-8")).decode(
+                            "utf-8"
+                        )
                     except Exception as e:
                         # might not be encrypted
                         pass
@@ -173,7 +185,7 @@ class MemoryDB:
                 cursor = conn.cursor()
                 for item in items:
                     host = item["host"]
-                    protocol = item["asset_type"]
+                    asset_type = item["asset_type"]
                     tags = item.get("tags") or ["未分组"]
 
                     cursor.execute(
@@ -184,7 +196,9 @@ class MemoryDB:
                     if row:
                         asset_id = row[0]
                         old_extra_args = json.loads(row[1]) if row[1] else {}
-                        new_extra_args = self._encrypt_extra_args(item.get("extra_args", {}), old_extra_args)
+                        new_extra_args = self._encrypt_extra_args(
+                            item.get("extra_args", {}), old_extra_args
+                        )
                         cursor.execute(
                             """
                             UPDATE assets SET remark=?, port=?, username=?, password=?, agent_profile=?, extra_args_json=?, skills_json=? WHERE id=?
@@ -201,7 +215,9 @@ class MemoryDB:
                             ),
                         )
                     else:
-                        new_extra_args = self._encrypt_extra_args(item.get("extra_args", {}))
+                        new_extra_args = self._encrypt_extra_args(
+                            item.get("extra_args", {})
+                        )
                         cursor.execute(
                             """
                             INSERT INTO assets (remark, host, port, username, password, asset_type, agent_profile, extra_args_json, skills_json)
@@ -213,7 +229,7 @@ class MemoryDB:
                                 item["port"],
                                 item["username"],
                                 item["password"],
-                                protocol,
+                                asset_type,
                                 item["agent_profile"],
                                 json.dumps(new_extra_args, ensure_ascii=False),
                                 json.dumps(item["skills"], ensure_ascii=False),
@@ -245,7 +261,7 @@ class MemoryDB:
         port,
         username,
         password,
-        protocol,
+        asset_type,
         agent_profile,
         extra_args,
         skills,
@@ -264,7 +280,9 @@ class MemoryDB:
                 if row:
                     asset_id = row[0]
                     old_extra_args = json.loads(row[1]) if row[1] else {}
-                    new_extra_args = self._encrypt_extra_args(extra_args, old_extra_args)
+                    new_extra_args = self._encrypt_extra_args(
+                        extra_args, old_extra_args
+                    )
                     cursor.execute(
                         """
                         UPDATE assets SET remark=?, port=?, username=?, password=?, agent_profile=?, extra_args_json=?, skills_json=? WHERE id=?
@@ -274,6 +292,7 @@ class MemoryDB:
                             port,
                             username,
                             password,
+                            asset_type,
                             agent_profile,
                             json.dumps(new_extra_args, ensure_ascii=False),
                             json.dumps(skills, ensure_ascii=False),
@@ -293,7 +312,7 @@ class MemoryDB:
                             port,
                             username,
                             password,
-                            protocol,
+                            asset_type,
                             agent_profile,
                             json.dumps(new_extra_args, ensure_ascii=False),
                             json.dumps(skills, ensure_ascii=False),
@@ -332,7 +351,9 @@ class MemoryDB:
                 assets = []
                 for row in rows:
                     r = dict(row)
-                    raw_extra_args = json.loads(r["extra_args_json"]) if r["extra_args_json"] else {}
+                    raw_extra_args = (
+                        json.loads(r["extra_args_json"]) if r["extra_args_json"] else {}
+                    )
                     r["extra_args"] = self._decrypt_extra_args(raw_extra_args)
                     r["skills"] = (
                         json.loads(r["skills_json"]) if r["skills_json"] else []

@@ -29,12 +29,35 @@ class ConnectionRequest(BaseModel):
     extra_args: dict = {}  # [新功能] 扩展参数，比如 db_name, api_key 等
     tags: list[str] = ["未分组"]  # [新功能] 资产组别
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_extra_args(self):
         if self.asset_type == "snmp":
             if self.extra_args.get("snmp_version") == "v3":
-                if not self.extra_args.get("v3_auth_protocol") or not self.extra_args.get("v3_priv_protocol"):
-                    raise ValueError("SNMPv3 requires v3_auth_protocol and v3_priv_protocol")
+                if not self.extra_args.get(
+                    "v3_auth_protocol"
+                ) or not self.extra_args.get("v3_priv_protocol"):
+                    raise ValueError(
+                        "SNMPv3 requires v3_auth_protocol and v3_priv_protocol"
+                    )
+        elif self.asset_type == "k8s":
+            if not self.extra_args.get("kubeconfig") and not self.extra_args.get(
+                "bearer_token"
+            ):
+                raise ValueError("k8s requires either kubeconfig or bearer_token")
+        elif self.asset_type in [
+            "mysql",
+            "postgresql",
+            "oracle",
+            "mssql",
+            "redis",
+            "mongodb",
+        ]:
+            if not self.extra_args.get("database") and not self.extra_args.get(
+                "db_name"
+            ):
+                raise ValueError(
+                    f"{self.asset_type} connection requires database/db_name in extra_args"
+                )
         return self
 
     target_scope: str = "asset"  # 作用域：global, group, asset
@@ -127,28 +150,41 @@ async def stop_chat_session(session_id: str):
     return ResponseModel(status="success", message="已发送中止信号。")
 
 
-
-def restore_masked_args(req):
-    """如果 req 中包含被掩码的 extra_args，则从持久化存储中找回真实值"""
+def get_restored_args(req: ConnectionRequest) -> dict:
+    """如果 req 中包含被掩码的 extra_args，则从持久化存储中找回真实值，返回一个新的字典"""
     if not hasattr(req, "extra_args") or not req.extra_args:
-        return
+        return {}
     has_mask = any(v == "********" for v in req.extra_args.values())
-    if has_mask:
-        from core.memory import memory_db
-        assets = memory_db.get_all_assets()
-        for a in assets:
-            if a["host"] == req.host and a["asset_type"] == req.asset_type:
-                db_args = a.get("extra_args", {})
-                for k, v in req.extra_args.items():
-                    if v == "********" and k in db_args:
-                        req.extra_args[k] = db_args[k]
-                break
+    if not has_mask:
+        return req.extra_args
+
+    restored = dict(req.extra_args)
+    from core.memory import memory_db
+
+    assets = memory_db.get_all_assets()
+    for a in assets:
+        if (
+            a["host"] == req.host
+            and a["asset_type"] == req.asset_type
+            and a.get("port") == req.port
+            and a.get("username") == req.username
+        ):
+            db_args = a.get("extra_args", {})
+            for k, v in restored.items():
+                if v == "********" and k in db_args:
+                    restored[k] = db_args[k]
+            break
+    return restored
+
 
 @router.post("/connect/test", response_model=ResponseModel)
 async def test_connection(req: ConnectionRequest):
     import asyncio
     import os
-    restore_masked_args(req)
+
+    restored_args = get_restored_args(req)
+    # 重新构建请求对象以触发 Pydantic 验证
+    req = ConnectionRequest(**{**req.model_dump(), "extra_args": restored_args})
 
     # SSH Test
     if req.asset_type in ["ssh", "linux", "switch"]:
@@ -187,7 +223,16 @@ async def test_connection(req: ConnectionRequest):
 
     # Database Test
     if (
-        req.asset_type in ["mysql", "oracle", "postgresql", "mssql", "redis", "mongodb", "elasticsearch"]
+        req.asset_type
+        in [
+            "mysql",
+            "oracle",
+            "postgresql",
+            "mssql",
+            "redis",
+            "mongodb",
+            "elasticsearch",
+        ]
         or "database" in str(req.active_skills)
         or (req.extra_args and req.extra_args.get("db_type"))
     ):
@@ -223,7 +268,16 @@ async def test_connection(req: ConnectionRequest):
             )
 
     # API Test
-    if req.asset_type in ["vmware", "k8s", "zstack", "f5", "zabbix", "prometheus", "snmp", "redfish"]:
+    if req.asset_type in [
+        "vmware",
+        "k8s",
+        "zstack",
+        "f5",
+        "zabbix",
+        "prometheus",
+        "snmp",
+        "redfish",
+    ]:
         import socket
 
         try:
@@ -267,7 +321,10 @@ async def test_connection(req: ConnectionRequest):
 @router.post("/connect", response_model=ResponseModel)
 async def create_ssh_connection(req: ConnectionRequest):
     """建立与远程系统的会话 (支持 SSH长连接 或 虚拟凭据会话)"""
-    restore_masked_args(req)
+
+    restored_args = get_restored_args(req)
+    req = ConnectionRequest(**{**req.model_dump(), "extra_args": restored_args})
+
     logger.info(
         f"API called: Connect to {req.host} via {req.asset_type} with profile {req.agent_profile}, remark: {req.remark}"
     )
@@ -288,7 +345,7 @@ async def create_ssh_connection(req: ConnectionRequest):
         active_skills=req.active_skills,  # 透传给底层会话
         agent_profile=req.agent_profile,  # 透传 Agent 身份
         remark=req.remark,  # 透传备注
-        protocol=req.asset_type,  # 透传协议
+        asset_type=req.asset_type,  # 透传协议
         extra_args=req.extra_args,  # 透传扩展凭证 (API Key, DB Name 等)
         tags=req.tags,  # 传递分组标签
         target_scope=req.target_scope,
@@ -305,7 +362,7 @@ async def create_ssh_connection(req: ConnectionRequest):
             port=req.port,
             username=req.username,
             password=req.password,
-            protocol=req.asset_type,
+            asset_type=req.asset_type,
             agent_profile=req.agent_profile,
             extra_args=req.extra_args,
             skills=req.active_skills,
@@ -849,9 +906,9 @@ async def update_session_permission(session_id: str, req: PermissionUpdateReques
     if session_id not in ssh_manager.active_sessions:
         raise HTTPException(status_code=404, detail="会话不存在或已断开")
 
-    ssh_manager.active_sessions[session_id]["info"][
-        "allow_modifications"
-    ] = req.allow_modifications
+    ssh_manager.active_sessions[session_id]["info"]["allow_modifications"] = (
+        req.allow_modifications
+    )
     logger.info(
         f"Session {session_id} permissions changed to: {req.allow_modifications}"
     )
@@ -865,13 +922,13 @@ async def update_session_heartbeat(session_id: str, req: HeartbeatUpdateRequest)
     if session_id not in ssh_manager.active_sessions:
         raise HTTPException(status_code=404, detail="会话不存在或已断开")
 
-    ssh_manager.active_sessions[session_id]["info"][
-        "heartbeat_enabled"
-    ] = req.heartbeat_enabled
+    ssh_manager.active_sessions[session_id]["info"]["heartbeat_enabled"] = (
+        req.heartbeat_enabled
+    )
     if req.heartbeat_enabled:
-        ssh_manager.active_sessions[session_id]["info"][
-            "last_active"
-        ] = 0  # Trigger immediately on next poll
+        ssh_manager.active_sessions[session_id]["info"]["last_active"] = (
+            0  # Trigger immediately on next poll
+        )
 
     if req.master_interval is not None:
         if "extra_args" not in ssh_manager.active_sessions[session_id]["info"]:
@@ -978,8 +1035,9 @@ async def get_active_sessions():
             "heartbeatEnabled": info.get("heartbeat_enabled", False),
             "tags": info.get("tags", ["未分组"]),
         }
-    
+
     from core.memory import memory_db
+
     for sid, s_data in sessions_data.items():
         if s_data.get("extra_args"):
             for k in memory_db.sensitive_keys:

@@ -62,12 +62,11 @@ async def chat_stream_agent(
     agent_profile = session_info.get("agent_profile", "default")
 
     # 获取资产协议凭证信息，构建模型上下文
-    protocol = session_info.get("asset_type", "ssh")
+    asset_type = session_info.get("asset_type", "ssh")
     is_virtual = session_info.get("is_virtual", False)
     host = session_info.get("host", "")
     port = session_info.get("port", "")
     username = session_info.get("username", "")
-    password = session_info.get("password", "")
     extra_args = session_info.get("extra_args", {})
 
     # 从外部 Markdown 文件加载 Agent 的核心人格 (Soul)
@@ -91,8 +90,7 @@ async def chat_stream_agent(
         logger.error(f"LTM retrieve error: {e}")
         ltm_context = ""
 
-    # 凭证信息格式化为字符串
-    extra_creds_str = "\\n".join([f"- {k}: {v}" for k, v in extra_args.items() if v])
+    # 凭证信息格式化为字符串 (已移除，防泄漏)
 
     SYSTEM_PROMPT = f"""
 {base_prompt}
@@ -102,8 +100,7 @@ async def chat_stream_agent(
 - 目标IP/主机名: {host}
 - 端口: {port}
 - 账号: {username}
-- 密码/Token: {password}
-{extra_creds_str}
+- 凭证信息: (已安全托管，底层工具执行时自动注入，无需在脚本中自行填写)
 {"⚠️ 注意：这是一个虚拟会话，请不要使用 `linux_execute_command`。你应该使用 `local_execute_script` 工具去执行本地的 Python 脚本来获取数据。" if is_virtual else "直接使用 `linux_execute_command` 执行 bash 命令。"}
 
 [已知安全模式]
@@ -350,12 +347,11 @@ async def headless_agent_chat(
     )
     active_skills = session_info.get("active_skills", [])
     agent_profile = session_info.get("agent_profile", "default")
-    protocol = session_info.get("asset_type", "ssh")
+    asset_type = session_info.get("asset_type", "ssh")
     is_virtual = session_info.get("is_virtual", False)
     host = session_info.get("host", "")
     port = session_info.get("port", "")
     username = session_info.get("username", "")
-    password = session_info.get("password", "")
     extra_args = session_info.get("extra_args", {})
 
     profile_path = os.path.join(
@@ -379,8 +375,7 @@ async def headless_agent_chat(
 - 目标IP/主机名: {host}
 - 端口: {port}
 - 账号: {username}
-- 密码/Token: {password}
-{extra_creds_str}
+- 凭证信息: (已安全托管，底层工具执行时自动注入，无需在脚本中自行填写)
 {"⚠️ 注意：这是一个虚拟会话，请不要使用 `linux_execute_command`，应使用 `local_execute_script` 工具。" if is_virtual else "直接使用 `linux_execute_command` 执行 bash 命令。"}
 
 [上级指挥官委派的任务]

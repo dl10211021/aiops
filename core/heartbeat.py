@@ -5,13 +5,15 @@ import json
 
 logger = logging.getLogger(__name__)
 
+
 async def run_single_heartbeat(sid, info, memory_db, dispatcher, trigger_msg=None):
     from core.agent import headless_agent_chat
+
     try:
         custom_hb_prompt = info.get("extra_args", {}).get("heartbeat_prompt", "")
-        protocol = info.get("asset_type", "ssh")
+        asset_type = info.get("asset_type", "ssh")
         agent_profile = info.get("agent_profile", "default")
-        
+
         if trigger_msg:
             system_alert = trigger_msg
         elif custom_hb_prompt:
@@ -39,70 +41,91 @@ async def run_single_heartbeat(sid, info, memory_db, dispatcher, trigger_msg=Non
 
     except Exception as e:
         logger.error(f"Heartbeat execution failed for {sid}: {e}")
-            
+
     finally:
         info["heartbeat_in_progress"] = False
         info["last_active"] = time.time()
+
 
 async def heartbeat_worker():
     """后台常驻的巡检任务"""
     from connections.ssh_manager import ssh_manager
     from core.memory import memory_db
     from core.dispatcher import dispatcher
-    
+
     logger.info("Heartbeat worker started polling loop.")
 
     while True:
         try:
             current_time = time.time()
-            logger.info(f"[Heartbeat Tick] active_sessions: {len(ssh_manager.active_sessions)}")
+            logger.info(
+                f"[Heartbeat Tick] active_sessions: {len(ssh_manager.active_sessions)}"
+            )
             for sid, sdata in list(ssh_manager.active_sessions.items()):
                 info = sdata.get("info", {})
                 client = sdata.get("client")
-                
+
                 idle_time = current_time - info.get("last_active", 0)
 
                 # 【连接健康检测】: 检查真实 SSH 连接是否仍然存活
                 if client is not None and not info.get("is_virtual"):
                     transport = client.get_transport()
                     if transport is None or not transport.is_active():
-                        logger.warning(f"💀 [Connection Lost] Session {sid} ({info.get('host')}) SSH 连接已断开！")
+                        logger.warning(
+                            f"💀 [Connection Lost] Session {sid} ({info.get('host')}) SSH 连接已断开！"
+                        )
                         pending = info.setdefault("pending_messages", [])
-                        pending.append(f"⚠️ **[连接断开警告]** 与 `{info.get('host')}` 的 SSH 连接已失效。可能是网络中断或目标服务器重启。建议重新连接。")
+                        pending.append(
+                            f"⚠️ **[连接断开警告]** 与 `{info.get('host')}` 的 SSH 连接已失效。可能是网络中断或目标服务器重启。建议重新连接。"
+                        )
                         sdata["client"] = None
                         continue
 
                 # 【连接池回收机制】: 如果闲置超过 10 分钟 (600秒) 且是真实 SSH 连接，则回收物理 Socket，节省内存
-                if idle_time > 600 and not info.get("is_virtual") and client is not None:
-                    logger.info(f"💤 [Lazy Pool] Session {sid} ({info.get('host')}) 闲置超过 10 分钟，自动回收物理连接。")
+                if (
+                    idle_time > 600
+                    and not info.get("is_virtual")
+                    and client is not None
+                ):
+                    logger.info(
+                        f"💤 [Lazy Pool] Session {sid} ({info.get('host')}) 闲置超过 10 分钟，自动回收物理连接。"
+                    )
                     try:
                         client.close()
                     except Exception:
                         pass
                     sdata["client"] = None
-                
+
                 if info.get("heartbeat_in_progress"):
                     continue
-                
-                logger.info(f"[Heartbeat Poll Loop] Session {sid} idle_time: {idle_time:.1f}s, enabled: {info.get('heartbeat_enabled')}")
-                
+
+                logger.info(
+                    f"[Heartbeat Poll Loop] Session {sid} idle_time: {idle_time:.1f}s, enabled: {info.get('heartbeat_enabled')}"
+                )
+
                 if info.get("heartbeat_enabled"):
                     agent_profile = info.get("agent_profile", "default")
-                    
+
                     if agent_profile == "master":
                         # 全局总控指挥官的专属心跳逻辑
                         # 尝试从 extra_args 读取用户配置的心跳间隔（秒），默认 300 秒（5分钟）
                         try:
-                            master_interval = int(info.get("extra_args", {}).get("master_interval", 120))
+                            master_interval = int(
+                                info.get("extra_args", {}).get("master_interval", 120)
+                            )
                         except (ValueError, TypeError):
                             master_interval = 120
-                            
-                        logger.info(f"[Master Debug] ID: {sid}, Idle: {idle_time:.1f}s, Interval: {master_interval}s, InProgress: {info.get('heartbeat_in_progress')}")
+
+                        logger.info(
+                            f"[Master Debug] ID: {sid}, Idle: {idle_time:.1f}s, Interval: {master_interval}s, InProgress: {info.get('heartbeat_in_progress')}"
+                        )
                         if idle_time > master_interval:
                             info["last_active"] = current_time
                             info["heartbeat_in_progress"] = True
-                            logger.info(f"👑 [Global Heartbeat] 触发全局指挥官主动巡检 (闲置 {idle_time:.1f} 秒, 设定周期 {master_interval} 秒)...")
-                            
+                            logger.info(
+                                f"👑 [Global Heartbeat] 触发全局指挥官主动巡检 (闲置 {idle_time:.1f} 秒, 设定周期 {master_interval} 秒)..."
+                            )
+
                             master_trigger_msg = """【🚨 全局主动故障自愈周期】当前为系统闲置期，全域自愈引擎启动。作为【跨系统总控指挥官】，你必须展现出极致的主动性和执行力！这不是一次简单的巡检报告，而是一次真实的“寻找病患并实施手术”的行动。
 
 【自愈行动纲领 (CRITICAL)】：
@@ -121,25 +144,43 @@ async def heartbeat_worker():
 4. **主刀手术 (主动修复)**：
    - 根据排查子 Agent 的分析结果，如果问题明确且在安全可控范围内，你必须**直接下发带有明确处置方案的指令，让其执行修复**！绝不停留在“建议人类去修”阶段。
 5. **抢救记录通报**：只有在完成所有的诊断、排查，甚至**修复动作全部结束**后，才输出一份《全网自愈抢救报告》，并对仍未解决的重大隐患使用 `send_notification` 呼叫人类管理员。"""
-                            
-                            asyncio.create_task(run_single_heartbeat(sid, info, memory_db, dispatcher, trigger_msg=master_trigger_msg))
+
+                            asyncio.create_task(
+                                run_single_heartbeat(
+                                    sid,
+                                    info,
+                                    memory_db,
+                                    dispatcher,
+                                    trigger_msg=master_trigger_msg,
+                                )
+                            )
                     else:
                         # 普通单机运维 Agent 的心跳逻辑
                         try:
-                            normal_interval = int(info.get("extra_args", {}).get("heartbeat_interval", 120))
+                            normal_interval = int(
+                                info.get("extra_args", {}).get(
+                                    "heartbeat_interval", 120
+                                )
+                            )
                         except (ValueError, TypeError):
                             normal_interval = 120
-                            
-                        logger.info(f"[Heartbeat Poll] Session {sid} idle_time: {idle_time:.1f}s, interval: {normal_interval}s, enabled: {info.get('heartbeat_enabled')}")
+
+                        logger.info(
+                            f"[Heartbeat Poll] Session {sid} idle_time: {idle_time:.1f}s, interval: {normal_interval}s, enabled: {info.get('heartbeat_enabled')}"
+                        )
                         if idle_time > normal_interval:
                             # 更新时间，防止重复触发
                             info["last_active"] = current_time
                             info["heartbeat_in_progress"] = True
-                            logger.info(f"❤️ [Heartbeat] 主动唤醒 Session {sid} 进行单机健康巡检... (闲置 {idle_time:.1f} 秒)")
-                            
+                            logger.info(
+                                f"❤️ [Heartbeat] 主动唤醒 Session {sid} 进行单机健康巡检... (闲置 {idle_time:.1f} 秒)"
+                            )
+
                             # 开启并发异步任务去执行，防止互相阻塞
-                            asyncio.create_task(run_single_heartbeat(sid, info, memory_db, dispatcher))
-                        
+                            asyncio.create_task(
+                                run_single_heartbeat(sid, info, memory_db, dispatcher)
+                            )
+
         except Exception as e:
             logger.error(f"Heartbeat loop error: {e}")
 
@@ -149,6 +190,7 @@ async def heartbeat_worker():
             for sdata in list(ssh_manager.active_sessions.values())
         )
         await asyncio.sleep(10 if any_heartbeat_enabled else 30)
+
 
 def start_heartbeat():
     asyncio.create_task(heartbeat_worker())

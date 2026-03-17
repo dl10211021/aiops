@@ -12,7 +12,7 @@ const ASSET_CATEGORIES = [
   { id: 'oob', label: '硬件动环 (Hardware & OOB)' },
 ]
 
-const ASSET_SUB_TYPES: Record<string, { id: string, label: string, asset_type: string, defaultPort: number }[]> = {
+const ASSET_SUB_TYPES: Record<string, { id: string, label: string, asset_type: string, defaultPort: number, authMode?: 'basic' | 'password_only' | 'custom_snmp' | 'none' }[]> = {
   os: [
     { id: 'linux', label: 'Linux / Unix (SSH)', asset_type: 'ssh', defaultPort: 22 },
     { id: 'winrm', label: 'Windows Server (WinRM)', asset_type: 'winrm', defaultPort: 5985 },
@@ -22,7 +22,7 @@ const ASSET_SUB_TYPES: Record<string, { id: string, label: string, asset_type: s
     { id: 'oracle', label: 'Oracle', asset_type: 'mysql', defaultPort: 1521 },
     { id: 'postgresql', label: 'PostgreSQL', asset_type: 'mysql', defaultPort: 5432 },
     { id: 'mssql', label: 'SQL Server', asset_type: 'mysql', defaultPort: 1433 },
-    { id: 'redis', label: 'Redis', asset_type: 'mysql', defaultPort: 6379 },
+    { id: 'redis', label: 'Redis', asset_type: 'mysql', defaultPort: 6379, authMode: 'password_only' },
     { id: 'mongodb', label: 'MongoDB', asset_type: 'mysql', defaultPort: 27017 },
     { id: 'elasticsearch', label: 'ElasticSearch', asset_type: 'mysql', defaultPort: 9200 },
   ],
@@ -40,9 +40,19 @@ const ASSET_SUB_TYPES: Record<string, { id: string, label: string, asset_type: s
     { id: 'prometheus', label: 'Prometheus', asset_type: 'api', defaultPort: 9090 },
   ],
   oob: [
-    { id: 'snmp', label: 'SNMP', asset_type: 'api', defaultPort: 161 },
+    { id: 'snmp', label: 'SNMP', asset_type: 'api', defaultPort: 161, authMode: 'custom_snmp' },
     { id: 'redfish', label: 'Redfish/iLO/iDRAC', asset_type: 'api', defaultPort: 443 },
   ]
+}
+
+const getAuthVisibility = (subType: string, category: string, extraArgs: any) => {
+  const currentSubInfo = ASSET_SUB_TYPES[category]?.find(s => s.id === subType);
+  const authMode = currentSubInfo?.authMode || 'basic';
+  
+  if (authMode === 'password_only') return { showUser: false, showPass: true };
+  if (authMode === 'custom_snmp' && extraArgs?.snmp_version === 'v3') return { showUser: false, showPass: false };
+  if (authMode === 'none') return { showUser: false, showPass: false };
+  return { showUser: true, showPass: true };
 }
 
 export default function ConnectionModal() {
@@ -290,22 +300,28 @@ export default function ConnectionModal() {
                 </div>
               </div>
 
-              {!(form.sub_type === 'snmp' && form.extra_args.snmp_version === 'v3') && (
-                <div className="grid grid-cols-2 gap-3">
-                  {form.sub_type !== 'redis' && (
-                    <div>
-                      <label className="text-xs text-ops-subtext">用户名</label>
-                      <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
-                        className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
-                    </div>
-                  )}
-                  <div className={form.sub_type === 'redis' ? 'col-span-2' : ''}>
-                    <label className="text-xs text-ops-subtext">密码</label>
-                    <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
-                      className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+              {(() => {
+                const authVis = getAuthVisibility(form.sub_type, form.category, form.extra_args);
+                if (!authVis.showUser && !authVis.showPass) return null;
+                return (
+                  <div className="grid grid-cols-2 gap-3">
+                    {authVis.showUser && (
+                      <div>
+                        <label className="text-xs text-ops-subtext">用户名</label>
+                        <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
+                          className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+                      </div>
+                    )}
+                    {authVis.showPass && (
+                      <div className={!authVis.showUser ? 'col-span-2' : ''}>
+                        <label className="text-xs text-ops-subtext">密码</label>
+                        <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
+                          className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </>
           )}
 
