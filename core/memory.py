@@ -7,6 +7,7 @@ import datetime
 import asyncio
 import pyarrow as pa
 import lancedb
+from cryptography.fernet import Fernet
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ class MemoryDB:
         self.db_path = os.path.join(self.root_dir, "opscore.db")
         self.lancedb_path = os.path.join(self.root_dir, "opscore_lancedb")
 
-        # LanceDB Vector Table Schema
+        # Init LanceDB Vector Table Schema
         self.ltm_schema = pa.schema(
             [
                 pa.field("session_id", pa.string()),
@@ -32,6 +33,23 @@ class MemoryDB:
                 ),  # Configurable embedding dimension
             ]
         )
+        
+        # 初始化加解密
+        try:
+            self.key_path = os.path.join(self.root_dir, ".fernet.key")
+            if os.path.exists(self.key_path):
+                with open(self.key_path, "rb") as f:
+                    self._key = f.read()
+            else:
+                self._key = Fernet.generate_key()
+                with open(self.key_path, "wb") as f:
+                    f.write(self._key)
+            self._fernet = Fernet(self._key)
+        except Exception as e:
+            logger.warning(f"Failed to init Fernet encryption: {e}")
+            self._fernet = None
+
+        self.sensitive_keys = ['bearer_token', 'kubeconfig', 'api_token', 'v3_auth_pass', 'v3_priv_pass', 'community_string', 'enable_pass']
 
         self.init_db()
 
@@ -113,6 +131,41 @@ class MemoryDB:
         except Exception as e:
             logger.error(f"初始化数据库失败: {e}")
 
+    def _encrypt_extra_args(self, new_args, old_args=None):
+        if not new_args:
+            return {}
+        args_copy = dict(new_args)
+        for k in self.sensitive_keys:
+            if k in args_copy:
+                v = args_copy[k]
+                if v == "********":
+                    if old_args and k in old_args:
+                        args_copy[k] = old_args[k]
+                    else:
+                        args_copy.pop(k, None)
+                elif v and self._fernet:
+                    if isinstance(v, str):
+                        try:
+                            args_copy[k] = self._fernet.encrypt(v.encode('utf-8')).decode('utf-8')
+                        except Exception as e:
+                            logger.error(f"Encryption failed for {k}: {e}")
+        return args_copy
+
+    def _decrypt_extra_args(self, args):
+        if not args:
+            return {}
+        args_copy = dict(args)
+        for k in self.sensitive_keys:
+            if k in args_copy:
+                v = args_copy[k]
+                if v and self._fernet and isinstance(v, str):
+                    try:
+                        args_copy[k] = self._fernet.decrypt(v.encode('utf-8')).decode('utf-8')
+                    except Exception as e:
+                        # might not be encrypted
+                        pass
+        return args_copy
+
     # -------- 资产持久化管理 --------
     def save_assets_batch(self, items: list[dict]):
         try:
@@ -124,12 +177,14 @@ class MemoryDB:
                     tags = item.get("tags") or ["未分组"]
 
                     cursor.execute(
-                        "SELECT id FROM assets WHERE host = ? AND protocol = ?",
+                        "SELECT id, extra_args_json FROM assets WHERE host = ? AND protocol = ?",
                         (host, protocol),
                     )
                     row = cursor.fetchone()
                     if row:
                         asset_id = row[0]
+                        old_extra_args = json.loads(row[1]) if row[1] else {}
+                        new_extra_args = self._encrypt_extra_args(item.get("extra_args", {}), old_extra_args)
                         cursor.execute(
                             """
                             UPDATE assets SET remark=?, port=?, username=?, password=?, agent_profile=?, extra_args_json=?, skills_json=? WHERE id=?
@@ -140,12 +195,13 @@ class MemoryDB:
                                 item["username"],
                                 item["password"],
                                 item["agent_profile"],
-                                json.dumps(item["extra_args"], ensure_ascii=False),
+                                json.dumps(new_extra_args, ensure_ascii=False),
                                 json.dumps(item["skills"], ensure_ascii=False),
                                 asset_id,
                             ),
                         )
                     else:
+                        new_extra_args = self._encrypt_extra_args(item.get("extra_args", {}))
                         cursor.execute(
                             """
                             INSERT INTO assets (remark, host, port, username, password, protocol, agent_profile, extra_args_json, skills_json)
@@ -159,7 +215,7 @@ class MemoryDB:
                                 item["password"],
                                 protocol,
                                 item["agent_profile"],
-                                json.dumps(item["extra_args"], ensure_ascii=False),
+                                json.dumps(new_extra_args, ensure_ascii=False),
                                 json.dumps(item["skills"], ensure_ascii=False),
                             ),
                         )
@@ -201,12 +257,14 @@ class MemoryDB:
             with self._db_lock, sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT id FROM assets WHERE host = ? AND protocol = ?",
+                    "SELECT id, extra_args_json FROM assets WHERE host = ? AND protocol = ?",
                     (host, protocol),
                 )
                 row = cursor.fetchone()
                 if row:
                     asset_id = row[0]
+                    old_extra_args = json.loads(row[1]) if row[1] else {}
+                    new_extra_args = self._encrypt_extra_args(extra_args, old_extra_args)
                     cursor.execute(
                         """
                         UPDATE assets SET remark=?, port=?, username=?, password=?, agent_profile=?, extra_args_json=?, skills_json=? WHERE id=?
@@ -217,12 +275,13 @@ class MemoryDB:
                             username,
                             password,
                             agent_profile,
-                            json.dumps(extra_args, ensure_ascii=False),
+                            json.dumps(new_extra_args, ensure_ascii=False),
                             json.dumps(skills, ensure_ascii=False),
                             asset_id,
                         ),
                     )
                 else:
+                    new_extra_args = self._encrypt_extra_args(extra_args)
                     cursor.execute(
                         """
                         INSERT INTO assets (remark, host, port, username, password, protocol, agent_profile, extra_args_json, skills_json)
@@ -236,7 +295,7 @@ class MemoryDB:
                             password,
                             protocol,
                             agent_profile,
-                            json.dumps(extra_args, ensure_ascii=False),
+                            json.dumps(new_extra_args, ensure_ascii=False),
                             json.dumps(skills, ensure_ascii=False),
                         ),
                     )
@@ -273,9 +332,8 @@ class MemoryDB:
                 assets = []
                 for row in rows:
                     r = dict(row)
-                    r["extra_args"] = (
-                        json.loads(r["extra_args_json"]) if r["extra_args_json"] else {}
-                    )
+                    raw_extra_args = json.loads(r["extra_args_json"]) if r["extra_args_json"] else {}
+                    r["extra_args"] = self._decrypt_extra_args(raw_extra_args)
                     r["skills"] = (
                         json.loads(r["skills_json"]) if r["skills_json"] else []
                     )

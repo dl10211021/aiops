@@ -118,10 +118,28 @@ async def stop_chat_session(session_id: str):
     return ResponseModel(status="success", message="已发送中止信号。")
 
 
+
+def restore_masked_args(req):
+    """如果 req 中包含被掩码的 extra_args，则从持久化存储中找回真实值"""
+    if not hasattr(req, "extra_args") or not req.extra_args:
+        return
+    has_mask = any(v == "********" for v in req.extra_args.values())
+    if has_mask:
+        from core.memory import memory_db
+        assets = memory_db.get_all_assets()
+        for a in assets:
+            if a["host"] == req.host and a["protocol"] == req.protocol:
+                db_args = a.get("extra_args", {})
+                for k, v in req.extra_args.items():
+                    if v == "********" and k in db_args:
+                        req.extra_args[k] = db_args[k]
+                break
+
 @router.post("/connect/test", response_model=ResponseModel)
 async def test_connection(req: ConnectionRequest):
     import asyncio
     import os
+    restore_masked_args(req)
 
     # SSH Test
     if req.protocol == "ssh":
@@ -240,6 +258,7 @@ async def test_connection(req: ConnectionRequest):
 @router.post("/connect", response_model=ResponseModel)
 async def create_ssh_connection(req: ConnectionRequest):
     """建立与远程系统的会话 (支持 SSH长连接 或 虚拟凭据会话)"""
+    restore_masked_args(req)
     logger.info(
         f"API called: Connect to {req.host} via {req.protocol} with profile {req.agent_profile}, remark: {req.remark}"
     )
@@ -946,10 +965,17 @@ async def get_active_sessions():
             "agentProfile": info.get("agent_profile"),
             "user": info.get("username"),
             "protocol": info.get("protocol"),
-            "extra_args": info.get("extra_args", {}),
+            "extra_args": dict(info.get("extra_args", {})),
             "heartbeatEnabled": info.get("heartbeat_enabled", False),
             "tags": info.get("tags", ["未分组"]),
         }
+    
+    from core.memory import memory_db
+    for sid, s_data in sessions_data.items():
+        if s_data.get("extra_args"):
+            for k in memory_db.sensitive_keys:
+                if k in s_data["extra_args"] and s_data["extra_args"][k]:
+                    s_data["extra_args"][k] = "********"
     return ResponseModel(status="success", data={"sessions": sessions_data})
 
 
@@ -969,6 +995,11 @@ async def get_saved_assets():
     from core.memory import memory_db
 
     assets = await asyncio.to_thread(memory_db.get_all_assets)
+    for a in assets:
+        if "extra_args" in a and a["extra_args"]:
+            for k in memory_db.sensitive_keys:
+                if k in a["extra_args"] and a["extra_args"][k]:
+                    a["extra_args"][k] = "********"
     return ResponseModel(status="success", data={"assets": assets})
 
 
