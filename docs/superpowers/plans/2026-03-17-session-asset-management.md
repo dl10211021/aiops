@@ -67,19 +67,19 @@ Commit the API and dispatcher scoping changes.
 - Modify: `core/agent.py`
 - Modify: `core/dispatcher.py`
 
-- [ ] **Step 1: Create `dispatch_sub_agents` Async Function**
+- [x] **Step 1: Create `dispatch_sub_agents` Async Function**
 In `core/agent.py`, create a new function `dispatch_group_tasks(tasks: List[Dict], allow_mod: bool)`. This function will use a semaphore (e.g., `asyncio.Semaphore(10)`) to limit concurrency, spinning up headless LLM calls for each target asset to execute its specific check. It MUST wrap each sub-agent execution in an `asyncio.wait_for(task, timeout=60)` block to prevent unresponsive assets from hanging the orchestrator.
 
-- [ ] **Step 2: Expose `execute_on_scope` Tool to Dispatcher**
+- [x] **Step 2: Expose `execute_on_scope` Tool to Dispatcher**
 In `core/dispatcher.py`, when `target_scope == 'group'`, inject a specific JSON schema tool `execute_on_scope(target_assets: List[str], task_instruction: str)`.
 
-- [ ] **Step 3: Hook Tool to Orchestrator**
+- [x] **Step 3: Hook Tool to Orchestrator**
 In `route_and_execute`, map the `execute_on_scope` tool call to the `dispatch_group_tasks` function. It should wait for all sub-agents to finish and return a summarized JSON dictionary of findings.
 
-- [ ] **Step 4: Test Sub-Agent Spawning**
+- [x] **Step 4: Test Sub-Agent Spawning**
 Mock a group with 3 tags. Ask the main agent to "check disk space on the group". Verify logs show 3 separate sub-agent calls being dispatched and aggregated.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 Commit the Sub-Agent Orchestrator logic.
 
 ---
@@ -89,14 +89,14 @@ Commit the Sub-Agent Orchestrator logic.
 **Files:**
 - Modify: `core/dispatcher.py`
 
-- [ ] **Step 1: Inject `search_assets_by_tag` Tool**
+- [x] **Step 1: Inject `search_assets_by_tag` Tool**
 When `target_scope == 'global'`, inject a tool that allows the LLM to query the `memory_db` for assets matching specific tags.
 
-- [ ] **Step 2: Restrict Direct Execution in Global**
+- [x] **Step 2: Restrict Direct Execution in Global**
 Ensure `linux_execute_command` is NOT injected when in Global scope, forcing the LLM to use the search tool and rely on the Group/Sub-Agent flow for mass execution.
 
-- [ ] **Step 3: Test Global Search**
+- [x] **Step 3: Test Global Search**
 Ask the global agent to "find all MES servers". It should use the tool and return the list without attempting SSH.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 Commit the Global scope tooling restrictions.

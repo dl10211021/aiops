@@ -90,6 +90,65 @@ try:
     ).json()
     print("Execute RW sql:", rw_sql)
 
+    print("\nTesting Group Sub-Agent scope execution...")
+    resp_group = requests.post(
+        "http://127.0.0.1:8088/api/v1/connect",
+        json={
+            "host": "127.0.0.1",
+            "username": "group_tester",
+            "allow_modifications": True,
+            "protocol": "virtual",
+            "target_scope": "group",
+            "lazy": True,
+        },
+    ).json()
+    print("Connect Group:", resp_group)
+
+    group_cmd = requests.post(
+        "http://127.0.0.1:8088/api/v1/execute",
+        json={
+            "session_id": resp_group["data"]["session_id"],
+            "command": "execute_on_scope",
+            "target_assets": ["127.0.0.1"],
+            "task_instruction": "Check disk space",
+        },
+    ).json()
+    print("Execute Group Sub-Agents:", group_cmd)
+
+    print("\nTesting Global Scope (search_assets_by_tag)...")
+    resp_global = requests.post(
+        "http://127.0.0.1:8088/api/v1/connect",
+        json={
+            "host": "127.0.0.1",
+            "username": "global_tester",
+            "allow_modifications": False,
+            "protocol": "virtual",
+            "target_scope": "global",
+            "lazy": True,
+        },
+    ).json()
+    print("Connect Global:", resp_global)
+
+    global_cmd = requests.post(
+        "http://127.0.0.1:8088/api/v1/execute",
+        json={
+            "session_id": resp_global["data"]["session_id"],
+            "command": "search_assets_by_tag",
+            "tags": ["未分组"],
+        },
+    ).json()
+    print(
+        "Execute Global Search:",
+        len(global_cmd["data"]["output"]) if "data" in global_cmd else global_cmd,
+    )
+
+    # Test linux execution block in global scope
+    global_linux_cmd = requests.post(
+        "http://127.0.0.1:8088/api/v1/execute",
+        json={"session_id": resp_global["data"]["session_id"], "command": "mkdir test"},
+    ).json()
+    print("Execute Global Linux (should fail/block):", global_linux_cmd)
+
 except Exception as e:
     print("Error:", e)
 finally:

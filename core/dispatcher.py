@@ -224,19 +224,7 @@ class SkillDispatcher:
         1. 连远程机器执行命令 (原有)
         2. 在宿主机（本地）执行 Python/Shell 脚本 (新！用于跑 Gemini CLI 里自带的那些外部工具)
         """
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": "linux_execute_command",
-                    "description": "在连接的远程目标服务器上执行诊断命令。",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {"command": {"type": "string"}},
-                        "required": ["command"],
-                    },
-                },
-            },
+        tools = [
             {
                 "type": "function",
                 "function": {
@@ -281,50 +269,6 @@ class SkillDispatcher:
                             },
                         },
                         "required": ["channel", "title", "content"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "db_execute_query",
-                    "description": "通过原生驱动直连查询数据库（支持 mysql, oracle, postgresql）。比 SSH 命令更安全、结构化。Oracle 无需 jdbc。不依赖当前机器。请把 SQL 拼好发给我。",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "db_type": {
-                                "type": "string",
-                                "enum": ["mysql", "oracle", "postgresql"],
-                                "description": "数据库类型",
-                            },
-                            "host": {
-                                "type": "string",
-                                "description": "数据库主机 IP 或域名",
-                            },
-                            "port": {
-                                "type": "integer",
-                                "description": "数据库端口（如 MySQL 3306, Oracle 1521, PG 5432）",
-                            },
-                            "user": {"type": "string", "description": "登录用户名"},
-                            "password": {"type": "string", "description": "登录密码"},
-                            "database": {
-                                "type": "string",
-                                "description": "数据库名称（Oracle 传 SID 或 Service Name）",
-                            },
-                            "sql": {
-                                "type": "string",
-                                "description": "要执行的 SQL 查询语句",
-                            },
-                        },
-                        "required": [
-                            "db_type",
-                            "host",
-                            "port",
-                            "user",
-                            "password",
-                            "database",
-                            "sql",
-                        ],
                     },
                 },
             },
@@ -430,6 +374,125 @@ class SkillDispatcher:
                 },
             },
         ]
+
+        target_scope = current_context.get("target_scope", "asset")
+
+        if target_scope == "asset":
+            # Asset scope gets direct linux and db execution
+            tools.extend(
+                [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "linux_execute_command",
+                            "description": "在连接的远程目标服务器上执行诊断命令。",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {"command": {"type": "string"}},
+                                "required": ["command"],
+                            },
+                        },
+                    },
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "db_execute_query",
+                            "description": "通过原生驱动直连查询数据库（支持 mysql, oracle, postgresql）。比 SSH 命令更安全、结构化。Oracle 无需 jdbc。不依赖当前机器。请把 SQL 拼好发给我。",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "db_type": {
+                                        "type": "string",
+                                        "enum": ["mysql", "oracle", "postgresql"],
+                                        "description": "数据库类型",
+                                    },
+                                    "host": {
+                                        "type": "string",
+                                        "description": "数据库主机 IP 或域名",
+                                    },
+                                    "port": {
+                                        "type": "integer",
+                                        "description": "数据库端口（如 MySQL 3306, Oracle 1521, PG 5432）",
+                                    },
+                                    "user": {
+                                        "type": "string",
+                                        "description": "登录用户名",
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "description": "登录密码",
+                                    },
+                                    "database": {
+                                        "type": "string",
+                                        "description": "数据库名称（Oracle 传 SID 或 Service Name）",
+                                    },
+                                    "sql": {
+                                        "type": "string",
+                                        "description": "要执行的 SQL 查询语句",
+                                    },
+                                },
+                                "required": [
+                                    "db_type",
+                                    "host",
+                                    "port",
+                                    "user",
+                                    "password",
+                                    "database",
+                                    "sql",
+                                ],
+                            },
+                        },
+                    },
+                ]
+            )
+        elif target_scope == "group":
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "execute_on_scope",
+                        "description": "在当前业务组的所有目标资产上批量执行相同的检查任务。底层会为您并发拉起多个子Agent去各个机器执行。请直接下发自然语言要求（如“检查磁盘根目录是否超过80%”）。",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "target_assets": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "要执行任务的目标主机IP地址列表。如果你想在这个业务组的所有机器上执行，就传入它们的IP。",
+                                },
+                                "task_instruction": {
+                                    "type": "string",
+                                    "description": "要派发给所有子Agent的任务指令，请用自然语言详细描述检查逻辑或操作逻辑。",
+                                },
+                            },
+                            "required": ["target_assets", "task_instruction"],
+                        },
+                    },
+                }
+            )
+        elif target_scope == "global":
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "search_assets_by_tag",
+                        "description": "【全局检索】根据Tag标签搜索通讯录中的资产列表。例如要寻找“MES”相关机器，传入['MES']，返回所有匹配的IP和凭证ID。",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "tags": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "要搜索的业务或技术标签，例如 ['db', 'prod']",
+                                }
+                            },
+                            "required": ["tags"],
+                        },
+                    },
+                }
+            )
+
+        return tools
 
     async def route_and_execute(
         self, tool_call_name: str, args: Dict[str, Any], context: Dict[str, Any]
@@ -671,73 +734,66 @@ class SkillDispatcher:
             return json.dumps({"active_sessions": sessions_info}, ensure_ascii=False)
 
         elif tool_call_name == "dispatch_sub_agents":
-            from core.agent import headless_agent_chat
+            from core.agent import dispatch_group_tasks
 
             tasks = args.get("tasks", [])
             parent_allow_mod = context.get("allow_modifications", False)
 
-            async def run_task(task):
-                target_sid = task.get("target_session_id")
-                task_desc = task.get("task_description")
+            results = await dispatch_group_tasks(tasks, parent_allow_mod)
+            return json.dumps(
+                {"status": "BATCH_COMPLETE", "results": results}, ensure_ascii=False
+            )
 
-                # 找到目标 Session 的备注名，让日志更好看
-                from connections.ssh_manager import ssh_manager
+        elif tool_call_name == "execute_on_scope":
+            from core.agent import dispatch_group_tasks
 
-                target_info = ssh_manager.active_sessions.get(target_sid, {}).get(
-                    "info", {}
-                )
-                target_name = (
-                    target_info.get("remark") or target_info.get("host") or target_sid
-                )
+            target_assets = args.get("target_assets", [])
+            task_instruction = args.get("task_instruction", "")
+            parent_allow_mod = context.get("allow_modifications", False)
 
-                logger.warning(
-                    f"🤖 [Swarm 协同] 指挥官 Agent 正在向子会话 {target_name} ({target_sid}) 下达自然语言任务: {task_desc}"
-                )
+            # Prepare the tasks matching dispatch_sub_agents format
+            # In execute_on_scope, target_assets represents IPs or names, but we need session_ids.
+            # We'll resolve the target_assets to their respective sessions or tell the agent if not connected.
+            from connections.ssh_manager import ssh_manager
 
-                try:
-                    # Set a timeout for the sub-agent task to prevent indefinite hanging
-                    result = await asyncio.wait_for(
-                        headless_agent_chat(
-                            target_sid,
-                            task_desc,
-                            inherited_allow_mod=parent_allow_mod,
-                        ),
-                        timeout=600.0,
+            tasks = []
+            for asset in target_assets:
+                # Find active session ID for the given host
+                session_id = None
+                for sid, sdata in ssh_manager.active_sessions.items():
+                    if (
+                        sdata["info"].get("host") == asset
+                        or sdata["info"].get("remark") == asset
+                    ):
+                        session_id = sid
+                        break
+
+                if session_id:
+                    tasks.append(
+                        {
+                            "target_session_id": session_id,
+                            "task_description": task_instruction,
+                        }
                     )
-                    return {
-                        "session_id": target_sid,
-                        "status": "SUCCESS",
-                        "report": result,
-                    }
-                except asyncio.TimeoutError:
-                    return {
-                        "session_id": target_sid,
-                        "status": "ERROR",
-                        "error": "跨域协同超时 (10分钟) 被强行中断。",
-                    }
-                except Exception as e:
-                    return {
-                        "session_id": target_sid,
-                        "status": "ERROR",
-                        "error": f"跨域协同异常: {str(e)}",
-                    }
+                else:
+                    logger.warning(
+                        f"execute_on_scope 找不到对应的会话，忽略目标: {asset}"
+                    )
 
-            # 强制执行最大并发度为 10，保护系统内存和API限制
-            sem = asyncio.Semaphore(10)
+            if not tasks:
+                return json.dumps(
+                    {"error": "找不到任何可用的目标资产会话，请先确保已建立连接。"}
+                )
 
-            async def bound_run_task(task):
-                async with sem:
-                    return await run_task(task)
-
-            results = await asyncio.gather(*(bound_run_task(task) for task in tasks))
+            results = await dispatch_group_tasks(tasks, parent_allow_mod)
             return json.dumps(
                 {"status": "BATCH_COMPLETE", "results": results}, ensure_ascii=False
             )
 
         elif tool_call_name == "evolve_skill":
-            skill_id = args.get("skill_id")
-            file_name = args.get("file_name")
-            content = args.get("content")
+            skill_id = args.get("skill_id", "")
+            file_name = args.get("file_name", "")
+            content = args.get("content", "")
 
             # 限制只能修改自己的 my_custom_skills 目录
             target_base = os.path.join(
@@ -802,6 +858,46 @@ class SkillDispatcher:
                 )
             except Exception as e:
                 return json.dumps({"error": f"外网检索异常: {str(e)}"})
+
+        elif tool_call_name == "search_assets_by_tag":
+            tags_to_search = args.get("tags", [])
+            from core.memory import memory_db
+
+            try:
+                all_assets = await asyncio.to_thread(memory_db.get_all_assets)
+
+                # Filter assets by tags
+                matched_assets = []
+                for asset in all_assets:
+                    asset_tags = asset.get("tags", [])
+                    # Verify if the asset has all the requested tags
+                    if all(tag in asset_tags for tag in tags_to_search):
+                        # Filter out sensitive fields
+                        safe_asset = {
+                            "id": asset.get("id"),
+                            "host": asset.get("host"),
+                            "port": asset.get("port"),
+                            "username": asset.get("username"),
+                            "protocol": asset.get("protocol"),
+                            "remark": asset.get("remark"),
+                            "tags": asset.get("tags"),
+                        }
+                        matched_assets.append(safe_asset)
+
+                logger.info(
+                    f"AI 发起了全局资产检索 tags={tags_to_search}, 匹配 {len(matched_assets)} 台"
+                )
+                return json.dumps(
+                    {
+                        "status": "SUCCESS",
+                        "matched_count": len(matched_assets),
+                        "assets": matched_assets,
+                    },
+                    ensure_ascii=False,
+                )
+            except Exception as e:
+                logger.error(f"search_assets_by_tag 发生异常: {e}")
+                return json.dumps({"error": f"全局检索异常: {str(e)}"})
 
         return '{"error": "Unknown tool"}'
 
