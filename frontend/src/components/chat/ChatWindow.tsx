@@ -30,7 +30,7 @@ export default function ChatWindow() {
     localStorage.getItem('ops_model') || 'gemini-2.5-flash-preview-05-20'
   )
   const [availableModels, setAvailableModels] = useState<string[]>([])
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const session = currentSessionId ? sessions[currentSessionId] : null
@@ -39,7 +39,9 @@ export default function ChatWindow() {
 
   // Scroll to bottom on new messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
   }, [messages])
 
   // Load available models once
@@ -235,7 +237,10 @@ export default function ChatWindow() {
   return (
     <div className="flex-1 flex flex-col min-w-0">
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4"
+      >
         {messages.map((msg) => (
           <MessageBubble
             key={msg.id}
@@ -243,7 +248,6 @@ export default function ChatWindow() {
             onApproval={handleApproval}
           />
         ))}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input area */}
