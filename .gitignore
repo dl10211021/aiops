@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+
+# Virtual environments
+venv/
+env/
+.env
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Database files
+opscore.db
+opscore.db-shm
+opscore.db-wal
+cron_jobs.sqlite
+opscore_lancedb/
+
+# Logs
+server_out.log
+server_err.log
+
+# Temporary/sandbox
+temp_sandbox/
+tmp_history.json
+
+# OS files
+Thumbs.db
+.DS_Store

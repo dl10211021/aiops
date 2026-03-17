@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+paramiko
+pydantic
+openai
+pyyaml
+python-dotenv
+apscheduler
+pymysql
+psycopg2-binary
+oracledb
+duckduckgo-search
+lancedb
+pyarrow
+langchain_community
+langchain_text_splitters

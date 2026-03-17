@@ -1,0 +1,391 @@
+import os
+import json
+import time
+import asyncio
+import logging
+from openai import AsyncOpenAI
+from core.dispatcher import dispatcher
+
+cancel_flags = {}
+
+logger = logging.getLogger(__name__)
+
+API_KEY = "AIzaSyB72JWI-l3-ihOr0FjZjh3Rln8oujncpPM"
+BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "models/gemini-embedding-001")
+EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "3072"))
+
+client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL, timeout=30.0)
+
+
+async def get_available_models() -> list:
+    try:
+        response = await client.models.list()
+        models = [m.id for m in response.data]
+        models.sort()
+        return models
+    except Exception as e:
+        logger.error(f"Failed to fetch models: {e}")
+        return []
+
+
+def update_client_config(new_base_url: str, new_api_key: str):
+    global client
+    client = AsyncOpenAI(api_key=new_api_key, base_url=new_base_url, timeout=30.0)
+    logger.info(f"Agent Engine reconfigured to connect to: {new_base_url}")
+
+
+def update_embedding_config(model: str, dim: int):
+    global EMBEDDING_MODEL, EMBEDDING_DIM
+    EMBEDDING_MODEL = model
+    EMBEDDING_DIM = dim
+    logger.info(f"Embedding config updated: model={model}, dim={dim}")
+
+
+def get_embedding_config():
+    return EMBEDDING_MODEL, EMBEDDING_DIM
+
+
+# 从 SQLite 持久化用户模型
+from core.memory import memory_db
+
+
+async def chat_stream_agent(
+    session_id: str, user_message: str, model_name: str = "gemini-2.5-flash"
+):
+    cancel_flags[session_id] = False
+    from connections.ssh_manager import ssh_manager
+
+    session_info = ssh_manager.active_sessions[session_id]["info"]
+    allow_modifications = session_info.get("allow_modifications", False)
+    active_skills = session_info.get("active_skills", [])
+    agent_profile = session_info.get("agent_profile", "default")
+
+    # 获取资产协议凭证信息，构建模型上下文
+    protocol = session_info.get("protocol", "ssh")
+    is_virtual = session_info.get("is_virtual", False)
+    host = session_info.get("host", "")
+    port = session_info.get("port", "")
+    username = session_info.get("username", "")
+    password = session_info.get("password", "")
+    extra_args = session_info.get("extra_args", {})
+
+    # 从外部 Markdown 文件加载 Agent 的核心人格 (Soul)
+    profile_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "workspaces",
+        agent_profile,
+        "SOUL.md",
+    )
+
+    if os.path.exists(profile_path):
+        with open(profile_path, "r", encoding="utf-8") as f:
+            base_prompt = f.read()
+    else:
+        base_prompt = "你是 OpsCore 的高级 AI 运维专家。"
+
+    # 从 LanceDB 获取长期记忆（与当前话题相关的历史摘要）
+    try:
+        ltm_context = await memory_db.retrieve_ltm(session_id, user_message, client)
+    except Exception as e:
+        logger.error(f"LTM retrieve error: {e}")
+        ltm_context = ""
+
+    # 凭证信息格式化为字符串
+    extra_creds_str = "\\n".join([f"- {k}: {v}" for k, v in extra_args.items() if v])
+
+    SYSTEM_PROMPT = f"""
+{base_prompt}
+
+[当前持有的资产凭证]
+一台通过{protocol.upper()}协议纳管的资产：
+- 目标IP/主机名: {host}
+- 端口: {port}
+- 账号: {username}
+- 密码/Token: {password}
+{extra_creds_str}
+{"⚠️ 注意：这是一个虚拟会话，请不要使用 `linux_execute_command`。你应该使用 `local_execute_script` 工具去执行本地的 Python 脚本来获取数据。" if is_virtual else "直接使用 `linux_execute_command` 执行 bash 命令。"}
+
+[已知安全模式]
+1. 用户动态加载的「可用Skills」决定了你「什么时候能调什么路」。仔细阅读已加载的技能说明！
+2. 当前会话权限状态：{"**高级读写修改权限**：可以执行修改系统的操作" if allow_modifications else "**只读安全模式**：禁止修改系统的文件。除非用户强制要求，否则请确认后拒绝"}
+3. 执行某些较高风险脚本时，请仔细参考技能说明中提供的 `<SKILL_ABSOLUTE_PATH>` 路径和 `cwd` 工作目录路径。不要自己凭空猜测目录
+
+[AIOps 专家行为准则 (CRITICAL)]
+作为运维管理工程师现场助手级别的专业伙伴：
+- **主动规划 (Proactive Planning)**：在接到运维操作任务时，明确列出操作思路和步骤 (Step 1, Step 2...)，不要盲目执行指令
+- **根因分析 (Root Cause Analysis)**：不要肤浅地只看表面。要像一名工程师一样，一步一步深入地直接指向异常
+- **闭环思维 (Closed-loop)**：操作、修复后自动执行修复验证确认修复
+- **心跳巡检 (Heartbeat)**：在「系统空闲」时期，主动执行系统的健康指标全面巡检（包括 CPU、内存、磁盘、关键服务状态），在发现异常时主动通报
+- **自我进化与未知资产应对 (Self-Evolution)**：当用户要你「安装」「修复」「改」或「打一个新技能」时，不要说「没有权限」。使用 `evolve_skill` 去修复或变更你的代码。更重要的是：**面对未知类型的设备（安全设备、数据库等），发现当前技能不匹配时，不要放弃！应使用 `local_execute_script` 动态生成并在本地执行 Python 脚本**（如 requests、pymysql 等），探测目标设备。一旦探测成功，使用 `evolve_skill` 将探测过程固化为一个新的「可复用技能」
+
+[使用的基础执行工具]
+- linux_execute_command: 在远程的目标 Linux 机器上执行 bash 命令 (需要 SSH 资产)
+- local_execute_script: 在本地执行 Python 或 Shell 脚本 (所有资产类型均可执行)
+
+[当前已加载专业技能说明 (Skills)]
+以下是当前专业技能的详细 <INSTRUCTIONS> 指令，请严格遵照其中的步骤进行操作
+{dispatcher.get_skill_instructions(active_skills)}
+
+{ltm_context}
+"""
+
+    # 从 SQLite 中读取之前的有效会话（去掉之前的 system 提示词）
+    db_messages = memory_db.get_messages(session_id)
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    for msg in db_messages:
+        if msg.get("role") != "system":
+            messages.append(msg)
+
+    # µһûʴݿ
+    new_user_msg = {"role": "user", "content": user_message}
+    memory_db.append_message(session_id, new_user_msg)
+    messages.append(new_user_msg)
+
+    context = {
+        "session_id": session_id,
+        "os_type": "linux",
+        "allow_modifications": allow_modifications,
+        "active_skills": active_skills,
+        "target_scope": session_info.get("target_scope", "asset"),
+        "scope_value": session_info.get("scope_value", None),
+    }
+    tools = dispatcher.get_available_tools(context)
+
+    try:
+        # Initial status
+        yield f"data: {json.dumps({'type': 'status', 'content': '🤖 AI 正在分析并规划执行路径...'})}\n\n"
+        await asyncio.sleep(0.05)
+
+        for iteration in range(50):  # չ 50
+            logger.info(
+                f"Loop {iteration} for {session_id}, cancel_flags: {cancel_flags.get(session_id)}"
+            )
+            if cancel_flags.get(session_id) is True:
+                cancel_flags[session_id] = False
+                yield f"data: {json.dumps({'type': 'error', 'content': '\u4efb\u52a1\u5df2\u88ab\u624b\u52a8\u4e2d\u6b62\u3002'})}\n\n"
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                break
+
+            response = await client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                stream=False,
+                timeout=60.0,
+            )
+
+            choice = response.choices[0]
+            assistant_content = choice.message.content or ""
+
+            if assistant_content:
+                msg_status = json.dumps({"type": "status", "content": "💭 思考中..."})
+                yield f"data: {msg_status}\n\n"
+
+                for i in range(0, len(assistant_content), 15):
+                    chunk_str = assistant_content[i : i + 15]
+                    msg_chunk = json.dumps({"type": "chunk", "content": chunk_str})
+                    yield f"data: {msg_chunk}\n\n"
+                    await asyncio.sleep(0.01)
+
+            if not choice.message.tool_calls:
+                safe_msg = choice.message.model_dump(exclude_unset=True)
+                messages.append(safe_msg)
+                memory_db.append_message(session_id, safe_msg)
+                msg_done = json.dumps({"type": "done"})
+                yield f"data: {msg_done}\n\n"
+                break
+
+            safe_msg = choice.message.model_dump(exclude_unset=True)
+            messages.append(safe_msg)
+            memory_db.append_message(session_id, safe_msg)
+
+            for tc in choice.message.tool_calls:
+                func_name = tc.function.name
+                try:
+                    func_args = json.loads(tc.function.arguments)
+                except Exception as e:
+                    func_args = {}
+
+                display_cmd = func_args.get("command", str(func_args))
+
+                msg_start = json.dumps(
+                    {
+                        "type": "tool_start",
+                        "id": tc.id,
+                        "tool": func_name,
+                        "cmd": display_cmd,
+                    }
+                )
+                yield f"data: {msg_start}\n\n"
+                await asyncio.sleep(0.05)
+
+                tool_res = await dispatcher.route_and_execute(
+                    func_name, func_args, context
+                )
+
+                preview = tool_res[:300] + "..." if len(tool_res) > 300 else tool_res
+                msg_end = json.dumps(
+                    {"type": "tool_end", "id": tc.id, "result": preview}
+                )
+                yield f"data: {msg_end}\n\n"
+                await asyncio.sleep(0.05)
+
+                tool_msg = {
+                    "tool_call_id": tc.id,
+                    "role": "tool",
+                    "name": func_name,
+                    "content": str(tool_res),
+                }
+                messages.append(tool_msg)
+                memory_db.append_message(session_id, tool_msg)
+
+            msg_loop = json.dumps(
+                {
+                    "type": "status",
+                    "content": f"🔄 收集结果，执行第 {iteration + 2} 步...",
+                }
+            )
+            yield f"data: {msg_loop}\n\n"
+            await asyncio.sleep(0.05)
+
+        else:
+            yield f"data: {json.dumps({'type': 'error', 'content': '⚠️ 任务过于复杂，已达到 50 次最大思考上限，自动终止'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        # ÿֶԻ׽󣬴ڼ첽ѹ (̨ǰ)
+        asyncio.create_task(
+            memory_db.compress_and_store_ltm(session_id, client, model_name)
+        )
+
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"Agent Loop Failed: {error_msg}")
+        if "timeout" in error_msg.lower() or "connect" in error_msg.lower():
+            yield f"data: {json.dumps({'type': 'error', 'content': '❌ **超时** 无法连接到 AI 模型接口(Google Gemini)\\n\\n**可能原因**\\n1. 你的网络无法直接访问 API\\n2. 代理设置有误'})}\n\n"
+        else:
+            yield f"data: {json.dumps({'type': 'error', 'content': f'❌ AI 思考时发生异常，请稍后再试。详细信息：`{error_msg}`'})}\n\n"
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+
+async def headless_agent_chat(
+    session_id: str, task_description: str, model_name: str = "gemini-2.5-flash"
+) -> str:
+    """后台无头模式的 Agent 循环，用于协同任务的结果汇报。"""
+    from connections.ssh_manager import ssh_manager
+
+    if session_id not in ssh_manager.active_sessions:
+        return f"目标会话 {session_id} 不在线或已过期。"
+
+    session_info = ssh_manager.active_sessions[session_id]["info"]
+    allow_modifications = session_info.get("allow_modifications", False)
+    active_skills = session_info.get("active_skills", [])
+    agent_profile = session_info.get("agent_profile", "default")
+    protocol = session_info.get("protocol", "ssh")
+    is_virtual = session_info.get("is_virtual", False)
+    host = session_info.get("host", "")
+    port = session_info.get("port", "")
+    username = session_info.get("username", "")
+    password = session_info.get("password", "")
+    extra_args = session_info.get("extra_args", {})
+
+    profile_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "workspaces",
+        agent_profile,
+        "SOUL.md",
+    )
+    if os.path.exists(profile_path):
+        with open(profile_path, "r", encoding="utf-8") as f:
+            base_prompt = f.read()
+    else:
+        base_prompt = "你是 OpsCore 的高级 AI 运维专家。"
+
+    extra_creds_str = "\\n".join([f"- {k}: {v}" for k, v in extra_args.items() if v])
+
+    SYSTEM_PROMPT = f"""{base_prompt}
+
+[当前持有的资产凭证]
+一台通过{protocol.upper()}协议纳管的资产：
+- 目标IP/主机名: {host}
+- 端口: {port}
+- 账号: {username}
+- 密码/Token: {password}
+{extra_creds_str}
+{"⚠️ 注意：这是一个虚拟会话，请不要使用 `linux_execute_command`，应使用 `local_execute_script` 工具。" if is_virtual else "直接使用 `linux_execute_command` 执行 bash 命令。"}
+
+[上级指挥官委派的任务]
+你是第一线的运维管理工程师调用的 Agent。
+上级委派给你的任务是：
+{task_description}
+
+请在当前的会话（{host}）内，利用你的技能和工具，全力完成该任务。
+在完成操作、修复或检查完成后，给出一份详细的「执行结果报告」。该报告将直接返回给上级指挥官作为你的工作内容。
+"""
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": "请开始执行任务。"},
+    ]
+
+    context = {
+        "session_id": session_id,
+        "os_type": "linux",
+        "allow_modifications": allow_modifications,
+        "active_skills": active_skills,
+        "target_scope": session_info.get("target_scope", "asset"),
+        "scope_value": session_info.get("scope_value", None),
+    }
+    tools = dispatcher.get_available_tools(context)
+
+    try:
+        assistant_content = ""
+        for iteration in range(50):
+            response = await client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                timeout=60.0,
+            )
+            choice = response.choices[0]
+            assistant_content = choice.message.content or ""
+
+            if not choice.message.tool_calls:
+                break
+
+            safe_msg = choice.message.model_dump(exclude_unset=True)
+            messages.append(safe_msg)
+
+            for tc in choice.message.tool_calls:
+                func_name = tc.function.name
+                try:
+                    func_args = json.loads(tc.function.arguments)
+                except Exception:
+                    func_args = {}
+
+                tool_res = await dispatcher.route_and_execute(
+                    func_name, func_args, context
+                )
+
+                tool_msg = {
+                    "tool_call_id": tc.id,
+                    "role": "tool",
+                    "name": func_name,
+                    "content": str(tool_res),
+                }
+                messages.append(tool_msg)
+        else:
+            return (
+                "任务过于复杂，Agent 执行已达到 50 轮上限，已被强制终止。以下是最后一轮结果："
+                + assistant_content
+            )
+
+        return (
+            f"来自 {agent_profile} Agent ({host}) 的协同任务报告：\n"
+            + assistant_content
+        )
+    except Exception as e:
+        return f"协同任务执行失败。目标节点 {host} 执行报错: {e}"

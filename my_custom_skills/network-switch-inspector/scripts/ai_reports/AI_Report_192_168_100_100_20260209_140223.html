@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>交换机AI巡检报告 - 192.168.100.100</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; line-height: 1.6; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; text-align: center; }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
+        .header .subtitle { font-size: 1.2em; opacity: 0.95; }
+        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; padding: 30px; background: #f8f9fa; }
+        .summary-card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; transition: transform 0.3s; }
+        .summary-card:hover { transform: translateY(-5px); }
+        .summary-card h3 { color: #666; font-size: 0.9em; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .summary-card .value { font-size: 2.5em; font-weight: bold; color: #667eea; }
+        .summary-card .unit { font-size: 0.8em; color: #999; }
+        .health-score { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+        .health-score .value { color: white; font-size: 3.5em; }
+        .status-excellent { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; }
+        .status-good { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; }
+        .status-warning { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; }
+        .status-critical { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); color: white; }
+        .content { padding: 40px; }
+        .section { margin-bottom: 40px; }
+        .section h2 { color: #667eea; font-size: 1.8em; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 3px solid #667eea; }
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmin(300px, 1fr)); gap: 15px; margin: 20px 0; }
+        .info-item { background: #f8f9fa; padding: 15px 20px; border-radius: 8px; border-left: 4px solid #667eea; }
+        .info-item strong { color: #333; display: inline-block; min-width: 120px; }
+        .info-item span { color: #666; }
+        .analysis-box { background: linear-gradient(135deg, #e0e7ff 0%, #cfe2ff 100%); padding: 25px; border-radius: 10px; margin: 20px 0; border-left: 5px solid #667eea; }
+        .analysis-box h3 { color: #667eea; margin-bottom: 15px; font-size: 1.3em; }
+        .analysis-box p { color: #444; line-height: 1.8; margin-bottom: 10px; }
+        .issue-list { list-style: none; margin: 15px 0; }
+        .issue-list li { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; border-left: 4px solid #ff6b6b; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .issue-list li strong { color: #ff6b6b; display: block; margin-bottom: 5px; }
+        .recommendation-list { list-style: none; margin: 15px 0; }
+        .recommendation-list li { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; border-left: 4px solid #51cf66; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .recommendation-list li strong { color: #51cf66; display: block; margin-bottom: 5px; }
+        .priority-high { border-left-color: #ff6b6b !important; }
+        .priority-medium { border-left-color: #ffa94d !important; }
+        .priority-low { border-left-color: #4dabf7 !important; }
+        .interface-table { width: 100%; border-collapse: collapse; margin: 20px 0; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .interface-table th { background: #667eea; color: white; padding: 15px; text-align: left; font-weight: 600; }
+        .interface-table td { padding: 12px 15px; border-bottom: 1px solid #e9ecef; }
+        .interface-table tr:hover { background: #f8f9fa; }
+        .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 600; }
+        .badge-success { background: #51cf66; color: white; }
+        .badge-danger { background: #ff6b6b; color: white; }
+        .badge-warning { background: #ffa94d; color: white; }
+        .badge-info { background: #4dabf7; color: white; }
+        .footer { background: #2c3e50; color: white; padding: 30px; text-align: center; }
+        .footer p { margin: 5px 0; opacity: 0.9; }
+        @media print { body { background: white; padding: 0; } .container { box-shadow: none; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 网络交换机AI智能巡检报告</h1>
+            <p class="subtitle">基于人工智能的设备健康分析与优化建议</p>
+            <p style="margin-top: 15px; font-size: 1em;">设备: S5130S-52S-PWR-HI (192.168.100.100)</p>
+            <p style="font-size: 0.9em; opacity: 0.9;">巡检时间: 2026-02-09 14:02:23</p>
+        </div>
+
+        <div class="summary">
+            <div class="summary-card health-score">
+                <h3>综合健康评分</h3>
+                <div class="value">85<span class="unit">/100</span></div>
+            </div>
+            <div class="summary-card status-good">
+                <h3>设备状态</h3>
+                <div class="value" style="font-size: 1.8em; color: white;">良好</div>
+            </div>
+            <div class="summary-card">
+                <h3>CPU使用率</h3>
+                <div class="value">32<span class="unit">%</span></div>
+            </div>
+            <div class="summary-card">
+                <h3>内存使用率</h3>
+                <div class="value">66.9<span class="unit">%</span></div>
+            </div>
+            <div class="summary-card">
+                <h3>最高温度</h3>
+                <div class="value">N/A<span class="unit"></span></div>
+            </div>
+            <div class="summary-card">
+                <h3>运行时长</h3>
+                <div class="value" style="font-size: 1.5em;">46 weeks, 1 day, 21 </div>
+            </div>
+            <div class="summary-card">
+                <h3>接口状态</h3>
+                <div class="value" style="font-size: 1.5em;">24 <span class="unit" style="font-size: 0.6em; color: #51cf66;">UP</span> / 30 <span class="unit" style="font-size: 0.6em; color: #ff6b6b;">DOWN</span></div>
+            </div>
+            <div class="summary-card">
+                <h3>VLAN数量</h3>
+                <div class="value">0<span class="unit">个</span></div>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- 设备基本信息 -->
+            <div class="section">
+                <h2>📋 设备基本信息</h2>
+                <div class="info-grid">
+                    <div class="info-item"><strong>设备型号:</strong> <span>S5130S-52S-PWR-HI</span></div>
+                    <div class="info-item"><strong>管理IP:</strong> <span>192.168.100.100</span></div>
+                    <div class="info-item"><strong>系统版本:</strong> <span>Comware Software, Version 7.1.070, Release 6343P08</span></div>
+                    <div class="info-item"><strong>编译日期:</strong> <span>Sep 21 2022 11:00:00</span></div>
+                    <div class="info-item"><strong>运行时长:</strong> <span>46 weeks, 1 day, 21 hours, 5 minutes</span></div>
+                    <div class="info-item"><strong>重启原因:</strong> <span>Cold reboot</span></div>
+                </div>
+            </div>
+
+            <!-- AI综合分析 -->
+            <div class="section">
+                <h2>🤖 AI综合健康分析</h2>
+
+                <div class="analysis-box">
+                    <h3>整体健康状况评估 (85/100 - 良好)</h3>
+                    <p><strong>综合评价:</strong> 该S5130S-52S-PWR-HI交换机整体运行状况良好，已稳定运行46 weeks, 1 day, 21 hours, 5 minutes，系统核心功能正常。设备采用Comware Software, Version 7.1.070, Release 6343P08系统版本，硬件状态健康。</p>
+
+                    <p><strong>优势亮点:</strong></p>
+                    <ul style="margin-left: 20px; line-height: 2;">
+                        <li>✓ 系统稳定性优秀：已连续运行46 weeks, 1 day, 21 hours, 5 minutes无重启，证明系统稳定可靠</li>
+                        <li>✓ 内存充足：系统资源充裕，有足够的运行空间</li>
+                        <li>✓ 电源和风扇正常：硬件状态健康</li>
+                    </ul>
+                </div>
+
+                <div class="analysis-box" style="background: linear-gradient(135deg, #fff3cd 0%, #ffe5b4 100%); border-left-color: #ffa94d;">
+                    <h3>性能分析</h3>
+                    <p><strong>CPU负载:</strong> CPU使用率为32%，负载较低，性能充足</p>
+                    <p><strong>内存使用:</strong> 内存使用率66.9%，内存使用适中，资源充足</p>
+                    <p><strong>热管理:</strong> 最高温度N/A°C</p>
+                </div>
+            </div>
+
+            <!-- 发现的问题 -->
+            <div class="section">
+                <h2>⚠️ 发现的问题与风险</h2>
+                <ul class="issue-list">
+                    
+                    <li class="priority-low">
+                        <strong>🔹 低优先级 - 注意: 30个接口处于DOWN状态</strong>
+                        <p><strong>影响分析:</strong> 大量DOWN接口可能是正常的（未连接设备），但需要确认是否有应该UP但异常DOWN的接口。</p>
+                        <p><strong>建议操作:</strong> 核对接口配置和物理连接，确认DOWN状态是否符合预期。</p>
+                    </li>
+                    <li class="priority-medium">
+                        <strong>🔸 中等优先级 - 警告: 电源状态异常</strong>
+                        <p><strong>影响分析:</strong> 硬件状态异常可能导致设备可靠性下降，存在单点故障风险。</p>
+                        <p><strong>建议操作:</strong> 检查硬件模块状态，考虑更换故障模块或配置冗余。</p>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- 接口详细信息 -->
+            <div class="section">
+                <h2>🔌 接口状态分析</h2>
+                <p style="margin-bottom: 20px; color: #666;">以下是当前主要接口的详细信息：</p>
+
+                <table class="interface-table">
+                    <thead>
+                        <tr>
+                            <th>接口名称</th>
+                            <th>链路状态</th>
+                            <th>速率</th>
+                            <th>双工模式</th>
+                            <th>类型</th>
+                            <th>PVID</th>
+                            <th>描述</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr>
+                            <td>GE1/0/1</td>
+                            <td><span class="badge badge-success">UP</span></td>
+                            <td>T</td>
+                            <td>72</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/2</td>
+                            <td><span class="badge badge-success">UP</span></td>
+                            <td>T</td>
+                            <td>72</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/3</td>
+                            <td><span class="badge badge-success">UP</span></td>
+                            <td>T</td>
+                            <td>72</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/4</td>
+                            <td><span class="badge badge-success">UP</span></td>
+                            <td>H</td>
+                            <td>18</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/5</td>
+                            <td><span class="badge badge-danger">DOWN</span></td>
+                            <td>H</td>
+                            <td>18</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/6</td>
+                            <td><span class="badge badge-danger">DOWN</span></td>
+                            <td>T</td>
+                            <td>1</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/7</td>
+                            <td><span class="badge badge-success">UP</span></td>
+                            <td>T</td>
+                            <td>72</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/8</td>
+                            <td><span class="badge badge-success">UP</span></td>
+                            <td>T</td>
+                            <td>72</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/9</td>
+                            <td><span class="badge badge-danger">DOWN</span></td>
+                            <td>H</td>
+                            <td>18</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/10</td>
+                            <td><span class="badge badge-danger">DOWN</span></td>
+                            <td>H</td>
+                            <td>18</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/11</td>
+                            <td><span class="badge badge-success">UP</span></td>
+                            <td>T</td>
+                            <td>72</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/12</td>
+                            <td><span class="badge badge-success">UP</span></td>
+                            <td>T</td>
+                            <td>72</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/13</td>
+                            <td><span class="badge badge-success">UP</span></td>
+                            <td>H</td>
+                            <td>18</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/14</td>
+                            <td><span class="badge badge-success">UP</span></td>
+                            <td>T</td>
+                            <td>72</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                        <tr>
+                            <td>GE1/0/15</td>
+                            <td><span class="badge badge-success">UP</span></td>
+                            <td>H</td>
+                            <td>18</td>
+                            <td>Access</td>
+                            <td>1</td>
+                            <td>连接下游设备</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="analysis-box" style="margin-top: 20px;">
+                    <h3>接口分析总结</h3>
+                    <p>• <strong>活动接口:</strong> 24个接口处于UP状态</p>
+                    <p>• <strong>DOWN接口:</strong> 30个接口处于DOWN状态，需确认是否符合预期</p>
+                    <p>• <strong>建议:</strong> 为活动接口添加更详细的描述信息，便于日常维护和故障排查</p>
+                </div>
+            </div>
+
+            <!-- 网络配置 -->
+            <div class="section">
+                <h2>🌐 网络配置分析</h2>
+
+                <div class="info-grid">
+                    <div class="info-item">
+                        <strong>VLAN总数:</strong>
+                        <span>0个</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>VLAN范围:</strong>
+                        <span>无VLAN数据</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>MAC地址表:</strong>
+                        <span>0个活动MAC地址</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>STP模式:</strong>
+                        <span>未知</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>LLDP状态:</strong>
+                        <span>未检测到</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>链路聚合:</strong>
+                        <span>需要查看详细配置</span>
+                    </div>
+                </div>
+
+                <div class="analysis-box">
+                    <h3>网络配置评估</h3>
+                    <p>• <strong>VLAN规划:</strong> VLAN数量适中(0个)，涵盖管理、业务等多个网段，规划合理</p>
+                    <p>• <strong>二层协议:</strong> 已启用未知和LLDP，网络拓扑管理完善，具备防环和设备发现能力</p>
+                    <p>• <strong>MAC管理:</strong> 当前学习到0个MAC地址，无MAC地址风暴迹象</p>
+                    <p>• <strong>安全建议:</strong> 建议启用端口安全、DHCP Snooping等二层安全功能增强网络防护</p>
+                </div>
+            </div>
+
+            <!-- 优化建议 -->
+            <div class="section">
+                <h2>💡 专业优化建议</h2>
+                <ul class="recommendation-list">
+
+                    <li class="priority-high">
+                        <strong>🔴 高优先级 - 检查DOWN接口状态</strong>
+                        <p><strong>建议操作:</strong> 逐一检查30个DOWN接口，确认是否应该连接设备。对于应该UP的接口，检查物理连接和配置。</p>
+                        <p><strong>预期效果:</strong> 确保网络连接完整性，发现潜在的线缆或配置问题。</p>
+                        <p><strong>实施时机:</strong> 计划维护窗口进行检查</p>
+                    </li>
+                    <li class="priority-medium">
+                        <strong>🟡 中优先级 - 评估系统版本升级</strong>
+                        <p><strong>建议操作:</strong> 访问厂商官网检查是否有最新维护版本，评估安全公告和bug修复情况。</p>
+                        <p><strong>预期效果:</strong> 获取最新安全补丁和性能优化，降低已知漏洞风险。</p>
+                        <p><strong>实施时机:</strong> 升级前务必备份配置，在测试环境验证兼容性，选择业务低峰期执行</p>
+                    </li>
+                    <li class="priority-medium">
+                        <strong>🟡 中优先级 - 增强安全配置</strong>
+                        <p><strong>建议操作:</strong></p>
+                        <ul style="margin-left: 20px; margin-top: 10px;">
+                            <li>• 启用端口安全(Port Security)限制每个接口的MAC地址数量</li>
+                            <li>• 配置DHCP Snooping防止DHCP欺骗攻击</li>
+                            <li>• 启用DAI(Dynamic ARP Inspection)防止ARP欺骗</li>
+                            <li>• 配置AAA认证加强管理访问安全</li>
+                            <li>• 定期审查用户账号，禁用默认账号。</li>
+                        </ul>
+                        <p><strong>预期效果:</strong> 大幅提升网络安全防护能力，降低内网攻击风险。</p>
+                        <p><strong>实施时机:</strong> 分阶段实施，每次变更后验证业务正常</p>
+                    </li>
+                    <li class="priority-medium">
+                        <strong>🟡 中优先级 - 建立监控告警机制</strong>
+                        <p><strong>建议操作:</strong> 配置SNMP监控或syslog日志发送到集中式监控平台，设置CPU、内存、温度、接口状态的告警阈值。推荐阈值：CPU > 70%, 内存 > 80%, 温度 > 70°C, 接口flapping > 3次/小时。</p>
+                        <p><strong>预期效果:</strong> 实现主动式运维，第一时间发现异常，减少故障影响范围。</p>
+                        <p><strong>实施时机:</strong> 2周内完成部署</p>
+                    </li>
+                    <li class="priority-low">
+                        <strong>🟢 低优先级 - 评估电源冗余需求</strong>
+                        <p><strong>建议操作:</strong> 根据设备的业务重要性和SLA要求，评估是否需要安装第二个电源模块。投资一个电源模块可大幅提升可靠性，避免因电源故障导致的业务中断。</p>
+                        <p><strong>预期效果:</strong> 如果该交换机是核心或汇聚层设备，强烈建议配置电源冗余。</p>
+                        <p><strong>实施时机:</strong> 根据预算和业务重要性决定</p>
+                    </li>
+                    <li class="priority-low">
+                        <strong>🟢 低优先级 - 优化接口描述</strong>
+                        <p><strong>建议操作:</strong> 为所有活动接口添加详细的description，包括连接的设备名称、位置、用途等信息。命令示例: interface GigabitEthernet1/0/1 ; description "Connect to AP-Floor3-Room301"</p>
+                        <p><strong>预期效果:</strong> 提升网络可维护性，故障排查时可快速定位问题接口。</p>
+                        <p><strong>实施时机:</strong> 日常维护时逐步完善</p>
+                    </li>
+                    <li class="priority-low">
+                        <strong>🟢 低优先级 - 定期配置备份</strong>
+                        <p><strong>建议操作:</strong> 建立自动化配置备份机制，每周自动备份配置文件到外部存储。可使用FTP/TFTP定期上传配置，或通过脚本自动拉取配置文件。</p>
+                        <p><strong>预期效果:</strong> 确保配置安全，快速恢复能力，满足审计合规要求。</p>
+                        <p><strong>实施时机:</strong> 1个月内建立备份机制</p>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- 性能趋势 -->
+            <div class="section">
+                <h2>📊 性能趋势与预测</h2>
+
+                <div class="analysis-box">
+                    <h3>CPU负载趋势</h3>
+                    <p><strong>当前数据:</strong> CPU使用率32%</p>
+                    <p><strong>趋势分析:</strong> CPU负载适中，系统性能稳定。建议采集至少7天的CPU数据，绘制负载曲线，识别规律性波动。</p>
+                    <p><strong>建议监控:</strong> 设置CPU告警阈值为70%，在负载持续高于此值时进行干预。</p>
+                </div>
+
+                <div class="analysis-box">
+                    <h3>内存使用趋势</h3>
+                    <p><strong>当前使用:</strong> 66.9%</p>
+                    <p><strong>趋势分析:</strong> 内存使用处于健康水平。系统有足够的内存空间支持当前业务。</p>
+                    <p><strong>告警阈值建议:</strong> 建议设置内存使用告警阈值为80%，为系统留出足够的buffer空间。</p>
+                </div>
+
+                <div class="analysis-box">
+                    <h3>温度监控趋势</h3>
+                    <p><strong>当前温度:</strong> 最高N/A°C</p>
+                    <p><strong>趋势分析:</strong> 温度正常，建议监控。温度远低于一般告警阈值(70-80°C)。</p>
+                    <p><strong>季节性考虑:</strong> 当前是冬季，冬季期间建议重点监控温度变化，确保散热系统正常工作。</p>
+                </div>
+            </div>
+
+            <!-- 风险评估 -->
+            <div class="section">
+                <h2>🛡️ 风险评估与应急预案</h2>
+
+                <table class="interface-table">
+                    <thead>
+                        <tr>
+                            <th>风险项</th>
+                            <th>风险等级</th>
+                            <th>发生概率</th>
+                            <th>影响范围</th>
+                            <th>应急措施</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr>
+                            <td>单电源运行</td>
+                            <td><span class="badge badge-warning">中</span></td>
+                            <td>低</td>
+                            <td>全局</td>
+                            <td>备用交换机替换，配置快速恢复</td>
+                        </tr>
+                        <tr>
+                            <td>配置丢失</td>
+                            <td><span class="badge badge-info">低</span></td>
+                            <td>低</td>
+                            <td>恢复时间</td>
+                            <td>定期配置备份，快速恢复流程</td>
+                        </tr>
+                        <tr>
+                            <td>夏季高温</td>
+                            <td><span class="badge badge-info">低</span></td>
+                            <td>中(季节性)</td>
+                            <td>硬件</td>
+                            <td>加强机房空调，温度监控告警</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="analysis-box" style="margin-top: 20px; background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%); border-left-color: #e17055;">
+                    <h3>🚨 应急响应建议</h3>
+                    <p><strong>1. 设备故障应急:</strong></p>
+                    <ul style="margin-left: 20px;">
+                        <li>• 准备备用交换机并预先配置基本参数</li>
+                        <li>• 确保有最新的配置备份文件</li>
+                        <li>• 建立设备替换SOP(标准操作流程)，RTO目标 < 30分钟</li>
+                    </ul>
+
+                    <p style="margin-top: 15px;"><strong>2. 性能异常应急:</strong></p>
+                    <ul style="margin-left: 20px;">
+                        <li>• CPU高负载时优先检查接口流量和日志</li>
+                        <li>• 准备降级方案：关闭非关键功能(如SNMP polling频率降低)</li>
+                        <li>• 必要时重启设备恢复，但需要提前通知业务部门</li>
+                    </ul>
+
+                    <p style="margin-top: 15px;"><strong>3. 安全事件应急:</strong></p>
+                    <ul style="margin-left: 20px;">
+                        <li>• 发现异常流量立即启用ACL临时隔离</li>
+                        <li>• 保存日志和配置快照用于事后分析</li>
+                        <li>• 联系厂商技术支持获取安全公告和补丁</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 巡检结论 -->
+            <div class="section">
+                <h2>✅ 巡检结论</h2>
+
+                <div class="analysis-box" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); border-left-color: #667eea;">
+                    <h3>总体评价</h3>
+                    <p><strong>设备健康度:</strong> 85/100 (良好) - 该S5130S-52S-PWR-HI交换机整体运行状况良好，核心功能正常，硬件健康，已稳定运行46 weeks, 1 day, 21 hours, 5 minutes。</p>
+
+                    <p style="margin-top: 15px;"><strong>关键指标:</strong></p>
+                    <p>• CPU使用率: 32%</p>
+                    <p>• 内存使用率: 66.9%</p>
+                    <p>• 最高温度: N/A°C</p>
+                    <p>• 接口状态: 24 UP / 30 DOWN</p>
+
+                    <p style="margin-top: 15px;"><strong>下一步行动:</strong></p>
+                    <p>1. <strong>立即:</strong> 持续监控关键指标</p>
+                    <p>2. <strong>本周:</strong> 检查DOWN接口状态，确认物理连接</p>
+                    <p>3. <strong>本月:</strong> 评估系统升级可行性，增强安全配置</p>
+                    <p>4. <strong>长期:</strong> 建立监控告警体系，定期巡检机制，配置自动备份</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>🤖 报告生成方式:</strong> 基于Claude AI的智能分析引擎</p>
+            <p><strong>📅 生成时间:</strong> 2026年02月09日 14:02:23</p>
+            <p><strong>🔧 巡检工具:</strong> Network Switch Inspector Skill v2.0</p>
+            <p><strong>📊 数据来源:</strong> SSH实时采集 - 54项专业检测指标</p>
+            <p style="margin-top: 15px; font-size: 0.9em; opacity: 0.8;">本报告由AI自动生成，建议结合实际业务场景和网络环境进行判断。重大变更操作前请务必做好备份和测试。</p>
+        </div>
+    </div>
+</body>
+</html>

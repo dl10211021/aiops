@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>批量巡检总览报告 - 1台设备</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; line-height: 1.6; }
+        .container { max-width: 1600px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; text-align: center; }
+        .header h1 { font-size: 2.8em; margin-bottom: 10px; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; padding: 30px; background: #f8f9fa; }
+        .stat-card { background: white; padding: 25px; border-radius: 10px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .stat-card h3 { color: #666; font-size: 0.85em; margin-bottom: 10px; text-transform: uppercase; }
+        .stat-card .value { font-size: 2.5em; font-weight: bold; color: #667eea; }
+        .status-excellent { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; }
+        .status-good { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; }
+        .status-warning { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; }
+        .status-critical { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); color: white; }
+        .content { padding: 40px; }
+        .device-table { width: 100%; border-collapse: collapse; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .device-table th { background: #667eea; color: white; padding: 15px; text-align: left; font-weight: 600; }
+        .device-table td { padding: 12px 15px; border-bottom: 1px solid #e9ecef; }
+        .device-table tr:hover { background: #f8f9fa; }
+        .badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-size: 0.9em; font-weight: 600; }
+        .badge.status-excellent { background: #11998e; color: white; }
+        .badge.status-good { background: #4facfe; color: white; }
+        .badge.status-warning { background: #ffa94d; color: white; }
+        .badge.status-critical { background: #ff6b6b; color: white; }
+        .btn-view { background: #667eea; color: white; padding: 8px 20px; border-radius: 5px; text-decoration: none; display: inline-block; }
+        .btn-view:hover { background: #5568d3; }
+        .footer { background: #2c3e50; color: white; padding: 30px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 批量巡检总览报告</h1>
+            <p style="font-size: 1.2em; margin-top: 15px;">共巡检 1 台网络设备</p>
+            <p style="font-size: 0.9em; opacity: 0.9; margin-top: 10px;">生成时间: 2026-02-09 14:02:23</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3>设备总数</h3>
+                <div class="value">1</div>
+            </div>
+            <div class="stat-card status-excellent">
+                <h3>优秀设备</h3>
+                <div class="value" style="color: white;">0</div>
+            </div>
+            <div class="stat-card status-good">
+                <h3>良好设备</h3>
+                <div class="value" style="color: white;">1</div>
+            </div>
+            <div class="stat-card status-warning">
+                <h3>警告设备</h3>
+                <div class="value" style="color: white;">0</div>
+            </div>
+            <div class="stat-card status-critical">
+                <h3>严重设备</h3>
+                <div class="value" style="color: white;">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>平均健康分</h3>
+                <div class="value">85</div>
+            </div>
+        </div>
+
+        <div class="content">
+            <h2 style="color: #667eea; font-size: 1.8em; margin-bottom: 20px;">设备列表</h2>
+            <table class="device-table">
+                <thead>
+                    <tr>
+                        <th>设备名称</th>
+                        <th>IP地址</th>
+                        <th>状态</th>
+                        <th>健康评分</th>
+                        <th>CPU</th>
+                        <th>内存</th>
+                        <th>温度</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+        <tr>
+            <td>H3C-192.168.100.100</td>
+            <td>192.168.100.100</td>
+            <td><span class="badge status-good">良好</span></td>
+            <td><strong>85</strong>/100</td>
+            <td>32%</td>
+            <td>66.9%</td>
+            <td>N/A</td>
+            <td><a href="AI_Report_192_168_100_100_20260209_140223.html" class="btn-view" target="_blank">查看详情</a></td>
+        </tr>
+        
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">
+            <p><strong>🤖 报告生成方式:</strong> 基于Claude AI的智能分析引擎</p>
+            <p><strong>📅 生成时间:</strong> 2026-02-09 14:02:23</p>
+            <p><strong>🔧 巡检工具:</strong> Network Switch Inspector Skill v2.2</p>
+        </div>
+    </div>
+</body>
+</html>

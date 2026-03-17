@@ -1,0 +1,19 @@
+﻿::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #181825; }
+        ::-webkit-scrollbar-thumb { background: #45475a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #585b70; }
+        
+        /* 聊天区的 Markdown 样式覆盖 */
+        .markdown-body ul { list-style-type: disc; margin-left: 1.5rem; margin-top: 0.5rem; }
+        .markdown-body pre { background: #11111b; padding: 0.75rem; border-radius: 0.5rem; margin-top: 0.5rem; border: 1px solid #45475a; overflow-x: auto; font-family: monospace; }
+        .markdown-body code { background: #11111b; padding: 0.15rem 0.3rem; border-radius: 0.2rem; color: #a6e3a1; font-family: monospace; font-size: 0.9em; }
+        .markdown-body p { margin-bottom: 0.5rem; }
+        .markdown-body strong { color: #f9e2af; font-weight: bold; }
+        
+        .typing-indicator span {
+            display: inline-block; width: 6px; height: 6px; background-color: #89b4fa; border-radius: 50%; animation: typing 1.4s infinite both; margin: 0 2px;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: 0s; }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }

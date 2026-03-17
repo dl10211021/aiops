@@ -1,0 +1,93 @@
+# 设备配置文件示例
+# 用于配置需要巡检的交换机设备列表
+
+devices:
+  # 核心交换机 - 华为
+  - name: "Core-Switch-01"
+    host: "192.168.1.1"
+    username: "admin"
+    password: "your-password-here"
+    vendor: "huawei"
+    port: 22
+    timeout: 10
+    location: "数据中心机房A"
+    role: "核心交换机"
+    description: "核心交换机01 - 主"
+
+  # 核心交换机 - 华为
+  - name: "Core-Switch-02"
+    host: "192.168.1.2"
+    username: "admin"
+    password: "your-password-here"
+    vendor: "huawei"
+    port: 22
+    timeout: 10
+    location: "数据中心机房B"
+    role: "核心交换机"
+    description: "核心交换机02 - 备"
+
+  # 汇聚交换机 - H3C
+  - name: "Aggr-Switch-01"
+    host: "192.168.2.1"
+    username: "admin"
+    password: "your-password-here"
+    vendor: "h3c"
+    port: 22
+    timeout: 10
+    location: "办公楼3层机房"
+    role: "汇聚交换机"
+    description: "办公楼汇聚交换机"
+
+  # 汇聚交换机 - H3C
+  - name: "Aggr-Switch-02"
+    host: "192.168.2.2"
+    username: "admin"
+    password: "your-password-here"
+    vendor: "h3c"
+    port: 22
+    timeout: 10
+    location: "生产楼2层机房"
+    role: "汇聚交换机"
+    description: "生产区汇聚交换机"
+
+  # 接入交换机 - 华为
+  - name: "Access-Switch-01"
+    host: "192.168.3.1"
+    username: "admin"
+    password: "your-password-here"
+    vendor: "huawei"
+    port: 22
+    timeout: 10
+    location: "办公楼1层"
+    role: "接入交换机"
+    description: "1层接入交换机"
+
+  # 接入交换机 - H3C
+  - name: "Access-Switch-02"
+    host: "192.168.3.2"
+    username: "admin"
+    password: "your-password-here"
+    vendor: "h3c"
+    port: 22
+    timeout: 10
+    location: "办公楼2层"
+    role: "接入交换机"
+    description: "2层接入交换机"
+
+# 配置说明:
+# name: 设备名称（自定义，用于报告中标识）
+# host: 设备IP地址
+# username: SSH登录用户名
+# password: SSH登录密码
+# vendor: 设备厂商 (支持: h3c, huawei)
+# port: SSH端口 (默认22，可选)
+# timeout: 连接超时时间（秒，默认10，可选）
+# location: 设备物理位置（可选，用于报告）
+# role: 设备角色（可选，用于报告）
+# description: 设备描述（可选，用于报告）
+
+# 使用方法:
+# 1. 复制本文件并重命名为 devices.yaml
+# 2. 修改为您实际的设备信息
+# 3. 运行: python scripts/switch_inspector.py devices.yaml
+# 4. 生成报告: python scripts/report_generator.py inspection_results_<timestamp>.json

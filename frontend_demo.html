@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpsCore AIOps Platform</title>
+    <!-- 引入 Tailwind CSS 和 FontAwesome -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 引入 marked.js 解析 AI 回复的 Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        opsDark: '#11111b', // 最深底色 (终端/主背景)
+                        opsSidebar: '#181825', // 侧边栏
+                        opsPanel: '#1e1e2e', // 次级面板/卡片
+                        opsAccent: '#89b4fa', // 主题蓝
+                        opsAlert: '#f38ba8', // 红色警告
+                        opsSuccess: '#a6e3a1' // 绿色成功
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="bg-opsDark text-gray-300 h-screen w-screen flex overflow-hidden font-sans selection:bg-opsAccent selection:text-opsDark">
+
+    <!-- 1. 全局最左侧菜单栏 (Global Navigation) -->
+    <nav class="w-16 bg-opsSidebar border-r border-gray-800 flex flex-col items-center py-4 space-y-8 z-20 shadow-xl">
+        <!-- Logo -->
+        <div class="w-10 h-10 bg-opsAccent/10 text-opsAccent rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(137,180,250,0.3)] cursor-pointer" title="OpsCore">
+            <i class="fa-solid fa-bolt"></i>
+        </div>
+        
+        <!-- 主要导航 -->
+        <div class="flex flex-col space-y-4 w-full px-2">
+            <div class="nav-item group cursor-pointer p-3 rounded-lg flex justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition relative" data-view="chatView" onclick="switchView('chatView')">
+                <i class="fa-solid fa-comments text-xl"></i>
+                <span class="absolute left-14 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition z-50">AI 会话中心</span>
+            </div>
+            
+            <div class="nav-item group cursor-pointer p-3 rounded-lg flex justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition relative" data-view="assetView" onclick="switchView('assetView')">
+                <i class="fa-solid fa-server text-xl"></i>
+                <span class="absolute left-14 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition z-50">全域资产网关 (Vault)</span>
+            </div>
+            
+            <div class="nav-item group cursor-pointer p-3 rounded-lg flex justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition relative" data-view="cronView" onclick="switchView('cronView')">
+                <i class="fa-solid fa-clock-rotate-left text-xl"></i>
+                <span class="absolute left-14 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition z-50">自动化巡检 (Cron)</span>
+            </div>
+            
+            <div class="nav-item group cursor-pointer p-3 rounded-lg flex justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition relative" data-view="skillsView" onclick="switchView('skillsView')">
+                <i class="fa-solid fa-layer-group text-xl"></i>
+                <span class="absolute left-14 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition z-50">技能插件市场</span>
+            </div>
+        </div>
+        
+        <!-- 底部设置 -->
+        <div class="mt-auto flex flex-col space-y-4 w-full px-2">
+            <div class="nav-item group cursor-pointer p-3 rounded-lg flex justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition relative" data-view="knowledgeView" onclick="switchView('knowledgeView'); fetchKnowledgeDocuments();">
+                <i class="fa-solid fa-book-open text-lg"></i>
+                <span class="absolute left-14 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition z-50">运维知识库 (RAG)</span>
+            </div>
+            <div class="nav-item group cursor-pointer p-3 rounded-lg flex justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition relative" onclick="toggleModal('notificationModal')">
+                <i class="fa-solid fa-bell text-lg"></i>
+                <span class="absolute left-14 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition z-50">告警通知配置</span>
+            </div>
+            <div class="nav-item group cursor-pointer p-3 rounded-lg flex justify-center text-gray-500 hover:text-white hover:bg-gray-800 transition relative" onclick="toggleModal('apiConfigModal')">
+                <i class="fa-solid fa-gear text-lg"></i>
+                <span class="absolute left-14 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition z-50">大模型底座设置</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主工作区容器 (通过 JavaScript 切换显示) -->
+    <div class="flex-1 relative bg-opsDark">
+        
+        <!-- ==================== 视图 1：AI 会话中心 (Chat View) ==================== -->
+        <div id="chatView" class="view-container flex h-full w-full absolute inset-0">
+            <!-- 次级边栏：会话列表 -->
+            <div class="w-64 bg-opsPanel border-r border-gray-800 flex flex-col z-10 shadow-lg">
+                <div class="p-4 border-b border-gray-800 flex items-center justify-between">
+                    <span class="font-bold text-gray-200">活跃会话</span>
+                    <button class="text-xs bg-opsAccent/20 text-opsAccent hover:bg-opsAccent hover:text-opsDark px-2 py-1 rounded transition" onclick="switchView('assetView')" title="去资产网关唤醒机器"><i class="fa-solid fa-plus mr-1"></i>新会话</button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-2" id="activeSessionsWrapper">
+                    <div id="noSessionHint" class="px-3 py-4 text-xs text-gray-500 text-center">暂无活跃会话<br><span class="mt-2 inline-block cursor-pointer text-opsAccent hover:underline" onclick="switchView('assetView')">前往资产网关唤醒</span></div>
+                </div>
+            </div>
+            
+            <!-- 主聊天区 -->
+            <div class="flex-1 flex flex-col relative bg-opsDark">
+                <!-- 顶栏 -->
+                <header class="h-14 border-b border-gray-800 flex items-center justify-between px-6 bg-opsPanel/80 backdrop-blur z-10">
+                    <div class="flex items-center space-x-3">
+                        <span id="topBadge" class="bg-gray-800 text-xs px-2 py-1 rounded border border-gray-700 hidden">
+                            <i class="fa-solid fa-plug text-opsSuccess mr-1"></i> <span id="topSessionName">未连接</span>
+                        </span>
+                        <span class="bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700/50 px-2 py-1 rounded text-gray-400 text-xs cursor-pointer transition flex items-center" onclick="openDynamicSkillsModal()" title="动态修改当前会话挂载的技能卡带">
+                            <i class="fa-solid fa-puzzle-piece text-opsAccent mr-1.5"></i>技能: <span id="topMountedSkillsCount" class="font-bold text-white ml-1">0</span>
+                        </span>
+                        <span id="heartbeatToggleBtn" class="bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700/50 px-2 py-1 rounded text-gray-400 text-xs cursor-pointer transition flex items-center hidden" onclick="toggleHeartbeat()" title="开启/关闭主动后台心跳">
+                            <i id="heartbeatIcon" class="fa-regular fa-heart mr-1.5"></i><span id="heartbeatText">心跳关闭</span>
+                        </span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <select id="modelSelector" class="appearance-none bg-gray-800 border border-gray-700 text-gray-300 text-[11px] rounded px-2 py-1 pr-6 focus:outline-none focus:border-opsAccent font-mono">
+                            <option value="gemini-3.1-pro-preview" selected>gemini-3.1-pro-preview</option>
+                            <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                            <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                        </select>
+                    </div>
+                </header>
+
+                <!-- 聊天历史框容器 -->
+                <div class="flex-1 overflow-hidden relative" id="mainChatWrapper">
+                    <div class="absolute inset-0 flex flex-col items-center justify-center opacity-30 z-0" id="welcomeBox">
+                        <i class="fa-solid fa-satellite-dish text-6xl mb-4 text-opsAccent"></i>
+                        <h2 class="text-xl font-bold mb-2 tracking-widest text-white">OpsCore AIOps 编排中心</h2>
+                        <p class="text-sm">前往【全域资产网关】唤醒一台设备，或者召唤【全局总管】开始工作。</p>
+                    </div>
+                </div>
+
+                <!-- 底部输入框 -->
+                <div class="p-4 bg-opsPanel border-t border-gray-800 shadow-[0_-10px_20px_rgba(0,0,0,0.3)] z-10">
+                    <div class="max-w-5xl mx-auto mb-2 flex justify-between items-center text-xs text-gray-400">
+                        <div class="flex space-x-3">
+                            <button onclick="switchView('knowledgeView')" class="hover:text-white transition flex items-center" title="向AI提供参考文档">
+                                <i class="fa-solid fa-file-arrow-up mr-1"></i>添加TXT/文档
+                            </button>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button onclick="clearChatHistory()" class="hover:text-opsAlert transition flex items-center" title="清空当前会话历史">
+                                <i class="fa-solid fa-trash mr-1"></i>清空历史
+                            </button>
+                            <button onclick="exportChatHistory()" class="hover:text-opsAccent transition flex items-center" title="导出对话记录为Markdown">
+                                <i class="fa-solid fa-download mr-1"></i>导出记录
+                            </button>
+                        </div>
+                    </div>
+                    <div class="relative flex items-center max-w-5xl mx-auto">
+                        <textarea id="chatInput" rows="1" class="w-full bg-gray-900 border border-gray-700 text-gray-200 text-sm rounded-lg pl-4 pr-12 py-3 focus:outline-none focus:border-opsAccent focus:ring-1 focus:ring-opsAccent resize-none shadow-inner" placeholder="输入诊断指令... (回车发送，Shift+Enter换行)" onkeydown="handleEnter(event)"></textarea>
+                        
+                        <button onclick="sendChatMessage()" id="btnSendChat" class="absolute right-2 bg-opsAccent hover:bg-blue-400 text-opsDark rounded-md p-1.5 transition flex items-center justify-center w-8 h-8 shadow">
+                            <i class="fa-solid fa-paper-plane text-sm"></i>
+                        </button>
+                        <button onclick="stopChatSession()" id="btnStopChat" class="absolute right-12 bg-red-900/50 hover:bg-red-900 text-opsAlert rounded-md p-1.5 transition items-center justify-center w-8 h-8 shadow hidden" title="中止任务">
+                            <i class="fa-solid fa-stop text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 视图 2：全域资产网关 (Global Asset Gateway) ==================== -->
+        <div id="assetView" class="view-container hidden flex-col h-full w-full absolute inset-0 bg-opsDark">
+            <header class="h-16 border-b border-gray-800 flex items-center justify-between px-8 bg-opsPanel">
+                <h1 class="text-xl font-bold text-white"><i class="fa-solid fa-network-wired text-opsAccent mr-3"></i>全域资产网关 (Global Asset Gateway)</h1>
+                <button onclick="toggleModal('connModal')" class="bg-opsAccent text-opsDark font-bold px-4 py-2 rounded shadow hover:bg-blue-400 transition text-sm">
+                    <i class="fa-solid fa-plus mr-2"></i>纳管新资产
+                </button>
+            </header>
+            
+            <div class="flex-1 p-8 overflow-y-auto">
+                <!-- 资产控制台概览卡片 -->
+                <div class="grid grid-cols-4 gap-4 mb-8">
+                    <div class="bg-opsPanel border border-gray-800 rounded-lg p-4 flex items-center">
+                        <div class="w-12 h-12 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center text-xl mr-4"><i class="fa-solid fa-server"></i></div>
+                        <div><div class="text-xs text-gray-400">管理节点总数</div><div class="text-xl font-bold text-white" id="statTotalAssets">-</div></div>
+                    </div>
+                    <!-- 可以放其他统计数据 -->
+                </div>
+
+                <h2 class="text-sm font-bold text-gray-400 mb-4 border-b border-gray-800 pb-2 uppercase tracking-widest">已持久化的凭证列表</h2>
+                
+                <div id="assetGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    <div class="text-gray-500 italic p-4"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在加载资产网关...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 视图 3：自动化巡检 (Cron) ==================== -->
+        <div id="cronView" class="view-container hidden flex-col h-full w-full absolute inset-0 bg-opsDark">
+            <!-- 这部分我们稍后把原来在 Modal 里的内容平铺出来 -->
+            <header class="h-16 border-b border-gray-800 flex items-center justify-between px-8 bg-opsPanel">
+                <h1 class="text-xl font-bold text-white"><i class="fa-solid fa-clock-rotate-left text-opsAccent mr-3"></i>自动化巡检任务 (Cron)</h1>
+            </header>
+            <div class="flex flex-1 overflow-hidden">
+                <div class="w-1/3 border-r border-gray-800 bg-opsPanel/50 flex flex-col">
+                    <div class="p-4 border-b border-gray-800 font-bold text-sm flex justify-between items-center text-gray-300">
+                        <span>正在执行的计划</span>
+                        <button onclick="fetchCronJobs()" class="text-opsAccent hover:text-white"><i class="fa-solid fa-rotate"></i></button>
+                    </div>
+                    <div id="cronJobList" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+                </div>
+                <div class="w-2/3 p-8 overflow-y-auto">
+                    <h3 class="font-bold text-lg text-white mb-6"><i class="fa-solid fa-plus-circle text-opsAccent mr-2"></i>新建巡检计划</h3>
+                    <div class="space-y-5 max-w-2xl bg-opsPanel p-6 rounded-lg border border-gray-800">
+                        <!-- 表单内容与原 Modal 一致，略微调整样式适应全屏 -->
+                        <div class="flex items-center">
+                            <label class="w-32 text-right text-sm text-gray-400 mr-4 font-bold">Cron 表达式:</label>
+                            <input id="cronExpr" type="text" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-opsAccent font-mono" value="0 9 * * *">
+                        </div>
+                        <div class="flex items-center">
+                            <label class="w-32 text-right text-sm text-gray-400 mr-4 font-bold">目标主机/IP:</label>
+                            <input id="cronHost" type="text" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-opsAccent" value="localhost" placeholder="输入 localhost 或 目标 IP">
+                        </div>
+                        <div class="flex items-center">
+                            <label class="w-32 text-right text-sm text-gray-400 mr-4 font-bold">远程用户名:</label>
+                            <input id="cronUser" type="text" class="w-1/3 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-opsAccent" value="root">
+                            <label class="w-16 text-right text-sm text-gray-400 mr-2 font-bold">密码:</label>
+                            <input id="cronPwd" type="password" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-opsAccent">
+                        </div>
+                        <div class="flex items-center">
+                            <label class="w-32 text-right text-sm text-gray-400 mr-4 font-bold">指派 AI 角色:</label>
+                            <select id="cronProfile" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-opsAccent">
+                                <option value="monitor" selected>📈 卓豪监控总管 (ManageEngine)</option>
+                                <option value="default">👨‍💻 通用运维排查 (常规系统健康检查)</option>
+                                <option value="security">🛡️ 安全扫描 (合规与漏洞扫描)</option>
+                                <option value="dba">🗄️ DBA 数据库分析 (慢查询统计)</option>
+                            </select>
+                        </div>
+                        <div class="flex items-start">
+                            <label class="w-32 text-right text-sm text-gray-400 mr-4 mt-2 font-bold">巡检指令 (Prompt):</label>
+                            <textarea id="cronMessage" rows="5" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-opsAccent resize-none" placeholder="告诉 AI 巡检时需要查什么..."></textarea>
+                        </div>
+                        <div id="cronError" class="text-opsAlert text-xs text-center hidden"></div>
+                        <div class="flex justify-end pt-4">
+                            <button onclick="addCronJob()" id="btnSaveCron" class="px-6 py-2.5 bg-opsAccent hover:bg-blue-400 text-opsDark font-bold rounded shadow transition">提交任务</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 视图 4：技能卡带大盘 (Skills) ==================== -->
+        <div id="skillsView" class="view-container hidden flex-col h-full w-full absolute inset-0 bg-opsDark">
+            <header class="h-16 border-b border-gray-800 flex items-center justify-between px-8 bg-opsPanel">
+                <h1 class="text-xl font-bold text-white"><i class="fa-solid fa-puzzle-piece text-opsAccent mr-3"></i>全局插件市场 (Skills Registry)</h1>
+                <div class="flex items-center space-x-4">
+                    <div class="text-sm text-gray-400">您可以直接将下载的卡带放入 <code>my_custom_skills</code> 目录。</div>
+                    <button onclick="scanLocalSkills()" class="border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 font-bold px-4 py-2 rounded transition text-sm">
+                        <i class="fa-solid fa-rotate mr-2"></i>扫描本地磁盘
+                    </button>
+                    <button onclick="launchSkillCreatorCLI()" class="bg-opsAccent text-opsDark font-bold px-4 py-2 rounded shadow hover:bg-blue-400 transition text-sm">
+                        <i class="fa-solid fa-terminal mr-2"></i>启动技能研发 CLI
+                    </button>
+                </div>
+            </header>
+
+            <div class="flex-1 p-8 overflow-y-auto" id="skillOverviewContent">
+                <!-- 卡片在这里动态生成 -->
+            </div>
+        </div>
+        
+        <!-- ==================== 视图 5：私有运维知识库大盘 (RAG Knowledge Base) ==================== -->
+        <div id="knowledgeView" class="view-container hidden flex-col h-full w-full absolute inset-0 bg-opsDark">
+            <header class="h-16 border-b border-gray-800 flex items-center justify-between px-8 bg-opsPanel">
+                <h1 class="text-xl font-bold text-white"><i class="fa-solid fa-book-open text-opsAccent mr-3"></i>私有运维知识库 (Enterprise RAG)</h1>
+                <div class="relative w-72">
+                    <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm"></i>
+                    <input type="text" id="kbSearchInput" onkeyup="filterKbList()" class="w-full bg-gray-900 border border-gray-700 text-sm rounded-full pl-9 pr-4 py-1.5 focus:border-opsAccent text-gray-200 outline-none transition shadow-inner" placeholder="搜索已上传的文档名称...">
+                </div>
+            </header>
+
+            <div class="flex flex-1 overflow-hidden">
+                <!-- 左侧上传区 -->
+                <div class="w-1/3 border-r border-gray-800 bg-opsPanel/30 flex flex-col p-8">
+                    <h3 class="font-bold text-lg text-white mb-2"><i class="fa-solid fa-cloud-arrow-up text-opsAccent mr-2"></i>批量注入新知识</h3>
+                    <p class="text-xs text-gray-400 mb-8 leading-relaxed">支持一次性拖拽/选择多个文件。AI 将在后台逐个对文档进行智能切片与高维空间向量化映射。</p>
+                    
+                    <div class="flex items-center justify-center w-full mb-4">
+                        <label for="kbFileInput" class="flex flex-col items-center justify-center w-full h-48 border-2 border-gray-700 border-dashed rounded-xl cursor-pointer bg-gray-900/50 hover:bg-gray-800/80 transition shadow-inner">
+                            <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                                <i class="fa-solid fa-file-arrow-up text-5xl text-gray-500 mb-4 group-hover:text-opsAccent transition"></i>
+                                <p class="mb-2 text-sm text-gray-400"><span class="font-semibold text-opsAccent">点击选择文件</span> 或拖拽到此处</p>
+                                <p class="text-xs text-gray-600 font-mono">.pdf, .docx, .txt (支持多选批量上传)</p>
+                            </div>
+                            <input id="kbFileInput" type="file" class="hidden" accept=".pdf,.docx,.txt" multiple onchange="updateKbFileLabel()" />
+                        </label>
+                    </div>
+                    
+                    <div id="kbFileName" class="text-xs text-gray-300 mb-6 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto bg-gray-900/50 p-3 rounded-lg hidden border border-gray-800"></div>
+                    
+                    <button onclick="uploadKnowledgeDocument()" class="w-full py-3 bg-opsAccent hover:bg-blue-400 text-opsDark font-bold rounded-lg shadow-lg transition flex items-center justify-center text-sm">
+                        <i class="fa-solid fa-microchip mr-2"></i> 启动向量化引擎
+                    </button>
+                    <div id="kbUploadMsg" class="text-xs text-center hidden mt-4 bg-gray-900/80 p-3 rounded-lg border border-gray-700"></div>
+                </div>
+
+                <!-- 右侧文档列表区 -->
+                <div class="w-2/3 p-8 flex flex-col bg-opsDark relative">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="font-bold text-white text-lg"><i class="fa-solid fa-database text-opsAccent mr-2"></i>已入库知识资产 (<span id="kbDocCount">0</span>)</h3>
+                        <button onclick="fetchKnowledgeDocuments()" class="text-xs bg-gray-800 border border-gray-700 px-3 py-1.5 rounded hover:bg-gray-700 text-gray-300 transition shadow"><i class="fa-solid fa-rotate mr-2"></i>强制刷新</button>
+                    </div>
+                    
+                    <div class="flex-1 bg-opsPanel border border-gray-800 rounded-xl overflow-hidden flex flex-col shadow-2xl">
+                        <!-- 表头 -->
+                        <div class="flex bg-gray-900 border-b border-gray-800 px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                            <div class="flex-[3]">文件名称 (Source)</div>
+                            <div class="flex-1 text-center">状态</div>
+                            <div class="w-24 text-center">危险操作</div>
+                        </div>
+                        <!-- 列表内容 -->
+                        <div id="kbDocList" class="flex-1 overflow-y-auto p-2 space-y-1">
+                            <div class="text-center text-sm text-gray-500 italic mt-20"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在连接 LanceDB 向量引擎...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ---------------------------------------------------------------------- -->
+    <!-- 模态框组 (Modals) 保留少数必须的弹窗 -->
+    <!-- ---------------------------------------------------------------------- -->
+
+    <!-- 新增资产 / 纳管连接 模态框 (原来左上角+号点出来的那个) -->
+    <div id="connModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center hidden z-50">
+        <div class="bg-opsPanel border border-gray-700 rounded-xl shadow-2xl w-[650px] flex flex-col overflow-hidden">
+            <div class="flex justify-between items-center p-4 border-b border-gray-800 bg-gray-900/80">
+                <span class="font-bold text-gray-200">添加 / 唤醒资产连接</span>
+                <button onclick="toggleModal('connModal')" class="text-gray-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto space-y-5 max-h-[70vh]">
+                <!-- 表单字段整合之前的最优解 -->
+                <div class="flex items-center">
+                    <label class="w-28 text-right text-sm text-gray-400 mr-4 font-bold text-opsAccent"><i class="fa-solid fa-tag mr-1"></i>资产别名:</label>
+                    <input id="connRemark" type="text" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-opsAccent" placeholder="例: 核心支付网关 / 财务库">
+                </div>
+                
+                <div class="flex items-center">
+                    <label class="w-28 text-right text-sm text-gray-400 mr-4 font-bold"><i class="fa-solid fa-id-badge mr-1 text-opsAccent"></i>Agent 角色:</label>
+                    <select id="connAgentProfile" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-opsAccent font-medium">
+                        <option value="master" class="text-yellow-400 font-bold">👑 跨系统总控指挥官 (Master Orchestrator)</option>
+                        <option value="default" selected>👨‍💻 通用运维多面手 (Default)</option>
+                        <option value="security">🛡️ 安全审计守卫 (严格只读)</option>
+                        <option value="dba">🗄️ 数据库架构专家 (DBA)</option>
+                        <option value="monitor">📈 全网监控大管家 (ManageEngine)</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-center">
+                    <label class="w-28 text-right text-sm text-gray-400 mr-4 font-bold"><i class="fa-solid fa-link mr-1"></i>资产大类:</label>
+                    <select id="connAssetCategory" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-opsAccent font-medium" onchange="handleAssetCategoryChange()">
+                        <option value="linux" selected>💻 Linux 服务器 (SSH 直连)</option>
+                        <option value="windows">🪟 Windows 服务器 (WinRM/SMB)</option>
+                        <option value="database">🗄️ 数据库引擎 (MySQL/Oracle/PG/SQLServer)</option>
+                        <option value="network">🖧 网络设备 (交换机/路由器/防火墙)</option>
+                        <option value="api">🌐 Web API 服务 (Prometheus/ManageEngine/第三方平台)</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-center">
+                    <label id="lblConnHost" class="w-28 text-right text-sm text-gray-400 mr-4">主机/IP/URL:</label>
+                    <input id="connHost" type="text" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white" value="localhost">
+                    <label id="lblConnPort" class="w-12 text-right text-sm text-gray-400 mx-2">端口:</label>
+                    <input id="connPort" type="text" class="w-16 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white" value="22" placeholder="默认">
+                </div>
+                
+                <div class="flex items-center">
+                    <label id="lblConnUser" class="w-28 text-right text-sm text-gray-400 mr-4">账号/用户名:</label>
+                    <input id="connUser" type="text" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white" value="root" placeholder="可选">
+                </div>
+                
+                <div class="flex items-center">
+                    <label id="lblConnPwd" class="w-28 text-right text-sm text-gray-400 mr-4">密码/Token:</label>
+                    <input id="connPwd" type="password" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white" placeholder="****** (可选)">
+                </div>
+
+                <!-- 动态扩展字段容器 -->
+                <div id="dynamicFieldsContainer" class="space-y-5 hidden border-l-2 border-opsAccent/50 pl-4 ml-8">
+                    <div id="fieldDbName" class="flex items-center hidden">
+                        <label class="w-24 text-right text-sm text-gray-400 mr-4">数据库名/SID:</label>
+                        <input id="connDbName" type="text" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-opsAccent" placeholder="例: ORCL 或 db_user">
+                    </div>
+                    <div id="fieldEnablePwd" class="flex items-center hidden">
+                        <label class="w-24 text-right text-sm text-gray-400 mr-4">Enable 密码:</label>
+                        <input id="connEnablePwd" type="password" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-opsAccent" placeholder="特权模式密码 (如需)">
+                    </div>
+                    <div id="fieldAuthHeader" class="flex items-center hidden">
+                        <label class="w-24 text-right text-sm text-gray-400 mr-4">Auth Header:</label>
+                        <input id="connAuthHeader" type="text" class="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-opsAccent" placeholder="例: Authorization 或 X-Api-Key" value="Authorization">
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-800 pt-2 mt-2">
+                    <div class="flex items-center justify-between cursor-pointer group" onclick="document.getElementById('advancedExtraArgsContainer').classList.toggle('hidden')">
+                        <span class="text-xs font-bold text-gray-500 hover:text-gray-300 transition"><i class="fa-solid fa-sliders mr-2"></i>高级选项: 自定义心跳与凭证</span>
+                        <i class="fa-solid fa-chevron-down text-gray-600 group-hover:text-gray-400 transition text-xs"></i>
+                    </div>
+                    <div id="advancedExtraArgsContainer" class="hidden mt-3 space-y-3">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">自定义心跳巡检指令 (可选):</label>
+                            <textarea id="connHeartbeatPrompt" rows="2" class="w-full bg-black/50 border border-gray-700 rounded px-3 py-2 text-xs text-opsAccent focus:outline-none focus:border-opsAccent font-mono" placeholder="默认 AI 自由发挥。可覆盖为：'查一下 /var/log/nginx/error.log'"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 mb-1">附加底层通信凭证 (JSON):</label>
+                            <textarea id="connExtraArgs" rows="2" class="w-full bg-black/50 border border-gray-700 rounded px-3 py-2 text-xs text-green-400 focus:outline-none focus:border-opsAccent font-mono" placeholder='透传给底层 Skill 脚本的原始 JSON 参数，例如: {"domain": "corp.local"}'></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-900/50 p-4 rounded-lg border border-gray-800">
+                    <div class="text-sm font-bold text-gray-300 mb-3"><i class="fa-solid fa-puzzle-piece text-opsAccent mr-2"></i>绑定技能卡带 (Skill Mounts)</div>
+                    <div class="grid grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto p-1" id="skillsCheckboxList">
+                        <!-- 动态注入 -->
+                    </div>
+                </div>
+                
+                <div class="flex items-center p-3 bg-red-900/10 rounded border border-red-900/30">
+                    <label class="flex items-center space-x-2 text-sm cursor-pointer w-full">
+                        <input id="connAllowMod" type="checkbox" class="w-4 h-4 text-opsAlert bg-gray-900 border-gray-700 rounded">
+                        <span class="text-gray-300 font-bold ml-2">⚠️ 授予 AI 【系统读写与修改】 最高权限</span>
+                        <span class="text-xs text-gray-500 ml-auto">(默认打勾则允许执行 rm、配置更改等高危指令)</span>
+                    </label>
+                </div>
+                
+                <div id="connError" class="text-opsAlert text-xs text-center hidden"></div>
+            </div>
+
+            <div class="p-4 border-t border-gray-800 bg-gray-900/80 flex justify-end space-x-3">
+                <button onclick="toggleModal('connModal')" class="px-5 py-2 text-sm text-gray-400 hover:text-white transition">取消</button>
+                <button onclick="testConnection()" id="testConnBtn" class="px-4 py-2 text-sm border border-opsAccent text-opsAccent hover:bg-opsAccent/10 font-bold rounded transition"><i class="fa-solid fa-stethoscope mr-1"></i>连通性测试</button>
+                <button onclick="connectToServer()" id="connBtn" class="px-6 py-2 text-sm bg-opsAccent hover:bg-blue-400 text-opsDark font-bold rounded shadow transition">接管资产</button>
+            </div>
+        </div>
+    </div>
+
+    
+    <!-- 动态技能挂载模态框 -->
+    <div id="dynamicSkillsModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center hidden z-[80]">
+        <div class="bg-opsPanel border border-gray-700 rounded-lg shadow-2xl w-[500px] flex flex-col overflow-hidden">
+            <div class="flex justify-between items-center p-4 border-b border-gray-800 bg-gray-900/80">
+                <span class="font-bold text-sm text-opsAccent"><i class="fa-solid fa-puzzle-piece mr-2"></i>动态挂载技能卡带</span>
+                <button onclick="toggleModal('dynamicSkillsModal')" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="p-6">
+                <div class="text-xs text-gray-400 mb-3">为当前正在连接的会话实时增减 AI 特权能力：</div>
+                <div class="bg-black/50 border border-gray-800 rounded p-2 text-xs text-gray-300 space-y-2 max-h-[50vh] overflow-y-auto" id="dynamicSkillsCheckboxList">
+                    <div class="text-center text-gray-500 italic py-2"><i class="fa-solid fa-spinner fa-spin mr-1"></i> 正在加载插件市场...</div>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-gray-800 bg-gray-900/50 flex justify-end space-x-3">
+                <button onclick="saveDynamicSkills()" id="btnSaveDynamicSkills" class="px-5 py-2 text-sm bg-opsAccent hover:bg-blue-400 text-opsDark font-bold rounded shadow transition">保存配置并生效</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 告警与系统设置模态框 -->
+    <div id="notificationModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center hidden z-50">
+        <div class="bg-opsPanel border border-gray-700 rounded-lg shadow-2xl w-[500px] flex flex-col overflow-hidden">
+            <div class="flex justify-between items-center p-4 border-b border-gray-800">
+                <span class="font-bold text-white"><i class="fa-solid fa-bell mr-2 text-opsAccent"></i>告警通讯渠道配置</span>
+                <button onclick="toggleModal('notificationModal')" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="p-6 space-y-4">
+                <div class="text-xs text-gray-400 mb-2">配置企业 IM 机器人的 Webhook 地址，AI 完成排障后将自动推送图文报告。</div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 mb-1"><i class="fa-brands fa-weixin mr-1 text-green-400"></i>企业微信 Webhook:</label>
+                    <input id="wechatWebhookInput" type="text" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white font-mono" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 mb-1"><i class="fa-solid fa-paper-plane mr-1 text-blue-400"></i>钉钉 Webhook:</label>
+                    <input id="dingtalkWebhookInput" type="text" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white font-mono" placeholder="https://oapi.dingtalk.com/robot/send?access_token=...">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 mb-1"><i class="fa-solid fa-envelope mr-1 text-yellow-400"></i>接收报警邮箱 (Email):</label>
+                    <input id="emailInput" type="email" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white font-mono" placeholder="admin@company.com">
+                </div>
+                
+                <div id="notificationSaveMsg" class="text-opsSuccess text-xs text-center hidden">✅ 告警通道配置已保存并生效！</div>
+            </div>
+            <div class="p-4 border-t border-gray-800 bg-gray-900/50 flex justify-end space-x-3">
+                <button onclick="toggleModal('notificationModal')" class="px-5 py-2 text-sm text-gray-400 hover:text-white transition">取消</button>
+                <button onclick="saveNotificationConfig()" class="px-5 py-2 text-sm bg-opsAccent hover:bg-blue-400 text-opsDark font-bold rounded shadow transition">保存配置 (Save)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- API 配置模态框 -->
+    <div id="apiConfigModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex justify-center items-center hidden z-50">
+        <div class="bg-opsPanel border border-gray-700 rounded-lg shadow-2xl w-[500px] flex flex-col overflow-hidden">
+            <div class="flex justify-between items-center p-4 border-b border-gray-800">
+                <span class="font-bold text-white"><i class="fa-solid fa-gear mr-2 text-opsAccent"></i>大模型底座设置</span>
+                <button onclick="toggleModal('apiConfigModal')" class="text-gray-400"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+                        <div class="p-6 space-y-4">
+                <div class="flex flex-wrap gap-2 mb-2">
+                    <button onclick="setLLMPreset('gemini')" class="text-xs bg-gray-800 border border-gray-700 px-3 py-1.5 rounded hover:bg-gray-700 text-gray-300 transition">Gemini</button>
+                    <button onclick="setLLMPreset('openai')" class="text-xs bg-gray-800 border border-gray-700 px-3 py-1.5 rounded hover:bg-gray-700 text-gray-300 transition">OpenAI</button>
+                    <button onclick="setLLMPreset('deepseek')" class="text-xs bg-gray-800 border border-gray-700 px-3 py-1.5 rounded hover:bg-gray-700 text-gray-300 transition">DeepSeek</button>
+                    <button onclick="setLLMPreset('ollama')" class="text-xs bg-gray-800 border border-gray-700 px-3 py-1.5 rounded hover:bg-gray-700 text-gray-300 transition">Ollama</button>
+                    <button onclick="setLLMPreset('vllm')" class="text-xs bg-gray-800 border border-gray-700 px-3 py-1.5 rounded hover:bg-gray-700 text-gray-300 transition">vLLM</button>
+                    <button onclick="setLLMPreset('anthropic')" class="text-xs bg-gray-800 border border-gray-700 px-3 py-1.5 rounded hover:bg-gray-700 text-gray-300 transition">Anthropic</button>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 mb-1">Base URL (API 地址):</label>
+                    <input id="apiBaseUrlInput" type="text" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white font-mono" value="https://generativelanguage.googleapis.com/v1beta/openai/">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 mb-1">API Key (密钥):</label>
+                    <input id="apiKeyInput" type="password" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm text-white font-mono" value="AIzaSyB72JWI-l3-ihOr0FjZjh3Rln8oujncpPM">
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="testLLMConnection()" id="btnTestLLM" class="text-xs bg-gray-800 border border-gray-700 px-3 py-1.5 rounded hover:bg-gray-700 text-gray-300 transition"><i class="fa-solid fa-stethoscope mr-1"></i>测试连通性</button>
+                    <span id="llmTestMsg" class="text-xs hidden"></span>
+                </div>
+                <div id="apiSaveMsg" class="text-opsSuccess text-xs text-center hidden">✅ 配置已成功下发至后端！模型列表已刷新。</div>
+            </div>
+            <div class="p-4 border-t border-gray-800 bg-gray-900/50 flex justify-end">
+                <button onclick="saveApiConfig()" class="px-5 py-2 text-sm bg-opsAccent text-opsDark font-bold rounded shadow transition">保存并刷新模型</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=4"></script>
+</body>
+</html>

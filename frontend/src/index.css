@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ops-dark: #11111b;
+  --color-ops-sidebar: #181825;
+  --color-ops-panel: #1e1e2e;
+  --color-ops-accent: #89b4fa;
+  --color-ops-alert: #f38ba8;
+  --color-ops-success: #a6e3a1;
+  --color-ops-text: #cdd6f4;
+  --color-ops-subtext: #a6adc8;
+  --color-ops-surface0: #313244;
+  --color-ops-surface1: #45475a;
+  --color-ops-overlay: #6c7086;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-ops-dark);
+  color: var(--color-ops-text);
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-ops-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ops-surface1);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ops-overlay);
+}
+
+/* Markdown content styling */
+.markdown-body {
+  line-height: 1.7;
+}
+.markdown-body pre {
+  background: var(--color-ops-dark);
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.markdown-body code {
+  background: var(--color-ops-dark);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.markdown-body pre code {
+  padding: 0;
+  background: none;
+}
+.markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+}
+.markdown-body th, .markdown-body td {
+  border: 1px solid var(--color-ops-surface1);
+  padding: 6px 12px;
+  text-align: left;
+}
+.markdown-body th {
+  background: var(--color-ops-surface0);
+}
+.markdown-body blockquote {
+  border-left: 3px solid var(--color-ops-accent);
+  padding-left: 12px;
+  margin-left: 0;
+  color: var(--color-ops-subtext);
+}
+
+/* Pulse animation for loading */
+@keyframes pulse-dot {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
+.typing-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }

@@ -1,0 +1,1210 @@
+{
+  "version": 1,
+  "lastUpdated": 1771996502758,
+  "plugins": [
+    {
+      "filename": "act.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\automation\\act.md",
+        "filename": "act.md",
+        "name": "act",
+        "description": "Execute GitHub Actions locally using act",
+        "allowed_tools": [
+          "Read",
+          "Edit",
+          "Bash"
+        ],
+        "category": "automation",
+        "type": "command",
+        "size": 1363,
+        "contentHash": "15e66bc165a2d5b7bd0b65efa022f412aa893998970f319127e97645eee2695c",
+        "installedAt": 1771996382326,
+        "updatedAt": 1771996382326
+      }
+    },
+    {
+      "filename": "feature.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\git\\feature.md",
+        "filename": "feature.md",
+        "name": "feature",
+        "description": "Create a new Git Flow feature branch from develop with proper naming and tracking",
+        "allowed_tools": [
+          "Bash(git:*)"
+        ],
+        "category": "git",
+        "type": "command",
+        "size": 4902,
+        "contentHash": "0faf89d8da203d8f85b3b145598211a873484733afea65d9625cac523a9556ca",
+        "installedAt": 1771996382854,
+        "updatedAt": 1771996382854
+      }
+    },
+    {
+      "filename": "flow-status.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\git\\flow-status.md",
+        "filename": "flow-status.md",
+        "name": "flow-status",
+        "description": "Display comprehensive Git Flow status including branch type, sync status, changes, and merge targets",
+        "allowed_tools": [
+          "Bash(git:*)",
+          "Read"
+        ],
+        "category": "git",
+        "type": "command",
+        "size": 9310,
+        "contentHash": "3c18df6223ab193999039e7ecf6af930274d68aef903845e3119ffa14b981926",
+        "installedAt": 1771996384081,
+        "updatedAt": 1771996384081
+      }
+    },
+    {
+      "filename": "hotfix.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\git\\hotfix.md",
+        "filename": "hotfix.md",
+        "name": "hotfix",
+        "description": "Create a new Git Flow hotfix branch from main for emergency production fixes",
+        "allowed_tools": [
+          "Bash(git:*)",
+          "Read",
+          "Edit",
+          "Write"
+        ],
+        "category": "git",
+        "type": "command",
+        "size": 11239,
+        "contentHash": "8f6ec1822db8eb8426343efe82a9f0cc3bc61cf7ee23d6892db779e7ce9f9d15",
+        "installedAt": 1771996384515,
+        "updatedAt": 1771996384515
+      }
+    },
+    {
+      "filename": "create-pr.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\git-workflow\\create-pr.md",
+        "filename": "create-pr.md",
+        "name": "create-pr",
+        "category": "git-workflow",
+        "type": "command",
+        "size": 795,
+        "contentHash": "695750001a3ab02ad8a1448e86b132ee951fe9465806aa918d4c2ab98fadbbcb",
+        "installedAt": 1771996385578,
+        "updatedAt": 1771996385578
+      }
+    },
+    {
+      "filename": "release.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\git\\release.md",
+        "filename": "release.md",
+        "name": "release",
+        "description": "Create a new Git Flow release branch from develop with version bumping and changelog generation",
+        "allowed_tools": [
+          "Bash(git:*)",
+          "Read",
+          "Edit",
+          "Write"
+        ],
+        "category": "git",
+        "type": "command",
+        "size": 9069,
+        "contentHash": "74d594dc0d45b9308f50fd76046bea454a2a4b3b162ca90982a3519f72ce13ce",
+        "installedAt": 1771996385982,
+        "updatedAt": 1771996385982
+      }
+    },
+    {
+      "filename": "create-pull-request.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\git-workflow\\create-pull-request.md",
+        "filename": "create-pull-request.md",
+        "name": "create-pull-request",
+        "category": "git-workflow",
+        "type": "command",
+        "size": 4238,
+        "contentHash": "8d45c39d05dc56dcabf500cb2ac7721a41cb75946f54a2ffc8fd583cd34aca2b",
+        "installedAt": 1771996388241,
+        "updatedAt": 1771996388241
+      }
+    },
+    {
+      "filename": "create-worktrees.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\git-workflow\\create-worktrees.md",
+        "filename": "create-worktrees.md",
+        "name": "create-worktrees",
+        "category": "git-workflow",
+        "type": "command",
+        "size": 5190,
+        "contentHash": "e0d1617a28907cd8e697476486a6648657bed81f5391d73d5687d2daf80d9b13",
+        "installedAt": 1771996390136,
+        "updatedAt": 1771996390136
+      }
+    },
+    {
+      "filename": "pr-review.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\git-workflow\\pr-review.md",
+        "filename": "pr-review.md",
+        "name": "pr-review",
+        "category": "git-workflow",
+        "type": "command",
+        "size": 3820,
+        "contentHash": "24c857336041fa2fc3dd4450d4e184791369e1e631274b51b10a47778e014570",
+        "installedAt": 1771996393038,
+        "updatedAt": 1771996393038
+      }
+    },
+    {
+      "filename": "fix-github-issue.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\git-workflow\\fix-github-issue.md",
+        "filename": "fix-github-issue.md",
+        "name": "fix-github-issue",
+        "category": "git-workflow",
+        "type": "command",
+        "size": 463,
+        "contentHash": "d75f2b919b4afb03dc05d3ea6fe5f4abd3cb51289a36e46c37d2c9d888d022b5",
+        "installedAt": 1771996394953,
+        "updatedAt": 1771996394953
+      }
+    },
+    {
+      "filename": "update-branch-name.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\git-workflow\\update-branch-name.md",
+        "filename": "update-branch-name.md",
+        "name": "update-branch-name",
+        "category": "git-workflow",
+        "type": "command",
+        "size": 441,
+        "contentHash": "dade40f7da94ad4c8876a2f490958ac34ba330fbe5fdb53c8636dea8ae885112",
+        "installedAt": 1771996395611,
+        "updatedAt": 1771996395611
+      }
+    },
+    {
+      "filename": "archive.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\orchestration\\archive.md",
+        "filename": "archive.md",
+        "name": "archive",
+        "category": "orchestration",
+        "type": "command",
+        "size": 11049,
+        "contentHash": "38ade8a5118e5e4b2bfd4ddff985c355692fb544439f927d858b7520bba04abf",
+        "installedAt": 1771996396073,
+        "updatedAt": 1771996396073
+      }
+    },
+    {
+      "filename": "find.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\orchestration\\find.md",
+        "filename": "find.md",
+        "name": "find",
+        "category": "orchestration",
+        "type": "command",
+        "size": 5134,
+        "contentHash": "dbbaff39c81d0ec2eca6b97232a6f75809beb6437788c4f2de92802400202b0d",
+        "installedAt": 1771996397967,
+        "updatedAt": 1771996397967
+      }
+    },
+    {
+      "filename": "commit.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\orchestration\\commit.md",
+        "filename": "commit.md",
+        "name": "commit",
+        "category": "orchestration",
+        "type": "command",
+        "size": 6227,
+        "contentHash": "3329c8fc109b19575246321cf514060b2f547af7f9884572117c267b9073ec55",
+        "installedAt": 1771996398339,
+        "updatedAt": 1771996398339
+      }
+    },
+    {
+      "filename": "log.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\orchestration\\log.md",
+        "filename": "log.md",
+        "name": "log",
+        "category": "orchestration",
+        "type": "command",
+        "size": 7074,
+        "contentHash": "c25158f009b7a0429f56b1c8466c324c89b904372a02fb578bff66152596b03b",
+        "installedAt": 1771996399199,
+        "updatedAt": 1771996399199
+      }
+    },
+    {
+      "filename": "move.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\orchestration\\move.md",
+        "filename": "move.md",
+        "name": "move",
+        "category": "orchestration",
+        "type": "command",
+        "size": 4762,
+        "contentHash": "09a03b08d9792efbee44389c5123eef35eb849c9bf99225ca1dac1300e9de5ed",
+        "installedAt": 1771996399642,
+        "updatedAt": 1771996399642
+      }
+    },
+    {
+      "filename": "remove.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\orchestration\\remove.md",
+        "filename": "remove.md",
+        "name": "remove",
+        "category": "orchestration",
+        "type": "command",
+        "size": 6532,
+        "contentHash": "1a41cdfa0f3a4b961eef88fa4da9ee1287ed6138927b7d08a33ba02052ddd7c3",
+        "installedAt": 1771996400819,
+        "updatedAt": 1771996400819
+      }
+    },
+    {
+      "filename": "optimize.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\orchestration\\optimize.md",
+        "filename": "optimize.md",
+        "name": "optimize",
+        "category": "orchestration",
+        "type": "command",
+        "size": 9433,
+        "contentHash": "182424714616f684fa05965c2943f528d6c8e7c6f4f51a6547399f0d598021a4",
+        "installedAt": 1771996401254,
+        "updatedAt": 1771996401254
+      }
+    },
+    {
+      "filename": "resume.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\orchestration\\resume.md",
+        "filename": "resume.md",
+        "name": "resume",
+        "category": "orchestration",
+        "type": "command",
+        "size": 6905,
+        "contentHash": "270ac4b874e8458a7960180d5e6c4ea194e7fd8e9c3a9c46fc9e6fbb89f7dd6a",
+        "installedAt": 1771996402521,
+        "updatedAt": 1771996402521
+      }
+    },
+    {
+      "filename": "report.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\orchestration\\report.md",
+        "filename": "report.md",
+        "name": "report",
+        "category": "orchestration",
+        "type": "command",
+        "size": 6420,
+        "contentHash": "27a0750445310c5af840e9bf785277a46a7759c2587a5832d449f0ea5938c14f",
+        "installedAt": 1771996402986,
+        "updatedAt": 1771996402986
+      }
+    },
+    {
+      "filename": "start.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\orchestration\\start.md",
+        "filename": "start.md",
+        "name": "start",
+        "category": "orchestration",
+        "type": "command",
+        "size": 4426,
+        "contentHash": "9c2eb99d7d9b103eaff7988f585975d980ce0f2e5d635ba76c47b1a8b53f6bee",
+        "installedAt": 1771996403527,
+        "updatedAt": 1771996403527
+      }
+    },
+    {
+      "filename": "status.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\orchestration\\status.md",
+        "filename": "status.md",
+        "name": "status",
+        "category": "orchestration",
+        "type": "command",
+        "size": 4754,
+        "contentHash": "9b0c0c90893fd6b09c97f102445de8b173793521a3c86e1a44ad9c905e528310",
+        "installedAt": 1771996403951,
+        "updatedAt": 1771996403951
+      }
+    },
+    {
+      "filename": "optimize-build.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\performance\\optimize-build.md",
+        "filename": "optimize-build.md",
+        "name": "optimize-build",
+        "category": "performance",
+        "type": "command",
+        "size": 5041,
+        "contentHash": "d954c4f565e75bc9468dd1f2038e950db25d2b0361d7c30e13139b26afbd8707",
+        "installedAt": 1771996404986,
+        "updatedAt": 1771996404986
+      }
+    },
+    {
+      "filename": "sync.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\orchestration\\sync.md",
+        "filename": "sync.md",
+        "name": "sync",
+        "category": "orchestration",
+        "type": "command",
+        "size": 6315,
+        "contentHash": "5fd075a545848036b44281b3ad5cc534d665d4810251cc79de20d6a3a366d0ea",
+        "installedAt": 1771996405608,
+        "updatedAt": 1771996405608
+      }
+    },
+    {
+      "filename": "system-behavior-simulator.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\performance\\system-behavior-simulator.md",
+        "filename": "system-behavior-simulator.md",
+        "name": "system-behavior-simulator",
+        "category": "performance",
+        "type": "command",
+        "size": 17470,
+        "contentHash": "891946f6e430f490eefcff80a472482cc73fb347e2a6a06ca789a3225f707d1c",
+        "installedAt": 1771996406888,
+        "updatedAt": 1771996406888
+      }
+    },
+    {
+      "filename": "svelte-a11y.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-a11y.md",
+        "filename": "svelte-a11y.md",
+        "name": "svelte-a11y",
+        "category": "svelte",
+        "type": "command",
+        "size": 2552,
+        "contentHash": "48f570a6486a9b06efa01bbe161da544ab8961408cde1c660084ea0072e902d4",
+        "installedAt": 1771996408402,
+        "updatedAt": 1771996408402
+      }
+    },
+    {
+      "filename": "svelte-debug.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-debug.md",
+        "filename": "svelte-debug.md",
+        "name": "svelte-debug",
+        "category": "svelte",
+        "type": "command",
+        "size": 1681,
+        "contentHash": "ba11109f0d57085f505be54d3310594f66693114068cde3ad4327d178ca68838",
+        "installedAt": 1771996409484,
+        "updatedAt": 1771996409484
+      }
+    },
+    {
+      "filename": "svelte-migrate.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-migrate.md",
+        "filename": "svelte-migrate.md",
+        "name": "svelte-migrate",
+        "category": "svelte",
+        "type": "command",
+        "size": 1985,
+        "contentHash": "e7deec79364f6e69f97be94d674d11c4b8f8dec75115d0be2cb9b52d0fadf99a",
+        "installedAt": 1771996412070,
+        "updatedAt": 1771996412070
+      }
+    },
+    {
+      "filename": "svelte-optimize.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-optimize.md",
+        "filename": "svelte-optimize.md",
+        "name": "svelte-optimize",
+        "category": "svelte",
+        "type": "command",
+        "size": 2563,
+        "contentHash": "0d512421ff79d2d40ac6d42d74fe72b0a63b5bc3927b08f03b286e32fcdb422f",
+        "installedAt": 1771996413026,
+        "updatedAt": 1771996413026
+      }
+    },
+    {
+      "filename": "svelte-scaffold.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-scaffold.md",
+        "filename": "svelte-scaffold.md",
+        "name": "svelte-scaffold",
+        "category": "svelte",
+        "type": "command",
+        "size": 2337,
+        "contentHash": "55717d1e25e22326852afddb26df9bf668d15c3f3d8ed8c7bdfa0d024cd63757",
+        "installedAt": 1771996414695,
+        "updatedAt": 1771996414695
+      }
+    },
+    {
+      "filename": "all-tools.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\all-tools.md",
+        "filename": "all-tools.md",
+        "name": "all-tools",
+        "category": "utilities",
+        "type": "command",
+        "size": 1064,
+        "contentHash": "5fd71c68a4bcd4d56a37ced0fc21e53383d05c49362089d92be621b1a483ce5e",
+        "installedAt": 1771996418960,
+        "updatedAt": 1771996418960
+      }
+    },
+    {
+      "filename": "architecture-scenario-explorer.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\architecture-scenario-explorer.md",
+        "filename": "architecture-scenario-explorer.md",
+        "name": "architecture-scenario-explorer",
+        "category": "utilities",
+        "type": "command",
+        "size": 15652,
+        "contentHash": "caf141099528f45098d5c48ed78092f63cbf4c844e111b7306225c4e616ad1d5",
+        "installedAt": 1771996419493,
+        "updatedAt": 1771996419493
+      }
+    },
+    {
+      "filename": "clean-branches.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\clean-branches.md",
+        "filename": "clean-branches.md",
+        "name": "clean-branches",
+        "category": "utilities",
+        "type": "command",
+        "size": 7366,
+        "contentHash": "b22e79c6bcaaa7a3f88a555b11dd32271042446650cd9f22c3a743bd97189487",
+        "installedAt": 1771996420076,
+        "updatedAt": 1771996420076
+      }
+    },
+    {
+      "filename": "code-permutation-tester.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\code-permutation-tester.md",
+        "filename": "code-permutation-tester.md",
+        "name": "code-permutation-tester",
+        "category": "utilities",
+        "type": "command",
+        "size": 13397,
+        "contentHash": "c7975556f64a5277aeeed6d8d68506a78e20cc3f118946920c2fa9ce23d86a06",
+        "installedAt": 1771996422903,
+        "updatedAt": 1771996422903
+      }
+    },
+    {
+      "filename": "clean.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\clean.md",
+        "filename": "clean.md",
+        "name": "clean",
+        "category": "utilities",
+        "type": "command",
+        "size": 68,
+        "contentHash": "1520cd6b66c1f0c1a815cac048ae8d69000d68a9b0d199d1c8e173aed6932bc3",
+        "installedAt": 1771996424845,
+        "updatedAt": 1771996424845
+      }
+    },
+    {
+      "filename": "check-file.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\check-file.md",
+        "filename": "check-file.md",
+        "name": "check-file",
+        "category": "utilities",
+        "type": "command",
+        "size": 1727,
+        "contentHash": "df195c448c07c47aa2f918eb504e06b81cf31db224b4e2b47da0aabea070828e",
+        "installedAt": 1771996425349,
+        "updatedAt": 1771996425349
+      }
+    },
+    {
+      "filename": "code-to-task.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\code-to-task.md",
+        "filename": "code-to-task.md",
+        "name": "code-to-task",
+        "category": "utilities",
+        "type": "command",
+        "size": 16329,
+        "contentHash": "c85a21dc65eac3cb83054bf31ac39e0cfd1d23c5410628cffe1a2e23bf6c26c1",
+        "installedAt": 1771996426356,
+        "updatedAt": 1771996426356
+      }
+    },
+    {
+      "filename": "context-prime.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\context-prime.md",
+        "filename": "context-prime.md",
+        "name": "context-prime",
+        "category": "utilities",
+        "type": "command",
+        "size": 138,
+        "contentHash": "dcdbad8a97dc647b2f141f6ecd68b841cc35eb22d9a9206020cd719335728769",
+        "installedAt": 1771996426779,
+        "updatedAt": 1771996426779
+      }
+    },
+    {
+      "filename": "ultra-think.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\ultra-think.md",
+        "filename": "ultra-think.md",
+        "name": "ultra-think",
+        "description": "Deep analysis and problem solving with multi-dimensional thinking",
+        "category": "utilities",
+        "type": "command",
+        "size": 4817,
+        "contentHash": "05babc1aa15373e8548ac684aa9fb454fd32876e5ca790ab34b30f2ad039f11d",
+        "installedAt": 1771996429505,
+        "updatedAt": 1771996429505
+      }
+    },
+    {
+      "filename": "refactor-code.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\refactor-code.md",
+        "filename": "refactor-code.md",
+        "name": "refactor-code",
+        "category": "utilities",
+        "type": "command",
+        "size": 4411,
+        "contentHash": "6b25f38a7f4facec53de376883cc6a3f5be15227477c5e5726c497acbd4bcc78",
+        "installedAt": 1771996430119,
+        "updatedAt": 1771996430119
+      }
+    },
+    {
+      "filename": "prime.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\prime.md",
+        "filename": "prime.md",
+        "name": "prime",
+        "category": "utilities",
+        "type": "command",
+        "size": 1593,
+        "contentHash": "8ced3d018a43ee3199095856a00a6f25de7f678fe80f529f0b155b04e4cc83ee",
+        "installedAt": 1771996431531,
+        "updatedAt": 1771996431531
+      }
+    },
+    {
+      "filename": "initref.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\initref.md",
+        "filename": "initref.md",
+        "name": "initref",
+        "category": "utilities",
+        "type": "command",
+        "size": 454,
+        "contentHash": "bdf76394dcc8ea856ec496573b50b341a94c30e888b74969b7f9b6778e65cca9",
+        "installedAt": 1771996431889,
+        "updatedAt": 1771996431889
+      }
+    },
+    {
+      "filename": "generate-linear-worklog.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\generate-linear-worklog.md",
+        "filename": "generate-linear-worklog.md",
+        "name": "generate-linear-worklog",
+        "category": "utilities",
+        "type": "command",
+        "size": 4238,
+        "contentHash": "524e26d7da0662fef396cfe9213672575149400668786ddf3901dd6ab4813fbc",
+        "installedAt": 1771996432383,
+        "updatedAt": 1771996432383
+      }
+    },
+    {
+      "filename": "git-status.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\git-status.md",
+        "filename": "git-status.md",
+        "name": "git-status",
+        "category": "utilities",
+        "type": "command",
+        "size": 1343,
+        "contentHash": "89acf696c7cbc530e05dd5fe4dee22a07ba0a9e19a585ee4de19a6542ed4253f",
+        "installedAt": 1771996434304,
+        "updatedAt": 1771996434304
+      }
+    },
+    {
+      "filename": "fix-issue.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\fix-issue.md",
+        "filename": "fix-issue.md",
+        "name": "fix-issue",
+        "category": "utilities",
+        "type": "command",
+        "size": 3237,
+        "contentHash": "07b6ab9bd79c15ea3a768e9974e6af6089d4fb3f4d3d6c55372a4736e57c7d51",
+        "installedAt": 1771996434888,
+        "updatedAt": 1771996434888
+      }
+    },
+    {
+      "filename": "explain-code.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\explain-code.md",
+        "filename": "explain-code.md",
+        "name": "explain-code",
+        "category": "utilities",
+        "type": "command",
+        "size": 6671,
+        "contentHash": "b1c84ce7d3b9b8b2b8d3a4853ceb2cf447ac63d52971945d7e51d7ff146b8298",
+        "installedAt": 1771996444300,
+        "updatedAt": 1771996444300
+      }
+    },
+    {
+      "filename": "debug-error.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\debug-error.md",
+        "filename": "debug-error.md",
+        "name": "debug-error",
+        "category": "utilities",
+        "type": "command",
+        "size": 4692,
+        "contentHash": "47eb4b8f0057786a590f7aa6d1893e268db8b3b674e95a84a3b79099f74a3bbc",
+        "installedAt": 1771996444937,
+        "updatedAt": 1771996444937
+      }
+    },
+    {
+      "filename": "directory-deep-dive.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\utilities\\directory-deep-dive.md",
+        "filename": "directory-deep-dive.md",
+        "name": "directory-deep-dive",
+        "category": "utilities",
+        "type": "command",
+        "size": 1210,
+        "contentHash": "dfc417b1f8920804ca02255409a13c107c9c8cc40aa98577c8799d89ec26b62f",
+        "installedAt": 1771996445751,
+        "updatedAt": 1771996445751
+      }
+    },
+    {
+      "filename": "svelte-test-coverage.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-test-coverage.md",
+        "filename": "svelte-test-coverage.md",
+        "name": "svelte-test-coverage",
+        "category": "svelte",
+        "type": "command",
+        "size": 1966,
+        "contentHash": "1a9bc86a03178c62840d0a802ac941efb50d618c78af4cb1f94e3938ee98ecd6",
+        "installedAt": 1771996449234,
+        "updatedAt": 1771996449234
+      }
+    },
+    {
+      "filename": "svelte-storybook.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-storybook.md",
+        "filename": "svelte-storybook.md",
+        "name": "svelte-storybook",
+        "category": "svelte",
+        "type": "command",
+        "size": 1529,
+        "contentHash": "01c1f96f7c6861e15312417ecb89bb880c2417a14a85743b3ab16e82564bae70",
+        "installedAt": 1771996450073,
+        "updatedAt": 1771996450073
+      }
+    },
+    {
+      "filename": "svelte-storybook-troubleshoot.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-storybook-troubleshoot.md",
+        "filename": "svelte-storybook-troubleshoot.md",
+        "name": "svelte-storybook-troubleshoot",
+        "category": "svelte",
+        "type": "command",
+        "size": 4425,
+        "contentHash": "94da21d370fee8a7e5657c44d62599571ebaf7d809cbad6340d74c6ab431f9df",
+        "installedAt": 1771996451869,
+        "updatedAt": 1771996451869
+      }
+    },
+    {
+      "filename": "svelte-test-fix.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-test-fix.md",
+        "filename": "svelte-test-fix.md",
+        "name": "svelte-test-fix",
+        "category": "svelte",
+        "type": "command",
+        "size": 2302,
+        "contentHash": "545d5c3be2244207d69b39b6b4cd04a29f21401cbdc85058d68f0cd83b09982a",
+        "installedAt": 1771996454873,
+        "updatedAt": 1771996454873
+      }
+    },
+    {
+      "filename": "svelte-storybook-story.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-storybook-story.md",
+        "filename": "svelte-storybook-story.md",
+        "name": "svelte-storybook-story",
+        "category": "svelte",
+        "type": "command",
+        "size": 3552,
+        "contentHash": "17a295858fcbd19a07e7fb96d8d7f083c673dadeb9917365918c9282d75b7f68",
+        "installedAt": 1771996457605,
+        "updatedAt": 1771996457605
+      }
+    },
+    {
+      "filename": "svelte-storybook-setup.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-storybook-setup.md",
+        "filename": "svelte-storybook-setup.md",
+        "name": "svelte-storybook-setup",
+        "category": "svelte",
+        "type": "command",
+        "size": 2852,
+        "contentHash": "fb3ed0e84b109ec3a8a556756c284552627a84007906a8b0ec7750ab7abfab19",
+        "installedAt": 1771996458315,
+        "updatedAt": 1771996458315
+      }
+    },
+    {
+      "filename": "svelte-storybook-migrate.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-storybook-migrate.md",
+        "filename": "svelte-storybook-migrate.md",
+        "name": "svelte-storybook-migrate",
+        "category": "svelte",
+        "type": "command",
+        "size": 4372,
+        "contentHash": "03cdf9f1ef11d0e27164ae68de0d2f2eccbec517a96b604b2c367e592f55ce34",
+        "installedAt": 1771996461002,
+        "updatedAt": 1771996461002
+      }
+    },
+    {
+      "filename": "svelte-storybook-mock.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-storybook-mock.md",
+        "filename": "svelte-storybook-mock.md",
+        "name": "svelte-storybook-mock",
+        "category": "svelte",
+        "type": "command",
+        "size": 5391,
+        "contentHash": "77a128e1980f19e9425cc4fdc4660e6bcf96eaec6ee3dca671491382de06efab",
+        "installedAt": 1771996461460,
+        "updatedAt": 1771996461460
+      }
+    },
+    {
+      "filename": "svelte-test.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-test.md",
+        "filename": "svelte-test.md",
+        "name": "svelte-test",
+        "category": "svelte",
+        "type": "command",
+        "size": 1782,
+        "contentHash": "996d9f1a6f06ef0660d6795f2bf1fba3843780a25a42851dded37d8e110a851e",
+        "installedAt": 1771996472049,
+        "updatedAt": 1771996472049
+      }
+    },
+    {
+      "filename": "svelte-test-setup.md",
+      "type": "command",
+      "metadata": {
+        "sourcePath": "commands\\svelte\\svelte-test-setup.md",
+        "filename": "svelte-test-setup.md",
+        "name": "svelte-test-setup",
+        "category": "svelte",
+        "type": "command",
+        "size": 2274,
+        "contentHash": "19bfb76fbff656aa469bf3f65b1172d6591b35a63aa1e28acf170620c517eba7",
+        "installedAt": 1771996472637,
+        "updatedAt": 1771996472637
+      }
+    },
+    {
+      "filename": "canvas-design",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\creative-design\\canvas-design",
+        "filename": "canvas-design",
+        "name": "canvas-design",
+        "description": "Create beautiful visual art in .png and .pdf documents using design philosophy. You should use this skill when the user asks to create a poster, piece of art, design, or other static piece. Create original visual designs, never copying existing artists' work to avoid copyright violations.",
+        "category": "skills",
+        "type": "skill",
+        "size": 5554015,
+        "contentHash": "a1f288079624402f30682753c1d43920b6664785698d21d3e7aa197450a6448b",
+        "installedAt": 1771996485911,
+        "updatedAt": 1771996485911
+      }
+    },
+    {
+      "filename": "algorithmic-art",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\creative-design\\algorithmic-art",
+        "filename": "algorithmic-art",
+        "name": "algorithmic-art",
+        "description": "Creating algorithmic art using p5.js with seeded randomness and interactive parameter exploration. Use this when users request creating art using code, generative art, algorithmic art, flow fields, or particle systems. Create original algorithmic art rather than copying existing artists' work to avoid copyright violations.",
+        "category": "skills",
+        "type": "skill",
+        "size": 59796,
+        "contentHash": "3bc4092c09804853186524c826bc0621b940bb6122c05b84496dff95388e6eef",
+        "installedAt": 1771996486493,
+        "updatedAt": 1771996486493
+      }
+    },
+    {
+      "filename": "slack-gif-creator",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\creative-design\\slack-gif-creator",
+        "filename": "slack-gif-creator",
+        "name": "slack-gif-creator",
+        "description": "Toolkit for creating animated GIFs optimized for Slack, with validators for size constraints and composable animation primitives. This skill applies when users request animated GIFs or emoji animations for Slack from descriptions like \"make me a GIF for Slack of X doing Y\".",
+        "category": "skills",
+        "type": "skill",
+        "size": 213368,
+        "contentHash": "e5ce81d3dc40e7780b0fa2a0a36b5ada888beb3931d2badd2909b57c50002aed",
+        "installedAt": 1771996487627,
+        "updatedAt": 1771996487627
+      }
+    },
+    {
+      "filename": "theme-factory",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\creative-design\\theme-factory",
+        "filename": "theme-factory",
+        "name": "theme-factory",
+        "description": "Toolkit for styling artifacts with a theme. These artifacts can be slides, docs, reportings, HTML landing pages, etc. There are 10 pre-set themes with colors/fonts that you can apply to any artifact that has been creating, or can generate a new theme on-the-fly.",
+        "category": "skills",
+        "type": "skill",
+        "size": 144106,
+        "contentHash": "c35893e221e28895c52143cc11bf30e41a44817796b39d4b15727dadc9796552",
+        "installedAt": 1771996488020,
+        "updatedAt": 1771996488020
+      }
+    },
+    {
+      "filename": "git-commit-helper",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\development\\git-commit-helper",
+        "filename": "git-commit-helper",
+        "name": "Git Commit Helper",
+        "description": "Generate descriptive commit messages by analyzing git diffs. Use when the user asks for help writing commit messages or reviewing staged changes.",
+        "category": "skills",
+        "type": "skill",
+        "size": 4372,
+        "contentHash": "37344ea1848305f6090075eb23e6e1f8808a79a02e032f6ac96b4ed74e298081",
+        "installedAt": 1771996488993,
+        "updatedAt": 1771996488993
+      }
+    },
+    {
+      "filename": "artifacts-builder",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\development\\artifacts-builder",
+        "filename": "artifacts-builder",
+        "name": "artifacts-builder",
+        "description": "Suite of tools for creating elaborate, multi-component claude.ai HTML artifacts using modern frontend web technologies (React, Tailwind CSS, shadcn/ui). Use for complex artifacts requiring state management, routing, or shadcn/ui components - not for simple single-file HTML/JSX artifacts.",
+        "category": "skills",
+        "type": "skill",
+        "size": 45844,
+        "contentHash": "8455a64e627d203fd7b43df64c83d8870cb98907aae21edce4ec8eeef651d850",
+        "installedAt": 1771996489401,
+        "updatedAt": 1771996489401
+      }
+    },
+    {
+      "filename": "mcp-builder",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\development\\mcp-builder",
+        "filename": "mcp-builder",
+        "name": "mcp-builder",
+        "description": "Guide for creating high-quality MCP (Model Context Protocol) servers that enable LLMs to interact with external services through well-designed tools. Use when building MCP servers to integrate external APIs or services, whether in Python (FastMCP) or Node/TypeScript (MCP SDK).",
+        "category": "skills",
+        "type": "skill",
+        "size": 147050,
+        "contentHash": "b1010e90adcb8fd6bf57640df34ab6454fbf7e4216e150a4620f7caccadc4e63",
+        "installedAt": 1771996490735,
+        "updatedAt": 1771996490735
+      }
+    },
+    {
+      "filename": "skill-creator",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\development\\skill-creator",
+        "filename": "skill-creator",
+        "name": "skill-creator",
+        "description": "Guide for creating effective skills. This skill should be used when users want to create a new skill (or update an existing skill) that extends Claude's capabilities with specialized knowledge, workflows, or tool integrations.",
+        "category": "skills",
+        "type": "skill",
+        "size": 39179,
+        "contentHash": "8c0ce23bb87be91f5b0853c2e9815617c3858b63acdddfe5da47d2c2d3a60816",
+        "installedAt": 1771996491092,
+        "updatedAt": 1771996491092
+      }
+    },
+    {
+      "filename": "docx",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\document-processing\\docx",
+        "filename": "docx",
+        "name": "docx",
+        "description": "Comprehensive document creation, editing, and analysis with support for tracked changes, comments, formatting preservation, and text extraction. When Claude needs to work with professional documents (.docx files) for: (1) Creating new documents, (2) Modifying or editing content, (3) Working with tracked changes, (4) Adding comments, or any other document tasks",
+        "category": "skills",
+        "type": "skill",
+        "size": 1185916,
+        "contentHash": "0bd90681fcab2e282025ee14acf508b60bbd6c41ac6c3bf83c0dc14d52c37933",
+        "installedAt": 1771996493138,
+        "updatedAt": 1771996493138
+      }
+    },
+    {
+      "filename": "webapp-testing",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\development\\webapp-testing",
+        "filename": "webapp-testing",
+        "name": "webapp-testing",
+        "description": "Toolkit for interacting with and testing local web applications using Playwright. Supports verifying frontend functionality, debugging UI behavior, capturing browser screenshots, and viewing browser logs.",
+        "category": "skills",
+        "type": "skill",
+        "size": 22406,
+        "contentHash": "51b7349e77ec63b7744a6f63647e7566a0b4d2e301121cc10e8c2113af6556a2",
+        "installedAt": 1771996494233,
+        "updatedAt": 1771996494233
+      }
+    },
+    {
+      "filename": "pdf-anthropic",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\document-processing\\pdf-anthropic",
+        "filename": "pdf-anthropic",
+        "name": "pdf",
+        "description": "Comprehensive PDF manipulation toolkit for extracting text and tables, creating new PDFs, merging/splitting documents, and handling forms. When Claude needs to fill in a PDF form or programmatically process, generate, or analyze PDF documents at scale.",
+        "category": "skills",
+        "type": "skill",
+        "size": 64296,
+        "contentHash": "38d8559d4899602f82f3560052132aa0c40cfca80203037729756bdb4fb8e0cb",
+        "installedAt": 1771996495517,
+        "updatedAt": 1771996495517
+      }
+    },
+    {
+      "filename": "pdf-processing",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\document-processing\\pdf-processing",
+        "filename": "pdf-processing",
+        "name": "PDF Processing",
+        "description": "Extract text and tables from PDF files, fill forms, merge documents. Use when working with PDF files or when the user mentions PDFs, forms, or document extraction.",
+        "category": "skills",
+        "type": "skill",
+        "size": 6008,
+        "contentHash": "1bbb21910cec7e3190a4c50cca3b699531cc4e82dd02340c2fc0c2e607c3ab70",
+        "installedAt": 1771996495784,
+        "updatedAt": 1771996495784
+      }
+    },
+    {
+      "filename": "pptx",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\document-processing\\pptx",
+        "filename": "pptx",
+        "name": "pptx",
+        "description": "Presentation creation, editing, and analysis. When Claude needs to work with presentations (.pptx files) for: (1) Creating new presentations, (2) Modifying or editing content, (3) Working with layouts, (4) Adding comments or speaker notes, or any other presentation tasks",
+        "category": "skills",
+        "type": "skill",
+        "size": 1230013,
+        "contentHash": "b6f25545bfb358739f1532f793458b5dbc87ee009933cb7c306b2d951ab6617f",
+        "installedAt": 1771996497390,
+        "updatedAt": 1771996497390
+      }
+    },
+    {
+      "filename": "pdf-processing-pro",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\document-processing\\pdf-processing-pro",
+        "filename": "pdf-processing-pro",
+        "name": "PDF Processing Pro",
+        "description": "Production-ready PDF processing with forms, tables, OCR, validation, and batch operations. Use when working with complex PDF workflows in production environments, processing large volumes of PDFs, or requiring robust error handling and validation.",
+        "category": "skills",
+        "type": "skill",
+        "size": 47458,
+        "contentHash": "0e07e0c87b7189911b91f35da0b3aaad6678ff2b2781334bfc217a5432a3fe6f",
+        "installedAt": 1771996498217,
+        "updatedAt": 1771996498217
+      }
+    },
+    {
+      "filename": "xlsx",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\document-processing\\xlsx",
+        "filename": "xlsx",
+        "name": "xlsx",
+        "description": "Comprehensive spreadsheet creation, editing, and analysis with support for formulas, formatting, data analysis, and visualization. When Claude needs to work with spreadsheets (.xlsx, .xlsm, .csv, .tsv, etc) for: (1) Creating new spreadsheets with formulas and formatting, (2) Reading or analyzing data, (3) Modify existing spreadsheets while preserving formulas, (4) Data analysis and visualization in spreadsheets, or (5) Recalculating formulas",
+        "category": "skills",
+        "type": "skill",
+        "size": 18507,
+        "contentHash": "020ccdb5932257b66c638ec1157ea248d57fa52c8c01f1f68b559b5970c7df35",
+        "installedAt": 1771996499475,
+        "updatedAt": 1771996499475
+      }
+    },
+    {
+      "filename": "brand-guidelines",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\enterprise-communication\\brand-guidelines",
+        "filename": "brand-guidelines",
+        "name": "brand-guidelines",
+        "description": "Applies Anthropic's official brand colors and typography to any sort of artifact that may benefit from having Anthropic's look-and-feel. Use it when brand colors or style guidelines, visual formatting, or company design standards apply.",
+        "category": "skills",
+        "type": "skill",
+        "size": 13592,
+        "contentHash": "1120b3769e2985cefb3d25be981b1f914abeba57ae079b83c20c666c164fa9fe",
+        "installedAt": 1771996499912,
+        "updatedAt": 1771996499912
+      }
+    },
+    {
+      "filename": "email-composer",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\enterprise-communication\\email-composer",
+        "filename": "email-composer",
+        "name": "Email Composer",
+        "description": "Draft professional emails for various contexts including business, technical, and customer communication. Use when the user needs help writing emails or composing professional messages.",
+        "category": "skills",
+        "type": "skill",
+        "size": 6813,
+        "contentHash": "fee7df66bbb4f9edc8d50bf2e0f5302ba3ab6330de8356ba2a9c712c10504eee",
+        "installedAt": 1771996501433,
+        "updatedAt": 1771996501433
+      }
+    },
+    {
+      "filename": "internal-comms",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\enterprise-communication\\internal-comms",
+        "filename": "internal-comms",
+        "name": "internal-comms",
+        "description": "A set of resources to help me write all kinds of internal communications, using the formats that my company likes to use. Claude should use this skill whenever asked to write some sort of internal communications (status reports, leadership updates, 3P updates, company newsletters, FAQs, incident reports, project updates, etc.).",
+        "category": "skills",
+        "type": "skill",
+        "size": 22405,
+        "contentHash": "067b7587a344a928fc6534ef66b1bcd591fc7c26d207ea7ca3334aeb678d6475",
+        "installedAt": 1771996502049,
+        "updatedAt": 1771996502049
+      }
+    },
+    {
+      "filename": "excel-analysis",
+      "type": "skill",
+      "metadata": {
+        "sourcePath": "skills\\enterprise-communication\\excel-analysis",
+        "filename": "excel-analysis",
+        "name": "Excel Analysis",
+        "description": "Analyze Excel spreadsheets, create pivot tables, generate charts, and perform data analysis. Use when analyzing Excel files, spreadsheets, tabular data, or .xlsx files.",
+        "category": "skills",
+        "type": "skill",
+        "size": 5166,
+        "contentHash": "fb681b860b4d3bc20938cfbe490ebdc39d679d1634f1a6c12727bd4ab7ac91d0",
+        "installedAt": 1771996502757,
+        "updatedAt": 1771996502757
+      }
+    }
+  ]
+}

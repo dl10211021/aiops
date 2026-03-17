@@ -50,13 +50,13 @@ Modify `/connect` and `/chat` endpoints in `api/routes.py` to handle `target_sco
 - [x] **Step 2: Update Session Storage in `ssh_manager.active_sessions`**
 Ensure `target_scope` and `allow_modifications` are stored securely in the active session dictionary.
 
-- [ ] **Step 3: Update `route_and_execute` Interceptor**
+- [x] **Step 3: Update `route_and_execute` Interceptor**
 In `core/dispatcher.py`, verify that the regex-based write interception triggers if `allow_modifications` is False. If `allow_modifications` is explicitly set to True by the user for the current session, the interception is bypassed (Read-Write flexibility enabled).
 
-- [ ] **Step 4: Test Read/Write Toggle**
+- [x] **Step 4: Test Read/Write Toggle**
 Start the server, create a session with `allow_modifications=True`, and attempt a mock write command. It should pass. Then create a session with `allow_modifications=False` and it should block the command.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 Commit the API and dispatcher scoping changes.
 
 ---
