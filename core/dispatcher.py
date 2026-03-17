@@ -364,21 +364,34 @@ class SkillDispatcher:
             {
                 "type": "function",
                 "function": {
-                    "name": "delegate_task_to_agent",
-                    "description": "【多智能体协同 (Swarm)】作为全局指挥官，当你需要了解或操作不在你当前连接环境下的设备时，调用此工具。它会唤醒对应 session_id 的子 Agent 专家，由该专家在其独立沙盒内完成任务并向你汇报最终结果。",
+                    "name": "dispatch_sub_agents",
+                    "description": "【批量协同】作为全局指挥官，一次性向多个会话/子Agent下发任务。执行时会并发调度，但最大并发限制为10以保护系统。返回所有任务的执行报告集合。",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "target_session_id": {
-                                "type": "string",
-                                "description": "目标资产/专家的 session_id (可通过 list_active_sessions 获取)",
-                            },
-                            "task_description": {
-                                "type": "string",
-                                "description": "自然语言描述的任务指令。必须详尽具体，例如：'帮我查一下最近1小时 MySQL 的慢查询并分析原因，需要重启的话直接重启'。",
-                            },
+                            "tasks": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "target_session_id": {
+                                            "type": "string",
+                                            "description": "目标资产/专家的 session_id",
+                                        },
+                                        "task_description": {
+                                            "type": "string",
+                                            "description": "详细具体的任务指令",
+                                        },
+                                    },
+                                    "required": [
+                                        "target_session_id",
+                                        "task_description",
+                                    ],
+                                },
+                                "description": "要分发的子任务列表",
+                            }
                         },
-                        "required": ["target_session_id", "task_description"],
+                        "required": ["tasks"],
                     },
                 },
             },
@@ -603,6 +616,25 @@ class SkillDispatcher:
             database = args.get("database")
             sql = args.get("sql")
 
+            allow_mod = context.get("allow_modifications", False)
+            if not allow_mod and sql:
+                # 危险的数据库写操作和DDL命令
+                sql_write_patterns = [
+                    r"\binsert\b",
+                    r"\bupdate\b",
+                    r"\bdelete\b",
+                    r"\bdrop\b",
+                    r"\balter\b",
+                    r"\btruncate\b",
+                    r"\breplace\b",
+                    r"\bgrant\b",
+                    r"\brevoke\b",
+                    r"\bcommit\b",
+                    r"\brollback\b",
+                ]
+                if any(re.search(p, sql, re.IGNORECASE) for p in sql_write_patterns):
+                    return '{"status": "BLOCKED", "reason": "只读安全模式，已拦截潜在的数据库修改动作"}'
+
             logger.info(
                 f"AI 调用原生数据库驱动 [{db_type.upper()}] 查询: {host}:{port}/{database} -> SQL: {sql}"
             )
@@ -638,40 +670,69 @@ class SkillDispatcher:
             )
             return json.dumps({"active_sessions": sessions_info}, ensure_ascii=False)
 
-        elif tool_call_name == "delegate_task_to_agent":
+        elif tool_call_name == "dispatch_sub_agents":
             from core.agent import headless_agent_chat
 
-            target_sid = args.get("target_session_id")
-            task_desc = args.get("task_description")
+            tasks = args.get("tasks", [])
+            parent_allow_mod = context.get("allow_modifications", False)
 
-            # 找到目标 Session 的备注名，让日志更好看
-            from connections.ssh_manager import ssh_manager
+            async def run_task(task):
+                target_sid = task.get("target_session_id")
+                task_desc = task.get("task_description")
 
-            target_info = ssh_manager.active_sessions.get(target_sid, {}).get(
-                "info", {}
-            )
-            target_name = (
-                target_info.get("remark") or target_info.get("host") or target_sid
-            )
+                # 找到目标 Session 的备注名，让日志更好看
+                from connections.ssh_manager import ssh_manager
 
-            logger.warning(
-                f"🤖 [Swarm 协同] 指挥官 Agent 正在向子会话 {target_name} ({target_sid}) 下达自然语言任务: {task_desc}"
-            )
-
-            # 【关键优化】：如果是流式对话，我们可以尝试给前端一个“正在委派任务”的提示
-            # 注意：这里的 context 并没有直接提供 yield 能力，但我们可以通过 logger 或者后续扩展消息来优化。
-            # 目前先保证执行不挂起。
-
-            try:
-                # Set a timeout for the sub-agent task to prevent indefinite hanging
-                result = await asyncio.wait_for(
-                    headless_agent_chat(target_sid, task_desc), timeout=600.0
+                target_info = ssh_manager.active_sessions.get(target_sid, {}).get(
+                    "info", {}
                 )
-                return json.dumps({"status": "SUCCESS", "sub_agent_report": result})
-            except asyncio.TimeoutError:
-                return json.dumps({"error": "跨域协同超时 (10分钟) 被强行中断。"})
-            except Exception as e:
-                return json.dumps({"error": f"跨域协同异常: {str(e)}"})
+                target_name = (
+                    target_info.get("remark") or target_info.get("host") or target_sid
+                )
+
+                logger.warning(
+                    f"🤖 [Swarm 协同] 指挥官 Agent 正在向子会话 {target_name} ({target_sid}) 下达自然语言任务: {task_desc}"
+                )
+
+                try:
+                    # Set a timeout for the sub-agent task to prevent indefinite hanging
+                    result = await asyncio.wait_for(
+                        headless_agent_chat(
+                            target_sid,
+                            task_desc,
+                            inherited_allow_mod=parent_allow_mod,
+                        ),
+                        timeout=600.0,
+                    )
+                    return {
+                        "session_id": target_sid,
+                        "status": "SUCCESS",
+                        "report": result,
+                    }
+                except asyncio.TimeoutError:
+                    return {
+                        "session_id": target_sid,
+                        "status": "ERROR",
+                        "error": "跨域协同超时 (10分钟) 被强行中断。",
+                    }
+                except Exception as e:
+                    return {
+                        "session_id": target_sid,
+                        "status": "ERROR",
+                        "error": f"跨域协同异常: {str(e)}",
+                    }
+
+            # 强制执行最大并发度为 10，保护系统内存和API限制
+            sem = asyncio.Semaphore(10)
+
+            async def bound_run_task(task):
+                async with sem:
+                    return await run_task(task)
+
+            results = await asyncio.gather(*(bound_run_task(task) for task in tasks))
+            return json.dumps(
+                {"status": "BATCH_COMPLETE", "results": results}, ensure_ascii=False
+            )
 
         elif tool_call_name == "evolve_skill":
             skill_id = args.get("skill_id")

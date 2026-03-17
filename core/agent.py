@@ -271,7 +271,10 @@ async def chat_stream_agent(
 
 
 async def headless_agent_chat(
-    session_id: str, task_description: str, model_name: str = "gemini-2.5-flash"
+    session_id: str,
+    task_description: str,
+    inherited_allow_mod: bool = False,
+    model_name: str = "gemini-2.5-flash",
 ) -> str:
     """后台无头模式的 Agent 循环，用于协同任务的结果汇报。"""
     from connections.ssh_manager import ssh_manager
@@ -280,7 +283,10 @@ async def headless_agent_chat(
         return f"目标会话 {session_id} 不在线或已过期。"
 
     session_info = ssh_manager.active_sessions[session_id]["info"]
-    allow_modifications = session_info.get("allow_modifications", False)
+    # 继承父级 allow_modifications 并结合当前会话的权限，两者必须同时为 True 才允许
+    allow_modifications = inherited_allow_mod and session_info.get(
+        "allow_modifications", False
+    )
     active_skills = session_info.get("active_skills", [])
     agent_profile = session_info.get("agent_profile", "default")
     protocol = session_info.get("protocol", "ssh")

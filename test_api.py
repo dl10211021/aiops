@@ -36,7 +36,23 @@ try:
         "http://127.0.0.1:8088/api/v1/execute",
         json={"session_id": resp_ro["data"]["session_id"], "command": "mkdir test"},
     ).json()
-    print("Execute RO:", ro_cmd)
+    print("Execute RO linux:", ro_cmd)
+
+    ro_sql = requests.post(
+        "http://127.0.0.1:8088/api/v1/execute",
+        json={
+            "session_id": resp_ro["data"]["session_id"],
+            "command": "db_execute_query",
+            "db_type": "mysql",
+            "host": "127.0.0.1",
+            "port": 3306,
+            "user": "test",
+            "password": "",
+            "database": "test",
+            "sql": "DROP TABLE users",
+        },
+    ).json()
+    print("Execute RO sql:", ro_sql)
 
     print("\nTesting write session...")
     resp_rw = requests.post(
@@ -57,6 +73,22 @@ try:
         json={"session_id": resp_rw["data"]["session_id"], "command": "mkdir test"},
     ).json()
     print("Execute RW:", rw_cmd)
+
+    rw_sql = requests.post(
+        "http://127.0.0.1:8088/api/v1/execute",
+        json={
+            "session_id": resp_rw["data"]["session_id"],
+            "command": "db_execute_query",
+            "db_type": "mysql",
+            "host": "127.0.0.1",
+            "port": 3306,
+            "user": "test",
+            "password": "",
+            "database": "test",
+            "sql": "DROP TABLE users",
+        },
+    ).json()
+    print("Execute RW sql:", rw_sql)
 
 except Exception as e:
     print("Error:", e)
