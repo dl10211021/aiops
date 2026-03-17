@@ -1,0 +1,39 @@
+{
+  "default_model": "gemini-2.5-flash",
+  "models": {
+    "gemini-2.5-flash": {
+      "provider": "google",
+      "protocol": "openai",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "api_key_env": "GOOGLE_API_KEY",
+      "supports_thinking": false
+    },
+    "claude-3-7-sonnet-20250219": {
+      "provider": "anthropic",
+      "protocol": "anthropic",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "supports_thinking": true
+    },
+    "o3-mini": {
+      "provider": "openai",
+      "protocol": "openai",
+      "base_url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "supports_thinking": true
+    },
+    "ollama-deepseek-r1": {
+      "provider": "local",
+      "protocol": "openai",
+      "base_url": "http://localhost:11434/v1",
+      "api_key_env": "",
+      "supports_thinking": true
+    },
+    "vllm-llama3": {
+      "provider": "local",
+      "protocol": "openai",
+      "base_url": "http://localhost:8000/v1",
+      "api_key_env": "",
+      "supports_thinking": false
+    }
+  }
+}

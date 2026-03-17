@@ -20,12 +20,19 @@ client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL, timeout=30.0)
 
 async def get_available_models() -> list:
     try:
-        response = await client.models.list()
-        models = [m.id for m in response.data]
+        import json
+        import os
+
+        config_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "models.json"
+        )
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        models = list(config.get("models", {}).keys())
         models.sort()
         return models
     except Exception as e:
-        logger.error(f"Failed to fetch models: {e}")
+        logger.error(f"Failed to fetch models from models.json: {e}")
         return []
 
 
