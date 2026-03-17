@@ -23,7 +23,8 @@ export async function connectSession(params: {
   host: string; port: number; username: string; password?: string;
   private_key_path?: string; allow_modifications: boolean;
   active_skills: string[]; agent_profile: string; remark?: string;
-  protocol: string; extra_args: Record<string, unknown>; group_name?: string;
+  asset_type: string; extra_args: Record<string, unknown>; group_name?: string;
+  tags?: string[]; target_scope?: string; scope_value?: string;
 }) {
   return request<{ session_id: string }>('/connect', {
     method: 'POST', body: JSON.stringify(params),
@@ -32,8 +33,9 @@ export async function connectSession(params: {
 
 export async function testConnection(params: {
   host: string; port: number; username: string; password?: string;
-  protocol: string; extra_args?: Record<string, unknown>;
+  asset_type: string; extra_args?: Record<string, unknown>;
   active_skills?: string[];
+  target_scope?: string; scope_value?: string;
 }) {
   return request('/connect/test', {
     method: 'POST', body: JSON.stringify(params),
@@ -48,8 +50,8 @@ export async function getActiveSessions() {
   return request<{ sessions: Record<string, {
     id: string; host: string; remark: string; isReadWriteMode: boolean;
     skills: string[]; agentProfile: string; user: string;
-    protocol: string; extra_args: Record<string, unknown>;
-    heartbeatEnabled: boolean; group_name: string;
+    asset_type: string; extra_args: Record<string, unknown>;
+    heartbeatEnabled: boolean; tags: string[];
   }> }>('/sessions/active')
 }
 

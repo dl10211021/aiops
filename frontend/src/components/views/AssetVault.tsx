@@ -44,7 +44,7 @@ export default function AssetVault() {
 
   const grouped: Record<string, Asset[]> = {}
   filtered.forEach((a) => {
-    const g = a.group_name || '未分组'
+    const g = (a.tags && a.tags[0]) || '未分组'
     if (!grouped[g]) grouped[g] = []
     grouped[g].push(a)
   })
@@ -88,7 +88,7 @@ export default function AssetVault() {
                       <div className="font-medium text-ops-text text-sm truncate">{asset.remark || asset.host}</div>
                       <div className="text-xs text-ops-overlay mt-0.5">{asset.username}@{asset.host}:{asset.port}</div>
                     </div>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${protocolBadge(asset.protocol)}`}>{asset.protocol.toUpperCase()}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${protocolBadge(asset.asset_type)}`}>{asset.asset_type.toUpperCase()}</span>
                   </div>
                   {asset.skills?.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-2">
@@ -99,7 +99,7 @@ export default function AssetVault() {
                     </div>
                   )}
                   <div className="flex gap-2 mt-3">
-                    <button onClick={() => handleConnect(asset)} className="flex-1 bg-ops-accent/15 text-ops-accent text-xs py-1.5 rounded-lg hover:bg-ops-accent/25 transition-colors">⚡ 连接</button>
+                    <button onClick={() => handleConnect(asset)} className="flex-1 bg-ops-accent/15 text-ops-accent text-xs py-1.5 rounded-lg hover:bg-ops-accent/25 transition-colors">✏️ 编辑 / 连接</button>
                     <button onClick={() => handleDelete(asset.id)} className="text-ops-overlay text-xs px-2 py-1.5 rounded-lg hover:text-ops-alert hover:bg-ops-alert/10 transition-colors">🗑️</button>
                   </div>
                 </div>

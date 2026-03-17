@@ -12,36 +12,36 @@ const ASSET_CATEGORIES = [
   { id: 'oob', label: '硬件动环 (Hardware & OOB)' },
 ]
 
-const ASSET_SUB_TYPES: Record<string, { id: string, label: string, protocol: string, defaultPort: number }[]> = {
+const ASSET_SUB_TYPES: Record<string, { id: string, label: string, asset_type: string, defaultPort: number }[]> = {
   os: [
-    { id: 'linux', label: 'Linux / Unix (SSH)', protocol: 'ssh', defaultPort: 22 },
-    { id: 'winrm', label: 'Windows Server (WinRM)', protocol: 'winrm', defaultPort: 5985 },
+    { id: 'linux', label: 'Linux / Unix (SSH)', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'winrm', label: 'Windows Server (WinRM)', asset_type: 'winrm', defaultPort: 5985 },
   ],
   db: [
-    { id: 'mysql', label: 'MySQL', protocol: 'database', defaultPort: 3306 },
-    { id: 'oracle', label: 'Oracle', protocol: 'database', defaultPort: 1521 },
-    { id: 'postgresql', label: 'PostgreSQL', protocol: 'database', defaultPort: 5432 },
-    { id: 'mssql', label: 'SQL Server', protocol: 'database', defaultPort: 1433 },
-    { id: 'redis', label: 'Redis', protocol: 'database', defaultPort: 6379 },
-    { id: 'mongodb', label: 'MongoDB', protocol: 'database', defaultPort: 27017 },
-    { id: 'elasticsearch', label: 'ElasticSearch', protocol: 'database', defaultPort: 9200 },
+    { id: 'mysql', label: 'MySQL', asset_type: 'mysql', defaultPort: 3306 },
+    { id: 'oracle', label: 'Oracle', asset_type: 'mysql', defaultPort: 1521 },
+    { id: 'postgresql', label: 'PostgreSQL', asset_type: 'mysql', defaultPort: 5432 },
+    { id: 'mssql', label: 'SQL Server', asset_type: 'mysql', defaultPort: 1433 },
+    { id: 'redis', label: 'Redis', asset_type: 'mysql', defaultPort: 6379 },
+    { id: 'mongodb', label: 'MongoDB', asset_type: 'mysql', defaultPort: 27017 },
+    { id: 'elasticsearch', label: 'ElasticSearch', asset_type: 'mysql', defaultPort: 9200 },
   ],
   cloud: [
-    { id: 'vmware', label: 'VMware vCenter/ESXi', protocol: 'api', defaultPort: 443 },
-    { id: 'k8s', label: 'Kubernetes (K8s)', protocol: 'api', defaultPort: 6443 },
-    { id: 'zstack', label: 'ZStack', protocol: 'api', defaultPort: 5000 },
+    { id: 'vmware', label: 'VMware vCenter/ESXi', asset_type: 'api', defaultPort: 443 },
+    { id: 'k8s', label: 'Kubernetes (K8s)', asset_type: 'api', defaultPort: 6443 },
+    { id: 'zstack', label: 'ZStack', asset_type: 'api', defaultPort: 5000 },
   ],
   network: [
-    { id: 'f5', label: 'F5 BIG-IP', protocol: 'api', defaultPort: 443 },
-    { id: 'switch', label: 'Switch / Router', protocol: 'ssh', defaultPort: 22 },
+    { id: 'f5', label: 'F5 BIG-IP', asset_type: 'api', defaultPort: 443 },
+    { id: 'switch', label: 'Switch / Router', asset_type: 'ssh', defaultPort: 22 },
   ],
   monitor: [
-    { id: 'zabbix', label: 'Zabbix', protocol: 'api', defaultPort: 80 },
-    { id: 'prometheus', label: 'Prometheus', protocol: 'api', defaultPort: 9090 },
+    { id: 'zabbix', label: 'Zabbix', asset_type: 'api', defaultPort: 80 },
+    { id: 'prometheus', label: 'Prometheus', asset_type: 'api', defaultPort: 9090 },
   ],
   oob: [
-    { id: 'snmp', label: 'SNMP', protocol: 'api', defaultPort: 161 },
-    { id: 'redfish', label: 'Redfish/iLO/iDRAC', protocol: 'api', defaultPort: 443 },
+    { id: 'snmp', label: 'SNMP', asset_type: 'api', defaultPort: 161 },
+    { id: 'redfish', label: 'Redfish/iLO/iDRAC', asset_type: 'api', defaultPort: 443 },
   ]
 }
 
@@ -53,7 +53,7 @@ export default function ConnectionModal() {
 
   const [form, setForm] = useState({
     host: '', port: 22, username: 'root', password: '',
-    remark: '', protocol: 'ssh', agent_profile: 'default',
+    remark: '', asset_type: 'ssh', agent_profile: 'default',
     group_name: '未分组', allow_modifications: false,
     target_scope: 'asset', category: 'os', sub_type: 'linux',
     extra_args: {} as Record<string, unknown>,
@@ -77,9 +77,9 @@ export default function ConnectionModal() {
         let sub_type = extraArgs.sub_type || a.sub_type
 
         if (!category || !sub_type) {
-          const p = a.protocol || 'ssh'
+          const p = a.asset_type || 'ssh'
           for (const [cat, subs] of Object.entries(ASSET_SUB_TYPES)) {
-            const match = subs.find(s => s.protocol === p)
+            const match = subs.find(s => s.id === p)
             if (match) {
               category = cat
               sub_type = match.id
@@ -91,7 +91,7 @@ export default function ConnectionModal() {
 
         setForm({
           host: a.host || '', port: a.port || 22, username: a.username || 'root',
-          password: a.password || '', remark: a.remark || '', protocol: a.protocol || 'ssh',
+          password: a.password || '', remark: a.remark || '', asset_type: a.asset_type || 'ssh',
           agent_profile: a.agent_profile || 'default', group_name: (a.tags && a.tags[0]) || '未分组',
           allow_modifications: false, target_scope: 'asset', extra_args: extraArgs,
           category, sub_type,
@@ -112,7 +112,7 @@ export default function ConnectionModal() {
       
       const res = await testConnection({
         host, port: form.port, username,
-        password: form.password, protocol: isGlobal ? 'api' : form.protocol,
+        password: form.password, asset_type: form.sub_type,
         extra_args: form.extra_args, active_skills: [],
         target_scope: form.target_scope,
         scope_value: form.target_scope === 'group' ? form.group_name : host,
@@ -134,7 +134,7 @@ export default function ConnectionModal() {
     try {
       const res = await connectSession({
         ...form,
-        host, username, protocol: isGlobal ? 'api' : form.protocol,
+        host, username, asset_type: form.sub_type,
         active_skills: Array.from(selectedSkills),
         tags: [form.group_name],
         target_scope: form.target_scope,
@@ -145,7 +145,7 @@ export default function ConnectionModal() {
         id: sid, host, remark: form.remark,
         isReadWriteMode: form.allow_modifications,
         skills: Array.from(selectedSkills), agentProfile: form.agent_profile,
-        user: username, protocol: isGlobal ? 'api' : form.protocol,
+        user: username, asset_type: form.sub_type,
         extra_args: form.extra_args, heartbeatEnabled: false,
         tags: [form.group_name], messages: [], isStreaming: false,
       })
@@ -168,7 +168,7 @@ export default function ConnectionModal() {
     try {
       await batchImportAssets([{
         host, username, password: form.password, port: form.port,
-        protocol: isGlobal ? 'api' : form.protocol,
+        asset_type: form.sub_type,
         remark: form.remark, agent_profile: form.agent_profile,
         extra_args: form.extra_args, skills: Array.from(selectedSkills),
         tags: [form.group_name]
@@ -231,7 +231,7 @@ export default function ConnectionModal() {
                       ...form, 
                       category: newCat, 
                       sub_type: firstSub.id, 
-                      protocol: firstSub.protocol, 
+                      asset_type: firstSub.asset_type, 
                       port: firstSub.defaultPort,
                       extra_args: {
                         category: newCat,
@@ -256,7 +256,7 @@ export default function ConnectionModal() {
                       setForm({
                         ...form,
                         sub_type: newSubId,
-                        protocol: subInfo.protocol,
+                        asset_type: subInfo.asset_type,
                         port: subInfo.defaultPort,
                         extra_args: {
                           category: form.category,

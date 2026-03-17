@@ -14,10 +14,10 @@ export default function Sidebar() {
 
   if (!sidebarOpen) return null
 
-  // Group sessions by group_name
+  // Group sessions by tags[0]
   const grouped: Record<string, Session[]> = {}
   Object.values(sessions).forEach((s) => {
-    const g = s.group_name || '未分组'
+    const g = (s.tags && s.tags[0]) || '未分组'
     if (!grouped[g]) grouped[g] = []
     grouped[g].push(s)
   })
@@ -87,7 +87,7 @@ export default function Sidebar() {
                     ? 'bg-ops-accent/15 text-ops-accent'
                     : 'text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text'}`}
               >
-                <span className="text-sm shrink-0">{protocolIcon(s.protocol)}</span>
+                <span className="text-sm shrink-0">{protocolIcon(s.asset_type)}</span>
                 <div className="flex-1 min-w-0">
                   <div className="truncate text-xs font-medium">
                     {s.remark || s.host}

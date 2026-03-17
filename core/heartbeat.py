@@ -9,7 +9,7 @@ async def run_single_heartbeat(sid, info, memory_db, dispatcher, trigger_msg=Non
     from core.agent import headless_agent_chat
     try:
         custom_hb_prompt = info.get("extra_args", {}).get("heartbeat_prompt", "")
-        protocol = info.get("protocol", "ssh")
+        protocol = info.get("asset_type", "ssh")
         agent_profile = info.get("agent_profile", "default")
         
         if trigger_msg:
@@ -19,7 +19,7 @@ async def run_single_heartbeat(sid, info, memory_db, dispatcher, trigger_msg=Non
         else:
             system_alert = f"""当前处于系统的闲置后台时间。作为高级 AIOps 专家，请你利用这段时间进行**深度的自主运维与自我进化**，而不仅仅是简单的“健康巡检”。
 
-当前资产类型：{protocol.upper()} ({agent_profile})
+当前资产类型：{asset_type.upper()} ({agent_profile})
 
 【自主运维与进化要求 (极其重要)】：
 1. **深度发掘与诊断**：主动探测潜在隐患、性能瓶颈、错误日志。如果发现异常，不要急于汇报，而是**深入挖掘根本原因**。

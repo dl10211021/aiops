@@ -8,10 +8,10 @@ export interface Session {
   skills: string[]
   agentProfile: string
   user: string
-  protocol: string
+  asset_type: string
   extra_args: Record<string, unknown>
   heartbeatEnabled: boolean
-  group_name: string
+  tags: string[]
   // Frontend-only state
   messages: ChatMessage[]
   isStreaming: boolean
@@ -58,12 +58,12 @@ export interface Asset {
   host: string
   port: number
   username: string
-  password: string
-  protocol: string
+  password?: string
+  asset_type: string
   agent_profile: string
   extra_args: Record<string, unknown>
   skills: string[]
-  group_name: string
+  tags: string[]
 }
 
 export interface CronJob {

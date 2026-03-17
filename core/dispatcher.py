@@ -445,27 +445,26 @@ class SkillDispatcher:
                     },
                 ]
             )
-        elif target_scope == "group":
+        elif target_scope in ("group", "tag"):
             tools.append(
                 {
                     "type": "function",
                     "function": {
                         "name": "execute_on_scope",
-                        "description": "在当前业务组的所有目标资产上批量执行相同的检查任务。底层会为您并发拉起多个子Agent去各个机器执行。请直接下发自然语言要求（如“检查磁盘根目录是否超过80%”）。",
+                        "description": "在当前标签/组内的所有目标资产上批量执行相同的 bash 命令。底层会并发拉起执行，并将相同的输出结果进行聚合（Scale到1000+机器不会撑爆上下文）。",
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "target_assets": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "要执行任务的目标主机IP地址列表。如果你想在这个业务组的所有机器上执行，就传入它们的IP。",
-                                },
-                                "task_instruction": {
+                                "scope_target": {
                                     "type": "string",
-                                    "description": "要派发给所有子Agent的任务指令，请用自然语言详细描述检查逻辑或操作逻辑。",
+                                    "description": "要执行的范围。如果你想在整个业务组的所有机器上执行，请传入 'ALL'。如果你只想测试部分机器，可传入逗号分隔的IP地址或主机名列表。",
+                                },
+                                "command": {
+                                    "type": "string",
+                                    "description": "要在所有目标上并发执行的 Bash 脚本或命令。",
                                 },
                             },
-                            "required": ["target_assets", "task_instruction"],
+                            "required": ["scope_target", "command"],
                         },
                     },
                 }
@@ -745,49 +744,108 @@ class SkillDispatcher:
             )
 
         elif tool_call_name == "execute_on_scope":
-            from core.agent import dispatch_group_tasks
-
-            target_assets = args.get("target_assets", [])
-            task_instruction = args.get("task_instruction", "")
+            scope_target = args.get("scope_target", "ALL")
+            command = args.get("command", "")
             parent_allow_mod = context.get("allow_modifications", False)
 
-            # Prepare the tasks matching dispatch_sub_agents format
-            # In execute_on_scope, target_assets represents IPs or names, but we need session_ids.
-            # We'll resolve the target_assets to their respective sessions or tell the agent if not connected.
+            if not parent_allow_mod:
+                write_patterns = [
+                    r"\brm\b",
+                    r"\bmkdir\b",
+                    r"\bmv\b",
+                    r"\bcp\b",
+                    r"\bvi\b",
+                    r"\bvim\b",
+                    r"\bnano\b",
+                    r"\bchmod\b",
+                    r"\bchown\b",
+                    r"\bdd\b",
+                    r"\bsystemctl\s+(start|stop|restart|enable|disable)\b",
+                    r"\byum\s+(install|remove|erase)\b",
+                    r"\bapt(-get)?\s+(install|remove|purge)\b",
+                    r"\brpm\s+-[eUi]\b",
+                    r"\bmkfs\b",
+                    r"\bfdisk\b",
+                    r"\bparted\b",
+                    r">",
+                ]
+                if any(re.search(p, command) for p in write_patterns):
+                    return '{"status": "BLOCKED", "reason": "只读安全模式，已拦截潜在的修改动作"}'
+
             from connections.ssh_manager import ssh_manager
 
-            tasks = []
-            for asset in target_assets:
-                # Find active session ID for the given host
-                session_id = None
-                for sid, sdata in ssh_manager.active_sessions.items():
-                    if (
-                        sdata["info"].get("host") == asset
-                        or sdata["info"].get("remark") == asset
-                    ):
-                        session_id = sid
-                        break
+            target_tag = context.get("scope_value", "")
+            if (
+                isinstance(target_tag, str)
+                and target_tag.startswith("[")
+                and target_tag.endswith("]")
+            ):
+                target_tag = target_tag[1:-1]
 
-                if session_id:
-                    tasks.append(
-                        {
-                            "target_session_id": session_id,
-                            "task_description": task_instruction,
-                        }
-                    )
-                else:
-                    logger.warning(
-                        f"execute_on_scope 找不到对应的会话，忽略目标: {asset}"
-                    )
+            tasks = []
+            for sid, sdata in ssh_manager.active_sessions.items():
+                info = sdata["info"]
+
+                if target_tag and target_tag not in info.get("tags", []):
+                    continue
+
+                host = info.get("host")
+                remark = info.get("remark", "")
+
+                if (
+                    scope_target == "ALL"
+                    or (host and host in scope_target)
+                    or (remark and remark in scope_target)
+                ):
+                    tasks.append((sid, host or remark))
 
             if not tasks:
                 return json.dumps(
-                    {"error": "找不到任何可用的目标资产会话，请先确保已建立连接。"}
+                    {
+                        "error": f"找不到匹配的在线资产会话 (Tag: {target_tag}, Target: {scope_target})。"
+                    }
                 )
 
-            results = await dispatch_group_tasks(tasks, parent_allow_mod)
+            sem = asyncio.Semaphore(50)
+
+            async def _run_single(t_sid, t_host):
+                async with sem:
+                    res = await asyncio.to_thread(
+                        ssh_manager.execute_command, t_sid, command
+                    )
+                    return t_host, res
+
+            completed = await asyncio.gather(
+                *(_run_single(sid, host) for sid, host in tasks)
+            )
+
+            results_dict = {}
+            for h, res in completed:
+                if res.get("success"):
+                    out = str(res.get("output", ""))
+                else:
+                    out = str(res.get("error", "ERROR"))
+
+                if not out.strip():
+                    out = "[空输出]"
+
+                if out not in results_dict:
+                    results_dict[out] = []
+                results_dict[out].append(h)
+
+            aggregated_res = {}
+            for out, hosts in results_dict.items():
+                summary_key = f"{len(hosts)} hosts returned this output"
+                display_hosts = hosts[:5] + (["..."] if len(hosts) > 5 else [])
+                aggregated_res[summary_key] = {"hosts": display_hosts, "output": out}
+
             return json.dumps(
-                {"status": "BATCH_COMPLETE", "results": results}, ensure_ascii=False
+                {
+                    "status": "BATCH_COMPLETE",
+                    "total_hosts": len(tasks),
+                    "results": aggregated_res,
+                },
+                ensure_ascii=False,
             )
 
         elif tool_call_name == "evolve_skill":
@@ -878,7 +936,7 @@ class SkillDispatcher:
                             "host": asset.get("host"),
                             "port": asset.get("port"),
                             "username": asset.get("username"),
-                            "protocol": asset.get("protocol"),
+                            "asset_type": asset.get("asset_type"),
                             "remark": asset.get("remark"),
                             "tags": asset.get("tags"),
                         }

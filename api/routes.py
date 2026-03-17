@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from typing import Optional
 from connections.ssh_manager import ssh_manager
 from fastapi.responses import StreamingResponse
@@ -25,9 +25,18 @@ class ConnectionRequest(BaseModel):
     active_skills: list[str] = []  # 增加用户动态勾选的技能包 ID 列表
     agent_profile: str = "default"  # [OpenClaw] Agent 身份/工作区
     remark: str | None = ""  # [新功能] 连接备注/别名
-    protocol: str = "ssh"  # [新功能] 资产协议类型 (ssh, telnet, db, api, winrm)
+    asset_type: str = "ssh"  # [新功能] 资产协议类型 (ssh, telnet, db, api, winrm)
     extra_args: dict = {}  # [新功能] 扩展参数，比如 db_name, api_key 等
     tags: list[str] = ["未分组"]  # [新功能] 资产组别
+
+    @model_validator(mode='after')
+    def validate_extra_args(self):
+        if self.asset_type == "snmp":
+            if self.extra_args.get("snmp_version") == "v3":
+                if not self.extra_args.get("v3_auth_protocol") or not self.extra_args.get("v3_priv_protocol"):
+                    raise ValueError("SNMPv3 requires v3_auth_protocol and v3_priv_protocol")
+        return self
+
     target_scope: str = "asset"  # 作用域：global, group, asset
     scope_value: str | None = (
         None  # 如果 scope 为 group，则为 tag 名称；如果为 asset，为 host/id；global 为空
@@ -128,7 +137,7 @@ def restore_masked_args(req):
         from core.memory import memory_db
         assets = memory_db.get_all_assets()
         for a in assets:
-            if a["host"] == req.host and a["protocol"] == req.protocol:
+            if a["host"] == req.host and a["asset_type"] == req.asset_type:
                 db_args = a.get("extra_args", {})
                 for k, v in req.extra_args.items():
                     if v == "********" and k in db_args:
@@ -142,7 +151,7 @@ async def test_connection(req: ConnectionRequest):
     restore_masked_args(req)
 
     # SSH Test
-    if req.protocol == "ssh":
+    if req.asset_type in ["ssh", "linux", "switch"]:
         from connections.ssh_manager import ssh_manager
 
         key_path = (
@@ -178,7 +187,7 @@ async def test_connection(req: ConnectionRequest):
 
     # Database Test
     if (
-        req.protocol == "database"
+        req.asset_type in ["mysql", "oracle", "postgresql", "mssql", "redis", "mongodb", "elasticsearch"]
         or "database" in str(req.active_skills)
         or (req.extra_args and req.extra_args.get("db_type"))
     ):
@@ -214,7 +223,7 @@ async def test_connection(req: ConnectionRequest):
             )
 
     # API Test
-    if req.protocol == "api":
+    if req.asset_type in ["vmware", "k8s", "zstack", "f5", "zabbix", "prometheus", "snmp", "redfish"]:
         import socket
 
         try:
@@ -260,7 +269,7 @@ async def create_ssh_connection(req: ConnectionRequest):
     """建立与远程系统的会话 (支持 SSH长连接 或 虚拟凭据会话)"""
     restore_masked_args(req)
     logger.info(
-        f"API called: Connect to {req.host} via {req.protocol} with profile {req.agent_profile}, remark: {req.remark}"
+        f"API called: Connect to {req.host} via {req.asset_type} with profile {req.agent_profile}, remark: {req.remark}"
     )
 
     key_path = req.private_key_path
@@ -279,7 +288,7 @@ async def create_ssh_connection(req: ConnectionRequest):
         active_skills=req.active_skills,  # 透传给底层会话
         agent_profile=req.agent_profile,  # 透传 Agent 身份
         remark=req.remark,  # 透传备注
-        protocol=req.protocol,  # 透传协议
+        protocol=req.asset_type,  # 透传协议
         extra_args=req.extra_args,  # 透传扩展凭证 (API Key, DB Name 等)
         tags=req.tags,  # 传递分组标签
         target_scope=req.target_scope,
@@ -296,7 +305,7 @@ async def create_ssh_connection(req: ConnectionRequest):
             port=req.port,
             username=req.username,
             password=req.password,
-            protocol=req.protocol,
+            protocol=req.asset_type,
             agent_profile=req.agent_profile,
             extra_args=req.extra_args,
             skills=req.active_skills,
@@ -964,7 +973,7 @@ async def get_active_sessions():
             "skills": info.get("active_skills", []),
             "agentProfile": info.get("agent_profile"),
             "user": info.get("username"),
-            "protocol": info.get("protocol"),
+            "protocol": info.get("asset_type"),
             "extra_args": dict(info.get("extra_args", {})),
             "heartbeatEnabled": info.get("heartbeat_enabled", False),
             "tags": info.get("tags", ["未分组"]),
@@ -1242,7 +1251,7 @@ class BatchAssetImportItem(BaseModel):
     port: int = 22
     username: str = ""
     password: str | None = ""
-    protocol: str = "ssh"
+    asset_type: str = "ssh"
     agent_profile: str = "default"
     extra_args: dict = {}
     skills: list[str] = []

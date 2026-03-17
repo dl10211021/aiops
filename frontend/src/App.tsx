@@ -66,10 +66,10 @@ export default function App() {
             skills: sinfo.skills || [],
             agentProfile: sinfo.agentProfile || 'default',
             user: sinfo.user || '',
-            protocol: sinfo.protocol || 'ssh',
+            asset_type: sinfo.asset_type || 'ssh',
             extra_args: sinfo.extra_args || {},
             heartbeatEnabled: sinfo.heartbeatEnabled || false,
-            group_name: sinfo.group_name || '未分组',
+            tags: sinfo.tags || ['未分组'],
             messages: [],
             isStreaming: false,
           })
@@ -131,7 +131,7 @@ export default function App() {
       <Sidebar />
 
       {/* Main content area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <TopBar />
         <ViewRouter />
       </div>

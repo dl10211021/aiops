@@ -98,7 +98,7 @@ class MemoryDB:
                         port INTEGER,
                         username TEXT,
                         password TEXT,
-                        protocol TEXT,
+                        asset_type TEXT,
                         agent_profile TEXT,
                         extra_args_json TEXT,
                         skills_json TEXT,
@@ -173,12 +173,12 @@ class MemoryDB:
                 cursor = conn.cursor()
                 for item in items:
                     host = item["host"]
-                    protocol = item["protocol"]
+                    protocol = item["asset_type"]
                     tags = item.get("tags") or ["未分组"]
 
                     cursor.execute(
-                        "SELECT id, extra_args_json FROM assets WHERE host = ? AND protocol = ?",
-                        (host, protocol),
+                        "SELECT id, extra_args_json FROM assets WHERE host = ? AND asset_type = ?",
+                        (host, asset_type),
                     )
                     row = cursor.fetchone()
                     if row:
@@ -204,7 +204,7 @@ class MemoryDB:
                         new_extra_args = self._encrypt_extra_args(item.get("extra_args", {}))
                         cursor.execute(
                             """
-                            INSERT INTO assets (remark, host, port, username, password, protocol, agent_profile, extra_args_json, skills_json)
+                            INSERT INTO assets (remark, host, port, username, password, asset_type, agent_profile, extra_args_json, skills_json)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                             (
@@ -257,8 +257,8 @@ class MemoryDB:
             with self._db_lock, sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT id, extra_args_json FROM assets WHERE host = ? AND protocol = ?",
-                    (host, protocol),
+                    "SELECT id, extra_args_json FROM assets WHERE host = ? AND asset_type = ?",
+                    (host, asset_type),
                 )
                 row = cursor.fetchone()
                 if row:
@@ -284,7 +284,7 @@ class MemoryDB:
                     new_extra_args = self._encrypt_extra_args(extra_args)
                     cursor.execute(
                         """
-                        INSERT INTO assets (remark, host, port, username, password, protocol, agent_profile, extra_args_json, skills_json)
+                        INSERT INTO assets (remark, host, port, username, password, asset_type, agent_profile, extra_args_json, skills_json)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                         (

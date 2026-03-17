@@ -32,7 +32,7 @@ class SSHConnectionManager:
         active_skills: list[str] | None = None,
         agent_profile: str = "default",
         remark: str = "",
-        protocol: str = "ssh",
+        asset_type: str = "ssh",
         extra_args: dict | None = None,
         lazy: bool = False,
         tags: list[str] | None = None,
@@ -49,7 +49,7 @@ class SSHConnectionManager:
 
         import hashlib
 
-        unique_str = f"{protocol}_{username}@{host}:{port}"
+        unique_str = f"{asset_type}_{username}@{host}:{port}"
         session_id = str(uuid.UUID(hashlib.md5(unique_str.encode()).hexdigest()))
 
         # 安全加固：如果该主机已有连接，先释放旧连接的资源，防止连接泄漏
@@ -64,9 +64,9 @@ class SSHConnectionManager:
                 del self.active_sessions[session_id]
 
         # 核心逻辑分离：如果不是 SSH，就不去尝试 paramiko 连接，只做凭证登记
-        if protocol != "ssh":
+        if asset_type != "ssh":
             logger.info(
-                f"Registered Virtual Asset [{protocol}] -> {username}@{host}:{port} (Profile: {agent_profile}, Extra: {extra_args})"
+                f"Registered Virtual Asset [{asset_type}] -> {username}@{host}:{port} (Profile: {agent_profile}, Extra: {extra_args})"
             )
             with self._sessions_lock:
                 self.active_sessions[session_id] = {
@@ -81,7 +81,7 @@ class SSHConnectionManager:
                         "active_skills": active_skills,
                         "agent_profile": agent_profile,
                         "remark": remark,
-                        "protocol": protocol,
+                        "asset_type": asset_type,
                         "extra_args": extra_args,
                         "tags": tags,
                         "target_scope": target_scope,
@@ -95,7 +95,7 @@ class SSHConnectionManager:
             return {
                 "success": True,
                 "session_id": session_id,
-                "message": f"{protocol.upper()} 资产已成功纳管登记",
+                "message": f"{asset_type.upper()} 资产已成功纳管登记",
             }
 
         # 如果开启了惰性加载 (lazy)，则只保存配置，不实际发起物理连接
@@ -116,7 +116,7 @@ class SSHConnectionManager:
                         "active_skills": active_skills,
                         "agent_profile": agent_profile,
                         "remark": remark,
-                        "protocol": "ssh",
+                        "asset_type": "ssh",
                         "extra_args": extra_args,
                         "tags": tags,
                         "target_scope": target_scope,
@@ -164,7 +164,7 @@ class SSHConnectionManager:
                         "active_skills": active_skills,
                         "agent_profile": agent_profile,
                         "remark": remark,
-                        "protocol": "ssh",
+                        "asset_type": "ssh",
                         "extra_args": extra_args,
                         "tags": tags,
                         "target_scope": target_scope,
@@ -209,7 +209,7 @@ class SSHConnectionManager:
                     "active_skills": active_skills,
                     "agent_profile": agent_profile,
                     "remark": remark,
-                    "protocol": "virtual",
+                    "asset_type": "virtual",
                     "extra_args": {},
                     "tags": ["本地会话"],
                     "is_virtual": True,

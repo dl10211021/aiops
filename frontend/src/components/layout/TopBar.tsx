@@ -56,7 +56,7 @@ export default function TopBar() {
               {session.remark || session.host}
             </span>
             <span className="text-ops-overlay text-xs">
-              {session.user}@{session.host} ({session.protocol})
+              {session.user}@{session.host} ({session.asset_type})
             </span>
           </div>
 

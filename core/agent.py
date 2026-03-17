@@ -62,7 +62,7 @@ async def chat_stream_agent(
     agent_profile = session_info.get("agent_profile", "default")
 
     # 获取资产协议凭证信息，构建模型上下文
-    protocol = session_info.get("protocol", "ssh")
+    protocol = session_info.get("asset_type", "ssh")
     is_virtual = session_info.get("is_virtual", False)
     host = session_info.get("host", "")
     port = session_info.get("port", "")
@@ -98,7 +98,7 @@ async def chat_stream_agent(
 {base_prompt}
 
 [当前持有的资产凭证]
-一台通过{protocol.upper()}协议纳管的资产：
+一台通过{asset_type.upper()}协议纳管的资产：
 - 目标IP/主机名: {host}
 - 端口: {port}
 - 账号: {username}
@@ -350,7 +350,7 @@ async def headless_agent_chat(
     )
     active_skills = session_info.get("active_skills", [])
     agent_profile = session_info.get("agent_profile", "default")
-    protocol = session_info.get("protocol", "ssh")
+    protocol = session_info.get("asset_type", "ssh")
     is_virtual = session_info.get("is_virtual", False)
     host = session_info.get("host", "")
     port = session_info.get("port", "")
@@ -375,7 +375,7 @@ async def headless_agent_chat(
     SYSTEM_PROMPT = f"""{base_prompt}
 
 [当前持有的资产凭证]
-一台通过{protocol.upper()}协议纳管的资产：
+一台通过{asset_type.upper()}协议纳管的资产：
 - 目标IP/主机名: {host}
 - 端口: {port}
 - 账号: {username}
