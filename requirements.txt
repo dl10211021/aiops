@@ -3,6 +3,7 @@ uvicorn
 paramiko
 pydantic
 openai
+anthropic
 pyyaml
 python-dotenv
 apscheduler
