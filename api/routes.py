@@ -195,7 +195,23 @@ async def test_connection(req: ConnectionRequest):
                 message=f"[FAIL] Database Connection Failed: {res.get('error')}",
             )
 
-    # API / Virtual Test: Ping
+    # API Test
+    if req.protocol == "api":
+        import socket
+
+        try:
+            with socket.create_connection((req.host, req.port), timeout=3):
+                pass
+            return ResponseModel(
+                status="success",
+                message=f"[OK] Port {req.port} is reachable. (Auth testing deferred to execution agent)",
+            )
+        except Exception as e:
+            return ResponseModel(
+                status="error", message=f"[FAIL] TCP Connect Failed: {str(e)}"
+            )
+
+    # Virtual Test: Ping
     try:
         import subprocess
 
@@ -805,9 +821,9 @@ async def update_session_permission(session_id: str, req: PermissionUpdateReques
     if session_id not in ssh_manager.active_sessions:
         raise HTTPException(status_code=404, detail="会话不存在或已断开")
 
-    ssh_manager.active_sessions[session_id]["info"]["allow_modifications"] = (
-        req.allow_modifications
-    )
+    ssh_manager.active_sessions[session_id]["info"][
+        "allow_modifications"
+    ] = req.allow_modifications
     logger.info(
         f"Session {session_id} permissions changed to: {req.allow_modifications}"
     )
@@ -821,13 +837,13 @@ async def update_session_heartbeat(session_id: str, req: HeartbeatUpdateRequest)
     if session_id not in ssh_manager.active_sessions:
         raise HTTPException(status_code=404, detail="会话不存在或已断开")
 
-    ssh_manager.active_sessions[session_id]["info"]["heartbeat_enabled"] = (
-        req.heartbeat_enabled
-    )
+    ssh_manager.active_sessions[session_id]["info"][
+        "heartbeat_enabled"
+    ] = req.heartbeat_enabled
     if req.heartbeat_enabled:
-        ssh_manager.active_sessions[session_id]["info"]["last_active"] = (
-            0  # Trigger immediately on next poll
-        )
+        ssh_manager.active_sessions[session_id]["info"][
+            "last_active"
+        ] = 0  # Trigger immediately on next poll
 
     if req.master_interval is not None:
         if "extra_args" not in ssh_manager.active_sessions[session_id]["info"]:
