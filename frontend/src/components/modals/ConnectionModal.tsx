@@ -217,7 +217,6 @@ export default function ConnectionModal() {
                       protocol: firstSub.protocol, 
                       port: firstSub.defaultPort,
                       extra_args: {
-                        ...form.extra_args,
                         category: newCat,
                         sub_type: firstSub.id,
                         ...(newCat === 'db' ? { db_type: firstSub.id } : {})
@@ -243,7 +242,7 @@ export default function ConnectionModal() {
                         protocol: subInfo.protocol,
                         port: subInfo.defaultPort,
                         extra_args: {
-                          ...form.extra_args,
+                          category: form.category,
                           sub_type: newSubId,
                           ...(form.category === 'db' ? { db_type: newSubId } : {})
                         }
@@ -274,20 +273,22 @@ export default function ConnectionModal() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                {form.sub_type !== 'redis' && (
-                  <div>
-                    <label className="text-xs text-ops-subtext">用户名</label>
-                    <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
+              {!(form.sub_type === 'snmp' && form.extra_args.snmp_version === 'v3') && (
+                <div className="grid grid-cols-2 gap-3">
+                  {form.sub_type !== 'redis' && (
+                    <div>
+                      <label className="text-xs text-ops-subtext">用户名</label>
+                      <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
+                        className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+                    </div>
+                  )}
+                  <div className={form.sub_type === 'redis' ? 'col-span-2' : ''}>
+                    <label className="text-xs text-ops-subtext">密码</label>
+                    <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
                       className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
                   </div>
-                )}
-                <div className={form.sub_type === 'redis' ? 'col-span-2' : ''}>
-                  <label className="text-xs text-ops-subtext">密码</label>
-                  <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
                 </div>
-              </div>
+              )}
             </>
           )}
 
@@ -306,15 +307,139 @@ export default function ConnectionModal() {
             </div>
           </div>
 
-          {/* Database extra fields */}
-          {form.target_scope !== 'global' && form.category === 'db' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-ops-subtext">数据库/SID</label>
-                <input value={(form.extra_args.database as string) || ''}
-                  onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, database: e.target.value } })}
-                  className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
-              </div>
+          {/* Custom Extra Fields */}
+          {form.target_scope !== 'global' && (
+            <div className="space-y-3">
+              {form.category === 'db' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-ops-subtext">Database Name / SID</label>
+                    <input value={(form.extra_args.db_name as string) || (form.extra_args.database as string) || ''}
+                      onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, db_name: e.target.value } })}
+                      className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+                  </div>
+                  <div className="flex items-center mt-6">
+                    <label className="flex items-center gap-2 text-sm text-ops-subtext cursor-pointer hover:text-ops-text">
+                      <input type="checkbox" checked={!!form.extra_args.use_ssl}
+                        onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, use_ssl: e.target.checked } })}
+                        className="accent-ops-accent" />
+                      Use SSL
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {form.sub_type === 'k8s' && (
+                <div className="space-y-3">
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-1.5 text-sm text-ops-subtext cursor-pointer">
+                      <input type="radio" name="k8s_auth" value="token" checked={form.extra_args.k8s_auth_type !== 'kubeconfig'}
+                        onChange={() => setForm({ ...form, extra_args: { ...form.extra_args, k8s_auth_type: 'token' } })}
+                        className="accent-ops-accent" /> Token
+                    </label>
+                    <label className="flex items-center gap-1.5 text-sm text-ops-subtext cursor-pointer">
+                      <input type="radio" name="k8s_auth" value="kubeconfig" checked={form.extra_args.k8s_auth_type === 'kubeconfig'}
+                        onChange={() => setForm({ ...form, extra_args: { ...form.extra_args, k8s_auth_type: 'kubeconfig' } })}
+                        className="accent-ops-accent" /> Kubeconfig
+                    </label>
+                  </div>
+                  {form.extra_args.k8s_auth_type === 'kubeconfig' ? (
+                    <div>
+                      <label className="text-xs text-ops-subtext">Kubeconfig</label>
+                      <textarea value={(form.extra_args.kubeconfig as string) || ''}
+                        onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, kubeconfig: e.target.value } })}
+                        className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent h-24 font-mono text-xs" />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-xs text-ops-subtext">Bearer Token</label>
+                      <input type="password" value={(form.extra_args.bearer_token as string) || ''}
+                        onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, bearer_token: e.target.value } })}
+                        className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {form.sub_type === 'snmp' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-ops-subtext">SNMP Version</label>
+                    <select value={(form.extra_args.snmp_version as string) || 'v2c'}
+                      onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, snmp_version: e.target.value } })}
+                      className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent appearance-none">
+                      <option value="v2c">v2c</option>
+                      <option value="v3">v3</option>
+                    </select>
+                  </div>
+                  {((form.extra_args.snmp_version as string) || 'v2c') === 'v2c' ? (
+                    <div>
+                      <label className="text-xs text-ops-subtext">Community String</label>
+                      <input type="password" value={(form.extra_args.community_string as string) || ''}
+                        onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, community_string: e.target.value } })}
+                        className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-ops-subtext">Auth User</label>
+                        <input value={(form.extra_args.v3_auth_user as string) || ''}
+                          onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, v3_auth_user: e.target.value } })}
+                          className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-ops-subtext">Auth Protocol</label>
+                        <select value={(form.extra_args.v3_auth_protocol as string) || 'MD5'}
+                          onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, v3_auth_protocol: e.target.value } })}
+                          className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent appearance-none">
+                          <option value="MD5">MD5</option>
+                          <option value="SHA">SHA</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-ops-subtext">Auth Pass</label>
+                        <input type="password" value={(form.extra_args.v3_auth_pass as string) || ''}
+                          onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, v3_auth_pass: e.target.value } })}
+                          className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+                      </div>
+                      <div className="col-span-1" />
+                      <div>
+                        <label className="text-xs text-ops-subtext">Priv Protocol</label>
+                        <select value={(form.extra_args.v3_priv_protocol as string) || 'DES'}
+                          onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, v3_priv_protocol: e.target.value } })}
+                          className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent appearance-none">
+                          <option value="DES">DES</option>
+                          <option value="AES">AES</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-ops-subtext">Priv Pass</label>
+                        <input type="password" value={(form.extra_args.v3_priv_pass as string) || ''}
+                          onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, v3_priv_pass: e.target.value } })}
+                          className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {['zabbix', 'elasticsearch', 'f5'].includes(form.sub_type) && (
+                <div>
+                  <label className="text-xs text-ops-subtext">API Token (Optional)</label>
+                  <input type="password" value={(form.extra_args.api_token as string) || ''}
+                    onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, api_token: e.target.value } })}
+                    className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+                </div>
+              )}
+
+              {form.sub_type === 'switch' && (
+                <div>
+                  <label className="text-xs text-ops-subtext">Enable Password</label>
+                  <input type="password" value={(form.extra_args.enable_pass as string) || ''}
+                    onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, enable_pass: e.target.value } })}
+                    className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+                </div>
+              )}
             </div>
           )}
 
