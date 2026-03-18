@@ -91,7 +91,7 @@ async def execute_chat_stream(
     actual_model_name = config.get("model", model_name)
     supports_thinking = config.get("supports_thinking", False)
 
-    is_thinking_requested = thinking_mode in ["low", "medium", "high"]
+    is_thinking_requested = thinking_mode in ["low", "medium", "high", "enabled"]
 
     if protocol == "openai":
         kwargs = {
@@ -169,10 +169,10 @@ async def execute_chat_stream(
             kwargs["system"] = system_prompt
 
         if supports_thinking and is_thinking_requested:
-            budget_map = {"low": 1024, "medium": 4096, "high": 8000}
+            budget_map = {"low": 1024, "medium": 4096, "high": 8000, "enabled": 4096}
             kwargs["thinking"] = {
                 "type": "enabled",
-                "budget_tokens": budget_map[thinking_mode],
+                "budget_tokens": budget_map.get(thinking_mode, 4096),
             }
             kwargs["temperature"] = 1.0
 

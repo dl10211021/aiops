@@ -35,12 +35,13 @@ async def get_available_models() -> list:
                     api_key = p.get("api_key")
                     if not api_key:
                         api_key = "dummy"
-                    temp_client = AsyncOpenAI(api_key=api_key, base_url=p.get("base_url"), timeout=5.0)
+                    temp_client = AsyncOpenAI(api_key=api_key, base_url=p.get("base_url"), timeout=3.0)
                     response = await temp_client.models.list()
                     for m in response.data:
                         models_list.append({"id": f"{p['id']}|{m.id}", "name": m.id})
                 except Exception as e:
-                    pass
+                    import logging
+                    logging.getLogger(__name__).warning(f"Failed to fetch models for {p.get('name')}: {e}")
             
             if models_list:
                 return {"provider_id": p["id"], "provider_name": p["name"], "models": models_list}

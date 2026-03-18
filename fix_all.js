@@ -1,6 +1,57 @@
 const fs = require('fs');
 
-const modalPath = 'frontend/src/components/modals/LLMConfigModal.tsx';
+// 1. Update client.ts
+let clientCode = fs.readFileSync('frontend/src/api/client.ts', 'utf8');
+
+if (!clientCode.includes('ProviderConfig')) {
+    const interfaces = `
+export interface ProviderConfig {
+  id: string;
+  name: string;
+  protocol: string;
+  base_url: string;
+  api_key: string;
+  models: string;
+}
+
+export interface ModelGroup {
+  provider_id: string;
+  provider_name: string;
+  models: { id: string; name: string }[];
+}
+`;
+    clientCode = clientCode.replace(/export async function getAvailableModels\(\) \{/, interfaces + '\nexport async function getAvailableModels() {');
+    clientCode = clientCode.replace(/return request<\{ models: string\[\] \}>\('\/models'\)/, `return request<{ models: ModelGroup[] }>('/models')`);
+    
+    // Add getProviders and updateProviders
+    const providersApi = `export async function getProviders() {
+  return request<{ providers: ProviderConfig[] }>('/config/providers')
+}
+
+export async function updateProviders(providers: ProviderConfig[]) {
+  return request('/config/providers', {
+    method: 'POST', body: JSON.stringify(providers),
+  })
+}\n`;
+    clientCode = clientCode.replace(/export async function getNotificationConfig\(\) \{/, providersApi + '\nexport async function getNotificationConfig() {');
+    
+    fs.writeFileSync('frontend/src/api/client.ts', clientCode);
+}
+
+// 2. Update ChatWindow.tsx
+let chatCode = fs.readFileSync('frontend/src/components/chat/ChatWindow.tsx', 'utf8');
+chatCode = chatCode.replace(/const \[availableModels, setAvailableModels\] = useState<string\[\]>\(\[\]\)/, `const [availableModels, setAvailableModels] = useState<import('@/api/client').ModelGroup[]>([])`);
+
+chatCode = chatCode.replace(/\{availableModels\.length > 0 \? \([\s\S]*?\) : \(/, `{availableModels.length > 0 ? (
+              availableModels.map(group => (
+                <optgroup key={group.provider_id} label={group.provider_name}>
+                  {group.models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </optgroup>
+              ))
+            ) : (`);
+fs.writeFileSync('frontend/src/components/chat/ChatWindow.tsx', chatCode);
+
+// 3. Generate new LLMConfigModal.tsx
 const modalCode = `import { useState, useEffect } from 'react'
 import { useStore } from '@/store'
 import { getProviders, updateProviders, getAvailableModels } from '@/api/client'
@@ -28,7 +79,7 @@ export default function LLMConfigModal() {
     const id = 'custom_' + Date.now().toString().slice(-6)
     const newProvider: ProviderConfig = {
       id,
-      name: '自定义供应商 ' + providers.length,
+      name: '自定义供应商 ' + (providers.length + 1),
       protocol: 'openai',
       base_url: '',
       api_key: '',
@@ -138,38 +189,4 @@ export default function LLMConfigModal() {
                   <label className="text-xs text-ops-subtext block mb-1">Base URL (兼容网关地址)</label>
                   <input value={selectedProvider.base_url} onChange={(e) => updateProvider({ base_url: e.target.value })}
                     placeholder="https://api.openai.com/v1"
-                    className="w-full bg-ops-dark border border-ops-surface1 rounded px-3 py-2 text-sm font-mono text-ops-text focus:border-ops-accent outline-none" />
-                  <p className="text-[11px] text-ops-subtext mt-1">本地模型请填入具体本地地址如 http://localhost:11434/v1。如果是官方端点可留空。</p>
-                </div>
-
-                <div>
-                  <label className="text-xs text-ops-subtext block mb-1">API Key</label>
-                  <input type="password" value={selectedProvider.api_key} onChange={(e) => updateProvider({ api_key: e.target.value })}
-                    placeholder="sk-..."
-                    className="w-full bg-ops-dark border border-ops-surface1 rounded px-3 py-2 text-sm font-mono text-ops-text focus:border-ops-accent outline-none" />
-                </div>
-
-                <div>
-                  <label className="text-xs text-ops-subtext block mb-1">手动定义模型列表 (逗号分隔)</label>
-                  <textarea value={selectedProvider.models} onChange={(e) => updateProvider({ models: e.target.value })}
-                    rows={3}
-                    placeholder="gpt-4o, gpt-4-turbo"
-                    className="w-full bg-ops-dark border border-ops-surface1 rounded px-3 py-2 text-sm font-mono text-ops-text focus:border-ops-accent outline-none resize-none" />
-                  <p className="text-[11px] text-ops-subtext mt-1">如果你只希望在这个渠道下显示特定模型，请在此填写。如果不填，系统将尝试从API动态拉取全量列表。</p>
-                </div>
-
-                <div className="pt-2 border-t border-ops-surface0">
-                  <button onClick={() => handleDelete(selectedProvider.id)} className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded hover:bg-red-400/10 transition-colors">
-                    🗑️ 删除该供应商
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="h-full flex items-center justify-center text-ops-subtext text-sm">
-                请在左侧选择或者添加一个新的配置
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="p-4 border-t border-ops-surface0 flex justify-between i
+                  

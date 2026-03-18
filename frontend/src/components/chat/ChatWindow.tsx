@@ -32,7 +32,7 @@ export default function ChatWindow() {
   const [thinkingMode, setThinkingMode] = useState(() =>
     localStorage.getItem('ops_thinking') || 'off'
   )
-  const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [availableModels, setAvailableModels] = useState<import('@/api/client').ModelGroup[]>([])
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -265,8 +265,10 @@ export default function ChatWindow() {
             value={thinkingMode}
             onChange={(e) => setThinkingMode(e.target.value)}
             className="bg-ops-surface0 text-ops-text text-xs rounded px-2 py-1.5 border border-ops-surface1 outline-none self-end"
+            title="思维推理模式"
           >
-            <option value="off">默认思维</option>
+            <option value="off">关闭思考 (默认)</option>
+            <option value="enabled">开启思考 (自动)</option>
             <option value="low">低度思考</option>
             <option value="medium">中度思考</option>
             <option value="high">高度思考</option>
@@ -279,7 +281,11 @@ export default function ChatWindow() {
             className="bg-ops-surface0 text-ops-text text-xs rounded px-2 py-1.5 border border-ops-surface1 outline-none self-end"
           >
             {availableModels.length > 0 ? (
-              availableModels.map((m) => <option key={m} value={m}>{m}</option>)
+              availableModels.map(group => (
+    <optgroup key={group.provider_id} label={group.provider_name}>
+      {group.models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+    </optgroup>
+  ))
             ) : (
               <option value={modelName}>{modelName}</option>
             )}

@@ -40,7 +40,7 @@ export default function LeftNav() {
       <button
         onClick={() => openModal('llm-config')}
         className="w-11 h-11 rounded-lg flex items-center justify-center text-lg text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text transition-colors"
-        title="AI 配置"
+        title="模型配置"
       >
         ⚙️
       </button>

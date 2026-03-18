@@ -154,6 +154,6 @@ def index():
 
 if __name__ == "__main__":
     # 启动后端服务
-    print("\n[START] OpsCore Backend is starting on http://localhost:9000")
-    print("[INFO] You can visit http://localhost:9000/docs for API details\n")
-    uvicorn.run("main:app", host="0.0.0.0", port=9000, reload=False)
+    print("\n[START] OpsCore Backend is starting on http://localhost:8000")
+    print("[INFO] You can visit http://localhost:8000/docs for API details\n")
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

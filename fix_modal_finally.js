@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react'
+const fs = require('fs');
+
+const modalPath = 'frontend/src/components/modals/LLMConfigModal.tsx';
+const modalCode = `import { useState, useEffect } from 'react'
 import { useStore } from '@/store'
 import { getProviders, updateProviders, getAvailableModels } from '@/api/client'
 import type { ProviderConfig } from '@/api/client'
@@ -11,7 +14,6 @@ export default function LLMConfigModal() {
   const [selectedId, setSelectedId] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const [modelsCount, setModelsCount] = useState<number | null>(null)
-  const [fetchedModelsInfo, setFetchedModelsInfo] = useState<import('@/api/client').ModelGroup[]>([])
 
   useEffect(() => {
     getProviders().then((r) => {
@@ -61,15 +63,13 @@ export default function LLMConfigModal() {
   }
 
   const handleTestModels = async () => {
-    console.log("Testing models...");
     try {
-      try { await updateProviders(providers) } catch (e) { console.warn('Save before test failed', e) } // 必须先保存
+      await updateProviders(providers) // Save first to test real config
       const res = await getAvailableModels()
       let count = 0
       res.data.models.forEach(g => { count += g.models.length })
       setModelsCount(count)
-      setFetchedModelsInfo(res.data.models)
-      addToast(`成功拉取到 ${count} 个可用模型`, 'success')
+      addToast(\`成功拉取到 \${count} 个可用模型\`, 'success')
     } catch {
       addToast('获取模型列表失败，请检查网络和 API Key', 'error')
     }
@@ -81,7 +81,7 @@ export default function LLMConfigModal() {
     <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center" onClick={closeModal}>
       <div className="bg-ops-panel rounded-xl p-0 w-[800px] h-[600px] flex overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
         
-        {/* 左侧：供应商列表 */}
+        {/* Left Sidebar */}
         <div className="w-64 bg-ops-dark border-r border-ops-surface0 flex flex-col">
           <div className="p-4 border-b border-ops-surface0 flex justify-between items-center">
             <h2 className="text-ops-text font-bold">🧠 模型配置</h2>
@@ -93,7 +93,7 @@ export default function LLMConfigModal() {
               <div 
                 key={p.id}
                 onClick={() => setSelectedId(p.id)}
-                className={`px-3 py-2 text-sm rounded cursor-pointer transition-colors ${selectedId === p.id ? 'bg-ops-surface1 text-ops-text font-medium' : 'text-ops-subtext hover:bg-ops-surface0'}`}
+                className={\`px-3 py-2 text-sm rounded cursor-pointer transition-colors \${selectedId === p.id ? 'bg-ops-surface1 text-ops-text font-medium' : 'text-ops-subtext hover:bg-ops-surface0'}\`}
               >
                 {p.name}
               </div>
@@ -102,7 +102,7 @@ export default function LLMConfigModal() {
           </div>
         </div>
 
-        {/* 右侧：详情配置面板 */}
+        {/* Right Content */}
         <div className="flex-1 flex flex-col bg-ops-panel">
           <div className="p-4 border-b border-ops-surface0 flex justify-between items-center h-14">
             <h2 className="text-ops-text font-medium">{selectedProvider ? '编辑配置' : '请选择一项配置'}</h2>
@@ -158,34 +158,6 @@ export default function LLMConfigModal() {
                   <p className="text-[11px] text-ops-subtext mt-1">如果您知道可用的模型名，请在此填写。如果不填，系统将尝试从API动态拉取全量列表。</p>
                 </div>
 
-                
-                <div className="pt-4 border-t border-ops-surface0">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs font-medium text-ops-subtext">已拉取到的模型列表</h3>
-                  </div>
-                  
-                  {fetchedModelsInfo.length > 0 ? (
-                    <div className="bg-black/30 rounded border border-ops-surface1 p-2 max-h-40 overflow-y-auto">
-                      {fetchedModelsInfo.map(group => (
-                        <div key={group.provider_id} className="mb-2 last:mb-0">
-                          <div className="text-[11px] text-ops-accent mb-1 sticky top-0 bg-black/80 py-0.5">{group.provider_name}</div>
-                          <div className="flex flex-wrap gap-1.5 pl-1">
-                            {group.models.map(m => (
-                              <span key={m.id} className="text-[10px] font-mono bg-ops-surface0 text-ops-text px-1.5 py-0.5 rounded border border-ops-surface1">
-                                {m.name}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-[11px] text-ops-subtext italic bg-ops-surface0/50 p-2 rounded text-center border border-ops-surface0/50">
-                      点击右下角的"测试全局连接 & 动态获取模型"查看结果
-                    </div>
-                  )}
-                </div>
-                
                 <div className="pt-2 border-t border-ops-surface0">
                   <button onClick={() => handleDelete(selectedProvider.id)} className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded hover:bg-red-400/10 transition-colors">
                     🗑️ 删除该供应商
@@ -200,23 +172,4 @@ export default function LLMConfigModal() {
           </div>
 
           {/* 右下侧：保存与获取按钮 */}
-          <div className="p-4 border-t border-ops-surface0 flex justify-betw
-een items-center bg-ops-dark">
-            <div className="flex items-center gap-3">
-              <button onClick={handleTestModels} className="text-xs bg-ops-surface1 hover:bg-ops-surface2 text-ops-text px-3 py-1.5 rounded transition-colors">
-                🔍 测试全局连接 & 动态获取模型
-              </button>
-              {modelsCount !== null && <span className="text-xs text-green-400">已成功获取 {modelsCount} 个模型</span>}
-            </div>
-            <div className="flex gap-2">
-              <button onClick={closeModal} className="px-4 py-2 text-sm text-ops-subtext hover:text-ops-text transition-colors">取消</button>
-              <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm bg-ops-accent text-ops-dark rounded-lg font-medium hover:bg-ops-accent/80 transition-colors disabled:opacity-50">
-                {saving ? '保存中...' : '💾 保存所有更改'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
+          <div className="p-4 border-t border-ops-surface0 flex justif

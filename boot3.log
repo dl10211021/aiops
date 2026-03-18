@@ -1,0 +1,14 @@
+INFO:     Started server process [36752]
+INFO:     Waiting for application startup.
+2026-03-18 10:53:40,434 [INFO] Heartbeat worker started.
+2026-03-18 10:53:40,435 [INFO] Heartbeat worker started polling loop.
+2026-03-18 10:53:40,436 [INFO] [Heartbeat Tick] active_sessions: 0
+INFO:     Application startup complete.
+ERROR:    [Errno 10048] error while attempting to bind on address ('0.0.0.0', 9000): [winerror 10048] 通常每个套接字地址(协议/网络地址/端口)只允许使用一次。
+INFO:     Waiting for application shutdown.
+2026-03-18 10:53:40,448 [INFO] OpsCore Backend shutting down...
+INFO:     Application shutdown complete.
+
+[START] OpsCore Backend is starting on http://localhost:9000
+[INFO] You can visit http://localhost:9000/docs for API details
+

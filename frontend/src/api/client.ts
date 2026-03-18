@@ -200,29 +200,37 @@ export async function deleteCronJob(jobId: string) {
 }
 
 // ---- Config ----
-export async function getLLMConfig() {
-  return request<{ base_url: string; api_key: string }>('/config/llm')
+
+export interface ProviderConfig {
+  id: string;
+  name: string;
+  protocol: string;
+  base_url: string;
+  api_key: string;
+  models: string;
 }
 
-export async function updateLLMConfig(baseUrl: string, apiKey: string) {
-  return request('/config/llm', {
-    method: 'POST', body: JSON.stringify({ base_url: baseUrl, api_key: apiKey }),
+export interface ModelGroup {
+  provider_id: string;
+  provider_name: string;
+  models: { id: string; name: string }[];
+}
+
+export async function getProviders() {
+  return request<{ providers: ProviderConfig[] }>('/config/providers')
+}
+
+export async function updateProviders(providers: ProviderConfig[]) {
+  return request('/config/providers', {
+    method: 'POST', body: JSON.stringify(providers),
   })
 }
 
 export async function getAvailableModels() {
-  return request<{ models: string[] }>('/models')
+  return request<{ models: ModelGroup[] }>('/models')
 }
 
-export async function getEmbeddingConfig() {
-  return request<{ model: string; dim: number }>('/config/embedding')
-}
 
-export async function updateEmbeddingConfig(model: string, dim: number) {
-  return request('/config/embedding', {
-    method: 'POST', body: JSON.stringify({ model, dim }),
-  })
-}
 
 export async function getNotificationConfig() {
   return request<Record<string, unknown>>('/config/notifications')

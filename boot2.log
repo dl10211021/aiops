@@ -1,0 +1,316 @@
+INFO:     Started server process [10740]
+INFO:     Waiting for application startup.
+2026-03-18 10:23:33,334 [INFO] Heartbeat worker started.
+2026-03-18 10:23:33,335 [INFO] Heartbeat worker started polling loop.
+2026-03-18 10:23:33,337 [INFO] [Heartbeat Tick] active_sessions: 0
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:9000 (Press CTRL+C to quit)
+2026-03-18 10:23:33,570 [ERROR] Auto-hydrate failed for 127.0.0.1: SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,572 [ERROR] Auto-hydrate failed for 192.168.1.100: SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,573 [ERROR] Auto-hydrate failed for 192.168.46.30: SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,576 [ERROR] Auto-hydrate failed for 192.168.42.51: SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,577 [ERROR] Auto-hydrate failed for 192.168.129.195: SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,577 [ERROR] Auto-hydrate failed for 172.17.8.151: SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,577 [ERROR] Auto-hydrate failed for 172.17.8.152: SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,578 [ERROR] Auto-hydrate failed for 172.17.8.151: SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,578 [ERROR] Auto-hydrate failed for 172.17.8.150: SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,579 [ERROR] Auto-hydrate failed for : SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,579 [ERROR] Auto-hydrate failed for localhost: SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,580 [ERROR] Auto-hydrate failed for https://192.168.129.132:8443/: SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,581 [ERROR] Auto-hydrate failed for 192.168.130.45:9090: SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,581 [ERROR] Auto-hydrate failed for 10.39.80.238: SSHConnectionManager.connect() got an unexpected keyword argument 'protocol'
+2026-03-18 10:23:33,582 [INFO] Auto-hydrated 0/14 assets from database in background.
+2026-03-18 10:24:03,397 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:24:33,412 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:25:03,434 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:25:33,481 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:26:03,511 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:26:33,529 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:27:03,555 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:27:33,580 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:28:03,613 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:28:33,630 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:29:03,648 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:29:33,661 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:30:03,679 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:30:33,694 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:31:03,708 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:31:33,717 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:32:03,731 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:32:33,741 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:33:03,747 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:33:33,755 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:34:03,762 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:34:33,778 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:35:03,789 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:35:33,791 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:36:03,795 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:36:33,808 [INFO] [Heartbeat Tick] active_sessions: 0
+2026-03-18 10:37:03,816 [INFO] [Heartbeat Tick] active_sessions: 0
+
+[START] OpsCore Backend is starting on http://localhost:9000
+[INFO] You can visit http://localhost:9000/docs for API details
+
+INFO:     127.0.0.1:6605 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6605 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6605 - "GET /assets/index-CTEgvUIy.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6612 - "GET /assets/index-CCEiLBp5.css HTTP/1.1" 200 OK
+2026-03-18 10:37:33,831 [INFO] [Heartbeat Tick] active_sessions: 0
+INFO:     127.0.0.1:6605 - "GET /api/v1/sessions/active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6605 - "GET /vite.svg HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:6620 - "GET /api/v1/sessions/active HTTP/1.1" 200 OK
+PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+INFO:     127.0.0.1:6621 - "GET /api/v1/knowledge/list HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6629 - "GET /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6605 - "GET /vite.svg HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:6633 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:38:43,323 [INFO] [Heartbeat Tick] active_sessions: 0
+INFO:     127.0.0.1:6621 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6629 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6605 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6633 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6629 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6605 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6633 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6629 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6605 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6633 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6629 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6605 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6633 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6629 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6605 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6633 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6629 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6605 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6633 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6629 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6621 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:38:46,273 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+2026-03-18 10:38:46,279 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:6612 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6620 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6620 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6620 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:38:49,371 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:6621 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6620 - "GET /api/v1/config/providers HTTP/1.1" 200 OK
+2026-03-18 10:38:52,383 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:6621 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6620 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6620 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6620 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+2026-03-18 10:38:55,013 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:6621 - "GET /api/v1/models HTTP/1.1" 200 OK
+2026-03-18 10:38:57,609 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:6621 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6620 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:38:59,859 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:6621 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6620 - "GET /api/v1/config/providers HTTP/1.1" 200 OK
+2026-03-18 10:39:02,191 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:6621 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6620 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:39:04,662 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:6621 - "GET /api/v1/models HTTP/1.1" 200 OK
+2026-03-18 10:39:07,520 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:6621 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6620 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3159 - "GET /api/v1/assets/saved HTTP/1.1" 200 OK
+2026-03-18 10:39:10,025 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:6621 - "GET /api/v1/models HTTP/1.1" 200 OK
+2026-03-18 10:39:12,623 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:6621 - "GET /api/v1/models HTTP/1.1" 200 OK
+2026-03-18 10:39:13,332 [INFO] [Heartbeat Tick] active_sessions: 0
+INFO:     127.0.0.1:6621 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:39:43,339 [INFO] [Heartbeat Tick] active_sessions: 0
+INFO:     127.0.0.1:10821 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:40:13,343 [INFO] [Heartbeat Tick] active_sessions: 0
+INFO:     127.0.0.1:10822 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10822 - "GET /api/v1/sessions/active HTTP/1.1" 200 OK
+2026-03-18 10:40:22,862 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:10822 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10822 - "GET /api/v1/assets/saved HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10822 - "GET /api/v1/skills/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10822 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10822 - "GET /api/v1/skills/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10822 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10822 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10822 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:40:43,358 [INFO] [Heartbeat Tick] active_sessions: 0
+INFO:     127.0.0.1:10822 - "GET /api/v1/skills/registry HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10822 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10822 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:40:48,437 [INFO] API called: Connect to 172.17.8.152 via linux with profile default, remark: linux4
+2026-03-18 10:40:48,437 [INFO] Registered Virtual Asset [linux] -> root@172.17.8.152:22 (Profile: default, Extra: {'device_type': 'linux'})
+2026-03-18 10:40:48,444 [ERROR] ±£´æ×Ê²úÊ§°Ü: Incorrect number of bindings supplied. The current statement uses 8, and there are 9 supplied.
+INFO:     127.0.0.1:10822 - "POST /api/v1/connect HTTP/1.1" 200 OK
+2026-03-18 10:40:51,220 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:10822 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10822 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:12817 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:12817 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:41:04,967 [INFO] AI Stream Chat received: 'hello' for session f97868ad-533b-33b4-a617-62ebe3e22f41 using model [custom_460589|models/gemini-3.1-pro-preview]
+INFO:     127.0.0.1:12817 - "POST /api/v1/chat HTTP/1.1" 200 OK
+2026-03-18 10:41:08,634 [INFO] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/openai/embeddings "HTTP/1.1 200 OK"
+2026-03-18 10:41:09,047 [INFO] Loop 0 for f97868ad-533b-33b4-a617-62ebe3e22f41, cancel_flags: False
+2026-03-18 10:41:13,365 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:41:13,365 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 8.4s, enabled: False
+INFO:     127.0.0.1:4399 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:41:17,336 [INFO] HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/openai/chat/completions "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:11232 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11232 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11233 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11233 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11233 - "GET /api/v1/config/providers HTTP/1.1" 200 OK
+2026-03-18 10:41:43,376 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:41:43,376 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 38.4s, enabled: False
+INFO:     127.0.0.1:11233 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11233 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11233 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2972 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2972 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2972 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2972 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:42:13,379 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:42:13,380 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 68.4s, enabled: False
+INFO:     127.0.0.1:2973 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2973 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2973 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2973 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4688 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4688 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4688 - "GET /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4688 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4688 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4689 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+2026-03-18 10:42:44,913 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:42:44,913 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 99.9s, enabled: False
+INFO:     127.0.0.1:5408 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:42:44,948 [INFO] HTTP Request: GET http://192.168.127.8/v1/models "HTTP/1.1 200 OK"
+2026-03-18 10:42:45,433 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:4688 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5408 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4689 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:42:49,328 [INFO] HTTP Request: GET http://192.168.127.8/v1/models "HTTP/1.1 200 OK"
+2026-03-18 10:42:49,668 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:4688 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4688 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4688 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10809 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10811 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:42:59,571 [INFO] HTTP Request: GET http://192.168.127.8/v1/models "HTTP/1.1 200 OK"
+2026-03-18 10:42:59,906 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:4688 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10811 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10809 - "POST /api/v1/config/providers HTTP/1.1" 200 OK
+2026-03-18 10:43:04,654 [INFO] HTTP Request: GET http://192.168.127.8/v1/models "HTTP/1.1 200 OK"
+2026-03-18 10:43:04,991 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:4688 - "GET /api/v1/models HTTP/1.1" 200 OK
+2026-03-18 10:43:07,759 [INFO] HTTP Request: GET http://192.168.127.8/v1/models "HTTP/1.1 200 OK"
+2026-03-18 10:43:08,096 [INFO] HTTP Request: GET https://generativelanguage.googleapis.com/v1beta/openai/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:4688 - "GET /api/v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4688 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4688 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:43:14,921 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:43:14,923 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 130.0s, enabled: False
+INFO:     127.0.0.1:4688 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:12806 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:12806 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8829 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8829 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8837 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:43:44,934 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:43:44,934 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 160.0s, enabled: False
+INFO:     127.0.0.1:8837 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8837 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6511 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6511 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5558 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5558 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:9986 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:44:14,945 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:44:14,945 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 190.0s, enabled: False
+INFO:     127.0.0.1:9986 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10690 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:10690 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:44:44,963 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:44:44,963 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 220.0s, enabled: False
+INFO:     127.0.0.1:6717 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6723 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6725 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5618 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:45:14,986 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:45:14,987 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 250.0s, enabled: False
+2026-03-18 10:45:45,004 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:45:45,021 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 280.0s, enabled: False
+INFO:     127.0.0.1:2129 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:46:15,052 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:46:15,052 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 310.1s, enabled: False
+2026-03-18 10:46:45,082 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:46:45,083 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 340.1s, enabled: False
+INFO:     127.0.0.1:3482 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:47:15,112 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:47:15,113 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 370.1s, enabled: False
+2026-03-18 10:47:45,132 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:47:45,132 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 400.2s, enabled: False
+INFO:     127.0.0.1:10070 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:48:15,166 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:48:15,167 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 430.2s, enabled: False
+2026-03-18 10:48:45,170 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:48:45,171 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 460.2s, enabled: False
+2026-03-18 10:49:15,208 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:49:15,208 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 490.2s, enabled: False
+2026-03-18 10:49:45,230 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:49:45,235 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 520.3s, enabled: False
+2026-03-18 10:50:15,249 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:50:15,249 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 550.3s, enabled: False
+2026-03-18 10:50:45,264 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:50:45,264 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 580.3s, enabled: False
+2026-03-18 10:51:15,304 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:51:15,305 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 610.3s, enabled: False
+2026-03-18 10:51:45,320 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:51:45,320 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 640.4s, enabled: False
+2026-03-18 10:52:15,332 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:52:15,332 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 670.4s, enabled: False
+2026-03-18 10:52:45,354 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:52:45,382 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 700.4s, enabled: False
+INFO:     127.0.0.1:10229 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:53:15,406 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:53:15,406 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 730.4s, enabled: False
+2026-03-18 10:53:45,420 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:53:45,421 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 760.5s, enabled: False
+INFO:     127.0.0.1:6236 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:53:58,668 [INFO] HTTP Request: GET http://192.168.127.8/v1/models "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:6239 - "GET /api/v1/models HTTP/1.1" 200 OK
+2026-03-18 10:54:15,449 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:54:15,452 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 790.5s, enabled: False
+2026-03-18 10:54:45,470 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:54:45,470 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 820.5s, enabled: False
+INFO:     127.0.0.1:12261 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:55:15,471 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:55:15,472 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 850.5s, enabled: False
+2026-03-18 10:55:45,512 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:55:45,514 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 880.5s, enabled: False
+INFO:     127.0.0.1:3201 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3201 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:56:15,536 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:56:15,536 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 910.6s, enabled: False
+2026-03-18 10:56:45,581 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:56:45,581 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 940.6s, enabled: False
+INFO:     127.0.0.1:3332 - "GET /api/v1/sessions/poll_all HTTP/1.1" 200 OK
+2026-03-18 10:57:15,631 [INFO] [Heartbeat Tick] active_sessions: 1
+2026-03-18 10:57:15,633 [INFO] [Heartbeat Poll Loop] Session f97868ad-533b-33b4-a617-62ebe3e22f41 idle_time: 970.7s, enabled: False

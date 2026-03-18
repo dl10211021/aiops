@@ -1,3 +1,10 @@
+# 前端重构：多供应商模型配置中心
+
+为了支持无限扩展各种模型厂家（自定义地址和API Key等），我们提供了一份全新设计的前端重构代码。
+
+请直接使用这段代码替换您的 `frontend/src/components/modals/LLMConfigModal.tsx` 文件内容：
+
+```tsx
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store'
 import { getProviders, updateProviders, getAvailableModels } from '@/api/client'
@@ -11,7 +18,6 @@ export default function LLMConfigModal() {
   const [selectedId, setSelectedId] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const [modelsCount, setModelsCount] = useState<number | null>(null)
-  const [fetchedModelsInfo, setFetchedModelsInfo] = useState<import('@/api/client').ModelGroup[]>([])
 
   useEffect(() => {
     getProviders().then((r) => {
@@ -61,14 +67,12 @@ export default function LLMConfigModal() {
   }
 
   const handleTestModels = async () => {
-    console.log("Testing models...");
     try {
-      try { await updateProviders(providers) } catch (e) { console.warn('Save before test failed', e) } // 必须先保存
+      await updateProviders(providers) // 必须先保存
       const res = await getAvailableModels()
       let count = 0
       res.data.models.forEach(g => { count += g.models.length })
       setModelsCount(count)
-      setFetchedModelsInfo(res.data.models)
       addToast(`成功拉取到 ${count} 个可用模型`, 'success')
     } catch {
       addToast('获取模型列表失败，请检查网络和 API Key', 'error')
@@ -158,34 +162,6 @@ export default function LLMConfigModal() {
                   <p className="text-[11px] text-ops-subtext mt-1">如果您知道可用的模型名，请在此填写。如果不填，系统将尝试从API动态拉取全量列表。</p>
                 </div>
 
-                
-                <div className="pt-4 border-t border-ops-surface0">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs font-medium text-ops-subtext">已拉取到的模型列表</h3>
-                  </div>
-                  
-                  {fetchedModelsInfo.length > 0 ? (
-                    <div className="bg-black/30 rounded border border-ops-surface1 p-2 max-h-40 overflow-y-auto">
-                      {fetchedModelsInfo.map(group => (
-                        <div key={group.provider_id} className="mb-2 last:mb-0">
-                          <div className="text-[11px] text-ops-accent mb-1 sticky top-0 bg-black/80 py-0.5">{group.provider_name}</div>
-                          <div className="flex flex-wrap gap-1.5 pl-1">
-                            {group.models.map(m => (
-                              <span key={m.id} className="text-[10px] font-mono bg-ops-surface0 text-ops-text px-1.5 py-0.5 rounded border border-ops-surface1">
-                                {m.name}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-[11px] text-ops-subtext italic bg-ops-surface0/50 p-2 rounded text-center border border-ops-surface0/50">
-                      点击右下角的"测试全局连接 & 动态获取模型"查看结果
-                    </div>
-                  )}
-                </div>
-                
                 <div className="pt-2 border-t border-ops-surface0">
                   <button onClick={() => handleDelete(selectedProvider.id)} className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded hover:bg-red-400/10 transition-colors">
                     🗑️ 删除该供应商
@@ -220,3 +196,40 @@ een items-center bg-ops-dark">
     </div>
   )
 }
+```
+
+同时请确保您的 `frontend/src/api/client.ts` 已经更新了这四个新接口类型：
+
+```ts
+export interface ProviderConfig {
+  id: string;
+  name: string;
+  protocol: string;
+  base_url: string;
+  api_key: string;
+  models: string;
+}
+
+export interface ModelGroup {
+  provider_id: string;
+  provider_name: string;
+  models: { id: string; name: string }[];
+}
+
+export async function getProviders() {
+  return request<{ providers: ProviderConfig[] }>('/config/providers')
+}
+
+export async function updateProviders(providers: ProviderConfig[]) {
+  return request('/config/providers', {
+    method: 'POST', body: JSON.stringify(providers),
+  })
+}
+
+// getAvailableModels 接口现在的返回类型应该是：
+export async function getAvailableModels() {
+  return request<{ models: ModelGroup[] }>('/models')
+}
+```
+
+这些前端更新配合我们刚才写好的后端，就可以完美实现类似 LobeChat 那种左侧选择供应商、右侧无限添加各个厂家的大模型面板功能了！
