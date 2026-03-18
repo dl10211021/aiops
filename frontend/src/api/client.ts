@@ -64,12 +64,13 @@ export async function pollAllSessions() {
 // ---- Chat (SSE) ----
 export function streamChat(
   sessionId: string, message: string, modelName: string,
+  thinkingMode: string = 'off',
   signal?: AbortSignal
 ) {
   return fetch(`${BASE}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId, message, model_name: modelName }),
+    body: JSON.stringify({ session_id: sessionId, message, model_name: modelName, thinking_mode: thinkingMode }),
     signal,
   })
 }
@@ -210,7 +211,7 @@ export async function updateLLMConfig(baseUrl: string, apiKey: string) {
 }
 
 export async function getAvailableModels() {
-  return request<{ models: string[] }>('/config/models')
+  return request<{ models: string[] }>('/models')
 }
 
 export async function getEmbeddingConfig() {

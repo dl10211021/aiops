@@ -27,7 +27,10 @@ export default function ChatWindow() {
 
   const [input, setInput] = useState('')
   const [modelName, setModelName] = useState(() =>
-    localStorage.getItem('ops_model') || 'gemini-2.5-flash-preview-05-20'
+    localStorage.getItem('ops_model') || 'gemini-2.5-flash'
+  )
+  const [thinkingMode, setThinkingMode] = useState(() =>
+    localStorage.getItem('ops_thinking') || 'off'
   )
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -58,6 +61,10 @@ export default function ChatWindow() {
     localStorage.setItem('ops_model', modelName)
   }, [modelName])
 
+  useEffect(() => {
+    localStorage.setItem('ops_thinking', thinkingMode)
+  }, [thinkingMode])
+
   const sendMessage = async () => {
     if (!input.trim() || !currentSessionId || isStreaming) return
 
@@ -87,7 +94,7 @@ export default function ChatWindow() {
     let accumulatedMd = ''
 
     try {
-      const response = await streamChat(currentSessionId, userMsg.content, modelName, controller.signal)
+      const response = await streamChat(currentSessionId, userMsg.content, modelName, thinkingMode, controller.signal)
       const reader = response.body?.getReader()
       if (!reader) return
 
@@ -253,6 +260,18 @@ export default function ChatWindow() {
       {/* Input area */}
       <div className="border-t border-ops-surface0 bg-ops-panel p-3">
         <div className="flex items-end gap-2">
+          {/* Thinking Mode selector */}
+          <select
+            value={thinkingMode}
+            onChange={(e) => setThinkingMode(e.target.value)}
+            className="bg-ops-surface0 text-ops-text text-xs rounded px-2 py-1.5 border border-ops-surface1 outline-none self-end"
+          >
+            <option value="off">默认思维</option>
+            <option value="low">低度思考</option>
+            <option value="medium">中度思考</option>
+            <option value="high">高度思考</option>
+          </select>
+          
           {/* Model selector */}
           <select
             value={modelName}
