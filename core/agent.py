@@ -10,12 +10,8 @@ cancel_flags = {}
 
 logger = logging.getLogger(__name__)
 
-API_KEY = "AIzaSyB72JWI-l3-ihOr0FjZjh3Rln8oujncpPM"
-BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "models/gemini-embedding-001")
 EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "3072"))
-
-client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL, timeout=30.0)
 
 
 async def get_available_models() -> list:
@@ -36,12 +32,6 @@ async def get_available_models() -> list:
         return []
 
 
-def update_client_config(new_base_url: str, new_api_key: str):
-    global client
-    client = AsyncOpenAI(api_key=new_api_key, base_url=new_base_url, timeout=30.0)
-    logger.info(f"Agent Engine reconfigured to connect to: {new_base_url}")
-
-
 def update_embedding_config(model: str, dim: int):
     global EMBEDDING_MODEL, EMBEDDING_DIM
     EMBEDDING_MODEL = model
@@ -58,10 +48,16 @@ from core.memory import memory_db
 
 
 async def chat_stream_agent(
-    session_id: str, user_message: str, model_name: str = "gemini-2.5-flash"
+    session_id: str,
+    user_message: str,
+    model_name: str = "gemini-2.5-flash",
+    thinking_mode: str = "off",
 ):
     cancel_flags[session_id] = False
     from connections.ssh_manager import ssh_manager
+    from core.llm_factory import get_client_for_model
+
+    emb_client, _ = get_client_for_model("gemini-2.5-flash")
 
     session_info = ssh_manager.active_sessions[session_id]["info"]
     allow_modifications = session_info.get("allow_modifications", False)
@@ -92,7 +88,7 @@ async def chat_stream_agent(
 
     # 从 LanceDB 获取长期记忆（与当前话题相关的历史摘要）
     try:
-        ltm_context = await memory_db.retrieve_ltm(session_id, user_message, client)
+        ltm_context = await memory_db.retrieve_ltm(session_id, user_message, emb_client)
     except Exception as e:
         logger.error(f"LTM retrieve error: {e}")
         ltm_context = ""
@@ -172,88 +168,40 @@ async def chat_stream_agent(
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
                 break
 
-            response = await client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
-                stream=False,
-                timeout=60.0,
-            )
+            from core.llm_execution import execute_chat_stream
 
-            choice = response.choices[0]
-            assistant_content = choice.message.content or ""
+            assistant_content = ""
+            thinking_content = ""
 
-            if assistant_content:
-                msg_status = json.dumps({"type": "status", "content": "💭 思考中..."})
-                yield f"data: {msg_status}\n\n"
+            msg_status = json.dumps({"type": "status", "content": "💭 思考中..."})
+            yield f"data: {msg_status}\n\n"
 
-                for i in range(0, len(assistant_content), 15):
-                    chunk_str = assistant_content[i : i + 15]
-                    msg_chunk = json.dumps({"type": "chunk", "content": chunk_str})
+            async for chunk in execute_chat_stream(model_name, messages, thinking_mode):
+                if cancel_flags.get(session_id) is True:
+                    break
+                if chunk["type"] == "thinking":
+                    msg_chunk = json.dumps(
+                        {"type": "chunk", "content": chunk["content"]}
+                    )
                     yield f"data: {msg_chunk}\n\n"
-                    await asyncio.sleep(0.01)
+                    thinking_content += chunk["content"]
+                elif chunk["type"] == "content":
+                    msg_chunk = json.dumps(
+                        {"type": "chunk", "content": chunk["content"]}
+                    )
+                    yield f"data: {msg_chunk}\n\n"
+                    assistant_content += chunk["content"]
 
-            if not choice.message.tool_calls:
-                safe_msg = choice.message.model_dump(exclude_unset=True)
-                messages.append(safe_msg)
-                memory_db.append_message(session_id, safe_msg)
-                msg_done = json.dumps({"type": "done"})
-                yield f"data: {msg_done}\n\n"
-                break
+            safe_msg = {"role": "assistant", "content": assistant_content}
+            if thinking_content:
+                safe_msg["reasoning_content"] = thinking_content
 
-            safe_msg = choice.message.model_dump(exclude_unset=True)
             messages.append(safe_msg)
             memory_db.append_message(session_id, safe_msg)
 
-            for tc in choice.message.tool_calls:
-                func_name = tc.function.name
-                try:
-                    func_args = json.loads(tc.function.arguments)
-                except Exception as e:
-                    func_args = {}
-
-                display_cmd = func_args.get("command", str(func_args))
-
-                msg_start = json.dumps(
-                    {
-                        "type": "tool_start",
-                        "id": tc.id,
-                        "tool": func_name,
-                        "cmd": display_cmd,
-                    }
-                )
-                yield f"data: {msg_start}\n\n"
-                await asyncio.sleep(0.05)
-
-                tool_res = await dispatcher.route_and_execute(
-                    func_name, func_args, context
-                )
-
-                preview = tool_res[:300] + "..." if len(tool_res) > 300 else tool_res
-                msg_end = json.dumps(
-                    {"type": "tool_end", "id": tc.id, "result": preview}
-                )
-                yield f"data: {msg_end}\n\n"
-                await asyncio.sleep(0.05)
-
-                tool_msg = {
-                    "tool_call_id": tc.id,
-                    "role": "tool",
-                    "name": func_name,
-                    "content": str(tool_res),
-                }
-                messages.append(tool_msg)
-                memory_db.append_message(session_id, tool_msg)
-
-            msg_loop = json.dumps(
-                {
-                    "type": "status",
-                    "content": f"🔄 收集结果，执行第 {iteration + 2} 步...",
-                }
-            )
-            yield f"data: {msg_loop}\n\n"
-            await asyncio.sleep(0.05)
+            msg_done = json.dumps({"type": "done"})
+            yield f"data: {msg_done}\n\n"
+            break
 
         else:
             yield f"data: {json.dumps({'type': 'error', 'content': '⚠️ 任务过于复杂，已达到 50 次最大思考上限，自动终止'})}\n\n"
@@ -261,7 +209,7 @@ async def chat_stream_agent(
 
         # ÿֶԻ׽󣬴ڼ첽ѹ (̨ǰ)
         asyncio.create_task(
-            memory_db.compress_and_store_ltm(session_id, client, model_name)
+            memory_db.compress_and_store_ltm(session_id, emb_client, model_name)
         )
 
     except Exception as e:
@@ -343,6 +291,9 @@ async def headless_agent_chat(
 ) -> str:
     """后台无头模式的 Agent 循环，用于协同任务的结果汇报。"""
     from connections.ssh_manager import ssh_manager
+    from core.llm_factory import get_client_for_model
+
+    client, _ = get_client_for_model(model_name)
 
     if session_id not in ssh_manager.active_sessions:
         return f"目标会话 {session_id} 不在线或已过期。"

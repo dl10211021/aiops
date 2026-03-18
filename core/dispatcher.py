@@ -886,7 +886,9 @@ class SkillDispatcher:
 
         elif tool_call_name == "search_knowledge_base":
             from core.rag import kb_manager
-            from core.agent import client
+            from core.llm_factory import get_client_for_model
+
+            client, _ = get_client_for_model("gemini-2.5-flash")
 
             query = args.get("query")
             try:

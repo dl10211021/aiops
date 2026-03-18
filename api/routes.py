@@ -75,6 +75,7 @@ class ChatRequest(BaseModel):
     session_id: str
     message: str
     model_name: str = "gemini-3.1-pro-preview"
+    thinking_mode: Optional[str] = "off"
 
 
 class ResponseModel(BaseModel):
@@ -109,6 +110,7 @@ async def ai_chat_with_system(req: ChatRequest):
             session_id=req.session_id,
             user_message=req.message,
             model_name=req.model_name,
+            thinking_mode=req.thinking_mode or "off",
         ),
         media_type="text/event-stream",
     )
@@ -418,11 +420,6 @@ class SkillsUpdateRequest(BaseModel):
     active_skills: list[str]
 
 
-class LLMConfigRequest(BaseModel):
-    base_url: str
-    api_key: str
-
-
 @router.post("/skills/scan", response_model=ResponseModel)
 async def scan_skills():
     """【新功能】前端手动触发扫描本地磁盘目录，热加载新的技能"""
@@ -611,44 +608,6 @@ async def get_llm_config():
             "api_key": os.environ.get("OPENAI_API_KEY", api_key),
         },
     )
-
-
-@router.post("/config/llm", response_model=ResponseModel)
-async def update_llm_config(req: LLMConfigRequest):
-    """【新功能】前端动态覆盖大模型底层的 Base_URL 和 Key"""
-    # 动态重载 Agent 的配置
-    from core.agent import update_client_config
-    import os
-
-    try:
-        update_client_config(req.base_url, req.api_key)
-        logger.info(f"LLM Client Config dynamically updated via API.")
-
-        # 将配置持久化到 .env 文件中
-        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
-        env_lines = []
-        if os.path.exists(env_path):
-            with open(env_path, "r", encoding="utf-8") as f:
-                env_lines = f.readlines()
-
-        keys_to_filter = ["OPENAI_API_KEY=", "OPENAI_BASE_URL="]
-        env_lines = [
-            line
-            for line in env_lines
-            if not any(line.startswith(k) for k in keys_to_filter)
-        ]
-
-        env_lines.append(f"OPENAI_BASE_URL={req.base_url}\n")
-        env_lines.append(f"OPENAI_API_KEY={req.api_key}\n")
-
-        with open(env_path, "w", encoding="utf-8") as f:
-            f.writelines(env_lines)
-
-        return ResponseModel(
-            status="success", message="AI 大脑已重新连接，并已保存为默认配置"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 class EmbeddingConfigRequest(BaseModel):
@@ -1091,7 +1050,10 @@ async def upload_knowledge_document(file: UploadFile = File(...)):
     """【新功能】上传运维文档并注入 LanceDB 知识库"""
     import os
     from core.rag import kb_manager
-    from core.agent import client
+    from core.llm_factory import get_client_for_model
+
+    # Just grab an embedding capable client
+    client, _ = get_client_for_model("gemini-2.5-flash")
 
     safe_filename = os.path.basename(file.filename)
     file_path = os.path.join(kb_manager.kb_dir, safe_filename)
