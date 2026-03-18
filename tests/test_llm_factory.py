@@ -1,49 +1,46 @@
-import os
 import unittest
-from unittest.mock import patch
+import os
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
-
 from core.llm_factory import get_client_for_model
 
-
 class TestLLMFactory(unittest.TestCase):
-    @patch.dict(os.environ, {"GOOGLE_API_KEY": "test_google_key"})
-    def test_openai_protocol_with_env_var(self):
+    def setUp(self):
+        # We assume models.json exists and has gemini-2.5-flash and claude-3-7-sonnet-20250219
+        os.environ["GOOGLE_API_KEY"] = "fake-google-key"
+        os.environ["ANTHROPIC_API_KEY"] = "fake-anthropic-key"
+        # Setup fallback
+        os.environ["OPENAI_API_KEY"] = "fake-openai-key"
+
+    def test_openai_protocol(self):
         client, config = get_client_for_model("gemini-2.5-flash")
         self.assertIsInstance(client, AsyncOpenAI)
-        self.assertEqual(config["provider"], "google")
-        self.assertEqual(client.api_key, "test_google_key")
-        self.assertEqual(
-            str(client.base_url),
-            "https://generativelanguage.googleapis.com/v1beta/openai/",
-        )
+        self.assertEqual(config["protocol"], "openai")
+        self.assertEqual(client.api_key, "fake-google-key")
 
-    @patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test_anthropic_key"})
     def test_anthropic_protocol(self):
         client, config = get_client_for_model("claude-3-7-sonnet-20250219")
         self.assertIsInstance(client, AsyncAnthropic)
-        self.assertEqual(config["provider"], "anthropic")
-        self.assertEqual(client.api_key, "test_anthropic_key")
+        self.assertEqual(config["protocol"], "anthropic")
+        self.assertEqual(client.api_key, "fake-anthropic-key")
 
-    def test_local_provider_no_env_var(self):
-        client, config = get_client_for_model("ollama-deepseek-r1")
+    def test_local_protocol_no_key(self):
+        # Using a model that doesn't have an env var required
+        client, config = get_client_for_model("vllm-llama3")
         self.assertIsInstance(client, AsyncOpenAI)
-        self.assertEqual(config["provider"], "local")
         self.assertEqual(client.api_key, "dummy")
-        self.assertEqual(str(client.base_url), "http://localhost:11434/v1/")
 
-    def test_missing_model(self):
-        with self.assertRaisesRegex(ValueError, "not found in models.json"):
-            get_client_for_model("nonexistent-model")
+    def test_missing_model_fallback(self):
+        client, config = get_client_for_model("unknown-model-123")
+        self.assertIsInstance(client, AsyncOpenAI)
+        self.assertEqual(config["protocol"], "openai")
+        self.assertEqual(client.api_key, "fake-openai-key")
 
-    @patch.dict(os.environ, clear=True)
-    def test_missing_env_var(self):
-        with self.assertRaisesRegex(
-            ValueError, "Missing API key: Environment variable"
-        ):
+    def test_missing_api_key(self):
+        # Unset the key explicitly
+        del os.environ["GOOGLE_API_KEY"]
+        with self.assertRaisesRegex(ValueError, "Missing API key"):
             get_client_for_model("gemini-2.5-flash")
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

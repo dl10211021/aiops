@@ -28,7 +28,14 @@ def get_client_for_model(model_name: str):
 
     models = config_data.get("models", {})
     if model_name not in models:
-        raise ValueError(f"Model '{model_name}' not found in models.json")
+        # Fallback to globally configured custom OpenAI endpoint (from frontend UI)
+        api_key = os.getenv("OPENAI_API_KEY")
+        base_url = os.getenv("OPENAI_BASE_URL")
+        
+        if not api_key:
+            api_key = "dummy"
+            
+        return AsyncOpenAI(api_key=api_key, base_url=base_url), {"protocol": "openai", "model": model_name, "supports_thinking": False}
 
     config = models[model_name]
     protocol = config.get("protocol")
