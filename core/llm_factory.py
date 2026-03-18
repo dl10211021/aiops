@@ -90,10 +90,17 @@ def get_client_for_model(full_model_id: str):
     base_url = provider.get("base_url")
 
     client_kwargs = {"api_key": api_key}
+    
+    # EXPLICITLY PREVENT ENVIRONMENT VARIABLE LEAKS FROM OLD .env CONFIG
     if base_url:
         client_kwargs["base_url"] = base_url
+    elif protocol == "openai":
+        client_kwargs["base_url"] = "https://api.openai.com/v1"
+    elif protocol == "anthropic":
+        client_kwargs["base_url"] = "https://api.anthropic.com/v1/"
 
     if protocol == "openai":
+
         client = AsyncOpenAI(**client_kwargs)
     elif protocol == "anthropic":
         client = AsyncAnthropic(**client_kwargs)

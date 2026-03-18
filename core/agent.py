@@ -30,12 +30,17 @@ async def get_available_models() -> list:
             if manual_models:
                 for m in manual_models:
                     models_list.append({"id": f"{p['id']}|{m}", "name": m})
-            elif p.get("protocol") == "openai" and p.get("base_url"):
+            elif p.get("protocol") == "openai":
                 try:
                     api_key = p.get("api_key")
                     if not api_key:
                         api_key = "dummy"
-                    temp_client = AsyncOpenAI(api_key=api_key, base_url=p.get("base_url"), timeout=3.0)
+                        
+                    base_url = p.get("base_url")
+                    if not base_url:
+                        base_url = "https://api.openai.com/v1"
+                        
+                    temp_client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=30.0)
                     response = await temp_client.models.list()
                     for m in response.data:
                         models_list.append({"id": f"{p['id']}|{m.id}", "name": m.id})
@@ -43,9 +48,10 @@ async def get_available_models() -> list:
                     import logging
                     logging.getLogger(__name__).warning(f"Failed to fetch models for {p.get('name')}: {e}")
             
-            if models_list:
-                return {"provider_id": p["id"], "provider_name": p["name"], "models": models_list}
-            return None
+            if not models_list:
+                models_list.append({"id": f"{p['id']}|none", "name": "未获取到模型或配置错误"})
+            
+            return {"provider_id": p["id"], "provider_name": p["name"], "models": models_list}
 
         results = await asyncio.gather(*(fetch_provider_models(p) for p in providers))
         

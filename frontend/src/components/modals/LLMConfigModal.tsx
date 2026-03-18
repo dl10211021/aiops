@@ -10,6 +10,7 @@ export default function LLMConfigModal() {
   const [providers, setProviders] = useState<ProviderConfig[]>([])
   const [selectedId, setSelectedId] = useState<string>('')
   const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
   const [modelsCount, setModelsCount] = useState<number | null>(null)
   const [fetchedModelsInfo, setFetchedModelsInfo] = useState<import('@/api/client').ModelGroup[]>([])
 
@@ -23,29 +24,37 @@ export default function LLMConfigModal() {
   }, [])
 
   const handleAddProvider = () => {
-    const id = 'custom_' + Date.now().toString().slice(-6)
-    const newProvider: ProviderConfig = {
-      id,
-      name: '自定义供应商 ' + (providers.length + 1),
-      protocol: 'openai',
-      base_url: '',
-      api_key: '',
-      models: ''
-    }
-    setProviders([...providers, newProvider])
+    const id = 'custom_' + Math.random().toString(36).substring(2, 9) + Date.now().toString().slice(-4)
+    setProviders(prev => {
+      const newProvider: ProviderConfig = {
+        id,
+        name: '自定义供应商 ' + (prev.length + 1),
+        protocol: 'openai',
+        base_url: '',
+        api_key: '',
+        models: ''
+      }
+      return [...prev, newProvider]
+    })
     setSelectedId(id)
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     const next = providers.filter(p => p.id !== id)
     setProviders(next)
-    if (selectedId === id && next.length > 0) {
-      setSelectedId(next[0].id)
+    if (selectedId === id) {
+      setSelectedId(next.length > 0 ? next[0].id : '')
+    }
+    try {
+      await updateProviders(next)
+      addToast('已删除供应商并保存', 'success')
+    } catch {
+      addToast('删除保存失败', 'error')
     }
   }
 
   const updateProvider = (updates: Partial<ProviderConfig>) => {
-    setProviders(providers.map(p => p.id === selectedId ? { ...p, ...updates } : p))
+    setProviders(prev => prev.map(p => p.id === selectedId ? { ...p, ...updates } : p))
   }
 
   const handleSave = async () => {
@@ -61,7 +70,6 @@ export default function LLMConfigModal() {
   }
 
   const handleTestModels = async () => {
-    console.log("Testing models...");
     try {
       try { await updateProviders(providers) } catch (e) { console.warn('Save before test failed', e) } // 必须先保存
       const res = await getAvailableModels()
@@ -203,8 +211,8 @@ export default function LLMConfigModal() {
           <div className="p-4 border-t border-ops-surface0 flex justify-betw
 een items-center bg-ops-dark">
             <div className="flex items-center gap-3">
-              <button onClick={handleTestModels} className="text-xs bg-ops-surface1 hover:bg-ops-surface2 text-ops-text px-3 py-1.5 rounded transition-colors">
-                🔍 测试全局连接 & 动态获取模型
+              <button onClick={handleTestModels} disabled={testing || saving} className="text-xs bg-ops-surface1 hover:bg-ops-surface2 text-ops-text px-3 py-1.5 rounded transition-colors disabled:opacity-50">
+                {testing ? '⏳ 正在与模型供应商通信 (部分境外节点可能需数十秒)...' : '🔍 测试全局连接 & 动态获取模型'}
               </button>
               {modelsCount !== null && <span className="text-xs text-green-400">已成功获取 {modelsCount} 个模型</span>}
             </div>

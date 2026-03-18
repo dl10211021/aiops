@@ -94,9 +94,36 @@ async def execute_chat_stream(
     is_thinking_requested = thinking_mode in ["low", "medium", "high", "enabled"]
 
     if protocol == "openai":
+        cleaned_messages = []
+        base_url = config.get("base_url") or ""
+        is_google = "google" in base_url.lower() or "gemini" in actual_model_name.lower()
+        
+        for msg in messages:
+            new_msg = dict(msg)
+            if is_google and new_msg.get("role") == "assistant" and new_msg.get("tool_calls"):
+                tc_strs = []
+                for tc in new_msg["tool_calls"]:
+                    f_name = tc.get("function", {}).get("name", "")
+                    f_args = tc.get("function", {}).get("arguments", "")
+                    tc_strs.append(f"Tool Call: {f_name}({f_args})")
+                
+                content = new_msg.get("content", "") or ""
+                new_msg["content"] = str(content) + "\n" + "\n".join(tc_strs)
+                del new_msg["tool_calls"]
+            
+            elif is_google and new_msg.get("role") == "tool":
+                new_msg["role"] = "user"
+                new_msg["content"] = f"Tool Response: {new_msg.get('content', '')}"
+                if "tool_call_id" in new_msg:
+                    del new_msg["tool_call_id"]
+                if "name" in new_msg:
+                    del new_msg["name"]
+                    
+            cleaned_messages.append(new_msg)
+
         kwargs = {
             "model": actual_model_name,
-            "messages": messages,
+            "messages": cleaned_messages,
             "stream": True,
         }
 
