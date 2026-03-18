@@ -172,11 +172,14 @@ async def chat_stream_agent(
 
             assistant_content = ""
             thinking_content = ""
+            tool_calls = []
 
             msg_status = json.dumps({"type": "status", "content": "💭 思考中..."})
             yield f"data: {msg_status}\n\n"
 
-            async for chunk in execute_chat_stream(model_name, messages, thinking_mode):
+            async for chunk in execute_chat_stream(
+                model_name, messages, thinking_mode, tools=tools
+            ):
                 if cancel_flags.get(session_id) is True:
                     break
                 if chunk["type"] == "thinking":
@@ -191,17 +194,73 @@ async def chat_stream_agent(
                     )
                     yield f"data: {msg_chunk}\n\n"
                     assistant_content += chunk["content"]
+                elif chunk["type"] == "tool_calls":
+                    tool_calls = chunk["tool_calls"]
 
             safe_msg = {"role": "assistant", "content": assistant_content}
             if thinking_content:
                 safe_msg["reasoning_content"] = thinking_content
+            if tool_calls:
+                safe_msg["tool_calls"] = tool_calls
 
             messages.append(safe_msg)
             memory_db.append_message(session_id, safe_msg)
 
-            msg_done = json.dumps({"type": "done"})
-            yield f"data: {msg_done}\n\n"
-            break
+            if not tool_calls:
+                msg_done = json.dumps({"type": "done"})
+                yield f"data: {msg_done}\n\n"
+                break
+
+            for tc in tool_calls:
+                func_name = tc.get("function", {}).get("name", "")
+                try:
+                    func_args = json.loads(
+                        tc.get("function", {}).get("arguments", "{}")
+                    )
+                except Exception as e:
+                    func_args = {}
+
+                display_cmd = func_args.get("command", str(func_args))
+
+                msg_start = json.dumps(
+                    {
+                        "type": "tool_start",
+                        "id": tc.get("id", ""),
+                        "tool": func_name,
+                        "cmd": display_cmd,
+                    }
+                )
+                yield f"data: {msg_start}\n\n"
+                await asyncio.sleep(0.05)
+
+                tool_res = await dispatcher.route_and_execute(
+                    func_name, func_args, context
+                )
+
+                preview = tool_res[:300] + "..." if len(tool_res) > 300 else tool_res
+                msg_end = json.dumps(
+                    {"type": "tool_end", "id": tc.get("id", ""), "result": preview}
+                )
+                yield f"data: {msg_end}\n\n"
+                await asyncio.sleep(0.05)
+
+                tool_msg = {
+                    "tool_call_id": tc.get("id", ""),
+                    "role": "tool",
+                    "name": func_name,
+                    "content": str(tool_res),
+                }
+                messages.append(tool_msg)
+                memory_db.append_message(session_id, tool_msg)
+
+            msg_loop = json.dumps(
+                {
+                    "type": "status",
+                    "content": f"🔄 收集结果，执行第 {iteration + 2} 步...",
+                }
+            )
+            yield f"data: {msg_loop}\n\n"
+            await asyncio.sleep(0.05)
 
         else:
             yield f"data: {json.dumps({'type': 'error', 'content': '⚠️ 任务过于复杂，已达到 50 次最大思考上限，自动终止'})}\n\n"
@@ -361,28 +420,40 @@ async def headless_agent_chat(
     tools = dispatcher.get_available_tools(context)
 
     try:
+        from core.llm_execution import execute_chat_stream
+
         assistant_content = ""
         for iteration in range(50):
-            response = await client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
-                timeout=60.0,
-            )
-            choice = response.choices[0]
-            assistant_content = choice.message.content or ""
+            assistant_content = ""
+            thinking_content = ""
+            tool_calls = []
 
-            if not choice.message.tool_calls:
+            async for chunk in execute_chat_stream(
+                model_name, messages, "off", tools=tools
+            ):
+                if chunk["type"] == "thinking":
+                    thinking_content += chunk["content"]
+                elif chunk["type"] == "content":
+                    assistant_content += chunk["content"]
+                elif chunk["type"] == "tool_calls":
+                    tool_calls = chunk["tool_calls"]
+
+            if not tool_calls:
                 break
 
-            safe_msg = choice.message.model_dump(exclude_unset=True)
+            safe_msg = {"role": "assistant", "content": assistant_content}
+            if thinking_content:
+                safe_msg["reasoning_content"] = thinking_content
+            safe_msg["tool_calls"] = tool_calls
+
             messages.append(safe_msg)
 
-            for tc in choice.message.tool_calls:
-                func_name = tc.function.name
+            for tc in tool_calls:
+                func_name = tc.get("function", {}).get("name", "")
                 try:
-                    func_args = json.loads(tc.function.arguments)
+                    func_args = json.loads(
+                        tc.get("function", {}).get("arguments", "{}")
+                    )
                 except Exception:
                     func_args = {}
 
@@ -391,7 +462,7 @@ async def headless_agent_chat(
                 )
 
                 tool_msg = {
-                    "tool_call_id": tc.id,
+                    "tool_call_id": tc.get("id", ""),
                     "role": "tool",
                     "name": func_name,
                     "content": str(tool_res),
