@@ -1,73 +1,108 @@
 import os
 import json
+import uuid
 from pathlib import Path
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
 
-# Calculate project root from current file path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-MODELS_JSON_PATH = PROJECT_ROOT / "models.json"
+PROVIDERS_JSON_PATH = PROJECT_ROOT / "providers.json"
 
+DEFAULT_PROVIDERS = [
+    {
+        "id": "google",
+        "name": "Google Gemini",
+        "protocol": "openai",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "api_key": "",
+        "models": "gemini-2.5-flash,gemini-2.5-pro,gemini-2.0-flash-thinking-exp"
+    },
+    {
+        "id": "anthropic",
+        "name": "Anthropic",
+        "protocol": "anthropic",
+        "base_url": "https://api.anthropic.com/v1/",
+        "api_key": "",
+        "models": "claude-3-7-sonnet-20250219,claude-3-5-sonnet-20241022"
+    },
+    {
+        "id": "deepseek",
+        "name": "DeepSeek",
+        "protocol": "openai",
+        "base_url": "https://api.deepseek.com/v1",
+        "api_key": "",
+        "models": "deepseek-chat,deepseek-reasoner"
+    },
+    {
+        "id": "ollama",
+        "name": "Ollama (本地)",
+        "protocol": "openai",
+        "base_url": "http://localhost:11434/v1",
+        "api_key": "dummy",
+        "models": ""
+    }
+]
 
-def get_client_for_model(model_name: str):
-    """
-    Reads models.json, determines the protocol, and returns an initialized
-    AsyncOpenAI or AsyncAnthropic client along with the model's configuration dict.
+def get_all_providers():
+    if not PROVIDERS_JSON_PATH.exists():
+        with open(PROVIDERS_JSON_PATH, "w", encoding="utf-8") as f:
+            json.dump(DEFAULT_PROVIDERS, f, ensure_ascii=False, indent=2)
+        return DEFAULT_PROVIDERS
+    try:
+        with open(PROVIDERS_JSON_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return DEFAULT_PROVIDERS
 
-    Args:
-        model_name: The name of the model to instantiate the client for.
+def save_providers(providers):
+    with open(PROVIDERS_JSON_PATH, "w", encoding="utf-8") as f:
+        json.dump(providers, f, ensure_ascii=False, indent=2)
 
-    Returns:
-        tuple: (client, config)
-    """
-    if not MODELS_JSON_PATH.exists():
-        raise FileNotFoundError(f"Configuration file not found at {MODELS_JSON_PATH}")
-
-    with open(MODELS_JSON_PATH, "r", encoding="utf-8") as f:
-        config_data = json.load(f)
-
-    models = config_data.get("models", {})
-    if model_name not in models:
-        # Fallback to globally configured custom OpenAI endpoint (from frontend UI)
-        api_key = os.getenv("OPENAI_API_KEY")
-        base_url = os.getenv("OPENAI_BASE_URL")
+def get_client_for_model(full_model_id: str):
+    providers = get_all_providers()
+    
+    provider_id = None
+    model_name = full_model_id
+    
+    if "|" in full_model_id:
+        provider_id, model_name = full_model_id.split("|", 1)
         
-        if not api_key:
-            api_key = "dummy"
-            
-        return AsyncOpenAI(api_key=api_key, base_url=base_url), {"protocol": "openai", "model": model_name, "supports_thinking": False}
-
-    config = models[model_name]
-    protocol = config.get("protocol")
-    api_key_env = config.get("api_key_env")
-
-    api_key = None
-    if api_key_env:
-        api_key = os.getenv(api_key_env)
-        if not api_key:
-            raise ValueError(
-                f"Missing API key: Environment variable '{api_key_env}' is not set."
-            )
+    provider = None
+    if provider_id:
+        provider = next((p for p in providers if p.get("id") == provider_id), None)
     else:
-        # Default to a dummy key for local models that don't specify an env var
-        # to prevent validation errors from client libraries.
+        # Fallback: try to find the model in the manual lists
+        for p in providers:
+            p_models = [m.strip() for m in p.get("models", "").split(",") if m.strip()]
+            if model_name in p_models:
+                provider = p
+                break
+        if not provider and providers:
+            provider = providers[0] # ultimate fallback
+            
+    if not provider:
+        raise ValueError(f"No suitable provider found for model '{full_model_id}'")
+        
+    protocol = provider.get("protocol", "openai")
+    api_key = provider.get("api_key", "dummy")
+    if not api_key:
         api_key = "dummy"
+    base_url = provider.get("base_url")
 
-    base_url = config.get("base_url")
-
-    # Initialize client kwargs
-    client_kwargs = {}
-    if api_key:
-        client_kwargs["api_key"] = api_key
+    client_kwargs = {"api_key": api_key}
     if base_url:
         client_kwargs["base_url"] = base_url
 
-    # Instantiate the correct client based on the protocol
     if protocol == "openai":
         client = AsyncOpenAI(**client_kwargs)
     elif protocol == "anthropic":
         client = AsyncAnthropic(**client_kwargs)
     else:
-        raise ValueError(f"Unsupported protocol '{protocol}' for model '{model_name}'.")
+        raise ValueError(f"Unsupported protocol '{protocol}'")
 
+    config = {
+        "protocol": protocol,
+        "model": model_name,
+        "supports_thinking": "reasoner" in model_name or "thinking" in model_name or "claude-3-7" in model_name or "o3-" in model_name or "o1-" in model_name or "r1" in model_name.lower()
+    }
     return client, config

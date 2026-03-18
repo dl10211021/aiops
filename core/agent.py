@@ -16,36 +16,43 @@ EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "3072"))
 
 async def get_available_models() -> list:
     try:
-        import json
-        import os
+        from core.llm_factory import get_all_providers
         from openai import AsyncOpenAI
-
-        config_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "models.json"
-        )
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
-        models = list(config.get("models", {}).keys())
+        import asyncio
+        import logging
         
-        # Check if the user has a custom OpenAI Base URL configured via UI
-        base_url = os.getenv("OPENAI_BASE_URL")
-        api_key = os.getenv("OPENAI_API_KEY", "dummy")
+        providers = get_all_providers()
         
-        if base_url:
-            try:
-                temp_client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=5.0)
-                response = await temp_client.models.list()
-                dynamic_models = [m.id for m in response.data]
-                models.extend(dynamic_models)
-            except Exception as dyn_e:
-                logger.warning(f"Failed to fetch dynamic models from {base_url}: {dyn_e}")
+        async def fetch_provider_models(p):
+            models_list = []
+            manual_models = [m.strip() for m in p.get("models", "").split(",") if m.strip()]
+            
+            if manual_models:
+                for m in manual_models:
+                    models_list.append({"id": f"{p['id']}|{m}", "name": m})
+            elif p.get("protocol") == "openai" and p.get("base_url"):
+                try:
+                    api_key = p.get("api_key")
+                    if not api_key:
+                        api_key = "dummy"
+                    temp_client = AsyncOpenAI(api_key=api_key, base_url=p.get("base_url"), timeout=5.0)
+                    response = await temp_client.models.list()
+                    for m in response.data:
+                        models_list.append({"id": f"{p['id']}|{m.id}", "name": m.id})
+                except Exception as e:
+                    pass
+            
+            if models_list:
+                return {"provider_id": p["id"], "provider_name": p["name"], "models": models_list}
+            return None
 
-        # Remove duplicates and sort
-        models = list(set(models))
-        models.sort()
-        return models
+        results = await asyncio.gather(*(fetch_provider_models(p) for p in providers))
+        
+        grouped_models = [res for res in results if res is not None]
+        return grouped_models
     except Exception as e:
-        logger.error(f"Failed to fetch models from models.json: {e}")
+        import logging
+        logging.getLogger(__name__).error(f"Failed to fetch models: {e}")
         return []
 
 
