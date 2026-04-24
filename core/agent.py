@@ -132,7 +132,7 @@ async def chat_stream_agent(
 - 目标IP/主机名: {host}
 - 端口: {port}
 - 账号: {username}
-- 凭证信息: (已安全托管，底层工具执行时自动注入，无需在脚本中自行填写)
+- 凭证信息: (已安全托管，底层工具执行时自动注入，无需在脚本中自行填写)\n{extra_creds_str}
 {"⚠️ 注意：这是一个虚拟会话，请不要使用 `linux_execute_command`。你应该使用 `local_execute_script` 工具去执行本地的 Python 脚本来获取数据。" if is_virtual else "直接使用 `linux_execute_command` 执行 bash 命令。"}
 
 [已知安全模式]
@@ -492,7 +492,7 @@ async def headless_agent_chat(
 - 目标IP/主机名: {host}
 - 端口: {port}
 - 账号: {username}
-- 凭证信息: (已安全托管，底层工具执行时自动注入，无需在脚本中自行填写)
+- 凭证信息: (已安全托管，底层工具执行时自动注入，无需在脚本中自行填写)\n{extra_creds_str}
 {"⚠️ 注意：这是一个虚拟会话，请不要使用 `linux_execute_command`，应使用 `local_execute_script` 工具。" if is_virtual else "直接使用 `linux_execute_command` 执行 bash 命令。"}
 
 [上级指挥官委派的任务]
