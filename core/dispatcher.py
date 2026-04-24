@@ -47,7 +47,7 @@ class SkillDispatcher:
         ):
             return  # 缓存尚未过期，跳过全量扫描
 
-        self.skills_registry.clear()
+        new_registry = {}
 
         for base_dir in self.skill_directories:
             if not os.path.exists(base_dir):
@@ -59,10 +59,11 @@ class SkillDispatcher:
 
                 if os.path.isdir(folder_path) and os.path.exists(skill_md_path):
                     try:
-                        self._parse_skill_md(skill_md_path, folder_path)
+                        self._parse_skill_md(skill_md_path, folder_path, new_registry)
                     except Exception as e:
                         logger.error(f"解析 {skill_md_path} 失败: {e}")
 
+        self.skills_registry = new_registry
         self._last_refresh_time = time.time()
 
     def _parse_skill_md(self, md_path: str, folder_path: str):
