@@ -26,9 +26,16 @@ export default function ChatWindow() {
   const addToast = useStore((s) => s.addToast)
 
   const [input, setInput] = useState('')
-  const [modelName, setModelName] = useState(() =>
-    localStorage.getItem('ops_model') || 'gemini-2.5-flash'
-  )
+  const [modelName, setModelName] = useState(() => {
+    const stored = localStorage.getItem('ops_model');
+    if (stored) {
+      if (!stored.includes('|') && stored.includes('gemini')) return `google|${stored}`;
+      if (!stored.includes('|') && stored.includes('claude')) return `anthropic|${stored}`;
+      if (!stored.includes('|') && stored.includes('deepseek')) return `deepseek|${stored}`;
+      return stored;
+    }
+    return 'google|gemini-2.5-flash';
+  })
   const [thinkingMode, setThinkingMode] = useState(() =>
     localStorage.getItem('ops_thinking') || 'off'
   )
