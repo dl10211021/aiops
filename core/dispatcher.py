@@ -879,7 +879,17 @@ class SkillDispatcher:
                 results_dict[out].append(h)
 
             aggregated_res = {}
-            for out, hosts in results_dict.items():
+            unique_outputs_count = 0
+            
+            # Sort by number of hosts (descending) so we keep the most common outputs first
+            sorted_results = sorted(results_dict.items(), key=lambda x: len(x[1]), reverse=True)
+            
+            for out, hosts in sorted_results:
+                unique_outputs_count += 1
+                if unique_outputs_count > 20:
+                    aggregated_res["..."] = {"note": f"剩余 {len(sorted_results) - 20} 种不同的输出结果因篇幅限制被折叠。为了保护上下文，建议您优化命令输出(例如只返回关键的 error code 或做 wc -l 统计)。"}
+                    break
+                    
                 summary_key = f"{len(hosts)} hosts returned this output"
                 display_hosts = hosts[:5] + (["..."] if len(hosts) > 5 else [])
                 aggregated_res[summary_key] = {"hosts": display_hosts, "output": out}
@@ -888,6 +898,7 @@ class SkillDispatcher:
                 {
                     "status": "BATCH_COMPLETE",
                     "total_hosts": len(tasks),
+                    "unique_outputs": len(results_dict),
                     "results": aggregated_res,
                 },
                 ensure_ascii=False,
