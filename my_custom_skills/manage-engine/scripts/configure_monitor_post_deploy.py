@@ -1,6 +1,3 @@
-import time
-import sys
-import json
 from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
 
 # Configuration
@@ -53,7 +50,7 @@ def retry_config():
             "criticalactionid": ACTION_ID,
             "warningactionid": ACTION_ID
         })
-        print(f" -> Memory Action Associated")
+        print(" -> Memory Action Associated")
         
         # Availability
         res = client.request("AssociateActionToAttribute", params={
@@ -61,7 +58,7 @@ def retry_config():
             "attributeid": "17", 
             "criticalactionid": ACTION_ID
         })
-        print(f" -> Availability Action Associated")
+        print(" -> Availability Action Associated")
 
     except Exception as e:
         print(f" -> Action Error: {e}")

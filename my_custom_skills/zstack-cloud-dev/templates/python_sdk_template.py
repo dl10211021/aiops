@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 import os
-import sys
-import time
 import hashlib
 import zstacklib.utils.log as log
 import apibinding.api_actions as api_actions

@@ -1,7 +1,6 @@
 import argparse
 import paramiko
 import threading
-import sys
 
 def check_server(ip, username, password, port=22):
     client = paramiko.SSHClient()

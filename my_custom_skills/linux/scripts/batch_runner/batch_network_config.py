@@ -4,7 +4,6 @@ import argparse
 import getpass
 import re
 import sys
-import socket
 import logging
 import threading
 import os

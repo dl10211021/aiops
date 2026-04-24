@@ -173,7 +173,7 @@ class MemoryDB:
                         args_copy[k] = self._fernet.decrypt(v.encode("utf-8")).decode(
                             "utf-8"
                         )
-                    except Exception as e:
+                    except Exception:
                         # might not be encrypted
                         pass
         return args_copy

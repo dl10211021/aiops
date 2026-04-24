@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 import paramiko
 import argparse
-import threading
-import sys
 import re
 import getpass
-import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # --- Audit Configuration ---
@@ -224,7 +221,7 @@ def main():
             for i in r['issues']:
                 print(f"    - {i}")
             if r['raw_logs']:
-                print(f"    --- Log Snippets ---")
+                print("    --- Log Snippets ---")
                 for l in r['raw_logs'].splitlines():
                     print(f"        {l}")
 

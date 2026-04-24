@@ -1,6 +1,4 @@
 import requests
-import json
-import sys
 
 def check_prometheus():
     url = "http://192.168.130.45:9090/api/v1/targets"

@@ -26,7 +26,6 @@ import time
 import sys
 import os
 import requests
-import json
 
 # Default Configuration
 DEFAULT_PROM_IP = "192.168.130.45"
@@ -253,7 +252,7 @@ WantedBy=multi-user.target
         return True
 
     def step4_verify(self):
-        print(f"\n=== [4/4] Verifying Target Status ===")
+        print("\n=== [4/4] Verifying Target Status ===")
         url = f"http://{self.args.prom_ip}:9090/api/v1/targets"
         print(f"  Polling API: {url}")
         

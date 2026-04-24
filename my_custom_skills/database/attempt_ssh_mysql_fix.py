@@ -1,7 +1,6 @@
 
 import paramiko
 import sys
-import time
 
 def attempt_ssh_mysql_fix(host, password, new_db_pass):
     print(f"Attempting SSH connection to {host} with root/{password}...")

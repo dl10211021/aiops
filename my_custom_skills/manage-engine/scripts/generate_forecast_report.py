@@ -1,9 +1,6 @@
 import csv
-import sys
 import datetime
-import math
 import argparse
-import os
 
 def get_business_tag(server_name):
     s = server_name.lower()

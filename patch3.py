@@ -1,5 +1,4 @@
 import re
-import json
 
 fpath = "core/agent.py"
 with open(fpath, "r", encoding="utf-8") as f:

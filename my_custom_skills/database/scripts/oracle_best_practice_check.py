@@ -2,7 +2,6 @@ import argparse
 import paramiko
 import oracledb
 import json
-import sys
 
 def check_os(host, user, password):
     results = {}
@@ -75,13 +74,13 @@ def evaluate(os_data, db_data):
             issues.append(f"[OS] vm.swappiness is {os_data['swappiness']} (Recommended: <= 10)")
         
         if not os_data['thp']:
-            issues.append(f"[OS] Transparent Huge Pages (THP) NOT disabled (Recommended: [never])")
+            issues.append("[OS] Transparent Huge Pages (THP) NOT disabled (Recommended: [never])")
             
         if os_data['hugepages_total'] == 0:
             if db_data and db_data.get('memory_target') and int(db_data['memory_target']) > 0:
                  pass 
             else:
-                 issues.append(f"[OS] HugePages not configured (Recommended for ASMM/SGA > 8GB)")
+                 issues.append("[OS] HugePages not configured (Recommended for ASMM/SGA > 8GB)")
         
         if os_data['file_max'] < 6815744:
             issues.append(f"[OS] fs.file-max ({os_data['file_max']}) < 6.8M")
@@ -94,7 +93,7 @@ def evaluate(os_data, db_data):
         # Memory
         mem_target = int(db_data['memory_target']) if db_data['memory_target'] else 0
         if mem_target > 0:
-             issues.append(f"[DB] MEMORY_TARGET is set (AMM). Best practice for Linux often prefers ASMM.")
+             issues.append("[DB] MEMORY_TARGET is set (AMM). Best practice for Linux often prefers ASMM.")
         
         if db_data['processes'] < 300:
             issues.append(f"[DB] PROCESSES ({db_data['processes']}) might be too low.")

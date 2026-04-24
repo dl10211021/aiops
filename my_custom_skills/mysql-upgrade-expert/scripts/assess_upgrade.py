@@ -113,7 +113,7 @@ def check_replication_config(conn):
     # Check Binlog Format
     if config.get('binlog_format') != 'ROW':
         issues.append(f"BINLOG_FORMAT is {config.get('binlog_format')}. Recommend ROW for compatibility and data integrity.")
-        fixes.append(f"SET GLOBAL binlog_format = 'ROW'; -- Requires checking downstream compatibility")
+        fixes.append("SET GLOBAL binlog_format = 'ROW'; -- Requires checking downstream compatibility")
         
     return issues, fixes
 

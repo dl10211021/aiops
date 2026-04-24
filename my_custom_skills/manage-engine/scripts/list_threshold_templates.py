@@ -57,21 +57,21 @@ def list_all_templates(client, show_detail=False):
             print(f"   描述: {th.get('DESCRIPTION', '无')}")
 
             # 严重告警
-            print(f"\n   严重告警 (Critical):")
+            print("\n   严重告警 (Critical):")
             print(f"     条件: {th.get('CRITICALTHRESHOLDCONDITION', 'N/A')} {th.get('CRITICALTHRESHOLDVALUE', 'N/A')}")
             print(f"     消息: {th.get('CRITICALTHRESHOLDMESSAGE', '无')}")
             print(f"     重试次数: {th.get('CRITICALPOLLSTORETRY', '使用全局默认')}")
             print(f"     最小重试: {th.get('MINIMUMCRITICALPOLLSTORETRY', '使用全局默认')}")
 
             # 警告告警
-            print(f"\n   警告告警 (Warning):")
+            print("\n   警告告警 (Warning):")
             print(f"     条件: {th.get('WARNINGTHRESHOLDCONDITION', 'N/A')} {th.get('WARNINGTHRESHOLDVALUE', 'N/A')}")
             print(f"     消息: {th.get('WARNINGTHRESHOLDMESSAGE', '无')}")
             print(f"     重试次数: {th.get('WARNINGPOLLSTORETRY', '使用全局默认')}")
             print(f"     最小重试: {th.get('MINIMUMWARNINGPOLLSTORETRY', '使用全局默认')}")
 
             # 恢复告警
-            print(f"\n   恢复告警 (Clear):")
+            print("\n   恢复告警 (Clear):")
             print(f"     条件: {th.get('CLEARTHRESHOLDCONDITION', 'N/A')} {th.get('CLEARTHRESHOLDVALUE', 'N/A')}")
             print(f"     消息: {th.get('CLEARTHRESHOLDMESSAGE', '无')}")
             print(f"     重试次数: {th.get('CLEARPOLLSTORETRY', '使用全局默认')}")

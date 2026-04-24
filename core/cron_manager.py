@@ -4,7 +4,6 @@ import uuid
 import os
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 

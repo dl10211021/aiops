@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import paramiko
 import argparse
-import sys
 import getpass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 

@@ -1,7 +1,6 @@
 import argparse
 import paramiko
 import threading
-import sys
 
 def check_server_health(ip, username, password, port=22):
     client = paramiko.SSHClient()
@@ -45,7 +44,7 @@ def check_server_health(ip, username, password, port=22):
             if len(output) > 0: result["hostname"] = output[0]
             
         client.close()
-    except Exception as e:
+    except Exception:
         result["status"] = "ERR"
     
     return result

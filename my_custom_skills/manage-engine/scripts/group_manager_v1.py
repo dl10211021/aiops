@@ -1,6 +1,6 @@
 import requests
 import xml.etree.ElementTree as ET
-from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
+from manage_engine_api import DEFAULT_URL, DEFAULT_API_KEY
 
 def manage_group_v1(target_id, group_name="test"):
     # 1. 构建专门针对 v1 XML 接口的 URL

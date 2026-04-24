@@ -1,5 +1,4 @@
 
-import sys
 import argparse
 import xml.etree.ElementTree as ET
 from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY

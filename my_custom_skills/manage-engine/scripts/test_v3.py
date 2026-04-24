@@ -1,5 +1,4 @@
 
-import sys
 from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
 import logging
 

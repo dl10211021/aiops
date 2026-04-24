@@ -430,7 +430,7 @@ async def cmd_research(args):
     try:
         if args.stream:
             # Streaming mode
-            print(f"Starting streaming research...\n")
+            print("Starting streaming research...\n")
             full_text = ""
 
             async for event in client.stream_research(args.query, args.format):
@@ -457,14 +457,14 @@ async def cmd_research(args):
             # Polling mode
             previous_id = args.continue_from if hasattr(args, 'continue_from') else None
 
-            print(f"Starting research task...")
+            print("Starting research task...")
             interaction_id = await client.start_research(
                 args.query,
                 args.format,
                 previous_id
             )
             print(f"Interaction ID: {interaction_id}")
-            print(f"Estimated time: 2-10 minutes\n")
+            print("Estimated time: 2-10 minutes\n")
 
             if args.no_wait:
                 print(f"Research started. Check status with: --status {interaction_id}")

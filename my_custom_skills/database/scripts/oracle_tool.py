@@ -4,7 +4,6 @@ import json
 import sys
 import csv
 import datetime
-import os
 
 # --- Database Connection ---
 def get_connection(args):

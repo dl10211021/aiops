@@ -162,7 +162,7 @@ skip-name-resolve
         s_client.close()
 
     def check(self):
-        print(f"[*] Checking Cluster Health...")
+        print("[*] Checking Cluster Health...")
         for node in self.nodes:
             ip = node['ip']
             role = node['role']

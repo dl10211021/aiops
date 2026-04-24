@@ -5,7 +5,6 @@ import csv
 import sys
 import os
 import statistics
-import datetime
 import xml.etree.ElementTree as ET
 
 # Add ManageEngine skill scripts to path to import api
@@ -82,7 +81,7 @@ def parse_history(xml_string):
                         if v >= 0: values.append(v)
                     except ValueError:
                         pass
-    except Exception as e:
+    except Exception:
         pass
         
     return values

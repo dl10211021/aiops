@@ -2,7 +2,6 @@
 import argparse
 import logging
 import statistics
-import datetime
 import xml.etree.ElementTree as ET
 import sys
 import os

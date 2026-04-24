@@ -1,4 +1,3 @@
-import json
 from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
 
 def explore_children(resource_id="10113062"):

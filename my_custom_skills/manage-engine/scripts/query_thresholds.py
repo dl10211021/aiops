@@ -62,7 +62,7 @@ def query_threshold_profiles(client):
                 print(f"  恢复告警条件: {clear_cond} {clear_val}")
 
         # 显示完整数据
-        print(f"  完整配置:")
+        print("  完整配置:")
         for key, value in sorted(profile.items()):
             if key not in ['THRESHOLDID', 'DISPLAYNAME', 'DESCRIPTION', 'TYPE',
                           'CRITICALVALUE', 'CRITICALCONDITION', 'WARNINGVALUE',
@@ -123,13 +123,13 @@ def query_monitor_details(client, resource_id):
 
     result = data['response']['result'][0]
 
-    print(f"\n基本信息:")
+    print("\n基本信息:")
     print(f"  名称: {result.get('DISPLAYNAME')}")
     print(f"  类型: {result.get('TYPE')}")
     print(f"  状态: {result.get('AVAILABILITYSTATUS')}")
     print(f"  健康状态: {result.get('HEALTHSTATUS')}")
 
-    print(f"\n当前监控值:")
+    print("\n当前监控值:")
     if 'CPUUTIL' in result:
         print(f"  CPU 利用率: {result.get('CPUUTIL')}%")
     if 'PHYMEMUTIL' in result:
@@ -138,7 +138,7 @@ def query_monitor_details(client, resource_id):
         print(f"  磁盘利用率: {result.get('DISKUTIL')}%")
 
     # 查找阈值和告警相关字段
-    print(f"\n阈值和告警相关字段:")
+    print("\n阈值和告警相关字段:")
     found_threshold_fields = False
     for key, value in sorted(result.items()):
         key_lower = key.lower()
@@ -150,7 +150,7 @@ def query_monitor_details(client, resource_id):
         print("  未找到阈值配置字段")
 
     # 显示完整数据
-    print(f"\n完整监控数据:")
+    print("\n完整监控数据:")
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
 

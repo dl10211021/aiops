@@ -1,6 +1,4 @@
 import requests
-import json
-import sys
 
 # 配置 Prometheus 地址
 PROMETHEUS_HOST = "192.168.130.45"
@@ -87,7 +85,7 @@ def check_bmc_status():
         # 尝试另一种常见的 metric: ipmi_sel_logs_count (系统事件日志)
         sel_logs = query("ipmi_sel_logs_count > 0")
         if sel_logs:
-             print(f"\n⚠️  发现 SEL 日志非空 (可能有硬件历史报错):")
+             print("\n⚠️  发现 SEL 日志非空 (可能有硬件历史报错):")
              for l in sel_logs:
                  instance = l['metric'].get('instance')
                  val = l['value'][1]

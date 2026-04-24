@@ -3,7 +3,7 @@ import requests
 import json
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
 def get_timestamp(time_str):
     """Parses time string to timestamp. Supports relative (e.g., 1h, 30m) or ISO format."""

@@ -205,7 +205,7 @@ class SkillDispatcher:
                 skill = self.skills_registry[s_id]
                 source_path = skill.get("source_path", "")
                 instructions += f"\n\n<!-- 激活技能: {skill['name']} -->\n"
-                instructions += f"<ACTIVATED_SKILL>\n"
+                instructions += "<ACTIVATED_SKILL>\n"
                 instructions += (
                     f"<SKILL_ABSOLUTE_PATH>{source_path}</SKILL_ABSOLUTE_PATH>\n"
                 )
@@ -213,7 +213,7 @@ class SkillDispatcher:
                 instructions += (
                     f"<INSTRUCTIONS>\n{skill['instructions']}\n</INSTRUCTIONS>\n"
                 )
-                instructions += f"</ACTIVATED_SKILL>\n"
+                instructions += "</ACTIVATED_SKILL>\n"
         return instructions
 
     def get_available_tools(

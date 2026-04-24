@@ -1,8 +1,7 @@
 import unittest
-import os
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
-from core.llm_factory import get_client_for_model, DEFAULT_PROVIDERS, save_providers
+from core.llm_factory import get_client_for_model, save_providers
 
 class TestLLMFactory(unittest.TestCase):
     def setUp(self):

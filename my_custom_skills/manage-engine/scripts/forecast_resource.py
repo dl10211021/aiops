@@ -1,7 +1,6 @@
 import argparse
 import logging
 import statistics
-import datetime
 import xml.etree.ElementTree as ET
 import concurrent.futures
 from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
@@ -141,12 +140,12 @@ def print_analysis(res):
 
     print(f"--- {res['name']} Analysis ---")
     print(f"History (30 Days): Avg: {res['curr_avg']:.1f}% | Max: {res['curr_max']:.1f}% | Trend: {res['trend']}")
-    print(f"Prediction (7 Days):")
+    print("Prediction (7 Days):")
     print(f"  > Expected Avg: {res['avg']:.1f}%")
     print(f"  > Potential Peak: {res['peak']:.1f}%")
     
     if res['status'] == "OK":
-        print(f"[OK] STATUS: HEALTHY.")
+        print("[OK] STATUS: HEALTHY.")
     else:
         print(f"[ALERT] STATUS: {res['status']}. Risks: {', '.join(res['reason'])}")
     print("")

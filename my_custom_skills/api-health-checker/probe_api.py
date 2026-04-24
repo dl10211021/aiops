@@ -1,6 +1,5 @@
 import requests
 import json
-import ssl
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 # Suppress only the single InsecureRequestWarning from urllib3

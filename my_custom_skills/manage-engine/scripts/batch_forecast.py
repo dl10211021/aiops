@@ -101,7 +101,7 @@ def main():
         # Print Summary to Console
         critical_count = sum(1 for r in results_data if r['Status'] == 'CRITICAL')
         warning_count = sum(1 for r in results_data if r['Status'] == 'WARNING')
-        print(f"\n--- Batch Analysis Complete ---")
+        print("\n--- Batch Analysis Complete ---")
         print(f"Total Metrics Analyzed: {len(results_data)}")
         print(f"Critical Risks: {critical_count}")
         print(f"Warnings: {warning_count}")

@@ -1,9 +1,7 @@
 import os
 import json
-import time
 import asyncio
 import logging
-from openai import AsyncOpenAI
 from core.dispatcher import dispatcher
 
 cancel_flags = {}
@@ -140,19 +138,19 @@ async def chat_stream_agent(
 [已知安全模式]
 1. 用户动态加载的「可用Skills」决定了你「什么时候能调什么路」。仔细阅读已加载的技能说明！
 2. 当前会话权限状态：{"**高级读写修改权限**：可以执行修改系统的操作" if allow_modifications else "**只读安全模式**：禁止修改系统的文件。除非用户强制要求，否则请确认后拒绝"}
-3. 执行某些较高风险脚本时，请仔细参考技能说明中提供的 `<SKILL_ABSOLUTE_PATH>` 路径和 `cwd` 工作目录路径。不要自己凭空猜测目录
+3. 执行某些较高风险脚本时，请仔细参考技能说明中提供的 `<SKILL_ABSOLUTE_PATH>` 路径和 `cwd` 工作目录路径。不要自己凭空猜测目录。
 
 [AIOps 专家行为准则 (CRITICAL)]
 作为运维管理工程师现场助手级别的专业伙伴：
 - **主动规划 (Proactive Planning)**：在接到运维操作任务时，明确列出操作思路和步骤 (Step 1, Step 2...)，不要盲目执行指令
 - **根因分析 (Root Cause Analysis)**：不要肤浅地只看表面。要像一名工程师一样，一步一步深入地直接指向异常
 - **闭环思维 (Closed-loop)**：操作、修复后自动执行修复验证确认修复
-- **心跳巡检 (Heartbeat)**：在「系统空闲」时期，主动执行系统的健康指标全面巡检（包括 CPU、内存、磁盘、关键服务状态），在发现异常时主动通报
-- **自我进化与未知资产应对 (Self-Evolution)**：当用户要你「安装」「修复」「改」或「打一个新技能」时，不要说「没有权限」。使用 `evolve_skill` 去修复或变更你的代码。更重要的是：**面对未知类型的设备（安全设备、数据库等），发现当前技能不匹配时，不要放弃！应使用 `local_execute_script` 动态生成并在本地执行 Python 脚本**（如 requests、pymysql 等），探测目标设备。一旦探测成功，使用 `evolve_skill` 将探测过程固化为一个新的「可复用技能」
+- **防死循环与边界 (Anti-Loop & Boundary)**：如果针对当前目标资产（{host}）连续执行工具 3 次依然失败（例如认证失败、网络超时），请【立即停止重试】，并将错误信息原本反馈给用户。绝不允许为了解决目标资产的问题，而去获取宿主机（你自身所在的机器）的信息作为替代，这会造成极大的误导。
+- **自我进化与未知资产应对 (Self-Evolution)**：当用户要你「安装」「修复」「改」或「打一个新技能」时，不要说「没有权限」。使用 `evolve_skill` 去修复或变更你的代码。面对未知类型的设备，可使用 `local_execute_script` 动态生成脚本探测，但必须确保脚本是指向目标 {host} 的，而不是探测本机。
 
 [使用的基础执行工具]
-- linux_execute_command: 在远程的目标 Linux 机器上执行 bash 命令 (需要 SSH 资产)
-- local_execute_script: 在本地执行 Python 或 Shell 脚本 (所有资产类型均可执行)
+- linux_execute_command: 在远程的目标机器 {host} 上执行 bash 命令
+- local_execute_script: 在本地执行 Python 或 Shell 脚本
 
 [当前已加载专业技能说明 (Skills)]
 以下是当前专业技能的详细 <INSTRUCTIONS> 指令，请严格遵照其中的步骤进行操作
@@ -208,25 +206,39 @@ async def chat_stream_agent(
             msg_status = json.dumps({"type": "status", "content": "💭 思考中..."})
             yield f"data: {msg_status}\n\n"
 
+            is_thinking_stream = False
             async for chunk in execute_chat_stream(
                 model_name, messages, thinking_mode, tools=tools
             ):
                 if cancel_flags.get(session_id) is True:
                     break
                 if chunk["type"] == "thinking":
+                    if not is_thinking_stream:
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': '<think>\\n'})}\n\n"
+                        is_thinking_stream = True
                     msg_chunk = json.dumps(
                         {"type": "chunk", "content": chunk["content"]}
                     )
                     yield f"data: {msg_chunk}\n\n"
                     thinking_content += chunk["content"]
                 elif chunk["type"] == "content":
+                    if is_thinking_stream:
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': '\\n</think>\\n'})}\n\n"
+                        is_thinking_stream = False
                     msg_chunk = json.dumps(
                         {"type": "chunk", "content": chunk["content"]}
                     )
                     yield f"data: {msg_chunk}\n\n"
                     assistant_content += chunk["content"]
                 elif chunk["type"] == "tool_calls":
+                    if is_thinking_stream:
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': '\\n</think>\\n'})}\n\n"
+                        is_thinking_stream = False
                     tool_calls = chunk["tool_calls"]
+
+            if is_thinking_stream:
+                yield f"data: {json.dumps({'type': 'chunk', 'content': '\\n</think>\\n'})}\n\n"
+                is_thinking_stream = False
 
             safe_msg = {"role": "assistant", "content": assistant_content}
             if thinking_content:
@@ -248,7 +260,7 @@ async def chat_stream_agent(
                     func_args = json.loads(
                         tc.get("function", {}).get("arguments", "{}")
                     )
-                except Exception as e:
+                except Exception:
                     func_args = {}
 
                 display_cmd = func_args.get("command", str(func_args))

@@ -320,7 +320,7 @@ def generate_performance_trend_section(health):
 
     cpu_trend = "CPU负载适中，系统性能稳定" if cpu and int(cpu) < 60 else "CPU负载偏高，建议持续监控"
     mem_trend = "内存使用处于健康水平" if memory and memory < 70 else "内存使用率需关注"
-    temp_trend = f"温度控制优秀，表明散热良好" if temp and temp < 50 else "温度正常，建议监控"
+    temp_trend = "温度控制优秀，表明散热良好" if temp and temp < 50 else "温度正常，建议监控"
 
     current_month = datetime.now().month
     season = "夏季" if current_month in [6, 7, 8] else "冬季" if current_month in [12, 1, 2] else "春秋季"
@@ -494,7 +494,7 @@ def generate_comprehensive_recommendations(health, data):
         # Format multi-point actions
         if '；' in action:
             action_points = action.split('；')
-            action_html = f"<p><strong>建议操作:</strong></p>\n                        <ul style=\"margin-left: 20px; margin-top: 10px;\">"
+            action_html = "<p><strong>建议操作:</strong></p>\n                        <ul style=\"margin-left: 20px; margin-top: 10px;\">"
             for point in action_points:
                 action_html += f"\n                            <li>• {point.strip()}</li>"
             action_html += "\n                        </ul>"

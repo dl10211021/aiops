@@ -1,6 +1,4 @@
 import requests
-import json
-import sys
 
 # 配置 Prometheus 地址
 PROMETHEUS_HOST = "192.168.130.45"

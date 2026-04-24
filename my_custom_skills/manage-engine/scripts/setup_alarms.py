@@ -121,22 +121,22 @@ def verify_configuration(resource_id, action_name):
         return False
 
     result = data['response']['result'][0]
-    print(f"\n服务器状态:")
+    print("\n服务器状态:")
     print(f"  名称: {result.get('DISPLAYNAME')}")
     print(f"  可用性: {result.get('AVAILABILITYSTATUS')}")
     print(f"  健康状态: {result.get('HEALTHSTATUS')}")
     print(f"  CPU: {result.get('CPUUTIL')}%")
     print(f"  内存: {result.get('PHYMEMUTIL')}%")
 
-    print(f"\n✅ 已配置告警:")
+    print("\n✅ 已配置告警:")
     print(f"  1. 可用性告警 (属性ID: 700) → {action_name}")
     print(f"  2. 健康状况告警 (属性ID: 701) → {action_name}")
-    print(f"  3. 已移除 CPU 误报配置")
+    print("  3. 已移除 CPU 误报配置")
 
-    print(f"\n📱 告警触发条件:")
-    print(f"  - 服务器宕机 (可用性 = down)")
-    print(f"  - 健康状态异常 (warning/critical)")
-    print(f"  - 连续 2 次轮询确认后触发")
+    print("\n📱 告警触发条件:")
+    print("  - 服务器宕机 (可用性 = down)")
+    print("  - 健康状态异常 (warning/critical)")
+    print("  - 连续 2 次轮询确认后触发")
 
     return True
 
@@ -172,7 +172,7 @@ def main():
     print("="*80)
     print("  ManageEngine 告警配置工具")
     print("="*80)
-    print(f"\n配置信息:")
+    print("\n配置信息:")
     print(f"  资源ID: {resource_id}")
     print(f"  告警动作: {action_name} (ID: {action_id})")
 

@@ -52,7 +52,7 @@ async def background_hydrate_assets():
                 active_skills=a["skills"],
                 agent_profile=a["agent_profile"],
                 remark=a["remark"],
-                protocol=a["protocol"],
+                asset_type=a.get("protocol", "ssh"),
                 extra_args=a["extra_args"],
                 tags=a.get("tags", ["未分组"]),
                 lazy=True,
@@ -128,7 +128,7 @@ if os.path.exists(static_dir):
 # ------------- 注册核心 API 路由 -------------
 app.include_router(ssh_router, prefix="/api/v1", tags=["OpsCore APIs"])
 
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse
 
 # ------------- React 前端静态资源 (Vite build) -------------
 react_dir = os.path.join(get_base_path(), "static_react")

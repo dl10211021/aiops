@@ -1,5 +1,4 @@
 import sys
-import argparse
 import re
 from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
 
@@ -42,7 +41,7 @@ def analyze_resource(query, days=7):
     print(f"目标: {display_name} (ID: {resource_id}) | 类型: {resource_type}")
 
     # --- 2. 当前状态与性能 ---
-    print(f"\n--- 📊 当前状态 ---")
+    print("\n--- 📊 当前状态 ---")
     data = client.get_monitor_data(resource_id)
     if data and 'response' in data and 'result' in data['response'] and len(data['response']['result']) > 0:
         info = data['response']['result'][0]
@@ -67,14 +66,14 @@ def analyze_resource(query, days=7):
         disk = info.get('DISKUTIL')
         
         if cpu or mem or disk:
-            print(f"\n[性能快照]")
+            print("\n[性能快照]")
             if cpu: print(f"  CPU 使用率:    {cpu}%")
             if mem: print(f"  内存 使用率:   {mem}%")
             if disk: print(f"  磁盘 使用率:   {disk}%")
         
         # Key Attributes (First 15)
         if 'Attribute' in info:
-            print(f"\n[关键指标]")
+            print("\n[关键指标]")
             count = 0
             for attr in info['Attribute']:
                 if count >= 15: break

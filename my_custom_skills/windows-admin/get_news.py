@@ -1,7 +1,6 @@
 import argparse
 import base64
 import re
-import sys
 import winrm # pywinrm
 
 def get_news(target, user, password):

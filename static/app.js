@@ -789,46 +789,54 @@ async function readFullSkillMd(skillId) {
         function handleStreamEvent(data) {
             const statusEl = document.getElementById(currentAiBubbleId + '_status');
             const execContainer = document.getElementById(executionContainerId);
-            
+
             if (data.type === 'status') {
                 statusEl.innerText = data.content;
                 statusEl.classList.remove('hidden');
-            } 
+            }
             else if (data.type === 'tool_ask_approval') {
                 execContainer.classList.remove('hidden');
                 statusEl.classList.add('hidden');
-                
+
                 const uniqueId = `execLog_${currentAiBubbleId}_${data.id}`;
                 const html = `
-                <div class="mt-2 text-xs border border-yellow-700/50 rounded bg-yellow-900/20 overflow-hidden" id="card_${uniqueId}">
-                    <div class="flex items-center text-yellow-400 p-2 border-b border-yellow-800/50 bg-black/40">
-                        <i id="icon_${uniqueId}" class="fa-solid fa-triangle-exclamation mr-2 text-yellow-400"></i>
-                        <span>等待授权: <span class="text-opsAccent font-mono">${data.tool}</span></span>
+                <div class="mt-2 text-xs border border-yellow-700/50 rounded-lg bg-[#0d0d0d] overflow-hidden shadow-lg" id="card_${uniqueId}">
+                    <div class="flex items-center justify-between p-2 border-b border-yellow-800/50 bg-[#1a1a1a]">
+                        <div class="flex space-x-2 pl-1">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                        </div>
+                        <span class="text-yellow-400 font-mono text-[10px] pr-2"><i class="fa-solid fa-lock mr-1"></i>${data.tool} (Pending)</span>
                     </div>
-                    <div class="p-2 font-mono text-gray-400 bg-black/20">${escapeHTML(data.cmd)}</div>
-                    <div class="p-2 flex gap-2 border-t border-yellow-800/50" id="approval_btns_${uniqueId}">
-                        <button onclick="submitApproval('${data.id}', true, '${uniqueId}')" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded">允许</button>
-                        <button onclick="submitApproval('${data.id}', false, '${uniqueId}')" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded">拒绝</button>
-                        <label class="flex items-center text-gray-400 ml-2"><input type="checkbox" id="auto_approve_${data.id}" class="mr-1"> 本次自动允许</label>
+                    <div class="p-3 font-mono text-gray-300 bg-[#0a0a0a] whitespace-pre-wrap">${escapeHTML(data.cmd)}</div>
+                    <div class="p-2 flex gap-2 border-t border-yellow-800/50 bg-[#1a1a1a]" id="approval_btns_${uniqueId}">
+                        <button onclick="submitApproval('${data.id}', true, '${uniqueId}')" class="bg-green-600/80 hover:bg-green-500 text-white px-3 py-1.5 rounded font-mono transition">允许执行</button>
+                        <button onclick="submitApproval('${data.id}', false, '${uniqueId}')" class="bg-red-600/80 hover:bg-red-500 text-white px-3 py-1.5 rounded font-mono transition">拒绝拦截</button>
+                        <label class="flex items-center text-gray-400 ml-2 text-xs cursor-pointer"><input type="checkbox" id="auto_approve_${data.id}" class="mr-1 accent-opsAccent"> 自动允许</label>
                     </div>
-                    <div id="res_${uniqueId}" class="hidden p-2 text-gray-400 font-mono whitespace-pre-wrap border-t border-gray-800 bg-black/50 text-[10px]"></div>
+                    <div id="res_${uniqueId}" class="hidden p-3 text-gray-400 font-mono whitespace-pre-wrap border-t border-gray-800 bg-[#050505] text-[11px] max-h-48 overflow-y-auto"></div>
                 </div>`;
                 execContainer.insertAdjacentHTML('beforeend', html);
                 scrollToBottom();
             }
             else if (data.type === 'tool_start') {
                 execContainer.classList.remove('hidden');
-                statusEl.classList.add('hidden'); // 隐藏通用状态
-                
+                statusEl.classList.add('hidden');
+
                 const uniqueId = `execLog_${currentAiBubbleId}_${data.id}`;
                 const html = `
-                <div class="mt-2 text-xs border border-gray-700 rounded bg-gray-900 overflow-hidden" id="card_${uniqueId}">
-                    <div class="flex items-center text-gray-400 p-2 border-b border-gray-800 bg-black/40">
-                        <i id="icon_${uniqueId}" class="fa-solid fa-circle-notch fa-spin mr-2 text-opsAccent"></i>
-                        <span>正在执行: <span class="text-opsAccent font-mono">${data.tool}</span></span>
+                <div class="mt-2 text-xs border border-gray-700/80 rounded-lg bg-[#0d0d0d] overflow-hidden shadow" id="card_${uniqueId}">
+                    <div class="flex items-center justify-between p-2 border-b border-gray-800 bg-[#1a1a1a]">
+                        <div class="flex space-x-2 pl-1">
+                            <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+                        </div>
+                        <span class="text-opsAccent font-mono text-[10px] pr-2"><i id="icon_${uniqueId}" class="fa-solid fa-circle-notch fa-spin mr-1 text-opsAccent"></i>${data.tool}</span>
                     </div>
-                    <div class="p-2 font-mono text-gray-500 bg-black/20">${escapeHTML(data.cmd)}</div>
-                    <div id="res_${uniqueId}" class="hidden p-2 text-gray-400 font-mono whitespace-pre-wrap border-t border-gray-800 bg-black/50 text-[10px]"></div>
+                    <div class="p-3 font-mono text-gray-300 bg-[#0a0a0a] whitespace-pre-wrap leading-relaxed">${escapeHTML(data.cmd)}</div>
+                    <div id="res_${uniqueId}" class="hidden p-3 text-gray-400 font-mono whitespace-pre-wrap border-t border-gray-800 bg-[#050505] text-[11px] max-h-60 overflow-y-auto"></div>
                 </div>`;
                 execContainer.insertAdjacentHTML('beforeend', html);
                 scrollToBottom();
@@ -837,21 +845,33 @@ async function readFullSkillMd(skillId) {
                 const uniqueId = `execLog_${currentAiBubbleId}_${data.id}`;
                 const iconEl = document.getElementById(`icon_${uniqueId}`);
                 const resEl = document.getElementById(`res_${uniqueId}`);
-                
+
                 if(iconEl) {
-                    iconEl.className = "fa-solid fa-check mr-2 text-opsSuccess";
+                    iconEl.className = "fa-solid fa-check mr-1 text-green-500";
                 }
                 if(resEl) {
-                    resEl.innerHTML = `<span class="text-gray-600">Return: </span><br>${escapeHTML(data.result)}`;
+                    resEl.innerHTML = escapeHTML(data.result);
                     resEl.classList.remove('hidden');
                 }
                 scrollToBottom();
             }
             else if (data.type === 'chunk') {
-                statusEl.classList.add('hidden'); // 开始打字就隐藏 status
+                statusEl.classList.add('hidden');
                 currentAiMarkdown += data.content;
-                // 用 marked 渲染 markdown 到目标 div
-                document.getElementById(currentAiBubbleId + '_text').innerHTML = DOMPurify.sanitize(marked.parse(currentAiMarkdown));
+                const textEl = document.getElementById(currentAiBubbleId + '_text');
+                
+                // Fold <think> tags into a <details> block
+                let processedMd = currentAiMarkdown.replace(/<think>([\s\S]*?)(<\/think>|$)/g, function(match, p1, p2) {
+                    const isClosed = !!p2;
+                    return `<details class="mb-3 border border-gray-700 rounded-md bg-[#0d0d0d] overflow-hidden" ${isClosed ? '' : 'open'}>
+                        <summary class="cursor-pointer text-xs text-gray-400 p-2 bg-[#1a1a1a] hover:bg-gray-700 font-mono flex items-center transition select-none">
+                            <i class="fa-solid fa-brain mr-2 text-purple-400"></i> AI 思考推演 ${isClosed ? '(已折叠)' : '(正在计算...)'}
+                        </summary>
+                        <div class="p-3 text-xs text-gray-400 italic font-mono whitespace-pre-wrap leading-relaxed border-t border-gray-700 bg-[#0d0d0d]">${escapeHTML(p1)}</div>
+                    </details>\n`;
+                });
+                
+                textEl.innerHTML = DOMPurify.sanitize(marked.parse(processedMd));
                 scrollToBottom();
             }
             else if (data.type === 'error') {
@@ -867,44 +887,49 @@ async function readFullSkillMd(skillId) {
             }
         }
 
+
+
                                 // --- 辅助 UI ---
                                 function appendAIBubbleSkeleton(sid = currentSessionId) {
-                                    const bubbleId = 'ai_' + Date.now() + Math.floor(Math.random()*1000);
-                                    const execId = 'exec_' + Date.now() + Math.floor(Math.random()*1000);
-                                    const chatContainer = document.getElementById('chatContainer_' + sid);  
-                                    const timeStr = new Date().toLocaleString();
-                        
-                                    const html = `
-                                    <div class="flex items-start space-x-3 mb-4">
-                                        <div class="w-8 h-8 rounded-full bg-opsAccent flex items-center justify-center text-opsDark text-sm font-bold shadow-lg flex-shrink-0 mt-1"><i class="fa-solid fa-bolt"></i></div>
-                                        <div class="flex-1 max-w-4xl space-y-2">
-                                            <!-- 执行轨迹容器 -->
-                                            <div id="${execId}" class="hidden bg-gray-800/40 rounded-lg px-4 py-2 border border-dashed border-gray-700 shadow-sm">
-                                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">🤖 引擎执行轨迹 (Execution Path)</div>
-                                            </div>
-                
-                                            <!-- 主回复气泡 -->
-                                            <div class="bg-gray-800/80 rounded-lg rounded-tl-none px-5 py-4 shadow-md border border-gray-700 text-sm leading-relaxed">
-                                                <div id="${bubbleId}_status" class="text-xs text-opsAccent animate-pulse font-mono"><i class="fa-solid fa-satellite-dish mr-1"></i>正在连接到大脑...</div>
-                                                <div id="${bubbleId}_text" class="markdown-body"></div>
-                                            </div>
-                                            <div class="text-[9px] text-gray-500 mt-1 pl-1">${timeStr}</div>
-                                        </div>
-                                    </div>`;
-                                    chatContainer.insertAdjacentHTML('beforeend', html);
-                                    if(sid === currentSessionId) scrollToBottom();
-                                    return { bubbleId, execId };
-                                }        // 插入用户气泡
+            const bubbleId = 'ai_' + Date.now() + Math.floor(Math.random()*1000);
+            const execId = 'exec_' + Date.now() + Math.floor(Math.random()*1000);
+            const chatContainer = document.getElementById('chatContainer_' + sid);
+            const timeStr = new Date().toLocaleString();
+
+            const html = `
+            <div class="flex items-start space-x-3 mb-6 w-full pr-4">
+                <div class="w-8 h-8 rounded border border-opsAccent/50 bg-[#1e1e1e] flex items-center justify-center text-opsAccent text-sm shadow flex-shrink-0 mt-1">
+                    <i class="fa-solid fa-terminal"></i>
+                </div>
+                <div class="flex-1 min-w-0 max-w-full space-y-2">
+                    <div id="${execId}" class="hidden space-y-2 mb-2"></div>
+                    <div class="bg-[#1e1e1e]/80 rounded-lg px-5 py-4 border border-gray-700 shadow text-sm leading-relaxed text-gray-300 w-full overflow-x-auto">
+                        <div id="${bubbleId}_status" class="text-xs text-opsAccent animate-pulse font-mono mb-2">
+                            <i class="fa-solid fa-circle-notch fa-spin mr-1"></i>System initializing...
+                        </div>
+                        <div id="${bubbleId}_text" class="markdown-body"></div>
+                    </div>
+                    <div class="text-[10px] text-gray-500 mt-1 font-mono pl-1">${timeStr}</div>
+                </div>
+            </div>`;
+            chatContainer.insertAdjacentHTML('beforeend', html);
+            if(sid === currentSessionId) scrollToBottom();
+            return { bubbleId, execId };
+        }        // 插入用户气泡
         function appendUserBubble(text) {
             const chatContainer = document.getElementById('chatContainer_' + currentSessionId);
             const timeStr = new Date().toLocaleString();
             const html = `
-            <div class="flex items-start justify-end space-x-3 mb-4">
-                <div class="flex flex-col items-end">
-                    <div class="bg-gray-800 rounded-lg rounded-tr-none px-4 py-3 max-w-2xl shadow-md border border-gray-700 text-sm whitespace-pre-wrap">${escapeHTML(text)}</div>
-                    <div class="text-[9px] text-gray-500 mt-1">${timeStr}</div>
+            <div class="flex items-start justify-end space-x-3 mb-6 pl-12 w-full">
+                <div class="flex flex-col items-end flex-1 min-w-0">
+                    <div class="bg-gray-700/60 rounded-lg px-4 py-3 max-w-[85%] shadow border border-gray-600 text-sm whitespace-pre-wrap text-gray-200">
+                        ${escapeHTML(text)}
+                    </div>
+                    <div class="text-[10px] text-gray-500 mt-1 font-mono pr-1">${timeStr}</div>
                 </div>
-                <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-lg flex-shrink-0">U</div>
+                <div class="w-8 h-8 rounded bg-gray-600 flex items-center justify-center text-white text-sm font-bold shadow flex-shrink-0 mt-1">
+                    <i class="fa-solid fa-user"></i>
+                </div>
             </div>`;
             chatContainer.insertAdjacentHTML('beforeend', html);
             scrollToBottom();
@@ -942,14 +967,28 @@ async function readFullSkillMd(skillId) {
             const chatContainer = document.getElementById('chatContainer_' + sid);
             if(!chatContainer) return;
             const timeStr = timestamp ? new Date(timestamp).toLocaleString() : new Date().toLocaleString();
+            
+            // Re-render <think> tags for history
+            let processedMd = markdownText.replace(/<think>([\s\S]*?)(<\/think>|$)/g, function(match, p1, p2) {
+                const isClosed = !!p2;
+                return `<details class="mb-3 border border-gray-700 rounded-md bg-[#0d0d0d] overflow-hidden" ${isClosed ? '' : 'open'}>
+                    <summary class="cursor-pointer text-xs text-gray-400 p-2 bg-[#1a1a1a] hover:bg-gray-700 font-mono flex items-center transition select-none">
+                        <i class="fa-solid fa-brain mr-2 text-purple-400"></i> AI 思考过程
+                    </summary>
+                    <div class="p-3 text-xs text-gray-400 italic font-mono whitespace-pre-wrap leading-relaxed border-t border-gray-700 bg-[#0d0d0d]">${escapeHTML(p1)}</div>
+                </details>\n`;
+            });
+            
             const html = `
-            <div class="flex items-start space-x-3 mb-4 opacity-70 hover:opacity-100 transition">
-                <div class="w-8 h-8 rounded-full bg-opsAccent flex items-center justify-center text-opsDark text-sm font-bold shadow-lg flex-shrink-0 mt-1"><i class="fa-solid fa-bolt"></i></div>
-                <div class="flex-1 max-w-4xl space-y-2">
-                    <div class="bg-gray-800/80 rounded-lg rounded-tl-none px-5 py-4 shadow-md border border-gray-700 text-sm leading-relaxed">
-                        <div class="markdown-body">${DOMPurify.sanitize(marked.parse(markdownText))}</div>
+            <div class="flex items-start space-x-3 mb-6 w-full pr-4 opacity-80 hover:opacity-100 transition">
+                <div class="w-8 h-8 rounded border border-opsAccent/50 bg-[#1e1e1e] flex items-center justify-center text-opsAccent text-sm shadow flex-shrink-0 mt-1">
+                    <i class="fa-solid fa-terminal"></i>
+                </div>
+                <div class="flex-1 min-w-0 max-w-full space-y-2">
+                    <div class="bg-[#1e1e1e]/80 rounded-lg px-5 py-4 border border-gray-700 shadow text-sm leading-relaxed text-gray-300 w-full overflow-x-auto">
+                        <div class="markdown-body">${DOMPurify.sanitize(marked.parse(processedMd))}</div>
                     </div>
-                    <div class="text-[9px] text-gray-500 mt-1 pl-1">${timeStr}</div>
+                    <div class="text-[10px] text-gray-500 mt-1 font-mono pl-1">${timeStr}</div>
                 </div>
             </div>`;
             chatContainer.insertAdjacentHTML('beforeend', html);
@@ -1629,10 +1668,10 @@ async function readFullSkillMd(skillId) {
             }
         });
 
-        // --- 重新：资产金库加载 (渲染为大型卡片网格) ---
+        // --- 重新：资产资产信息加载 (渲染为大型卡片网格) ---
         async function deleteAsset(assetId, event) {
             event.stopPropagation();
-            if(!confirm("确定要从金库中删除这个资产吗？")) return;
+            if(!confirm("确定要从资产信息中删除这个资产吗？")) return;
             try {
                 const response = await fetch(`${apiBaseUrl}/assets/${assetId}`, { method: 'DELETE' });
                 const data = await response.json();
@@ -1658,7 +1697,7 @@ async function readFullSkillMd(skillId) {
                     const _elT_statTotalAssets = document.getElementById('statTotalAssets'); if(_elT_statTotalAssets) _elT_statTotalAssets.innerText = assets.length;
                     
                     if (assets.length === 0) {
-                        grid.innerHTML = '<div class="text-gray-500 italic p-4 col-span-full">金库为空。请点击右上角「纳管新资产」。</div>';
+                        grid.innerHTML = '<div class="text-gray-500 italic p-4 col-span-full">资产信息为空。请点击右上角「纳管新资产」。</div>';
                         return;
                     }
                     

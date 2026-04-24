@@ -1,7 +1,6 @@
 import argparse
 import paramiko
 import threading
-import sys
 import time
 
 def change_password(ip, username, old_password, new_password, port=22):

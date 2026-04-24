@@ -38,7 +38,7 @@ def configure_cpu_alarm(resource_id, critical_threshold=90, warning_threshold=80
     from manage_engine_api import AppManagerClient
     client = AppManagerClient(DEFAULT_URL, DEFAULT_API_KEY)
 
-    print(f"\n📊 正在获取资源信息...")
+    print("\n📊 正在获取资源信息...")
     data = client.get_monitor_data(resource_id)
 
     if not data or data.get('response-code') != '4000':
@@ -49,13 +49,13 @@ def configure_cpu_alarm(resource_id, critical_threshold=90, warning_threshold=80
     display_name = result.get('DISPLAYNAME')
     cpu_util = result.get('CPUUTIL', 'N/A')
 
-    print(f"\n资源信息:")
+    print("\n资源信息:")
     print(f"  名称: {display_name}")
     print(f"  资源ID: {resource_id}")
     print(f"  当前 CPU: {cpu_util}%")
 
     # 方法1: 应用默认阈值模板
-    print(f"\n" + "="*80)
+    print("\n" + "="*80)
     print("方法1: 应用系统默认阈值模板（快速）")
     print("="*80)
 
@@ -69,12 +69,12 @@ def configure_cpu_alarm(resource_id, critical_threshold=90, warning_threshold=80
         'overrideConf': 'true'
     }
 
-    print(f"\n正在应用默认阈值模板...")
+    print("\n正在应用默认阈值模板...")
     try:
         r = requests.post(url, data=params, verify=False, timeout=30)
         if r.status_code == 200 and '4000' in r.text:
             print("✅ 成功应用默认阈值模板到 CPU 属性")
-            print(f"   (系统会使用默认的告警阈值)")
+            print("   (系统会使用默认的告警阈值)")
         else:
             print("⚠️  应用默认模板时出现问题")
             print(f"   响应: {r.text[:200]}")
@@ -82,59 +82,59 @@ def configure_cpu_alarm(resource_id, critical_threshold=90, warning_threshold=80
         print(f"❌ 应用失败: {e}")
 
     # 方法2: Web 界面配置自定义阈值
-    print(f"\n" + "="*80)
+    print("\n" + "="*80)
     print("方法2: Web 界面配置自定义阈值（推荐，精确控制）")
     print("="*80)
 
     print(f"\n要配置精确的 CPU > {critical_threshold}% 告警，请按以下步骤操作:")
-    print(f"\n1. 访问资源详情页:")
+    print("\n1. 访问资源详情页:")
     print(f"   https://192.168.129.132:8443/showresource.do?resourceid={resource_id}")
 
-    print(f"\n2. 找到 'CPU利用率' 指标并点击")
+    print("\n2. 找到 'CPU利用率' 指标并点击")
 
-    print(f"\n3. 在属性详情页，点击 'Add Threshold and Associate' 或 'Associate Threshold'")
+    print("\n3. 在属性详情页，点击 'Add Threshold and Associate' 或 'Associate Threshold'")
 
-    print(f"\n4. 配置阈值:")
-    print(f"   a) 如果选择创建新阈值:")
-    print(f"      - Threshold Name: CPU_Custom_Threshold")
+    print("\n4. 配置阈值:")
+    print("   a) 如果选择创建新阈值:")
+    print("      - Threshold Name: CPU_Custom_Threshold")
     print(f"      - Critical: 值 = {critical_threshold}, 条件 = 大于(>)")
     print(f"      - Warning: 值 = {warning_threshold}, 条件 = 大于(>)")
-    print(f"      - Consecutive Polls: 2 (连续2次超过才告警)")
+    print("      - Consecutive Polls: 2 (连续2次超过才告警)")
 
-    print(f"\n   b) 或者选择现有的阈值配置文件，然后关联")
+    print("\n   b) 或者选择现有的阈值配置文件，然后关联")
 
-    print(f"\n5. 保存配置")
+    print("\n5. 保存配置")
 
     # 方法3: 通过阈值配置管理页面
-    print(f"\n" + "="*80)
+    print("\n" + "="*80)
     print("方法3: 全局阈值配置（适合批量应用）")
     print("="*80)
 
-    print(f"\n1. 进入阈值配置管理:")
-    print(f"   https://192.168.129.132:8443/admin/AdminConfiguration.do")
-    print(f"   → Threshold and Availability → Threshold Settings")
+    print("\n1. 进入阈值配置管理:")
+    print("   https://192.168.129.132:8443/admin/AdminConfiguration.do")
+    print("   → Threshold and Availability → Threshold Settings")
 
-    print(f"\n2. 创建新的阈值配置文件:")
-    print(f"   - 点击 'Add Threshold Profile'")
-    print(f"   - 选择监控类型: Linux")
-    print(f"   - 配置 CPU 利用率阈值:")
+    print("\n2. 创建新的阈值配置文件:")
+    print("   - 点击 'Add Threshold Profile'")
+    print("   - 选择监控类型: Linux")
+    print("   - 配置 CPU 利用率阈值:")
     print(f"     * Critical: > {critical_threshold}%")
     print(f"     * Warning: > {warning_threshold}%")
 
-    print(f"\n3. 应用到资源:")
-    print(f"   - 可以应用到单个资源")
-    print(f"   - 或应用到整个监控组")
+    print("\n3. 应用到资源:")
+    print("   - 可以应用到单个资源")
+    print("   - 或应用到整个监控组")
 
     # 验证
-    print(f"\n" + "="*80)
+    print("\n" + "="*80)
     print("验证配置")
     print("="*80)
 
-    print(f"\n配置完成后，可以:")
-    print(f"1. 等待5-10分钟（至少2个轮询周期）")
-    print(f"2. 访问 Alarms → Alarm Settings 查看配置")
-    print(f"3. 在资源详情页查看阈值是否已关联")
-    print(f"4. 可以手动触发高 CPU 负载来测试告警")
+    print("\n配置完成后，可以:")
+    print("1. 等待5-10分钟（至少2个轮询周期）")
+    print("2. 访问 Alarms → Alarm Settings 查看配置")
+    print("3. 在资源详情页查看阈值是否已关联")
+    print("4. 可以手动触发高 CPU 负载来测试告警")
 
     return True
 

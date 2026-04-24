@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import time
-import json
 
 logger = logging.getLogger(__name__)
 

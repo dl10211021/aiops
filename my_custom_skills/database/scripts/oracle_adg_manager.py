@@ -1,7 +1,5 @@
 import argparse
 import oracledb
-import time
-import sys
 import json
 
 def get_connection(args, host, sid):

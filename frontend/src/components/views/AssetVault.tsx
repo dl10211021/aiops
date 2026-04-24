@@ -22,7 +22,7 @@ export default function AssetVault() {
   useEffect(() => { loadAssets() }, [loadAssets])
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定要从金库中移除此资产？')) return
+    if (!confirm('确定要从资产中移除此资产？')) return
     try {
       await deleteAsset(id)
       setAssets(assets.filter((a) => a.id !== id))
@@ -64,7 +64,7 @@ export default function AssetVault() {
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-xl font-bold text-ops-text">🏦 资产金库</h1>
+            <h1 className="text-xl font-bold text-ops-text">🏦 资产资产</h1>
             <p className="text-sm text-ops-subtext mt-1">管理所有已保存的远程资产连接凭据</p>
           </div>
           <div className="flex gap-2">
@@ -111,7 +111,7 @@ export default function AssetVault() {
         {filtered.length === 0 && (
           <div className="text-center text-ops-subtext py-20">
             <div className="text-4xl mb-3">🏦</div>
-            <p>金库中暂无资产</p>
+            <p>资产中暂无资产</p>
             <p className="text-xs mt-1">连接过的资产会自动保存在这里</p>
           </div>
         )}

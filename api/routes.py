@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, model_validator
 from typing import Optional
 from connections.ssh_manager import ssh_manager
@@ -190,7 +190,6 @@ async def test_connection(req: ConnectionRequest):
 
     # SSH Test
     if req.asset_type in ["ssh", "linux", "switch"]:
-        from connections.ssh_manager import ssh_manager
 
         key_path = (
             req.private_key_path
@@ -766,7 +765,7 @@ async def update_notification_config(req: NotificationConfigRequest):
     except Exception as e:
         logger.error(f"Failed to save .env file: {e}")
 
-    logger.info(f"Notification Webhooks updated.")
+    logger.info("Notification Webhooks updated.")
     return ResponseModel(status="success", message="告警通道配置已保存并生效")
 
 
@@ -1261,7 +1260,7 @@ async def delete_cron_job(job_id: str):
     try:
         CronManager.remove_job(job_id)
         return ResponseModel(status="success", message=f"巡检计划 {job_id} 已取消。")
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=404, detail="未找到该计划。")
 
 

@@ -1,7 +1,5 @@
-import argparse
 import sys
 import os
-import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Add current directory to path

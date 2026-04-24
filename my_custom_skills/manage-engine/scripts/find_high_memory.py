@@ -58,7 +58,7 @@ def main():
                             count += 1
                     except ValueError:
                         continue
-            except Exception as e:
+            except Exception:
                 # print(f"Error processing {m_id}: {e}")
                 continue
     

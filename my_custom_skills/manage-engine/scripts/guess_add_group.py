@@ -1,5 +1,5 @@
 import requests
-from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
+from manage_engine_api import DEFAULT_URL, DEFAULT_API_KEY
 
 def try_add_monitor_to_group(group_name="test", resource_id="10113062"):
     base_url = DEFAULT_URL.rstrip('/') + "/AppManager/xml"

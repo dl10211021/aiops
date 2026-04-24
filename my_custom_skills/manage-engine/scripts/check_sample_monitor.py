@@ -1,6 +1,6 @@
 import json
 import sys
-from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY, Attributes
+from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
 
 # Ensure UTF-8 output for Windows console
 if sys.platform == 'win32':

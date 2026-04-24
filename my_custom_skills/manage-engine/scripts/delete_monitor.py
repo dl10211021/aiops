@@ -32,7 +32,7 @@ def delete_by_resource_id(client, resource_id):
         print(f"✅ 成功删除监控资源 (ID: {resource_id})")
         return True
     else:
-        print(f"❌ 删除失败")
+        print("❌ 删除失败")
         if result:
             print(f"返回信息: {json.dumps(result, indent=2, ensure_ascii=False)}")
         return False
@@ -71,14 +71,14 @@ def delete_by_identifier(client, identifier):
     host_ip = resource.get('HOSTIP')
     resource_type = resource.get('TYPESHORTNAME')
 
-    print(f"\n找到监控资源:")
+    print("\n找到监控资源:")
     print(f"  名称: {display_name}")
     print(f"  类型: {resource_type}")
     print(f"  IP: {host_ip}")
     print(f"  资源ID: {resource_id}")
 
     # 3. 确认删除
-    confirm = input(f"\n确认删除此监控? (yes/no): ").strip().lower()
+    confirm = input("\n确认删除此监控? (yes/no): ").strip().lower()
     if confirm not in ['yes', 'y', '是']:
         print("❌ 取消删除操作")
         return False
@@ -102,7 +102,7 @@ def delete_by_identifier(client, identifier):
 
         return True
     else:
-        print(f"❌ 删除失败")
+        print("❌ 删除失败")
         if result:
             print(f"返回信息: {json.dumps(result, indent=2, ensure_ascii=False)}")
         return False

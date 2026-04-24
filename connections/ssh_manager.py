@@ -46,6 +46,8 @@ class SSHConnectionManager:
             active_skills = []  # 【解除绑定】不再强行绑定 linux_basic，让用户自由决定
         if extra_args is None:
             extra_args = {}
+        if not asset_type:
+            asset_type = "ssh"
 
         import hashlib
 

@@ -1,7 +1,6 @@
 import argparse
 import paramiko
 import threading
-import sys
 
 def check_server_health(ip, username, password, port=22):
     client = paramiko.SSHClient()
@@ -46,7 +45,7 @@ def check_server_health(ip, username, password, port=22):
             result["hostname"] = output[0] if len(output) > 0 else "Unknown"
             
         client.close()
-    except Exception as e:
+    except Exception:
         result["status"] = "ERR"
         # Keep minimal error info if needed, but for table display "ERR" is enough
     

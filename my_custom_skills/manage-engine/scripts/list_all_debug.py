@@ -1,6 +1,5 @@
 
 from manage_engine_api import AppManagerClient
-import json
 
 client = AppManagerClient()
 try:

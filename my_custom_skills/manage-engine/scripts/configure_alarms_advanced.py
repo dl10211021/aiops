@@ -5,7 +5,6 @@ Demonstrates comprehensive usage of ManageEngine Configure Alarms API
 """
 
 import sys
-import json
 import logging
 from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
 

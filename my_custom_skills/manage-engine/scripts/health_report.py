@@ -1,9 +1,7 @@
 import argparse
 import sys
 import os
-import json
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Add current directory to path
 current_dir = os.path.dirname(os.path.abspath(__file__))

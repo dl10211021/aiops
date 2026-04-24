@@ -3,7 +3,6 @@ import oracledb
 import csv
 import json
 import sys
-import os
 
 def get_connection(args):
     if args.sid:

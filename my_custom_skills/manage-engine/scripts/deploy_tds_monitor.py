@@ -1,6 +1,4 @@
 import time
-import sys
-import json
 from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
 
 # Configuration

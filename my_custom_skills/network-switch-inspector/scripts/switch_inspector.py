@@ -9,7 +9,6 @@ import time
 import yaml
 import json
 import sys
-from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime
 
@@ -503,7 +502,7 @@ def main():
             mode_items = SwitchInspector.INSPECTION_MODES.get(args.mode)
             if mode_items == 'all':
                 items = None
-                print(f"[INFO] Inspection mode: FULL (all available commands)\\n")
+                print("[INFO] Inspection mode: FULL (all available commands)\\n")
             else:
                 items = mode_items
                 print(f"[INFO] Inspection mode: {args.mode.upper()} ({len(items)} items)\\n")

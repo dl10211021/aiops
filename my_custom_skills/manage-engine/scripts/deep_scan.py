@@ -1,4 +1,3 @@
-import json
 from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
 
 def deep_scan_attributes(resource_id="10113062"):

@@ -1,5 +1,3 @@
-import json
-import sys
 from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
 
 def get_oracle_storage_report(resource_id):

@@ -6,7 +6,6 @@
 """
 
 import sys
-import json
 from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
 
 # 确保 Windows 控制台正确显示中文
@@ -31,7 +30,7 @@ def show_resource_info(client, resource_id):
     resource_type = result.get('TYPESHORTNAME')
     last_polled = result.get('LASTPOLLEDTIME', '未轮询')
 
-    print(f"\n📊 资源基本信息:")
+    print("\n📊 资源基本信息:")
     print(f"  名称: {display_name}")
     print(f"  类型: {resource_type}")
     print(f"  资源ID: {resource_id}")
@@ -42,7 +41,7 @@ def show_resource_info(client, resource_id):
     mem = result.get('PHYMEMUTIL', 'N/A')
     disk = result.get('DISKUTIL', 'N/A')
 
-    print(f"\n📈 当前性能指标:")
+    print("\n📈 当前性能指标:")
     print(f"  CPU 使用率: {cpu}%")
     print(f"  内存使用率: {mem}%")
     print(f"  磁盘使用率: {disk}%")
@@ -84,7 +83,7 @@ def show_resource_info(client, resource_id):
     if len(attributes) > len(important_attrs) + 10:
         print(f"    ... 还有 {len(attributes) - len(important_attrs) - 10} 个属性")
 
-    print(f"\n  🏥 特殊属性:")
+    print("\n  🏥 特殊属性:")
     print(f"    []{health_attr_id}] 健康状态 (Health Status)")
     print(f"    [{avail_attr_id}] 可用性 (Availability)")
 
@@ -98,17 +97,17 @@ def show_threshold_guide(resource_id):
 
     print("\n📌 方法1: Web 界面配置（推荐）")
     print("-" * 80)
-    print(f"\n1. 访问资源详情页:")
+    print("\n1. 访问资源详情页:")
     print(f"   https://192.168.129.132:8443/showresource.do?resourceid={resource_id}")
 
-    print(f"\n2. 配置步骤:")
+    print("\n2. 配置步骤:")
     print("   a) 在资源详情页，找到要配置阈值的性能指标（如 CPU 利用率）")
     print("   b) 点击该指标名称，进入属性详情页")
     print("   c) 在属性详情页，点击 'Associate Threshold' 或 '关联阈值'")
     print("   d) 选择合适的阈值配置文件（Default 或自定义）")
     print("   e) 保存配置")
 
-    print(f"\n3. 推荐的阈值设置:")
+    print("\n3. 推荐的阈值设置:")
     print("   CPU 利用率:")
     print("     - Warning (警告):  > 80%")
     print("     - Critical (严重): > 90%")
@@ -137,10 +136,10 @@ def show_threshold_guide(resource_id):
 
     print("\n\n📌 验证配置")
     print("-" * 80)
-    print(f"\n配置完成后，可以通过以下方式验证:")
-    print(f"1. 访问资源详情页查看阈值是否已关联")
-    print(f"2. 等待下次轮询（5分钟），观察告警是否正常触发")
-    print(f"3. 在 Alarms → All Alarms 中查看告警记录")
+    print("\n配置完成后，可以通过以下方式验证:")
+    print("1. 访问资源详情页查看阈值是否已关联")
+    print("2. 等待下次轮询（5分钟），观察告警是否正常触发")
+    print("3. 在 Alarms → All Alarms 中查看告警记录")
 
 def main():
     if len(sys.argv) < 2:
@@ -164,7 +163,7 @@ def main():
     print("\n" + "="*80)
     print("  ✅ 配置指南已显示完毕")
     print("="*80)
-    print(f"\n💡 提示: 现在可以访问 Web 界面完成阈值配置")
+    print("\n💡 提示: 现在可以访问 Web 界面完成阈值配置")
     print(f"   https://192.168.129.132:8443/showresource.do?resourceid={resource_id}\n")
 
 if __name__ == "__main__":

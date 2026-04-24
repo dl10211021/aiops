@@ -74,7 +74,7 @@ class LinuxSkillProvider(BaseSkillProvider):
                     if base_cmd in write_keywords or is_dangerous_redirect:
                         return json.dumps({
                             "status": "BLOCKED", 
-                            "reason": f"当前会话处于【只读安全模式】。检测到违规命令或文件覆写动作。如需执行，请先点击界面顶部的安全徽章进行提权。"
+                            "reason": "当前会话处于【只读安全模式】。检测到违规命令或文件覆写动作。如需执行，请先点击界面顶部的安全徽章进行提权。"
                         })
             else:
                 # --- 【读写特权模式】仅拦截同归于尽的操作 ---

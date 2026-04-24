@@ -144,7 +144,7 @@ class KnowledgeBaseManager:
             try:
                 tbl.cleanup_old_versions()
                 tbl.compact_files()
-                logger.info(f"LanceDB knowledge_base 整理和清理完成。")
+                logger.info("LanceDB knowledge_base 整理和清理完成。")
             except Exception as e:
                 logger.warning(f"LanceDB 整理报错: {e}")
                 

@@ -1,7 +1,5 @@
 import requests
 import json
-import ssl
-import os
 import tempfile
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 

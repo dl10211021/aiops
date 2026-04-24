@@ -1,20 +1,13 @@
 
-import argparse
 import logging
-import concurrent.futures
-import csv
 import sys
 import os
-import statistics
-import datetime
-import xml.etree.ElementTree as ET
 
 # Add ManageEngine skill scripts to path to import api
 skill_path = os.path.dirname(os.path.abspath(__file__))
 if skill_path not in sys.path:
     sys.path.append(skill_path)
 
-from manage_engine_api import AppManagerClient, DEFAULT_URL, DEFAULT_API_KEY
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('capacity_planner')

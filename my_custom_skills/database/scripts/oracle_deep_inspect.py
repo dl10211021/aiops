@@ -2,7 +2,6 @@ import argparse
 import oracledb
 import json
 import sys
-import datetime
 
 def get_connection(args):
     if args.sid:
