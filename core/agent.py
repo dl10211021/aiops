@@ -256,19 +256,76 @@ async def chat_stream_agent(
 
             for tc in tool_calls:
                 func_name = tc.get("function", {}).get("name", "")
+                parse_error = None
                 try:
                     func_args = json.loads(
                         tc.get("function", {}).get("arguments", "{}")
                     )
-                except Exception:
+                except Exception as e:
                     func_args = {}
+                    parse_error = str(e)
 
                 display_cmd = func_args.get("command", str(func_args))
+                if parse_error:
+                    display_cmd = "JSON解析失败: " + parse_error
+                tc_id = tc.get("id", "")
+
+                if parse_error:
+                    tool_res = json.dumps({"status": "ERROR", "error": f"参数 JSON 格式无效，请检查是否包含未转义字符或格式错误: {parse_error}"})
+                    msg_end = json.dumps({"type": "tool_end", "id": tc_id, "result": "❌ JSON解析错误"})
+                    yield f"data: {msg_end}\n\n"
+                    tool_msg = {"tool_call_id": tc_id, "role": "tool", "name": func_name, "content": tool_res}
+                    messages.append(tool_msg)
+                    memory_db.append_message(session_id, tool_msg)
+                    continue
+
+                # ======== NEW APPROVAL LOGIC ========
+                needs_approval, reason = dispatcher.check_approval_needed(func_name, func_args, context)
+                
+                if needs_approval:
+                    msg_ask = json.dumps({
+                        "type": "tool_ask_approval", 
+                        "tool_call_id": tc_id, # for new React frontend
+                        "tool_name": func_name, # for new React frontend
+                        "args": display_cmd, # for new React frontend
+                        "id": tc_id, 
+                        "tool": func_name, 
+                        "cmd": display_cmd
+                    })
+                    yield f"data: {msg_ask}\n\n"
+                    
+                    future = asyncio.Future()
+                    dispatcher.pending_approvals[tc_id] = future
+                    try:
+                        approved = await asyncio.wait_for(future, timeout=300.0) # wait up to 5 min
+                    except asyncio.TimeoutError:
+                        approved = False
+                    
+                    if tc_id in dispatcher.pending_approvals:
+                        del dispatcher.pending_approvals[tc_id]
+                        
+                    if not approved:
+                        tool_res = '{"status": "BLOCKED", "error": "User rejected this execution."}'
+                        msg_end = json.dumps(
+                            {"type": "tool_end", "id": tc_id, "result": "❌ 已被用户拦截"}
+                        )
+                        yield f"data: {msg_end}\n\n"
+                        
+                        tool_msg = {
+                            "tool_call_id": tc_id,
+                            "role": "tool",
+                            "name": func_name,
+                            "content": tool_res,
+                        }
+                        messages.append(tool_msg)
+                        memory_db.append_message(session_id, tool_msg)
+                        continue
+                # ====================================
 
                 msg_start = json.dumps(
                     {
                         "type": "tool_start",
-                        "id": tc.get("id", ""),
+                        "id": tc_id,
                         "tool": func_name,
                         "cmd": display_cmd,
                     }

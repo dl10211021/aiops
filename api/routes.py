@@ -9,6 +9,7 @@ import logging
 import asyncio
 import os
 
+webhook_locks = {}
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -1186,21 +1187,23 @@ async def receive_webhook_alert(request: Request):
     for sid in affected_sessions:
         info = ssh_manager.active_sessions[sid].get("info", {})
 
-        # 为了避免并发冲突，简单锁一下当前 session
-        if info.get("heartbeat_in_progress"):
-            # 如果当前该 session 正在后台自主巡检，则退化为仅追加日志
-            memory_db.append_message(sid, {"role": "user", "content": injection_msg})
-            logger.info(f"Session {sid} is busy, appended alert to context only.")
-        else:
-            info["heartbeat_in_progress"] = True
-            logger.info(
-                f"Actively triggering background AI task for session {sid} due to alert."
-            )
-            asyncio.create_task(
-                run_single_heartbeat(
-                    sid, info, memory_db, dispatcher, trigger_msg=injection_msg
+        # 使用真实的 asyncio Lock 解决高并发告警风暴下的竞态条件 (Race Condition)
+        lock = webhook_locks.setdefault(sid, asyncio.Lock())
+        async with lock:
+            if info.get("heartbeat_in_progress"):
+                # 如果当前该 session 正在后台自主巡检，则退化为仅追加日志
+                memory_db.append_message(sid, {"role": "user", "content": injection_msg})
+                logger.info(f"Session {sid} is busy, appended alert to context only.")
+            else:
+                info["heartbeat_in_progress"] = True
+                logger.info(
+                    f"Actively triggering background AI task for session {sid} due to alert."
                 )
-            )
+                asyncio.create_task(
+                    run_single_heartbeat(
+                        sid, info, memory_db, dispatcher, trigger_msg=injection_msg
+                    )
+                )
 
         injected_count += 1
 

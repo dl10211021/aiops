@@ -19,7 +19,7 @@ class SSHConnectionManager:
         self.active_sessions = {}
         self._sessions_lock = threading.Lock()
         # 线程池隔离执行防止死锁阻塞协程
-        self.executor = ThreadPoolExecutor(max_workers=10)
+        self.executor = ThreadPoolExecutor(max_workers=100)
 
     def connect(
         self,

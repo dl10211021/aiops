@@ -216,7 +216,55 @@ class SkillDispatcher:
                 instructions += "</ACTIVATED_SKILL>\n"
         return instructions
 
+    def check_approval_needed(self, tool_call_name: str, args: dict, context: dict) -> tuple[bool, str]:
+        """【安全层】检查当前大模型执行的指令是否需要人类审批"""
+        from connections.ssh_manager import ssh_manager
+        
+        session_id = context.get("session_id")
+        if session_id and session_id in ssh_manager.active_sessions:
+            if ssh_manager.active_sessions[session_id]["info"].get("auto_approve_all", False):
+                return False, ""
+                
+        cmd_str = args.get("command", "")
+        sql_str = args.get("sql", "")
+        
+        # 1. 本地执行脚本：极度危险，永远需要审批 (除非勾选了自动审批)
+        if tool_call_name == "local_execute_script":
+            return True, "【安全警告】AI 试图在平台宿主机底层运行代码，必须人工确认！"
+            
+        # 2. Linux 危险指令检查
+        elif tool_call_name in ["linux_execute_command", "execute_on_scope"]:
+            write_patterns = [
+                r"\brm\b", r"\bmv\b", r"\bcp\b", r"\bchmod\b", r"\bchown\b",
+                r"\bsystemctl\s+(start|stop|restart|enable|disable)\b",
+                r"\byum\s+(install|remove|erase)\b", r"\bapt(-get)?\s+(install|remove|purge)\b",
+                r"\bkill\b", r"\bpkill\b", r"\breboot\b", r"\bshutdown\b", r">", r">>"
+            ]
+            if any(re.search(p, cmd_str) for p in write_patterns):
+                return True, "检测到改变系统状态的高危命令"
+                
+            # 如果是只读模式，拦截所有，除非明确放行
+            allow_mod = context.get("allow_modifications", False)
+            if not allow_mod:
+                # 只读模式下，为了防呆，凡是不是明确安全的，最好都弹审批
+                safe_cmds = ["cat", "ls", "grep", "top", "free", "df", "ps", "pwd", "netstat", "ss", "tail", "head", "awk", "sed"]
+                cmd_root = cmd_str.split()[0] if cmd_str else ""
+                if cmd_root not in safe_cmds:
+                    return True, f"只读模式下，未知状态改变命令拦截: {cmd_root}"
+                    
+        # 3. 数据库危险操作检查
+        elif tool_call_name == "db_execute_query":
+            sql_write_patterns = [
+                r"\binsert\b", r"\bupdate\b", r"\bdelete\b", r"\bdrop\b", r"\balter\b",
+                r"\btruncate\b", r"\breplace\b", r"\bgrant\b", r"\brevoke\b", r"\bcommit\b", r"\brollback\b"
+            ]
+            if any(re.search(p, sql_str, re.IGNORECASE) for p in sql_write_patterns):
+                return True, "检测到数据库数据修改或结构变更 (DML/DDL)"
+                
+        return False, ""
+
     def get_available_tools(
+
         self, current_context: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """
@@ -635,12 +683,9 @@ class SkillDispatcher:
                     except UnicodeDecodeError:
                         out = out_bytes.decode("gbk", errors="replace")
 
-                    output_limit = 1024 * 1024
+                    output_limit = 2 * 1024 * 1024 # 2MB limit (适配目前主流 100万~200万 Token 的大模型上下文)
                     if len(out) > output_limit:
-                        out = (
-                            out[:output_limit]
-                            + "\n...[警告：输出内容超大，已被安全截断至 1MB 以内]"
-                        )
+                        out = out[:output_limit] + "\\n...[警告：输出内容超大，已被截断至 2MB 以内]"
 
                     return json.dumps(
                         {
