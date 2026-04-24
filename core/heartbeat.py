@@ -36,7 +36,17 @@ async def run_single_heartbeat(sid, info, memory_db, dispatcher, trigger_msg=Non
 **警告：你必须至少调用一次工具（如 linux_execute_command 或 local_execute_script）来获取真实数据，绝不能凭空猜测！** 
 说明你刚刚执行了哪些检查、当前的健康状态数据（如 CPU/内存利用率等）。如果不需汇报，请仅输出“【无需汇报】”。"""
 
-        await headless_agent_chat(sid, system_alert)
+        report = await headless_agent_chat(sid, system_alert)
+        
+        # 将后台巡检/告警处理的最终结果追加到会话历史和前端未读消息队列中
+        if report:
+            final_msg = {"role": "assistant", "content": f"🔔 **后台任务报告**\n\n{report}"}
+            memory_db.append_message(sid, final_msg)
+            
+            # 推送到前端
+            if "pending_messages" not in info:
+                info["pending_messages"] = []
+            info["pending_messages"].append(final_msg)
 
     except Exception as e:
         logger.error(f"Heartbeat execution failed for {sid}: {e}")
