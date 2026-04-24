@@ -368,7 +368,7 @@ async def chat_stream_agent(
 
         # ÿֶԻ׽󣬴ڼ첽ѹ (̨ǰ)
         asyncio.create_task(
-            memory_db.compress_and_store_ltm(session_id, emb_client, model_name)
+            memory_db.compress_and_store_ltm(session_id, emb_client)
         )
 
     except Exception as e:

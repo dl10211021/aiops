@@ -586,7 +586,7 @@ class MemoryDB:
             return ""
 
     async def compress_and_store_ltm(
-        self, session_id: str, client, model_name: str = "gemini-2.5-flash"
+        self, session_id: str, client
     ):
         """将超出短期窗口的历史对话进行总结并存入 LanceDB，然后从 SQLite 释放"""
         try:
@@ -639,8 +639,11 @@ class MemoryDB:
             else:
                 prompt = f"以下是一段过往的对话日志。请提取其中的关键事实、配置信息、用户的偏好或系统状态，写成一段简洁客观的总结，便于未来作为长期记忆供 AI 检索。不需要任何寒暄，直接输出核心信息：\n\n{text_to_summarize}"
 
+                # 这里必须使用 emb_client (默认的基础小模型) 对应的模型名，而不是用户当前对话的昂贵模型名
+                # 从 .env 中读取专用摘要模型，默认使用 gemini-2.5-flash
+                compress_model = os.environ.get("COMPRESS_MODEL", "gemini-2.5-flash")
                 resp = await client.chat.completions.create(
-                    model=model_name,
+                    model=compress_model,
                     messages=[{"role": "user", "content": prompt}],
                     stream=False,
                 )
