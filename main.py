@@ -52,7 +52,7 @@ async def background_hydrate_assets():
                 active_skills=a["skills"],
                 agent_profile=a["agent_profile"],
                 remark=a["remark"],
-                asset_type=a.get("protocol", "ssh"),
+                asset_type=a.get("asset_type", "ssh"),
                 extra_args=a["extra_args"],
                 tags=a.get("tags", ["未分组"]),
                 lazy=True,
