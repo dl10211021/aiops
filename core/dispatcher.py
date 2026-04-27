@@ -245,6 +245,63 @@ class SkillDispatcher:
                 paths.append(os.path.realpath(skill["source_path"]))
         return paths
 
+    def _custom_skills_base(self) -> str:
+        return os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "my_custom_skills"
+        )
+
+    @staticmethod
+    def _validate_skill_frontmatter(skill_id: str, content: str) -> tuple[bool, str]:
+        if not content.startswith("---\n"):
+            return False, "SKILL.md 必须以 YAML frontmatter 开头"
+        end_marker = content.find("\n---", 4)
+        if end_marker < 0:
+            return False, "SKILL.md 缺少结束 frontmatter 标记"
+        try:
+            frontmatter = yaml.safe_load(content[4:end_marker].strip()) or {}
+        except Exception as e:
+            return False, f"SKILL.md frontmatter 解析失败: {e}"
+        name = str(frontmatter.get("name") or "").strip()
+        description = str(frontmatter.get("description") or "").strip()
+        if not name or not description:
+            return False, "SKILL.md frontmatter 必须包含 name 和 description"
+        if name != skill_id:
+            return False, "SKILL.md frontmatter name 必须与 skill_id 一致"
+        return True, ""
+
+    @staticmethod
+    def _atomic_write_text(file_path: str, content: str) -> None:
+        tmp_path = os.path.join(
+            os.path.dirname(file_path),
+            f".{os.path.basename(file_path)}.{time.time_ns()}.tmp",
+        )
+        try:
+            with open(tmp_path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, file_path)
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+
+    @staticmethod
+    def _backup_existing_skill_file(file_path: str) -> str | None:
+        if not os.path.exists(file_path):
+            return None
+        versions_dir = os.path.join(os.path.dirname(file_path), ".versions")
+        os.makedirs(versions_dir, exist_ok=True)
+        backup_name = f"{os.path.basename(file_path)}.{time.strftime('%Y%m%d%H%M%S')}.{time.time_ns()}.bak"
+        backup_path = os.path.join(versions_dir, backup_name)
+        with open(file_path, "rb") as src, open(backup_path, "wb") as dst:
+            dst.write(src.read())
+            dst.flush()
+            os.fsync(dst.fileno())
+        return backup_path
+
     def _validate_local_execution(
         self, command: str, cwd: str, context: Dict[str, Any]
     ) -> tuple[bool, str]:
@@ -830,24 +887,34 @@ class SkillDispatcher:
             file_name = args.get("file_name", "")
             content = args.get("content", "")
 
+            skill_id = str(skill_id or "").strip()
+            file_name = str(file_name or "").strip()
+            content = str(content or "")
+
             # 限制只能修改自己的 my_custom_skills 目录
-            target_base = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), "my_custom_skills"
-            )
+            target_base = self._custom_skills_base()
             os.makedirs(target_base, exist_ok=True)
 
             # 安全校验，防止目录穿越
-            if ".." in skill_id or "/" in skill_id or "\\" in skill_id:
-                return json.dumps({"error": "非法路径，禁止包含特殊字符或目录穿越符"})
+            if not re.match(r"^[A-Za-z0-9_-]+$", skill_id):
+                return json.dumps({"error": "非法 skill_id，只允许英文字母、数字、下划线和横线"})
 
             safe_file_name = os.path.basename(file_name)
+            if not safe_file_name or safe_file_name != file_name:
+                return json.dumps({"error": "非法文件名，禁止包含路径分隔符或目录穿越符"})
+
             dest_folder = os.path.join(target_base, skill_id)
             os.makedirs(dest_folder, exist_ok=True)
 
             file_path = os.path.join(dest_folder, safe_file_name)
             try:
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(content)
+                if safe_file_name == "SKILL.md":
+                    valid, reason = self._validate_skill_frontmatter(skill_id, content)
+                    if not valid:
+                        return json.dumps({"error": reason}, ensure_ascii=False)
+
+                backup_path = self._backup_existing_skill_file(file_path)
+                self._atomic_write_text(file_path, content)
                 logger.info(f"AI 成功自我进化：更新了文件 -> {file_path}")
 
                 # 通知 Dispatcher 重新加载
@@ -856,6 +923,7 @@ class SkillDispatcher:
                     {
                         "status": "SUCCESS",
                         "message": f"技能卡带文件 {file_name} 已经成功更新并热重载！现在您可以告诉用户它已经生效了。",
+                        "backup_path": backup_path,
                     }
                 )
             except Exception as e:

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +11,94 @@ from api import routes
 
 
 class TestSkillSecurity(unittest.TestCase):
+    def test_evolve_skill_rejects_nested_file_name(self):
+        from core.dispatcher import dispatcher
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(dispatcher, "_custom_skills_base", return_value=str(Path(tmp) / "custom")):
+                result = asyncio.run(
+                    dispatcher.route_and_execute(
+                        "evolve_skill",
+                        {
+                            "skill_id": "safe-skill",
+                            "file_name": "nested/SKILL.md",
+                            "content": "---\nname: safe-skill\ndescription: demo\n---\n\nbody\n",
+                        },
+                        {"allow_modifications": True},
+                    )
+                )
+
+        self.assertIn("非法文件名", json.loads(result)["error"])
+
+    def test_evolve_skill_validates_skill_frontmatter(self):
+        from core.dispatcher import dispatcher
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target_base = Path(tmp) / "custom"
+            with patch.object(dispatcher, "_custom_skills_base", return_value=str(target_base)):
+                result = asyncio.run(
+                    dispatcher.route_and_execute(
+                        "evolve_skill",
+                        {
+                            "skill_id": "safe-skill",
+                            "file_name": "SKILL.md",
+                            "content": "missing frontmatter",
+                        },
+                        {"allow_modifications": True},
+                    )
+                )
+
+            self.assertFalse((target_base / "safe-skill" / "SKILL.md").exists())
+
+        self.assertIn("frontmatter", json.loads(result)["error"])
+
+    def test_evolve_skill_writes_atomically_and_versions_existing_file(self):
+        from core.dispatcher import dispatcher
+
+        old_content = "---\nname: safe-skill\ndescription: old\n---\n\nold\n"
+        new_content = "---\nname: safe-skill\ndescription: new\n---\n\nnew\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            target_base = Path(tmp) / "custom"
+            skill_dir = target_base / "safe-skill"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(old_content, encoding="utf-8")
+
+            with (
+                patch.object(dispatcher, "_custom_skills_base", return_value=str(target_base)),
+                patch.object(dispatcher, "refresh_skills"),
+            ):
+                result = asyncio.run(
+                    dispatcher.route_and_execute(
+                        "evolve_skill",
+                        {
+                            "skill_id": "safe-skill",
+                            "file_name": "SKILL.md",
+                            "content": new_content,
+                        },
+                        {"allow_modifications": True},
+                    )
+                )
+
+            payload = json.loads(result)
+            backups = list((skill_dir / ".versions").glob("SKILL.md.*.bak"))
+            self.assertEqual(payload["status"], "SUCCESS")
+            self.assertEqual((skill_dir / "SKILL.md").read_text(encoding="utf-8"), new_content)
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups[0].read_text(encoding="utf-8"), old_content)
+
+    def test_active_skill_paths_still_returns_registered_skill_paths(self):
+        from core.dispatcher import SkillDispatcher
+
+        dispatcher = SkillDispatcher.__new__(SkillDispatcher)
+        dispatcher.skills_registry = {
+            "safe-skill": {"source_path": str(Path.cwd() / "my_custom_skills" / "safe-skill")}
+        }
+        with patch.object(dispatcher, "refresh_skills"):
+            paths = dispatcher.get_active_skill_paths(["safe-skill", "missing"])
+
+        self.assertEqual(len(paths), 1)
+        self.assertTrue(paths[0].endswith(str(Path("my_custom_skills") / "safe-skill")))
+
     def test_create_skill_rejects_invalid_id_with_http_error(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(routes, "CUSTOM_SKILLS_DIR", Path(tmp) / "custom"):

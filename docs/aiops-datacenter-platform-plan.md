@@ -549,6 +549,17 @@
 - Master、Heartbeat、告警注入提示统一使用真实注册工具 `dispatch_sub_agents`。
 - Headless/Cron/Heartbeat/Webhook 触发的后台工具调用会先走统一安全策略；命中审批策略时写入审批队列并由系统自动拒绝，避免无人值守任务直接执行高风险动作。
 
+### Task 9.4: Skill Lifecycle Hardening
+
+**Description:** 将技能创建/进化从直接写文件推进到可审计、可恢复、可校验的生命周期。
+
+状态：进行中。
+
+已交付：
+- `evolve_skill` 写入前校验 `skill_id` 与文件名，拒绝目录穿越和嵌套路径。
+- 更新 `SKILL.md` 时校验 YAML frontmatter，要求 `name` 与 `skill_id` 一致，并包含 `description`。
+- 覆盖已有技能文件前写入 `.versions/*.bak` 备份，文件内容通过临时文件和 `os.replace` 原子替换。
+
 ## Phase 10: Productionization
 
 ### Task 10.1: Frontend Product Pages
