@@ -16,6 +16,8 @@ class TestProductionReadiness(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertIn("checks", payload)
         self.assertIn("database", payload["checks"])
+        self.assertIn("cron_store", payload["checks"])
+        self.assertEqual(payload["checks"]["cron_store"]["status"], "ok")
         self.assertIn("storage", payload["checks"])
         self.assertIn("version", payload)
 

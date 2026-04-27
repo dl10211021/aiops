@@ -194,7 +194,7 @@ def healthz():
             with closing(sqlite3.connect(cron_db_path, timeout=2)) as conn:
                 conn.execute("SELECT 1")
         else:
-            checks["cron_store"] = {"status": "warning", "path": "cron_jobs.sqlite", "message": "not initialized"}
+            checks["cron_store"] = {"status": "ok", "path": "cron_jobs.sqlite", "message": "not initialized"}
     except Exception as e:
         checks["cron_store"] = {"status": "error", "path": "cron_jobs.sqlite", "error": str(e)}
 
