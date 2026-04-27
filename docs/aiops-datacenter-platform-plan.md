@@ -260,9 +260,10 @@
 
 本轮验证：
 - `npm run build` 通过。
-- `python -W default -m unittest discover -s tests -p "test*.py"` 通过，102 个测试。
+- `python -W default -m unittest discover -s tests -p "test*.py"` 通过，158 个测试。
 - `python scripts/security_scan.py` 通过。
 - `python -m pip check` 通过。
+- GitHub Actions `quality` 工作流已在 `master` 分支通过。
 
 ### Task 5.1: Full Regression Verification
 
@@ -288,9 +289,9 @@
 当前残留风险：
 - 深度厂商 SDK 仍未全部接入：VMware/OpenStack/Proxmox/Redfish/K8s/Prometheus 等当前已有统一工具入口，但真实生产建议逐类补 SDK 级适配和集成测试。
 - 真实环境验证仍不足：Windows WinRM、MySQL/PostgreSQL/Oracle/MSSQL、SNMP 网络设备、K8s、虚拟化、存储需要用实际资产做端到端巡检。
-- 定时巡检已支持资产/标签/分类/协议/类型展开、结果查询和成功率统计；仍需补“耗时分布、报告归档导出、失败重试策略”。
-- 前端已有总览页，不等于最终大屏；后续大屏需要独立路由、实时刷新、告警态势图和大屏布局。
-- `git status` 中存在大量历史脏文件和 node_modules 删除记录，本轮未回滚这些无关变更，合并前需要单独清理工作区。
+- 定时巡检已支持资产/标签/分类/协议/类型展开、结果查询、失败重试、运行耗时和成功率趋势；生产环境仍需用真实任务校准阈值和告警策略。
+- 前端已有总览页和基础大屏路由；后续仍可继续增强实时告警态势、交互钻取和大屏专用视觉布局。
+- 当前 `git status` 已保持干净，`frontend/node_modules`、运行时状态文件和构建策略已从索引/ignore 角度收敛；敏感密钥仍需在生产发布前轮换，并且历史提交中的旧密钥清理需要单独授权执行。
 
 ## Execution Rules
 
@@ -559,7 +560,7 @@
 
 **Description:** 清理历史脏文件、node_modules 删除记录、构建产物策略和敏感文件状态。
 
-状态：已完成非破坏性审计、ignore 收敛和清理说明；实际从 Git 索引移除历史跟踪文件需人工确认后单独执行。
+状态：已完成非破坏性审计、ignore 收敛、历史跟踪产物移出索引、CI 门禁修复和清理说明；当前主分支工作区保持干净。
 
 **Acceptance criteria:**
 - `git status` 只剩本次计划内变更或明确保留项。
@@ -571,5 +572,7 @@
 - 新增 `tests/test_worktree_hygiene.py`，覆盖敏感状态、node_modules、日志和产品变更分类。
 - 新增 `docs/worktree-cleanup.md`，定义清理策略、分类、风险项和 rollback。
 - `.gitignore` 补充 `approval_requests.json`、`inspection_runs.json`、`inspection_templates.json`、`verification_runs.json`、`backups/`、`logs/`、`.git_log_frontend.txt`、`frontend/.vite/`。
-- 当前审计摘要：`dependency_artifact=2599`、`product_change=94`、`frontend_build_artifact=5`、`runtime_output=6`、`runtime_state=4`、`sensitive_runtime_state=1`。
-- 高风险项：`.fernet.key` 处于删除状态，必须按密钥轮换/备份策略处理；`frontend/node_modules` 需要确认后使用 `git rm --cached -r frontend/node_modules` 从索引移除，不能直接恢复入库。
+- 已停止跟踪 `frontend/node_modules`、运行时数据库/JSON、日志和本地密钥等不应入库文件。
+- CI 已覆盖 `master` 分支，并通过 158 个后端测试、安全扫描、`pip check` 和前端构建。
+- 当前审计摘要：无 staged/unstaged/untracked 产品变更。
+- 高风险项：`.fernet.key` 已不在最新树中，但旧提交仍包含历史密钥；生产发布前必须轮换密钥。若要从 Git 历史彻底清除，需要单独执行历史重写和强制推送流程。
