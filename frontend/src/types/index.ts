@@ -158,6 +158,29 @@ export interface AlertTrendPoint {
   [severity: string]: string | number
 }
 
+export type AlertEventStatus = 'open' | 'acknowledged' | 'closed' | 'suppressed'
+
+export interface AlertEventNote {
+  time: string
+  content: string
+}
+
+export interface AlertEvent {
+  id: string
+  created_at: string
+  updated_at: string
+  closed_at?: string | null
+  status: AlertEventStatus | string
+  assignee: string
+  host: string
+  alert_name: string
+  severity: string
+  description: string
+  source: string
+  payload: Record<string, unknown>
+  notes: AlertEventNote[]
+}
+
 export interface RiskRankingItem {
   host: string
   count: number
@@ -317,7 +340,7 @@ export interface ApiResponse<T = Record<string, unknown>> {
   message: string
 }
 
-export type ViewId = 'dashboard' | 'bigscreen' | 'chat' | 'assets' | 'cron' | 'approvals' | 'skills' | 'knowledge'
+export type ViewId = 'dashboard' | 'bigscreen' | 'chat' | 'assets' | 'cron' | 'alerts' | 'approvals' | 'skills' | 'knowledge'
 
 export interface ApprovalRequest {
   id: string

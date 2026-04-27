@@ -12,6 +12,7 @@ import ApprovalCenter from '@/components/views/ApprovalCenter'
 import SkillMarket from '@/components/views/SkillMarket'
 import KnowledgeBase from '@/components/views/KnowledgeBase'
 import CronManager from '@/components/views/CronManager'
+import AlertCenter from '@/components/views/AlertCenter'
 import ConnectionModal from '@/components/modals/ConnectionModal'
 import LLMConfigModal from '@/components/modals/LLMConfigModal'
 import NotificationsModal from '@/components/modals/NotificationsModal'
@@ -31,6 +32,7 @@ function ViewRouter() {
     case 'skills': return <SkillMarket />
     case 'knowledge': return <KnowledgeBase />
     case 'cron': return <CronManager />
+    case 'alerts': return <AlertCenter />
     case 'approvals': return <ApprovalCenter />
     default: return <ChatWindow />
   }
