@@ -537,6 +537,17 @@
 - 审批列表展示工具名、命中原因、脱敏参数、资产上下文、申请时间和处理结果。
 - 前端 API client 新增 `getApprovals`、`decideApproval`。
 
+### Task 9.3: P0 Security And Swarm Control Fixes
+
+**Description:** 修复技能变更审批、技能迁移路径安全和 Swarm 工具名错配。
+
+状态：已完成首批 P0 修复。
+
+已交付：
+- `evolve_skill` 独立归类为 `skill_change`，默认必须人工审批。
+- `/skills/migrate` 校验目标目录名、规范化目标路径，并要求来源目录包含 `SKILL.md`。
+- Master、Heartbeat、告警注入提示统一使用真实注册工具 `dispatch_sub_agents`。
+
 ## Phase 10: Productionization
 
 ### Task 10.1: Frontend Product Pages

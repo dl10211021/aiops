@@ -21,11 +21,30 @@ import logging
 import asyncio
 import os
 import json
+import re
+from pathlib import Path
 
 webhook_locks = {}
 logger = logging.getLogger(__name__)
+CUSTOM_SKILLS_DIR = Path(__file__).resolve().parent.parent / "my_custom_skills"
 
 router = APIRouter()
+
+
+def resolve_custom_skill_dir(target_dir_name: str) -> Path:
+    """Return a normalized custom-skill target directory, rejecting traversal."""
+    name = str(target_dir_name or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+        raise HTTPException(
+            status_code=422,
+            detail="target_dir_name 只能包含英文字母、数字、横线和下划线。",
+        )
+
+    base = CUSTOM_SKILLS_DIR.resolve()
+    target = (base / name).resolve()
+    if target.parent != base:
+        raise HTTPException(status_code=422, detail="非法技能目标路径。")
+    return target
 
 
 # ----------------- 数据模型 -----------------
@@ -997,20 +1016,20 @@ async def create_skill(req: CreateSkillRequest):
 async def migrate_skill(req: MigrateRequest):
     """将外部卡带拷贝到专属的 my_custom_skills 目录"""
     import shutil
-    import os
 
-    target_base = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "my_custom_skills"
-    )
-    os.makedirs(target_base, exist_ok=True)
-
-    dest_path = os.path.join(target_base, req.target_dir_name)
+    CUSTOM_SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    dest_path = resolve_custom_skill_dir(req.target_dir_name)
+    source_path = Path(req.source_path).expanduser().resolve()
+    if not source_path.is_dir():
+        raise HTTPException(status_code=422, detail="source_path 必须是技能目录。")
+    if not (source_path / "SKILL.md").is_file():
+        raise HTTPException(status_code=422, detail="source_path 必须包含 SKILL.md。")
 
     try:
         if os.path.exists(dest_path):
             shutil.rmtree(dest_path)
 
-        shutil.copytree(req.source_path, dest_path)
+        shutil.copytree(source_path, dest_path)
 
         # 拷贝完成后通知 Dispatcher 重新加载
         from core.dispatcher import dispatcher
@@ -2085,7 +2104,7 @@ async def receive_webhook_alert(request: Request):
     from core.heartbeat import run_single_heartbeat
     import asyncio
 
-    injection_msg = f"🔔 【监控告警接入】外部系统触发了级别为 [{str(severity).upper()}] 的告警。\n**告警名称**：{alert_name}\n**故障节点**：{host}\n**详细信息**：\n{description}\n\n作为监控专家，请主动分析此告警。如果你是负责整个环境的指挥官（例如你的连接是 localhost），请使用 `list_active_sessions` 查找合适的子节点并使用 `delegate_task_to_agent` 派发调查任务；如果你是具体服务器的节点 Agent，请立刻调用技能/工具去探查根因！"
+    injection_msg = f"🔔 【监控告警接入】外部系统触发了级别为 [{str(severity).upper()}] 的告警。\n**告警名称**：{alert_name}\n**故障节点**：{host}\n**详细信息**：\n{description}\n\n作为监控专家，请主动分析此告警。如果你是负责整个环境的指挥官（例如你的连接是 localhost），请使用 `list_active_sessions` 查找合适的子节点并使用 `dispatch_sub_agents` 派发调查任务；如果你是具体服务器的节点 Agent，请立刻调用技能/工具去探查根因！"
 
     injected_count = 0
     for sid in affected_sessions:

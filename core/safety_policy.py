@@ -51,6 +51,15 @@ DEFAULT_SAFETY_POLICY: dict[str, Any] = {
                 "init 0",
             ],
         },
+        "skill_change": {
+            "always_approval": True,
+            "approval_reason": "AI 试图创建或修改平台技能，必须人工审批并审计。",
+            "hard_block_substrings": [
+                "../",
+                "..\\",
+                "\x00",
+            ],
+        },
         "linux": {
             "hard_block_substrings": [
                 "rm -rf /",
@@ -378,6 +387,7 @@ DEFAULT_SAFETY_POLICY: dict[str, Any] = {
 
 TOOL_CATEGORY = {
     "local_execute_script": "local",
+    "evolve_skill": "skill_change",
     "linux_execute_command": "linux",
     "container_execute_command": "linux",
     "middleware_execute_command": "linux",
@@ -479,6 +489,11 @@ def _category(tool_call_name: str, policy: dict[str, Any]) -> dict[str, Any]:
 def _command_text(tool_call_name: str, args: dict[str, Any]) -> str:
     if tool_call_name == "db_execute_query":
         return str(args.get("sql") or "")
+    if tool_call_name == "evolve_skill":
+        return " ".join(
+            str(args.get(key) or "")
+            for key in ("skill_id", "file_name")
+        )
     return str(args.get("command") or "")
 
 

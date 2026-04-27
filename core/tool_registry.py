@@ -198,7 +198,7 @@ def _register_builtin_tools() -> None:
             name="evolve_skill",
             toolset="skill-runtime",
             scope="base",
-            safety_category="local",
+            safety_category="skill_change",
             description="创建或更新 my_custom_skills 下的技能文件。仅用于用户明确要求修改技能时。",
             parameters=_obj(
                 {

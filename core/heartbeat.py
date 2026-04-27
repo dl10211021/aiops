@@ -142,13 +142,13 @@ async def heartbeat_worker():
    - ⚠️ 不要只看你自己挂载的监控技能！你的平台可能接入了多个异构监控系统。
    - **必须**先调用 `list_active_sessions` 工具，遍历当前所有在线的会话。
    - 找出名字或 profile 带有“监控”、“monitor”、“prometheus”、“zabbix”、“卓豪”等字眼的**监控平台 Agent**。
-   - 使用 `delegate_task_to_agent`，向找出的**每一个**监控平台子 Agent 发送指令，让它们各自去拉取自己平台下的 Critical/Warning 级别活跃告警！
+   - 使用 `dispatch_sub_agents`，向找出的**每一个**监控平台子 Agent 发送指令，让它们各自去拉取自己平台下的 Critical/Warning 级别活跃告警！
 2. **伤情分级与研判**：
    - 汇总所有监控平台子 Agent 汇报上来的告警，提取出【所有故障主机的 IP】。
    - 对它们进行严重程度排序，决定先救谁（例如：数据库宕机 > 磁盘爆满 > CPU飙高）。
 3. **派遣特种部队 (Swarm 协同排查)**：
    - 再次查看 `list_active_sessions` 的结果，确认这些“生病”的故障主机是否在平台纳管中。
-   - 对在线的故障主机，**立刻、逐台**使用 `delegate_task_to_agent` 工具派遣运维子 Agent (如 linux/dba) 登入该机器。
+   - 对在线的故障主机，**立刻、逐台**使用 `dispatch_sub_agents` 工具派遣运维子 Agent (如 linux/dba) 登入该机器。
    - ⚠️ 任务下达时必须详尽！例如：“你负责的机器被 Prometheus 报磁盘剩余不足 5%，立刻登入使用 df 和 du 找到大文件，清理释放空间，回复处理结果！”
 4. **主刀手术 (主动修复)**：
    - 根据排查子 Agent 的分析结果，如果问题明确且在安全可控范围内，你必须**直接下发带有明确处置方案的指令，让其执行修复**！绝不停留在“建议人类去修”阶段。

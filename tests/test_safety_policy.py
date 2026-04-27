@@ -36,6 +36,46 @@ class TestSafetyPolicy(unittest.TestCase):
         self.assertTrue(needs_approval)
         self.assertIn("数据库", reason)
 
+    def test_evolve_skill_requires_skill_change_approval(self):
+        path = self.policy_path("safety_policy_test_missing_skill_change.json")
+        self.cleanup_policy_file(path)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", path):
+                needs_approval, reason = check_approval_needed(
+                    "evolve_skill",
+                    {
+                        "skill_id": "linux-hardening",
+                        "file_name": "SKILL.md",
+                        "content": "---\nname: linux-hardening\n---\n",
+                    },
+                    {"allow_modifications": True},
+                )
+        finally:
+            self.cleanup_policy_file(path)
+
+        self.assertTrue(needs_approval)
+        self.assertIn("技能", reason)
+
+    def test_evolve_skill_path_traversal_is_hard_blocked(self):
+        path = self.policy_path("safety_policy_test_missing_skill_block.json")
+        self.cleanup_policy_file(path)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", path):
+                from core.safety_policy import check_hard_block
+
+                blocked, reason = check_hard_block(
+                    "evolve_skill",
+                    {
+                        "skill_id": "../escape",
+                        "file_name": "SKILL.md",
+                    },
+                )
+        finally:
+            self.cleanup_policy_file(path)
+
+        self.assertTrue(blocked)
+        self.assertIn("硬拦截", reason)
+
     def test_default_policy_blocks_sql_write_in_readonly(self):
         path = self.policy_path("safety_policy_test_missing_2.json")
         self.cleanup_policy_file(path)
