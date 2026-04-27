@@ -60,6 +60,8 @@ def _safe_context(context: dict[str, Any]) -> dict[str, Any]:
             "allow_modifications": bool(context.get("allow_modifications", False)),
             "target_scope": context.get("target_scope"),
             "scope_value": context.get("scope_value"),
+            "execution_mode": context.get("execution_mode"),
+            "trigger_source": context.get("trigger_source"),
             "tags": context.get("tags") or [],
         }
     )

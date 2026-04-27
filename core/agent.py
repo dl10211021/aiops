@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import logging
+import uuid
 from core.dispatcher import dispatcher
 from core.asset_protocols import API_PROTOCOLS, SQL_PROTOCOLS, normalize_protocol
 from core.redaction import redact_json_text, redact_text
@@ -49,6 +50,39 @@ def record_tool_approval_request(
         context=context,
         timeout_seconds=approval_timeout_seconds(),
     )
+
+
+def record_headless_approval_block(
+    *,
+    tool_call_id: str,
+    session_id: str,
+    tool_name: str,
+    args: dict,
+    reason: str,
+    context: dict,
+) -> dict:
+    """Audit and block approval-required tool calls from unattended runs."""
+    approval_id = str(tool_call_id or "").strip() or f"headless-{uuid.uuid4().hex[:16]}"
+    recorded = record_tool_approval_request(
+        tool_call_id=approval_id,
+        session_id=session_id,
+        tool_name=tool_name,
+        args=args,
+        reason=reason,
+        context={**(context or {}), "execution_mode": "headless"},
+    )
+
+    try:
+        from core.approval_queue import resolve_approval_request
+
+        return resolve_approval_request(
+            approval_id,
+            approved=False,
+            operator="system",
+            note="后台自治任务触发需审批工具调用，系统已自动阻断；请在前台人工确认后重试。",
+        )
+    except KeyError:
+        return recorded
 
 
 def format_extra_args_for_prompt(extra_args: dict) -> str:
@@ -713,6 +747,8 @@ async def headless_agent_chat(
         "extra_args": extra_args,
         "target_scope": session_info.get("target_scope", "asset"),
         "scope_value": session_info.get("scope_value", None),
+        "execution_mode": "headless",
+        "trigger_source": "background_agent",
     }
     tools = dispatcher.get_available_tools(context)
 
@@ -754,9 +790,36 @@ async def headless_agent_chat(
                 except Exception:
                     func_args = {}
 
-                tool_res = await dispatcher.route_and_execute(
+                needs_approval, reason = dispatcher.check_approval_needed(
                     func_name, func_args, context
                 )
+                if needs_approval:
+                    blocked = record_headless_approval_block(
+                        tool_call_id=tc.get("id", ""),
+                        session_id=session_id,
+                        tool_name=func_name,
+                        args=func_args,
+                        reason=reason,
+                        context=context,
+                    )
+                    logger.warning(
+                        "Blocked unattended tool call requiring approval: session=%s tool=%s approval=%s",
+                        session_id,
+                        func_name,
+                        blocked.get("id"),
+                    )
+                    tool_res = json.dumps(
+                        {
+                            "status": "BLOCKED",
+                            "error": f"后台自治任务触发审批策略，已自动阻断: {reason}",
+                            "approval_id": blocked.get("id"),
+                        },
+                        ensure_ascii=False,
+                    )
+                else:
+                    tool_res = await dispatcher.route_and_execute(
+                        func_name, func_args, context
+                    )
 
                 tool_msg = {
                     "tool_call_id": tc.get("id", ""),

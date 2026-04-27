@@ -539,7 +539,7 @@
 
 ### Task 9.3: P0 Security And Swarm Control Fixes
 
-**Description:** 修复技能变更审批、技能迁移路径安全和 Swarm 工具名错配。
+**Description:** 修复技能变更审批、技能迁移路径安全、Swarm 工具名错配和后台自治审批绕过。
 
 状态：已完成首批 P0 修复。
 
@@ -547,6 +547,7 @@
 - `evolve_skill` 独立归类为 `skill_change`，默认必须人工审批。
 - `/skills/migrate` 校验目标目录名、规范化目标路径，并要求来源目录包含 `SKILL.md`。
 - Master、Heartbeat、告警注入提示统一使用真实注册工具 `dispatch_sub_agents`。
+- Headless/Cron/Heartbeat/Webhook 触发的后台工具调用会先走统一安全策略；命中审批策略时写入审批队列并由系统自动拒绝，避免无人值守任务直接执行高风险动作。
 
 ## Phase 10: Productionization
 
