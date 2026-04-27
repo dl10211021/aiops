@@ -52,6 +52,50 @@ class TestSkillSecurity(unittest.TestCase):
 
         self.assertIn("frontmatter", json.loads(result)["error"])
 
+    def test_evolve_skill_rejects_invalid_id_before_writing(self):
+        from core.dispatcher import dispatcher
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target_base = Path(tmp) / "custom"
+            with patch.object(dispatcher, "_custom_skills_base", return_value=str(target_base)):
+                result = asyncio.run(
+                    dispatcher.route_and_execute(
+                        "evolve_skill",
+                        {
+                            "skill_id": "bad skill",
+                            "file_name": "notes.md",
+                            "content": "body",
+                        },
+                        {"allow_modifications": True},
+                    )
+                )
+
+            self.assertFalse((target_base / "bad skill").exists())
+
+        self.assertIn("非法 skill_id", json.loads(result)["error"])
+
+    def test_evolve_skill_rejects_empty_sidecar_content(self):
+        from core.dispatcher import dispatcher
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target_base = Path(tmp) / "custom"
+            with patch.object(dispatcher, "_custom_skills_base", return_value=str(target_base)):
+                result = asyncio.run(
+                    dispatcher.route_and_execute(
+                        "evolve_skill",
+                        {
+                            "skill_id": "safe-skill",
+                            "file_name": "notes.md",
+                            "content": "",
+                        },
+                        {"allow_modifications": True},
+                    )
+                )
+
+            self.assertFalse((target_base / "safe-skill" / "notes.md").exists())
+
+        self.assertIn("不能为空", json.loads(result)["error"])
+
     def test_skill_frontmatter_validation_accepts_crlf(self):
         from core.dispatcher import dispatcher
 

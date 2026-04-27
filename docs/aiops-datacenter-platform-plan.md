@@ -562,6 +562,7 @@
 - 新增技能版本列表与回滚接口，回滚前会校验版本路径和 `SKILL.md` frontmatter，并为当前文件再次生成备份。
 - 新增 `POST /skills/validate` 静态校验入口，返回 `valid/issues/warnings`，不写文件、不执行脚本，用作后续审批与测试验证的前置门。
 - 创建技能时复用统一静态校验，拒绝不完整 frontmatter 与嵌套脚本路径，并通过原子写入生成初始文件。
+- 将技能静态校验下沉到核心生命周期模块，`create_skill` 与 `evolve_skill` 共用同一套路径、frontmatter 与空内容校验。
 
 ## Phase 10: Productionization
 

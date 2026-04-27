@@ -15,6 +15,7 @@ from core.safety_policy import (
     check_hard_block,
     check_readonly_block,
 )
+from core.skill_lifecycle import validate_skill_candidate, validate_skill_frontmatter
 from core.tool_registry import tool_registry
 
 logger = logging.getLogger(__name__)
@@ -252,20 +253,7 @@ class SkillDispatcher:
 
     @staticmethod
     def _validate_skill_frontmatter(skill_id: str, content: str) -> tuple[bool, str]:
-        match = re.match(r"^---\r?\n(.*?)\r?\n---(?:\r?\n|$)", content, re.DOTALL)
-        if not match:
-            return False, "SKILL.md 必须以 YAML frontmatter 开头"
-        try:
-            frontmatter = yaml.safe_load(match.group(1).strip()) or {}
-        except Exception as e:
-            return False, f"SKILL.md frontmatter 解析失败: {e}"
-        name = str(frontmatter.get("name") or "").strip()
-        description = str(frontmatter.get("description") or "").strip()
-        if not name or not description:
-            return False, "SKILL.md frontmatter 必须包含 name 和 description"
-        if name != skill_id:
-            return False, "SKILL.md frontmatter name 必须与 skill_id 一致"
-        return True, ""
+        return validate_skill_frontmatter(skill_id, content)
 
     @staticmethod
     def _atomic_write_text(file_path: str, content: str) -> None:
@@ -893,24 +881,17 @@ class SkillDispatcher:
             target_base = self._custom_skills_base()
             os.makedirs(target_base, exist_ok=True)
 
-            # 安全校验，防止目录穿越
-            if not re.match(r"^[A-Za-z0-9_-]+$", skill_id):
-                return json.dumps({"error": "非法 skill_id，只允许英文字母、数字、下划线和横线"})
-
-            safe_file_name = os.path.basename(file_name)
-            if not safe_file_name or safe_file_name != file_name:
-                return json.dumps({"error": "非法文件名，禁止包含路径分隔符或目录穿越符"})
+            validation = validate_skill_candidate(skill_id, file_name, content)
+            if not validation["valid"]:
+                detail = "；".join(issue["message"] for issue in validation["issues"])
+                return json.dumps({"error": detail}, ensure_ascii=False)
 
             dest_folder = os.path.join(target_base, skill_id)
             os.makedirs(dest_folder, exist_ok=True)
 
+            safe_file_name = validation["file_name"]
             file_path = os.path.join(dest_folder, safe_file_name)
             try:
-                if safe_file_name == "SKILL.md":
-                    valid, reason = self._validate_skill_frontmatter(skill_id, content)
-                    if not valid:
-                        return json.dumps({"error": reason}, ensure_ascii=False)
-
                 backup_path = self._backup_existing_skill_file(file_path)
                 self._atomic_write_text(file_path, content)
                 logger.info(f"AI 成功自我进化：更新了文件 -> {file_path}")
