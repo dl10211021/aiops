@@ -396,7 +396,7 @@
 
 **Description:** 把巡检运行记录升级为报告，支持详情、Markdown/JSON 导出、按资产过滤。
 
-状态：已完成后端报告详情、导出和前端 API 契约。
+状态：已完成后端报告详情、导出、前端 API 契约和巡检页报告查看入口。
 
 **Acceptance criteria:**
 - 巡检报告详情接口不暴露敏感字段。
@@ -410,6 +410,7 @@
 - `list_runs(asset_id=...)` 支持按资产过滤目标结果。
 - Markdown/JSON 报告导出默认脱敏。
 - 前端 `InspectionReport` 类型和报告查询/导出 API client。
+- 定时巡检页最近运行记录可打开报告详情，并导出 Markdown/JSON。
 
 **Verification:**
 - 后端报告测试。
