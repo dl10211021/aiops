@@ -9,6 +9,11 @@ venv/
 env/
 ENV/
 .env
+.env.local
+.env.*.local
+.fernet.key
+*.pem
+*.key
 
 # 打包构建产物
 build/
@@ -36,6 +41,13 @@ temp_sandbox/
 *.log
 tmp_history.json
 .git_log_frontend.txt
+.pytest_cache/
+.ruff_cache/
+.research/
+tmp*/
+patch_*.py
+fix_*.py
+update_*.py
 
 # 本地数据库 (不要打包进初始镜像，因为我们希望通过挂载或启动后生成)
 opscore.db
@@ -43,6 +55,13 @@ opscore.db-shm
 opscore.db-wal
 cron_jobs.sqlite
 opscore_lancedb/
+memory/
+data/
+providers.json
+safety_policy.json
+asset_cleanup_backup_*.json
+frontend/node_modules/
+frontend/tsconfig.tsbuildinfo
 
 # 其他无关文件
 OpsCore.spec

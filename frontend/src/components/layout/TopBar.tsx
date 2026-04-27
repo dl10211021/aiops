@@ -1,4 +1,5 @@
 import { useStore } from '@/store'
+import { updateHeartbeat, updatePermission } from '@/api/client'
 
 export default function TopBar() {
   const currentSessionId = useStore((s) => s.currentSessionId)
@@ -14,7 +15,6 @@ export default function TopBar() {
   const togglePermission = async () => {
     if (!session) return
     try {
-      const { updatePermission } = await import('@/api/client')
       const newMode = !session.isReadWriteMode
       await updatePermission(session.id, newMode)
       updateSession(session.id, { isReadWriteMode: newMode })
@@ -27,7 +27,6 @@ export default function TopBar() {
   const toggleHeartbeat = async () => {
     if (!session) return
     try {
-      const { updateHeartbeat } = await import('@/api/client')
       const newState = !session.heartbeatEnabled
       await updateHeartbeat(session.id, newState)
       updateSession(session.id, { heartbeatEnabled: newState })
@@ -38,11 +37,11 @@ export default function TopBar() {
   }
 
   return (
-    <header className="h-12 bg-ops-panel border-b border-ops-surface0 flex items-center px-3 gap-3 shrink-0">
+    <header className="h-14 bg-ops-panel/82 border-b border-ops-surface0/80 flex items-center px-4 gap-3 shrink-0 backdrop-blur-xl">
       {/* Sidebar toggle */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="text-ops-subtext hover:text-ops-text text-lg"
+        className="text-ops-subtext hover:text-ops-text text-lg rounded-lg px-2 py-1 hover:bg-ops-surface0/70"
         title="切换侧栏"
       >
         ☰
@@ -51,12 +50,13 @@ export default function TopBar() {
       {session ? (
         <>
           {/* Session info */}
-          <div className="flex items-center gap-2 text-sm min-w-0">
-            <span className="font-medium text-ops-text truncate">
+          <div className="flex min-w-0 items-center gap-3 text-sm">
+            <span className="inline-flex h-2.5 w-2.5 rounded-full bg-ops-success shadow-[0_0_18px_rgba(79,209,177,0.65)]" />
+            <span className="font-semibold text-ops-text truncate">
               {session.remark || session.host}
             </span>
-            <span className="text-ops-overlay text-xs">
-              {session.user}@{session.host} ({session.asset_type})
+            <span className="rounded-full border border-ops-surface1/70 bg-ops-dark/50 px-2 py-0.5 font-mono text-[11px] text-ops-subtext">
+              {session.user}@{session.host} ({session.asset_type}/{session.protocol})
             </span>
           </div>
 
@@ -65,10 +65,10 @@ export default function TopBar() {
           {/* Action buttons */}
           <button
             onClick={togglePermission}
-            className={`text-xs px-2.5 py-1 rounded transition-colors ${
+            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
               session.isReadWriteMode
-                ? 'bg-ops-alert/20 text-ops-alert'
-                : 'bg-ops-surface0 text-ops-subtext'
+                ? 'border-ops-alert/40 bg-ops-alert/15 text-ops-alert'
+                : 'border-ops-surface1/60 bg-ops-surface0/70 text-ops-subtext'
             }`}
             title={session.isReadWriteMode ? '当前: 读写模式' : '当前: 只读模式'}
           >
@@ -77,10 +77,10 @@ export default function TopBar() {
 
           <button
             onClick={toggleHeartbeat}
-            className={`text-xs px-2.5 py-1 rounded transition-colors ${
+            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
               session.heartbeatEnabled
-                ? 'bg-ops-success/20 text-ops-success'
-                : 'bg-ops-surface0 text-ops-subtext'
+                ? 'border-ops-success/40 bg-ops-success/15 text-ops-success'
+                : 'border-ops-surface1/60 bg-ops-surface0/70 text-ops-subtext'
             }`}
           >
             {session.heartbeatEnabled ? '💓 巡检中' : '💤 巡检关'}
@@ -88,14 +88,14 @@ export default function TopBar() {
 
           <button
             onClick={() => openModal('dynamic-skills')}
-            className="text-xs px-2.5 py-1 rounded bg-ops-surface0 text-ops-subtext hover:text-ops-text transition-colors"
+            className="text-xs px-3 py-1.5 rounded-full border border-ops-surface1/60 bg-ops-surface0/70 text-ops-subtext hover:text-ops-text transition-colors"
           >
             🧩 技能
           </button>
 
           <button
             onClick={() => openModal('session-actions')}
-            className="text-ops-subtext hover:text-ops-text text-sm"
+            className="text-ops-subtext hover:text-ops-text text-sm rounded-lg px-2 py-1 hover:bg-ops-surface0/70"
             title="更多操作"
           >
             ⋯

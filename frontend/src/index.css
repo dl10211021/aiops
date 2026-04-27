@@ -1,24 +1,59 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ops-dark: #11111b;
-  --color-ops-sidebar: #181825;
-  --color-ops-panel: #1e1e2e;
-  --color-ops-accent: #89b4fa;
-  --color-ops-alert: #f38ba8;
-  --color-ops-success: #a6e3a1;
-  --color-ops-text: #cdd6f4;
-  --color-ops-subtext: #a6adc8;
-  --color-ops-surface0: #313244;
-  --color-ops-surface1: #45475a;
-  --color-ops-overlay: #6c7086;
+  --color-ops-dark: #061111;
+  --color-ops-sidebar: #0a1918;
+  --color-ops-panel: #102321;
+  --color-ops-accent: #f3b15a;
+  --color-ops-alert: #ff6b5f;
+  --color-ops-success: #4fd1b1;
+  --color-ops-text: #efe7d4;
+  --color-ops-subtext: #9fb8b3;
+  --color-ops-surface0: #183431;
+  --color-ops-surface1: #28524d;
+  --color-ops-overlay: #68807c;
 }
 
 body {
   margin: 0;
-  background-color: var(--color-ops-dark);
+  min-width: 320px;
+  background:
+    radial-gradient(circle at 18% 10%, rgba(243, 177, 90, 0.16), transparent 30rem),
+    radial-gradient(circle at 82% 12%, rgba(79, 209, 177, 0.16), transparent 34rem),
+    linear-gradient(135deg, #041010 0%, #081917 45%, #150f08 100%);
   color: var(--color-ops-text);
-  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: 'IBM Plex Sans', 'Aptos', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.32;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, black, transparent 82%);
+}
+
+button, input, textarea, select {
+  font: inherit;
+}
+
+.ops-shell {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), transparent 24rem),
+    transparent;
+}
+
+.ops-glass {
+  background: color-mix(in oklab, var(--color-ops-panel) 88%, transparent);
+  border-color: color-mix(in oklab, var(--color-ops-surface1) 58%, transparent);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
 }
 
 /* Scrollbar styling */
@@ -27,10 +62,10 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--color-ops-dark);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-ops-surface1);
+  background: color-mix(in oklab, var(--color-ops-surface1) 70%, transparent);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {

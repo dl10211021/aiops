@@ -6,7 +6,16 @@ import asyncio
 import subprocess
 import logging
 import time
+import shlex
 from typing import Dict, Any, List
+
+from core.asset_protocols import API_PROTOCOLS, NETWORK_CLI_ASSET_TYPES, SQL_PROTOCOLS, resolve_asset_identity
+from core.safety_policy import (
+    check_approval_needed as policy_check_approval_needed,
+    check_hard_block,
+    check_readonly_block,
+)
+from core.tool_registry import tool_registry
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +75,7 @@ class SkillDispatcher:
         self.skills_registry = new_registry
         self._last_refresh_time = time.time()
 
-    def _parse_skill_md(self, md_path: str, folder_path: str):
+    def _parse_skill_md(self, md_path: str, folder_path: str, registry: dict):
         """解析带有 YAML frontmatter 的 Markdown 文件"""
         with open(md_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -93,7 +102,7 @@ class SkillDispatcher:
                 code_blocks = re.findall(r"```", body)
                 tool_count = max(len(code_blocks) // 2, 1)
 
-                self.skills_registry[skill_id] = {
+                registry[skill_id] = {
                     "id": skill_id,
                     "name": skill_id.replace("-", " ").title(),
                     "description": frontmatter.get("description", "未提供描述"),
@@ -198,458 +207,233 @@ class SkillDispatcher:
 
         return result
 
-    def get_skill_instructions(self, active_skill_ids: List[str]) -> str:
+    def get_skill_instructions(
+        self, active_skill_ids: List[str], allow_local_scripts: bool = True
+    ) -> str:
         """把用户勾选的所有技能的说明书（Markdown）拼接到一起，作为系统提示词给 AI 看"""
         instructions = ""
+        if active_skill_ids and not allow_local_scripts:
+            instructions += (
+                "\n\n【协议优先约束】：当前是真实资产的原生协议会话，已挂载 Skill 只能作为知识/SOP 参考；"
+                "禁止执行 Skill 中的 python/bash/本地脚本示例，必须使用当前会话暴露的原生协议工具完成操作。\n"
+            )
         for s_id in active_skill_ids:
             if s_id in self.skills_registry:
                 skill = self.skills_registry[s_id]
                 source_path = skill.get("source_path", "")
                 instructions += f"\n\n<!-- 激活技能: {skill['name']} -->\n"
                 instructions += "<ACTIVATED_SKILL>\n"
-                instructions += (
-                    f"<SKILL_ABSOLUTE_PATH>{source_path}</SKILL_ABSOLUTE_PATH>\n"
-                )
-                instructions += f"【重要指令】：此技能存放于物理路径 `{source_path}`。当你需要调用此技能内的 python 脚本时，请务必使用绝对路径，或者在使用 `local_execute_script` 工具时将 `cwd` 参数严格设置为该绝对路径，切勿自行猜测。\n"
+                if allow_local_scripts:
+                    instructions += (
+                        f"<SKILL_ABSOLUTE_PATH>{source_path}</SKILL_ABSOLUTE_PATH>\n"
+                    )
+                    instructions += f"【重要指令】：此技能存放于物理路径 `{source_path}`。当你需要调用此技能内的 python 脚本时，请务必使用绝对路径，或者在使用 `local_execute_script` 工具时将 `cwd` 参数严格设置为该绝对路径，切勿自行猜测。\n"
+                else:
+                    instructions += "【重要指令】：当前会话禁止执行此 Skill 内的本地脚本；其中脚本示例仅作知识参考。\n"
                 instructions += (
                     f"<INSTRUCTIONS>\n{skill['instructions']}\n</INSTRUCTIONS>\n"
                 )
                 instructions += "</ACTIVATED_SKILL>\n"
         return instructions
 
+    def get_active_skill_paths(self, active_skill_ids: List[str]) -> List[str]:
+        self.refresh_skills()
+        paths = []
+        for s_id in active_skill_ids:
+            skill = self.skills_registry.get(s_id)
+            if skill and skill.get("source_path"):
+                paths.append(os.path.realpath(skill["source_path"]))
+        return paths
+
+    def _validate_local_execution(
+        self, command: str, cwd: str, context: Dict[str, Any]
+    ) -> tuple[bool, str]:
+        if not command or not isinstance(command, str):
+            return False, "本地执行命令不能为空"
+
+        if re.search(r"(&&|\|\||[;&|`<>])", command):
+            return False, "禁止在 local_execute_script 中使用 Shell 控制符或重定向"
+
+        active_paths = context.get("active_skill_paths") or self.get_active_skill_paths(
+            context.get("active_skills", [])
+        )
+        if not active_paths:
+            return False, "local_execute_script 只能在已挂载 Skill 的目录内执行"
+
+        real_cwd = os.path.realpath(cwd or os.getcwd())
+        real_active_paths = [os.path.realpath(p) for p in active_paths]
+        try:
+            if not any(
+                os.path.commonpath([real_cwd, p]) == p for p in real_active_paths
+            ):
+                return False, "local_execute_script 的 cwd 必须位于已挂载 Skill 目录内"
+        except ValueError:
+            return False, "local_execute_script 的 cwd 路径非法"
+
+        try:
+            parts = shlex.split(command, posix=os.name != "nt")
+        except ValueError as e:
+            return False, f"命令解析失败: {e}"
+
+        if not parts:
+            return False, "本地执行命令不能为空"
+
+        executable = os.path.basename(parts[0]).lower()
+        allowed_executables = {
+            "python",
+            "python.exe",
+            "python3",
+            "python3.exe",
+            "py",
+            "py.exe",
+            "powershell",
+            "powershell.exe",
+            "pwsh",
+            "pwsh.exe",
+        }
+        if executable not in allowed_executables:
+            return False, "local_execute_script 只允许调用解释器运行已挂载 Skill 内的脚本"
+
+        return True, ""
+
     def check_approval_needed(self, tool_call_name: str, args: dict, context: dict) -> tuple[bool, str]:
-        """【安全层】检查当前大模型执行的指令是否需要人类审批"""
+        """【安全层】检查当前大模型执行的指令是否需要人类审批。"""
         from connections.ssh_manager import ssh_manager
         
         session_id = context.get("session_id")
         if session_id and session_id in ssh_manager.active_sessions:
             if ssh_manager.active_sessions[session_id]["info"].get("auto_approve_all", False):
                 return False, ""
-                
-        cmd_str = args.get("command", "")
-        sql_str = args.get("sql", "")
-        
-        # 1. 本地执行脚本：极度危险，永远需要审批 (除非勾选了自动审批)
-        if tool_call_name == "local_execute_script":
-            return True, "【安全警告】AI 试图在平台宿主机底层运行代码，必须人工确认！"
-            
-        # 2. Linux 危险指令检查
-        elif tool_call_name in ["linux_execute_command", "execute_on_scope"]:
-            write_patterns = [
-                r"\brm\b", r"\bmv\b", r"\bcp\b", r"\bchmod\b", r"\bchown\b",
-                r"\bsystemctl\s+(start|stop|restart|enable|disable)\b",
-                r"\byum\s+(install|remove|erase)\b", r"\bapt(-get)?\s+(install|remove|purge)\b",
-                r"\bkill\b", r"\bpkill\b", r"\breboot\b", r"\bshutdown\b", r">", r">>"
-            ]
-            if any(re.search(p, cmd_str) for p in write_patterns):
-                return True, "检测到改变系统状态的高危命令"
-                
-            # 如果是只读模式，拦截所有，除非明确放行
-            allow_mod = context.get("allow_modifications", False)
-            if not allow_mod:
-                # 只读模式下，为了防呆，凡是不是明确安全的，最好都弹审批
-                safe_cmds = ["cat", "ls", "grep", "top", "free", "df", "ps", "pwd", "netstat", "ss", "tail", "head", "awk", "sed"]
-                cmd_root = cmd_str.split()[0] if cmd_str else ""
-                if cmd_root not in safe_cmds:
-                    return True, f"只读模式下，未知状态改变命令拦截: {cmd_root}"
-                    
-        # 3. 数据库危险操作检查
-        elif tool_call_name == "db_execute_query":
-            sql_write_patterns = [
-                r"\binsert\b", r"\bupdate\b", r"\bdelete\b", r"\bdrop\b", r"\balter\b",
-                r"\btruncate\b", r"\breplace\b", r"\bgrant\b", r"\brevoke\b", r"\bcommit\b", r"\brollback\b"
-            ]
-            if any(re.search(p, sql_str, re.IGNORECASE) for p in sql_write_patterns):
-                return True, "检测到数据库数据修改或结构变更 (DML/DDL)"
-                
-        return False, ""
+        return policy_check_approval_needed(tool_call_name, args, context)
 
     def get_available_tools(
 
         self, current_context: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        """
-        不论用户勾选了什么技能，底层我们统一只给 AI 暴露两种终极物理工具：
-        1. 连远程机器执行命令 (原有)
-        2. 在宿主机（本地）执行 Python/Shell 脚本 (新！用于跑 Gemini CLI 里自带的那些外部工具)
-        """
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "local_execute_script",
-                    "description": "在运维平台宿主机上执行本地命令或脚本。例如根据 SKILL 指示执行 `python scripts/xxx.py`。",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "command": {
-                                "type": "string",
-                                "description": "要运行的本地命令",
-                            },
-                            "cwd": {
-                                "type": "string",
-                                "description": "工作目录（可选），如果不填则在默认目录运行",
-                            },
-                        },
-                        "required": ["command"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "send_notification",
-                    "description": "当完成重要的故障排查、系统分析或执行了高危修改后，调用此工具向团队汇报结果。",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "channel": {
-                                "type": "string",
-                                "enum": ["auto", "wechat", "dingtalk", "email"],
-                                "description": "要发送的渠道。填 'auto' 则自动选择系统已开启的默认渠道。",
-                            },
-                            "title": {
-                                "type": "string",
-                                "description": "消息标题（如：数据库告警排查结果、系统巡检报告）",
-                            },
-                            "content": {
-                                "type": "string",
-                                "description": "详细汇报内容，支持 Markdown 格式。请对你的排查过程和结论进行精炼总结。",
-                            },
-                        },
-                        "required": ["channel", "title", "content"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "list_active_sessions",
-                    "description": "【总控特权】列出当前平台已连接的所有活跃资产会话（Session），获取它们的 session_id、IP、备注名和读写权限。在需要跨系统操作前必须先调用此工具获取目标的 session_id。",
-                    "parameters": {"type": "object", "properties": {}},
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "evolve_skill",
-                    "description": "【自我进化】当你被用户要求更新、修改或创建一个技能卡带时，使用此工具直接修改物理硬盘上的技能文件。支持创建/覆盖 SKILL.md 或 python 脚本文件。",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "skill_id": {
-                                "type": "string",
-                                "description": "技能包名称的文件夹名（如 my-linux-skill），它将被创建在 my_custom_skills 目录下。",
-                            },
-                            "file_name": {
-                                "type": "string",
-                                "description": "要修改的文件名。通常是 SKILL.md 或 附加的 python 脚本（如 script.py）。",
-                            },
-                            "content": {
-                                "type": "string",
-                                "description": "文件的完整新内容。请注意，如果是 SKILL.md，必须包含 YAML frontmatter (即 --- name: ... ---)。",
-                            },
-                        },
-                        "required": ["skill_id", "file_name", "content"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "dispatch_sub_agents",
-                    "description": "【批量协同】作为全局指挥官，一次性向多个会话/子Agent下发任务。执行时会并发调度，但最大并发限制为10以保护系统。返回所有任务的执行报告集合。",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "tasks": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "target_session_id": {
-                                            "type": "string",
-                                            "description": "目标资产/专家的 session_id",
-                                        },
-                                        "task_description": {
-                                            "type": "string",
-                                            "description": "详细具体的任务指令",
-                                        },
-                                    },
-                                    "required": [
-                                        "target_session_id",
-                                        "task_description",
-                                    ],
-                                },
-                                "description": "要分发的子任务列表",
-                            }
-                        },
-                        "required": ["tasks"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "search_knowledge_base",
-                    "description": "检索企业内部运维知识库。当被问及账号、密码、IP地址、资产信息、或者遇到未知报错、需要参考SOP手册时，必须第一时间调用此工具去本地知识库搜索答案。",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "要检索的问题或关键词，例如 '数据库的密码是多少' 或 'Nginx 502 排查 SOP'",
-                            }
-                        },
-                        "required": ["query"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "web_search",
-                    "description": "【联网检索】当本地知识库没有答案时，调用此工具去互联网搜索实时资料、官方文档或开源社区方案。使用 DuckDuckGo 引擎。",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "要搜索的内容关键词，尽量精炼，例如 'k8s pod terminating status reason'",
-                            }
-                        },
-                        "required": ["query"],
-                    },
-                },
-            },
-        ]
-
-        target_scope = current_context.get("target_scope", "asset")
-
-        if target_scope == "asset":
-            # Asset scope gets direct linux and db execution
-            tools.extend(
-                [
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": "linux_execute_command",
-                            "description": "在连接的远程目标服务器上执行诊断命令。",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {"command": {"type": "string"}},
-                                "required": ["command"],
-                            },
-                        },
-                    },
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": "db_execute_query",
-                            "description": "通过原生驱动直连查询数据库（支持 mysql, oracle, postgresql）。比 SSH 命令更安全、结构化。Oracle 无需 jdbc。不依赖当前机器。请把 SQL 拼好发给我。",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "db_type": {
-                                        "type": "string",
-                                        "enum": ["mysql", "oracle", "postgresql"],
-                                        "description": "数据库类型",
-                                    },
-                                    "host": {
-                                        "type": "string",
-                                        "description": "数据库主机 IP 或域名",
-                                    },
-                                    "port": {
-                                        "type": "integer",
-                                        "description": "数据库端口（如 MySQL 3306, Oracle 1521, PG 5432）",
-                                    },
-                                    "user": {
-                                        "type": "string",
-                                        "description": "登录用户名",
-                                    },
-                                    "password": {
-                                        "type": "string",
-                                        "description": "登录密码",
-                                    },
-                                    "database": {
-                                        "type": "string",
-                                        "description": "数据库名称（Oracle 传 SID 或 Service Name）",
-                                    },
-                                    "sql": {
-                                        "type": "string",
-                                        "description": "要执行的 SQL 查询语句",
-                                    },
-                                },
-                                "required": [
-                                    "db_type",
-                                    "host",
-                                    "port",
-                                    "user",
-                                    "password",
-                                    "database",
-                                    "sql",
-                                ],
-                            },
-                        },
-                    },
-                ]
-            )
-        elif target_scope in ("group", "tag"):
-            tools.append(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "execute_on_scope",
-                        "description": "在当前标签/组内的所有目标资产上批量执行相同的 bash 命令。底层会并发拉起执行，并将相同的输出结果进行聚合（Scale到1000+机器不会撑爆上下文）。",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "scope_target": {
-                                    "type": "string",
-                                    "description": "要执行的范围。如果你想在整个业务组的所有机器上执行，请传入 'ALL'。如果你只想测试部分机器，可传入逗号分隔的IP地址或主机名列表。",
-                                },
-                                "command": {
-                                    "type": "string",
-                                    "description": "要在所有目标上并发执行的 Bash 脚本或命令。",
-                                },
-                            },
-                            "required": ["scope_target", "command"],
-                        },
-                    },
-                }
-            )
-        elif target_scope == "global":
-            tools.append(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "search_assets_by_tag",
-                        "description": "【全局检索】根据Tag标签搜索通讯录中的资产列表。例如要寻找“MES”相关机器，传入['MES']，返回所有匹配的IP和凭证ID。",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "tags": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "要搜索的业务或技术标签，例如 ['db', 'prod']",
-                                }
-                            },
-                            "required": ["tags"],
-                        },
-                    },
-                }
-            )
-
-        return tools
+        """Return protocol-aware tool schemas from the central registry."""
+        return tool_registry.get_openai_tools(current_context)
 
     async def route_and_execute(
         self, tool_call_name: str, args: Dict[str, Any], context: Dict[str, Any]
     ) -> str:
         """执行大模型的意图"""
-        if tool_call_name == "linux_execute_command":
+        hard_blocked, hard_reason = check_hard_block(tool_call_name, args)
+        if hard_blocked:
+            logger.warning(
+                "Hard blocked tool call %s for session %s: %s",
+                tool_call_name,
+                context.get("session_id"),
+                hard_reason,
+            )
+            return json.dumps(
+                {"status": "BLOCKED", "reason": hard_reason}, ensure_ascii=False
+            )
+
+        if tool_call_name in {
+            "linux_execute_command",
+            "container_execute_command",
+            "middleware_execute_command",
+            "storage_execute_command",
+        }:
             from connections.ssh_manager import ssh_manager
+
+            identity = resolve_asset_identity(
+                context.get("asset_type"),
+                context.get("protocol"),
+                context.get("extra_args") or {},
+                context.get("host"),
+                context.get("port"),
+                context.get("remark"),
+            )
+            if identity["protocol"] != "ssh":
+                return json.dumps(
+                    {"status": "ERROR", "error": f"当前资产协议是 {identity['protocol']}，不能使用 {tool_call_name}；请使用对应的原生协议工具。"},
+                    ensure_ascii=False,
+                )
+            if identity["asset_type"] in NETWORK_CLI_ASSET_TYPES:
+                return json.dumps(
+                    {
+                        "status": "ERROR",
+                        "error": "当前资产是网络设备，不能使用 Linux 命令工具；请使用 network_cli_execute_command。",
+                    },
+                    ensure_ascii=False,
+                )
 
             session_id = context.get("session_id")
             if not session_id:
                 return '{"error": "没有找到激活的远程会话"}'
 
-            # 【这里保留之前的拦截逻辑代码，略简化】
-            allow_mod = context.get("allow_modifications", False)
-            # 增强版的只读模式拦截：使用正则词边界匹配，减少对 grep/cat 等只读命令的误杀
-            if not allow_mod:
-                cmd_str = args.get("command", "")
-                # 危险写操作命令（必须在词边界处匹配，避免 "grep rm" 被误拦截）
-                write_patterns = [
-                    r"\brm\b",
-                    r"\bmkdir\b",
-                    r"\bmv\b",
-                    r"\bcp\b",
-                    r"\bvi\b",
-                    r"\bvim\b",
-                    r"\bnano\b",
-                    r"\bchmod\b",
-                    r"\bchown\b",
-                    r"\bdd\b",
-                    r"\bsystemctl\s+(start|stop|restart|enable|disable)\b",
-                    r"\byum\s+(install|remove|erase)\b",
-                    r"\bapt(-get)?\s+(install|remove|purge)\b",
-                    r"\brpm\s+-[eUi]\b",
-                    r"\bmkfs\b",
-                    r"\bfdisk\b",
-                    r"\bparted\b",
-                    r">",  # 重定向写入
-                ]
-                if any(re.search(p, cmd_str) for p in write_patterns):
-                    return '{"status": "BLOCKED", "reason": "只读安全模式，已拦截潜在的修改动作"}'
+            blocked, reason = check_readonly_block(tool_call_name, args, context)
+            if blocked:
+                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
 
             result = await asyncio.to_thread(
                 ssh_manager.execute_command, session_id, args.get("command")
             )
             return json.dumps(result)
 
+        elif tool_call_name == "winrm_execute_command":
+            from connections.winrm_manager import winrm_executor
+
+            extra_args = context.get("extra_args") or {}
+            command = args.get("command")
+            if args.get("password") or args.get("username"):
+                logger.warning("winrm_execute_command ignored model-supplied credentials and used managed session credentials.")
+
+            if not all([context.get("host"), context.get("port"), context.get("username"), context.get("password") is not None, command]):
+                return json.dumps(
+                    {
+                        "status": "ERROR",
+                        "error": "WinRM 会话凭据不完整，请检查资产中心配置的 host/port/user/password。",
+                    },
+                    ensure_ascii=False,
+                )
+
+            blocked, reason = check_readonly_block(tool_call_name, args, context)
+            if blocked:
+                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
+
+            result = await asyncio.to_thread(
+                winrm_executor.execute_command,
+                host=context.get("host"),
+                port=context.get("port"),
+                username=context.get("username"),
+                password=context.get("password"),
+                command=command,
+                extra_args=extra_args,
+            )
+            return json.dumps(result, ensure_ascii=False)
+
+        elif tool_call_name == "network_cli_execute_command":
+            from connections.ssh_manager import ssh_manager
+
+            session_id = context.get("session_id")
+            if not session_id:
+                return '{"error": "没有找到激活的网络设备会话"}'
+
+            blocked, reason = check_readonly_block(tool_call_name, args, context)
+            if blocked:
+                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
+
+            result = await asyncio.to_thread(
+                ssh_manager.execute_network_cli_command,
+                session_id,
+                args.get("command"),
+            )
+            return json.dumps(result, ensure_ascii=False)
+
         elif tool_call_name == "local_execute_script":
             # 这是为了兼容之前的 Gemini Skills，让它能在当前电脑上跑写的 python 脚本
             cmd = args.get("command")
             cwd = args.get("cwd") or os.getcwd()
 
-            # 【轻量级安全防御】
-            allow_mod = context.get("allow_modifications", False)
-            if not allow_mod:
-                write_patterns = [
-                    r"\brm\b",
-                    r"\bmkdir\b",
-                    r"\bmv\b",
-                    r"\bcp\b",
-                    r"\bvi\b",
-                    r"\bvim\b",
-                    r"\bnano\b",
-                    r"\bchmod\b",
-                    r"\bchown\b",
-                    r"\bdd\b",
-                    r"\bsystemctl\s+(start|stop|restart|enable|disable)\b",
-                    r"\byum\s+(install|remove|erase)\b",
-                    r"\bapt(-get)?\s+(install|remove|purge)\b",
-                    r"\brpm\s+-[eUi]\b",
-                    r"\bmkfs\b",
-                    r"\bfdisk\b",
-                    r"\bparted\b",
-                    r">",  # 重定向写入
-                    # Windows
-                    r"\bdel\b",
-                    r"\bformat\b",
-                    r"\brmdir\b",
-                ]
-                if any(re.search(p, cmd) for p in write_patterns):
-                    return '{"status": "BLOCKED", "reason": "只读安全模式，已拦截潜在的修改动作"}'
+            is_valid, reason = self._validate_local_execution(cmd, cwd, context)
+            if not is_valid:
+                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
 
-            # 防止 AI 幻觉写出直接格式化硬盘或关闭操作系统的恶意指令。
-            # 覆盖 Windows + Linux 双平台危险命令
-            dangerous_commands = [
-                # Windows
-                "del /f /s /q",
-                "format ",
-                "shutdown ",
-                "rmdir /s",
-                "taskkill /f /im svchost",
-                # Linux
-                "rm -rf /",
-                "mkfs.",
-                "dd if=",
-                ":(){ :|:& };:",
-                "> /dev/sd",
-                "shutdown -h",
-                "halt",
-                "poweroff",
-                "init 0",
-            ]
-            if any(danger in cmd.lower() for danger in dangerous_commands):
-                logger.warning(f"🚨 [Security] 拦截了 AI 试图执行的高危本地指令: {cmd}")
-                return json.dumps(
-                    {
-                        "status": "BLOCKED",
-                        "error": "指令触发了宿主机高危防御策略，已被系统拦截。请检查你的脚本逻辑。",
-                    }
-                )
+            blocked, reason = check_readonly_block(tool_call_name, args, context)
+            if blocked:
+                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
 
             try:
 
@@ -659,8 +443,8 @@ class SkillDispatcher:
                     env["PYTHONIOENCODING"] = "utf-8"
 
                     process = subprocess.Popen(
-                        cmd,
-                        shell=True,
+                        shlex.split(cmd, posix=os.name != "nt"),
+                        shell=False,
                         cwd=cwd,
                         env=env,
                         stdout=subprocess.PIPE,
@@ -716,32 +500,55 @@ class SkillDispatcher:
         elif tool_call_name == "db_execute_query":
             from connections.db_manager import db_executor
 
-            db_type = args.get("db_type")
-            host = args.get("host")
-            port = args.get("port")
-            user = args.get("user")
-            password = args.get("password")
-            database = args.get("database")
+            extra_args = context.get("extra_args") or {}
+            db_type = (
+                args.get("db_type")
+                or extra_args.get("db_type")
+                or extra_args.get("login_protocol")
+                or context.get("protocol")
+                or context.get("asset_type")
+                or "mysql"
+            )
+            db_type = str(db_type).lower()
+            if db_type not in SQL_PROTOCOLS:
+                return json.dumps(
+                    {
+                        "status": "ERROR",
+                        "error": f"当前数据源协议是 {db_type}，不能使用 db_execute_query；请使用对应的数据源工具。",
+                    },
+                    ensure_ascii=False,
+                )
+            host = context.get("host") or args.get("host")
+            port = context.get("port") or args.get("port")
+            user = context.get("username") or args.get("user")
+            password = context.get("password")
+            database = (
+                extra_args.get("SID")
+                or extra_args.get("service_name")
+                or extra_args.get("database")
+                or extra_args.get("db_name")
+                or args.get("database")
+                or ""
+            )
             sql = args.get("sql")
 
-            allow_mod = context.get("allow_modifications", False)
-            if not allow_mod and sql:
-                # 危险的数据库写操作和DDL命令
-                sql_write_patterns = [
-                    r"\binsert\b",
-                    r"\bupdate\b",
-                    r"\bdelete\b",
-                    r"\bdrop\b",
-                    r"\balter\b",
-                    r"\btruncate\b",
-                    r"\breplace\b",
-                    r"\bgrant\b",
-                    r"\brevoke\b",
-                    r"\bcommit\b",
-                    r"\brollback\b",
-                ]
-                if any(re.search(p, sql, re.IGNORECASE) for p in sql_write_patterns):
-                    return '{"status": "BLOCKED", "reason": "只读安全模式，已拦截潜在的数据库修改动作"}'
+            if args.get("password"):
+                logger.warning("db_execute_query ignored model-supplied password and used managed session credentials.")
+            if args.get("database") and database != args.get("database"):
+                logger.warning("db_execute_query ignored model-supplied database and used managed session database.")
+
+            if not all([db_type, host, port, user, password is not None, sql]):
+                return json.dumps(
+                    {
+                        "status": "ERROR",
+                        "error": "数据库会话凭据不完整，请检查资产中心配置的 host/port/user/password/database。",
+                    },
+                    ensure_ascii=False,
+                )
+
+            blocked, reason = check_readonly_block(tool_call_name, args, context)
+            if blocked:
+                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
 
             logger.info(
                 f"AI 调用原生数据库驱动 [{db_type.upper()}] 查询: {host}:{port}/{database} -> SQL: {sql}"
@@ -758,6 +565,107 @@ class SkillDispatcher:
                 sql,
             )
 
+        elif tool_call_name == "redis_execute_command":
+            from connections.datastore_manager import redis_executor
+
+            command = args.get("command", "")
+            blocked, reason = check_readonly_block(tool_call_name, args, context)
+            if blocked:
+                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
+
+            result = await asyncio.to_thread(
+                redis_executor.execute_command,
+                host=context.get("host"),
+                port=context.get("port"),
+                username=context.get("username") or "",
+                password=context.get("password"),
+                command=command,
+                extra_args=context.get("extra_args") or {},
+            )
+            return json.dumps(result, ensure_ascii=False, default=str)
+
+        elif tool_call_name == "mongodb_find":
+            from connections.datastore_manager import mongo_executor
+
+            extra_args = context.get("extra_args") or {}
+            database = args.get("database") or extra_args.get("database") or extra_args.get("db_name") or "admin"
+            result = await asyncio.to_thread(
+                mongo_executor.find,
+                host=context.get("host"),
+                port=context.get("port"),
+                username=context.get("username") or "",
+                password=context.get("password"),
+                database=database,
+                collection=args.get("collection"),
+                filter_doc=args.get("filter") or {},
+                projection=args.get("projection"),
+                limit=args.get("limit") or 100,
+                extra_args=extra_args,
+            )
+            return json.dumps(result, ensure_ascii=False, default=str)
+
+        elif tool_call_name in {
+            "http_api_request",
+            "k8s_api_request",
+            "monitoring_api_query",
+            "virtualization_api_request",
+            "storage_api_request",
+        }:
+            from connections.http_api_manager import http_api_executor
+
+            if tool_call_name == "virtualization_api_request" and context.get("protocol") == "winrm":
+                return await self.route_and_execute(
+                    "winrm_execute_command",
+                    {"command": args.get("command") or args.get("path") or "Get-VM | Select-Object -First 20 | ConvertTo-Json -Compress"},
+                    context,
+                )
+            if tool_call_name == "storage_api_request" and context.get("protocol") == "snmp":
+                return await self.route_and_execute(
+                    "snmp_get",
+                    {"oid": args.get("oid") or "1.3.6.1.2.1.1.1.0"},
+                    context,
+                )
+
+            method = str(args.get("method") or "GET").upper()
+            blocked, reason = check_readonly_block(tool_call_name, args, context)
+            if blocked:
+                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
+
+            result = await asyncio.to_thread(
+                http_api_executor.request,
+                asset_type=context.get("asset_type") or "",
+                host=context.get("host"),
+                port=context.get("port"),
+                username=context.get("username") or "",
+                password=context.get("password"),
+                extra_args=context.get("extra_args") or {},
+                method=method,
+                path=args.get("path") or "/",
+                headers=args.get("headers") or {},
+                body=args.get("body"),
+            )
+            return json.dumps(result, ensure_ascii=False, default=str)
+
+        elif tool_call_name == "snmp_get":
+            from connections.snmp_manager import snmp_executor
+
+            extra_args = dict(context.get("extra_args") or {})
+            if extra_args.get("v3_auth_user") and not extra_args.get("v3_username"):
+                extra_args["v3_username"] = extra_args.get("v3_auth_user")
+            elif context.get("username") and not any(
+                extra_args.get(key)
+                for key in ("v3_username", "v3_auth_user", "security_name", "username", "user")
+            ):
+                extra_args.setdefault("v3_username", context.get("username"))
+            result = await asyncio.to_thread(
+                snmp_executor.get,
+                host=context.get("host"),
+                port=context.get("port") or 161,
+                oid=args.get("oid"),
+                extra_args=extra_args,
+            )
+            return json.dumps(result, ensure_ascii=False, default=str)
+
         elif tool_call_name == "list_active_sessions":
             from connections.ssh_manager import ssh_manager
 
@@ -769,6 +677,8 @@ class SkillDispatcher:
                         "session_id": sid,
                         "host": info.get("host"),
                         "remark": info.get("remark", ""),
+                        "asset_type": info.get("asset_type"),
+                        "protocol": info.get("protocol"),
                         "profile": info.get("agent_profile", ""),
                         "allow_modifications": info.get("allow_modifications", False),
                     }
@@ -792,31 +702,11 @@ class SkillDispatcher:
         elif tool_call_name == "execute_on_scope":
             scope_target = args.get("scope_target", "ALL")
             command = args.get("command", "")
-            parent_allow_mod = context.get("allow_modifications", False)
-
-            if not parent_allow_mod:
-                write_patterns = [
-                    r"\brm\b",
-                    r"\bmkdir\b",
-                    r"\bmv\b",
-                    r"\bcp\b",
-                    r"\bvi\b",
-                    r"\bvim\b",
-                    r"\bnano\b",
-                    r"\bchmod\b",
-                    r"\bchown\b",
-                    r"\bdd\b",
-                    r"\bsystemctl\s+(start|stop|restart|enable|disable)\b",
-                    r"\byum\s+(install|remove|erase)\b",
-                    r"\bapt(-get)?\s+(install|remove|purge)\b",
-                    r"\brpm\s+-[eUi]\b",
-                    r"\bmkfs\b",
-                    r"\bfdisk\b",
-                    r"\bparted\b",
-                    r">",
-                ]
-                if any(re.search(p, command) for p in write_patterns):
-                    return '{"status": "BLOCKED", "reason": "只读安全模式，已拦截潜在的修改动作"}'
+            blocked, reason = check_readonly_block(tool_call_name, args, context)
+            if blocked:
+                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
+            if not str(command).strip():
+                return json.dumps({"status": "ERROR", "error": "范围执行命令不能为空。"}, ensure_ascii=False)
 
             from connections.ssh_manager import ssh_manager
 
@@ -831,6 +721,16 @@ class SkillDispatcher:
             tasks = []
             for sid, sdata in ssh_manager.active_sessions.items():
                 info = sdata["info"]
+                identity = resolve_asset_identity(
+                    info.get("asset_type"),
+                    info.get("protocol"),
+                    info.get("extra_args", {}),
+                    info.get("host"),
+                    info.get("port"),
+                    info.get("remark"),
+                )
+                if identity["protocol"] != "ssh":
+                    continue
 
                 if target_tag and target_tag not in info.get("tags", []):
                     continue
@@ -843,7 +743,7 @@ class SkillDispatcher:
                     or (host and host in scope_target)
                     or (remark and remark in scope_target)
                 ):
-                    tasks.append((sid, host or remark))
+                    tasks.append((sid, host or remark, identity["asset_type"]))
 
             if not tasks:
                 return json.dumps(
@@ -854,15 +754,35 @@ class SkillDispatcher:
 
             sem = asyncio.Semaphore(50)
 
-            async def _run_single(t_sid, t_host):
+            async def _run_single(t_sid, t_host, t_asset_type):
                 async with sem:
-                    res = await asyncio.to_thread(
-                        ssh_manager.execute_command, t_sid, command
+                    actual_tool = (
+                        "network_cli_execute_command"
+                        if t_asset_type == "switch"
+                        else "linux_execute_command"
                     )
+                    hard_blocked, hard_reason = check_hard_block(actual_tool, args)
+                    if hard_blocked:
+                        return t_host, {"success": False, "error": hard_reason}
+                    session_info = ssh_manager.active_sessions.get(t_sid, {}).get("info", {})
+                    readonly_blocked, readonly_reason = check_readonly_block(
+                        actual_tool, args, {**context, **session_info}
+                    )
+                    if readonly_blocked:
+                        return t_host, {"success": False, "error": readonly_reason}
+
+                    if actual_tool == "network_cli_execute_command":
+                        res = await asyncio.to_thread(
+                            ssh_manager.execute_network_cli_command, t_sid, command
+                        )
+                    else:
+                        res = await asyncio.to_thread(
+                            ssh_manager.execute_command, t_sid, command
+                        )
                     return t_host, res
 
             completed = await asyncio.gather(
-                *(_run_single(sid, host) for sid, host in tasks)
+                *(_run_single(sid, host, asset_type) for sid, host, asset_type in tasks)
             )
 
             results_dict = {}
@@ -943,14 +863,14 @@ class SkillDispatcher:
 
         elif tool_call_name == "search_knowledge_base":
             from core.rag import kb_manager
-            from core.llm_factory import get_client_for_model
+            from core.llm_factory import get_embedding_client_and_model
 
-            client, _ = get_client_for_model("gemini-2.5-flash")
+            client, embedding_model = get_embedding_client_and_model()
 
             query = args.get("query")
             try:
                 result = await asyncio.wait_for(
-                    kb_manager.search(query, client), timeout=60.0
+                    kb_manager.search(query, client, embedding_model), timeout=60.0
                 )
                 return json.dumps({"status": "SUCCESS", "results": result})
             except asyncio.TimeoutError:
@@ -996,6 +916,7 @@ class SkillDispatcher:
                             "port": asset.get("port"),
                             "username": asset.get("username"),
                             "asset_type": asset.get("asset_type"),
+                            "protocol": asset.get("protocol"),
                             "remark": asset.get("remark"),
                             "tags": asset.get("tags"),
                         }

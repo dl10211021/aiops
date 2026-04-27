@@ -5,7 +5,10 @@ import Sidebar from '@/components/layout/Sidebar'
 import TopBar from '@/components/layout/TopBar'
 import ToastContainer from '@/components/layout/ToastContainer'
 import ChatWindow from '@/components/chat/ChatWindow'
+import Dashboard from '@/components/views/Dashboard'
+import BigScreen from '@/components/views/BigScreen'
 import AssetVault from '@/components/views/AssetVault'
+import ApprovalCenter from '@/components/views/ApprovalCenter'
 import SkillMarket from '@/components/views/SkillMarket'
 import KnowledgeBase from '@/components/views/KnowledgeBase'
 import CronManager from '@/components/views/CronManager'
@@ -14,17 +17,21 @@ import LLMConfigModal from '@/components/modals/LLMConfigModal'
 import NotificationsModal from '@/components/modals/NotificationsModal'
 import DynamicSkillsModal from '@/components/modals/DynamicSkillsModal'
 import SessionActionsModal from '@/components/modals/SessionActionsModal'
+import SafetyPolicyModal from '@/components/modals/SafetyPolicyModal'
 import { getActiveSessions, pollAllSessions, getSessionHistory } from '@/api/client'
 import type { ChatMessage } from '@/types'
 
 function ViewRouter() {
   const currentView = useStore((s) => s.currentView)
   switch (currentView) {
+    case 'dashboard': return <Dashboard />
+    case 'bigscreen': return <BigScreen />
     case 'chat': return <ChatWindow />
     case 'assets': return <AssetVault />
     case 'skills': return <SkillMarket />
     case 'knowledge': return <KnowledgeBase />
     case 'cron': return <CronManager />
+    case 'approvals': return <ApprovalCenter />
     default: return <ChatWindow />
   }
 }
@@ -35,6 +42,7 @@ function ModalRouter() {
     case 'connect': return <ConnectionModal />
     case 'llm-config': return <LLMConfigModal />
     case 'notifications': return <NotificationsModal />
+    case 'safety-policy': return <SafetyPolicyModal />
     case 'dynamic-skills': return <DynamicSkillsModal />
     case 'session-actions': return <SessionActionsModal />
     default: return null
@@ -67,7 +75,8 @@ export default function App() {
             skills: sinfo.skills || [],
             agentProfile: sinfo.agentProfile || 'default',
             user: sinfo.user || '',
-            asset_type: sinfo.asset_type || 'ssh',
+            asset_type: sinfo.asset_type || sinfo.protocol || 'ssh',
+            protocol: sinfo.protocol || 'ssh',
             extra_args: sinfo.extra_args || {},
             heartbeatEnabled: sinfo.heartbeatEnabled || false,
             tags: sinfo.tags || ['未分组'],
@@ -124,7 +133,7 @@ export default function App() {
   }, [sessions, appendMessage])
 
   return (
-    <div className="h-screen flex bg-ops-dark overflow-hidden">
+    <div className="ops-shell h-screen flex bg-ops-dark overflow-hidden">
       {/* Left icon nav */}
       <LeftNav />
 

@@ -1,10 +1,12 @@
 import uvicorn
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, closing
 import asyncio
+import sqlite3
 
 # 在所有模块加载之前加载 .env 文件，确保通知配置等环境变量持久生效
 try:
@@ -53,6 +55,7 @@ async def background_hydrate_assets():
                 agent_profile=a["agent_profile"],
                 remark=a["remark"],
                 asset_type=a.get("asset_type", "ssh"),
+                protocol=a.get("protocol"),
                 extra_args=a["extra_args"],
                 tags=a.get("tags", ["未分组"]),
                 lazy=True,
@@ -79,9 +82,11 @@ async def background_hydrate_assets():
 async def lifespan(app: FastAPI):
     # Startup actions
     from core.heartbeat import start_heartbeat
+    from core.cron_manager import CronManager
 
     start_heartbeat()
     logging.info("Heartbeat worker started.")
+    CronManager.start_scheduler()
 
     # 将长耗时的资产重连放入后台并发执行，防止拖死应用启动
     asyncio.create_task(background_hydrate_assets())
@@ -101,14 +106,37 @@ app = FastAPI(
 
 from fastapi.staticfiles import StaticFiles
 
-# ------------- 跨域配置 (本地开发必须开启) -------------
+allowed_origins = [
+    origin.strip()
+    for origin in os.environ.get(
+        "OPSCORE_ALLOWED_ORIGINS",
+        "http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origin.strip()
+]
+
+# ------------- 跨域配置 -------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 允许你的前端 HTML 跨域访问
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def api_token_auth(request: Request, call_next):
+    if request.url.path.startswith("/api/v1/") and request.method != "OPTIONS":
+        from core.security import is_authorized_request
+
+        token = os.environ.get("OPSCORE_API_TOKEN", "")
+        if not is_authorized_request(request.headers, token):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Missing or invalid OpsCore API token"},
+            )
+    return await call_next(request)
 
 import sys
 
@@ -138,6 +166,55 @@ if os.path.exists(react_assets):
 
 
 # ------------- 健康检查与前端页面 -------------
+@app.get("/healthz")
+def healthz():
+    """Production health check endpoint for load balancers and container probes."""
+    base_path = get_base_path()
+    root_dir = os.path.dirname(__file__)
+    db_path = os.path.join(root_dir, "opscore.db")
+    cron_db_path = os.path.join(root_dir, "cron_jobs.sqlite")
+    react_index = os.path.join(base_path, "static_react", "index.html")
+
+    checks = {
+        "database": {"status": "ok", "path": "opscore.db"},
+        "cron_store": {"status": "ok", "path": "cron_jobs.sqlite"},
+        "storage": {"status": "ok", "path": root_dir},
+        "frontend": {"status": "ok" if os.path.exists(react_index) else "warning"},
+        "hydrate": dict(hydrate_status),
+    }
+
+    try:
+        with closing(sqlite3.connect(db_path, timeout=2)) as conn:
+            conn.execute("SELECT 1")
+    except Exception as e:
+        checks["database"] = {"status": "error", "path": "opscore.db", "error": str(e)}
+
+    try:
+        if os.path.exists(cron_db_path):
+            with closing(sqlite3.connect(cron_db_path, timeout=2)) as conn:
+                conn.execute("SELECT 1")
+        else:
+            checks["cron_store"] = {"status": "warning", "path": "cron_jobs.sqlite", "message": "not initialized"}
+    except Exception as e:
+        checks["cron_store"] = {"status": "error", "path": "cron_jobs.sqlite", "error": str(e)}
+
+    if not os.access(root_dir, os.W_OK):
+        checks["storage"] = {"status": "error", "path": root_dir, "error": "not writable"}
+
+    overall = "ok"
+    if any(item.get("status") == "error" for item in checks.values() if isinstance(item, dict)):
+        overall = "error"
+    elif any(item.get("status") == "warning" for item in checks.values() if isinstance(item, dict)):
+        overall = "warning"
+
+    return {
+        "status": overall,
+        "service": "opscore-aiops",
+        "version": app.version,
+        "checks": checks,
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     """优先返回 React 构建产物，降级到旧版 HTML"""

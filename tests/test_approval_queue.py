@@ -1,0 +1,160 @@
+import asyncio
+import shutil
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from api import routes
+
+
+class TestApprovalQueue(unittest.TestCase):
+    def tearDown(self):
+        for path in (Path.cwd() / "tests").glob("tmp_approval_queue_*"):
+            shutil.rmtree(path, ignore_errors=True)
+
+    def _store_path(self, name: str) -> Path:
+        root = Path.cwd() / "tests" / f"tmp_approval_queue_{name}"
+        root.mkdir(parents=True, exist_ok=True)
+        return root / "approvals.json"
+
+    def test_record_approval_request_redacts_args_and_lists_pending(self):
+        from core import approval_queue
+
+        store_path = self._store_path("record")
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path):
+            request = approval_queue.record_approval_request(
+                tool_call_id="call-1",
+                session_id="sid-1",
+                tool_name="db_execute_query",
+                args={"sql": "UPDATE users SET password='secret' WHERE id=1", "password": "plain-secret"},
+                reason="检测到数据库数据修改或结构变更操作。",
+                context={"host": "10.0.0.1", "asset_type": "mysql", "protocol": "mysql", "password": "asset-secret"},
+                timeout_seconds=300,
+            )
+            pending = approval_queue.list_approval_requests(status="pending")
+
+        self.assertEqual(request["status"], "pending")
+        self.assertEqual(pending[0]["id"], "call-1")
+        self.assertEqual(pending[0]["args"]["password"], "***")
+        self.assertNotIn("asset-secret", str(pending[0]))
+
+    def test_resolve_approval_request_records_decision(self):
+        from core import approval_queue
+
+        store_path = self._store_path("resolve")
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path):
+            approval_queue.record_approval_request(
+                tool_call_id="call-2",
+                session_id="sid-1",
+                tool_name="linux_execute_command",
+                args={"command": "systemctl restart nginx"},
+                reason="检测到可能改变 Linux/KVM 系统状态的命令。",
+                context={"host": "10.0.0.2", "asset_type": "linux", "protocol": "ssh"},
+            )
+            resolved = approval_queue.resolve_approval_request(
+                "call-2",
+                approved=False,
+                operator="ops-admin",
+                note="变更窗口外拒绝",
+            )
+
+        self.assertEqual(resolved["status"], "rejected")
+        self.assertEqual(resolved["decision"], "rejected")
+        self.assertEqual(resolved["operator"], "ops-admin")
+        self.assertEqual(resolved["note"], "变更窗口外拒绝")
+
+    def test_pending_approval_expires_to_timeout(self):
+        from core import approval_queue
+
+        store_path = self._store_path("timeout")
+        with (
+            patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path),
+            patch.object(approval_queue, "_now", return_value=1_000.0),
+        ):
+            approval_queue.record_approval_request(
+                tool_call_id="call-3",
+                session_id="sid-1",
+                tool_name="http_api_request",
+                args={"method": "POST", "path": "/api/change"},
+                reason="HTTP POST 可能改变目标系统状态，需要确认。",
+                context={"host": "api.local", "asset_type": "api", "protocol": "http_api"},
+                timeout_seconds=30,
+            )
+
+        with (
+            patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path),
+            patch.object(approval_queue, "_now", return_value=1_031.0),
+        ):
+            timed_out = approval_queue.list_approval_requests(status="timeout")
+
+        self.assertEqual(len(timed_out), 1)
+        self.assertEqual(timed_out[0]["status"], "timeout")
+
+    def test_mark_approval_timeout_records_timeout_decision(self):
+        from core import approval_queue
+
+        store_path = self._store_path("mark_timeout")
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path):
+            approval_queue.record_approval_request(
+                tool_call_id="call-timeout",
+                session_id="sid-1",
+                tool_name="linux_execute_command",
+                args={"command": "systemctl restart nginx"},
+                reason="检测到可能改变 Linux/KVM 系统状态的命令。",
+                context={"host": "10.0.0.9", "asset_type": "linux", "protocol": "ssh"},
+            )
+            timed_out = approval_queue.mark_approval_timeout("call-timeout")
+
+        self.assertEqual(timed_out["status"], "timeout")
+        self.assertEqual(timed_out["decision"], "timeout")
+        self.assertEqual(timed_out["operator"], "system")
+
+    def test_approval_routes_list_and_decide_without_live_future(self):
+        from core import approval_queue
+
+        store_path = self._store_path("routes")
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path):
+            approval_queue.record_approval_request(
+                tool_call_id="call-4",
+                session_id="sid-1",
+                tool_name="redis_execute_command",
+                args={"command": "SET a b"},
+                reason="检测到 Redis 写操作或高危命令。",
+                context={"host": "redis.local", "asset_type": "redis", "protocol": "redis"},
+            )
+
+            listed = asyncio.run(routes.list_approval_requests(status="pending"))
+            decision = asyncio.run(
+                routes.decide_approval_request(
+                    "call-4",
+                    routes.ApprovalDecisionRequest(approved=True, operator="ops-admin"),
+                )
+            )
+
+        self.assertEqual(listed.data["approvals"][0]["id"], "call-4")
+        self.assertEqual(decision.data["approval"]["status"], "approved")
+
+    def test_agent_records_approval_request_with_policy_timeout(self):
+        from core import agent, approval_queue
+
+        store_path = self._store_path("agent")
+        with (
+            patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path),
+            patch.object(agent, "approval_timeout_seconds", return_value=45),
+        ):
+            recorded = agent.record_tool_approval_request(
+                tool_call_id="call-5",
+                session_id="sid-2",
+                tool_name="linux_execute_command",
+                args={"command": "systemctl restart nginx"},
+                reason="检测到可能改变 Linux/KVM 系统状态的命令。",
+                context={"session_id": "sid-2", "host": "10.0.0.5", "asset_type": "linux", "protocol": "ssh"},
+            )
+
+        self.assertEqual(recorded["id"], "call-5")
+        self.assertEqual(recorded["status"], "pending")
+        self.assertEqual(recorded["expires_at_ts"] - recorded["requested_at_ts"], 45)
+
+
+if __name__ == "__main__":
+    unittest.main()

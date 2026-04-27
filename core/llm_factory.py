@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
@@ -41,22 +42,122 @@ DEFAULT_PROVIDERS = [
     }
 ]
 
+
+SUPPORTED_PROVIDER_PROTOCOLS = {"openai", "anthropic", "custom"}
+MASKED_SECRET = "********"
+
+
+def normalize_provider_config(provider: dict) -> dict:
+    """Normalize provider config at the API boundary before saving or using it."""
+    item = dict(provider or {})
+    provider_id = str(item.get("id") or "").strip()
+    provider_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", provider_id).strip("._-")
+    if not provider_id:
+        provider_id = "custom"
+
+    protocol = str(item.get("protocol") or "openai").strip().lower()
+    if protocol == "custom":
+        protocol = "openai"
+    if protocol not in {"openai", "anthropic"}:
+        protocol = "openai"
+
+    name = str(item.get("name") or "").strip() or provider_id
+    base_url = str(item.get("base_url") or "").strip()
+    api_key = str(item.get("api_key") or "").strip()
+    models = item.get("models", "")
+    if isinstance(models, list):
+        models = ",".join(str(m).strip() for m in models if str(m).strip())
+    else:
+        models = str(models or "").strip()
+
+    return {
+        "id": provider_id,
+        "name": name,
+        "protocol": protocol,
+        "base_url": base_url,
+        "api_key": api_key,
+        "models": models,
+    }
+
+
+def normalize_providers(providers: list[dict]) -> list[dict]:
+    seen = set()
+    normalized = []
+    for provider in providers or []:
+        item = normalize_provider_config(provider)
+        base_id = item["id"]
+        suffix = 2
+        while item["id"] in seen:
+            item["id"] = f"{base_id}_{suffix}"
+            suffix += 1
+        seen.add(item["id"])
+        normalized.append(item)
+    return normalized
+
+
+def mask_provider_secrets(providers):
+    masked = []
+    for provider in normalize_providers(providers):
+        item = dict(provider)
+        if item.get("api_key"):
+            item["api_key"] = MASKED_SECRET
+        masked.append(item)
+    return masked
+
+
+def merge_provider_secrets(incoming, existing):
+    existing_by_id = {p.get("id"): p for p in normalize_providers(existing)}
+    merged = []
+    for provider in incoming:
+        item = normalize_provider_config(provider)
+        old = existing_by_id.get(item.get("id"), {})
+        if item.get("api_key") == MASKED_SECRET:
+            item["api_key"] = old.get("api_key", "")
+        merged.append(item)
+    return merged
+
 def get_all_providers():
     if not PROVIDERS_JSON_PATH.exists():
-        with open(PROVIDERS_JSON_PATH, "w", encoding="utf-8") as f:
-            json.dump(DEFAULT_PROVIDERS, f, ensure_ascii=False, indent=2)
-        return DEFAULT_PROVIDERS
+        save_providers(DEFAULT_PROVIDERS)
+        return normalize_providers(DEFAULT_PROVIDERS)
     try:
         with open(PROVIDERS_JSON_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+            return normalize_providers(json.load(f))
     except Exception:
-        return DEFAULT_PROVIDERS
+        return normalize_providers(DEFAULT_PROVIDERS)
 
 def save_providers(providers):
-    with open(PROVIDERS_JSON_PATH, "w", encoding="utf-8") as f:
-        json.dump(providers, f, ensure_ascii=False, indent=2)
+    normalized = normalize_providers(providers)
+    PROVIDERS_JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = PROVIDERS_JSON_PATH.with_suffix(PROVIDERS_JSON_PATH.suffix + ".tmp")
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(normalized, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    tmp_path.replace(PROVIDERS_JSON_PATH)
+
+def get_default_model_id() -> str:
+    """Return the first configured model as a provider-qualified id."""
+    providers = get_all_providers()
+    for provider in providers:
+        models = [m.strip() for m in provider.get("models", "").split(",") if m.strip()]
+        if models:
+            return f"{provider['id']}|{models[0]}"
+    if providers:
+        return f"{providers[0]['id']}|none"
+    raise ValueError("No model provider is configured")
+
+def get_embedding_client_and_model(full_model_id: str | None = None):
+    """Resolve the embedding client/model without falling back to hard-coded Gemini."""
+    import os
+
+    model_id = os.environ.get("EMBEDDING_MODEL_ID") or full_model_id or get_default_model_id()
+    client, config = get_client_for_model(model_id)
+    embedding_model = os.environ.get("EMBEDDING_MODEL") or config["model"]
+    return client, embedding_model
 
 def get_client_for_model(full_model_id: str):
+    if not full_model_id:
+        full_model_id = get_default_model_id()
     providers = get_all_providers()
     
     provider_id = None
@@ -68,7 +169,8 @@ def get_client_for_model(full_model_id: str):
     provider = None
     if provider_id:
         provider = next((p for p in providers if p.get("id") == provider_id), None)
-    else:
+
+    if not provider:
         # Fallback: try to find the model in the manual lists
         for p in providers:
             p_models = [m.strip() for m in p.get("models", "").split(",") if m.strip()]
@@ -77,9 +179,8 @@ def get_client_for_model(full_model_id: str):
                 break
         if not provider and providers:
             provider = providers[0] # ultimate fallback
-            
-    if not provider:
-        raise ValueError(f"No suitable provider found for model '{full_model_id}'")
+
+    if not provider:        raise ValueError(f"No suitable provider found for model '{full_model_id}'")
         
     protocol = provider.get("protocol", "openai")
     api_key = provider.get("api_key", "dummy")

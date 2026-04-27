@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store'
 import { getProviders, updateProviders, getAvailableModels } from '@/api/client'
-import type { ProviderConfig } from '@/api/client'
+import type { ModelGroup, ProviderConfig } from '@/api/client'
 
 export default function LLMConfigModal() {
   const closeModal = useStore((s) => s.closeModal)
@@ -12,7 +12,7 @@ export default function LLMConfigModal() {
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [modelsCount, setModelsCount] = useState<number | null>(null)
-  const [fetchedModelsInfo, setFetchedModelsInfo] = useState<import('@/api/client').ModelGroup[]>([])
+  const [fetchedModelsInfo, setFetchedModelsInfo] = useState<ModelGroup[]>([])
 
   useEffect(() => {
     getProviders().then((r) => {
@@ -63,24 +63,44 @@ export default function LLMConfigModal() {
       await updateProviders(providers)
       addToast('配置已保存', 'success')
       closeModal()
-    } catch {
-      addToast('保存失败', 'error')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '保存失败', 'error')
     }
     setSaving(false)
   }
 
   const handleTestModels = async () => {
+    setTesting(true)
     try {
-      try { await updateProviders(providers) } catch (e) { console.warn('Save before test failed', e) } // 必须先保存
-      const res = await getAvailableModels()
+      if (!selectedId) throw new Error('请先选择一个模型供应商')
+      await updateProviders(providers)
+      const res = await getAvailableModels(selectedId, true)
       let count = 0
-      res.data.models.forEach(g => { count += g.models.length })
+      let nextProviders = providers
+      
+      // Auto-fill models string only for the selected provider.
+      if (res.data.models) {
+        res.data.models.forEach(g => { 
+          count += g.models.length;
+          nextProviders = nextProviders.map(p => {
+            if (p.id === g.provider_id) {
+              const modelNames = g.models.filter(m => m.name !== '未获取到模型或配置错误').map(m => m.name).join(',');
+              return { ...p, models: modelNames };
+            }
+            return p;
+          });
+        })
+        setProviders(nextProviders)
+        await updateProviders(nextProviders)
+      }
+      
       setModelsCount(count)
       setFetchedModelsInfo(res.data.models)
-      addToast(`成功拉取到 ${count} 个可用模型`, 'success')
-    } catch {
-      addToast('获取模型列表失败，请检查网络和 API Key', 'error')
+      addToast(`已从当前供应商拉取 ${count} 个可用模型`, 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '获取模型失败，请检查 Base URL 和 API Key', 'error')
     }
+    setTesting(false)
   }
 
   const selectedProvider = providers.find(p => p.id === selectedId)
@@ -163,7 +183,7 @@ export default function LLMConfigModal() {
                     rows={3}
                     placeholder="gpt-4o, gpt-4-turbo"
                     className="w-full bg-ops-dark border border-ops-surface1 rounded px-3 py-2 text-sm font-mono text-ops-text focus:border-ops-accent outline-none resize-none" />
-                  <p className="text-[11px] text-ops-subtext mt-1">如果您知道可用的模型名，请在此填写。如果不填，系统将尝试从API动态拉取全量列表。</p>
+                  <p className="text-[11px] text-ops-subtext mt-1">可手动填写，也可点击下方按钮从当前供应商的 /models 接口强制刷新。</p>
                 </div>
 
                 
@@ -189,7 +209,7 @@ export default function LLMConfigModal() {
                     </div>
                   ) : (
                     <div className="text-[11px] text-ops-subtext italic bg-ops-surface0/50 p-2 rounded text-center border border-ops-surface0/50">
-                      点击右下角的"测试全局连接 & 动态获取模型"查看结果
+                      点击右下角的"测试当前供应商 & 动态获取模型"查看结果
                     </div>
                   )}
                 </div>
@@ -212,7 +232,7 @@ export default function LLMConfigModal() {
 een items-center bg-ops-dark">
             <div className="flex items-center gap-3">
               <button onClick={handleTestModels} disabled={testing || saving} className="text-xs bg-ops-surface1 hover:bg-ops-surface2 text-ops-text px-3 py-1.5 rounded transition-colors disabled:opacity-50">
-                {testing ? '⏳ 正在与模型供应商通信 (部分境外节点可能需数十秒)...' : '🔍 测试全局连接 & 动态获取模型'}
+                {testing ? '⏳ 正在与当前模型供应商通信...' : '🔍 测试当前供应商 & 动态获取模型'}
               </button>
               {modelsCount !== null && <span className="text-xs text-green-400">已成功获取 {modelsCount} 个模型</span>}
             </div>

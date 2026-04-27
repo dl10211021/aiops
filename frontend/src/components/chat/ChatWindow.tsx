@@ -1,9 +1,10 @@
 import { useRef, useEffect, useState } from 'react'
 import { useStore } from '@/store'
-import { streamChat, stopChat, approveToolCall } from '@/api/client'
+import { streamChat, stopChat, approveToolCall, getSafetyPolicy, getAvailableModels, getSessionTools, getSessionCommands } from '@/api/client'
+import type { ModelGroup } from '@/api/client'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import type { ChatMessage, ExecTraceItem, ToolApproval } from '@/types'
+import type { ChatMessage, ExecTraceItem, Session, SessionToolCatalog, ToolApproval, ToolsetInfo } from '@/types'
 
 // Configure marked for async
 marked.setOptions({ breaks: true, gfm: true })
@@ -34,18 +35,27 @@ export default function ChatWindow() {
       if (!stored.includes('|') && stored.includes('deepseek')) return `deepseek|${stored}`;
       return stored;
     }
-    return 'google|gemini-2.5-flash';
+    return '';
   })
   const [thinkingMode, setThinkingMode] = useState(() =>
     localStorage.getItem('ops_thinking') || 'off'
   )
-  const [availableModels, setAvailableModels] = useState<import('@/api/client').ModelGroup[]>([])
+  const [availableModels, setAvailableModels] = useState<ModelGroup[]>([])
+  const [readWriteWarningEnabled, setReadWriteWarningEnabled] = useState(true)
+  const [readWriteConfirm, setReadWriteConfirm] = useState<{ message: string; remember: boolean } | null>(null)
+  const [toolCatalog, setToolCatalog] = useState<SessionToolCatalog | null>(null)
+  const [backendCommands, setBackendCommands] = useState<Array<{ id: string; label: string; description: string; prompt: string }>>([])
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const session = currentSessionId ? sessions[currentSessionId] : null
   const messages = session?.messages || []
   const isStreaming = session?.isStreaming || false
+  const slashCommands = backendCommands.length > 0 ? backendCommands : (session ? buildSlashCommands(session, toolCatalog) : [])
+  const slashQuery = input.startsWith('/') ? input.slice(1).toLowerCase() : ''
+  const visibleSlashCommands = input.startsWith('/')
+    ? slashCommands.filter((cmd) => cmd.id.includes(slashQuery) || cmd.label.toLowerCase().includes(slashQuery)).slice(0, 6)
+    : []
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -56,29 +66,71 @@ export default function ChatWindow() {
 
   // Load available models once
   useEffect(() => {
-    import('@/api/client').then(({ getAvailableModels }) =>
-      getAvailableModels().then((r) => {
-        if (r.data.models) setAvailableModels(r.data.models)
-      }).catch(() => {})
-    )
+    getAvailableModels().then((r) => {
+      const groups = r.data.models || []
+      setAvailableModels(groups)
+      const validIds = groups.flatMap((g) => g.models.map((m) => m.id))
+      const firstValid = validIds.find((id) => !id.endsWith('|none')) || validIds[0] || ''
+      setModelName((current) => {
+        if (current && validIds.includes(current)) return current
+        return firstValid || current
+      })
+    }).catch(() => {})
+    getSafetyPolicy()
+      .then((r) => setReadWriteWarningEnabled(r.data.policy.readwrite_chat_warning_enabled))
+      .catch(() => {})
   }, [])
 
   // Save model to localStorage
   useEffect(() => {
-    localStorage.setItem('ops_model', modelName)
+    if (modelName) localStorage.setItem('ops_model', modelName)
   }, [modelName])
 
   useEffect(() => {
     localStorage.setItem('ops_thinking', thinkingMode)
   }, [thinkingMode])
 
-  const sendMessage = async () => {
-    if (!input.trim() || !currentSessionId || isStreaming) return
+  useEffect(() => {
+    if (!currentSessionId) {
+      setToolCatalog(null)
+      return
+    }
+    let cancelled = false
+    getSessionTools(currentSessionId)
+      .then((r) => {
+        if (!cancelled) setToolCatalog(r.data)
+      })
+      .catch(() => {
+        if (!cancelled) setToolCatalog(null)
+      })
+    getSessionCommands(currentSessionId)
+      .then((r) => {
+        if (!cancelled) setBackendCommands(r.data.commands || [])
+      })
+      .catch(() => {
+        if (!cancelled) setBackendCommands([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [currentSessionId, session?.asset_type, session?.protocol])
+
+  const sendMessage = async (forcedMessage?: string) => {
+    const text = (forcedMessage ?? input).trim()
+    if (!text || !currentSessionId || isStreaming) return
+
+    if (!forcedMessage && session?.isReadWriteMode && readWriteWarningEnabled) {
+      const ackKey = `opscore_rw_confirmed_${currentSessionId}`
+      if (sessionStorage.getItem(ackKey) !== '1') {
+        setReadWriteConfirm({ message: text, remember: false })
+        return
+      }
+    }
 
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
       role: 'user',
-      content: input.trim(),
+      content: text,
       timestamp: Date.now(),
     }
     appendMessage(currentSessionId, userMsg)
@@ -102,6 +154,10 @@ export default function ChatWindow() {
 
     try {
       const response = await streamChat(currentSessionId, userMsg.content, modelName, thinkingMode, controller.signal)
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `HTTP Error ${response.status}: ${response.statusText}`);
+      }
       const reader = response.body?.getReader()
       if (!reader) return
 
@@ -142,6 +198,8 @@ export default function ChatWindow() {
                     type: 'tool_start',
                     tool: data.tool || 'unknown',
                     args: typeof data.args === 'string' ? data.args : JSON.stringify(data.args || {}),
+                    status: 'running',
+                    startedAt: Date.now(),
                   } as ExecTraceItem],
                 }))
                 break
@@ -149,11 +207,7 @@ export default function ChatWindow() {
               case 'tool_end':
                 updateLastAssistantMessage(sid, (m) => ({
                   ...m,
-                  execTrace: [...(m.execTrace || []), {
-                    type: 'tool_end',
-                    tool: data.tool || 'unknown',
-                    result: data.result || '',
-                  } as ExecTraceItem],
+                  execTrace: completeLastTrace(m.execTrace || [], data),
                 }))
                 break
 
@@ -162,6 +216,7 @@ export default function ChatWindow() {
                   toolCallId: data.tool_call_id,
                   toolName: data.tool_name || 'unknown',
                   args: typeof data.args === 'string' ? data.args : JSON.stringify(data.args || {}),
+                  reason: data.reason || '',
                   uniqueId: `approval-${Date.now()}`,
                   resolved: false,
                 }
@@ -201,6 +256,9 @@ export default function ChatWindow() {
       } else {
         const errMsg = err instanceof Error ? err.message : 'Network error'
         addToast(errMsg, 'error')
+        updateLastAssistantMessage(currentSessionId, (m) => ({
+          ...m, content: m.content || `\n\n❌ 消息发送失败: ${errMsg}`,
+        }))
       }
     } finally {
       updateSession(currentSessionId, { isStreaming: false })
@@ -236,6 +294,21 @@ export default function ChatWindow() {
     }
   }
 
+  const confirmReadWriteSend = () => {
+    if (!readWriteConfirm || !currentSessionId) return
+    if (readWriteConfirm.remember) {
+      sessionStorage.setItem(`opscore_rw_confirmed_${currentSessionId}`, '1')
+    }
+    const message = readWriteConfirm.message
+    setReadWriteConfirm(null)
+    void sendMessage(message)
+  }
+
+  const applySlashCommand = (prompt: string) => {
+    setInput(prompt)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }
+
   if (!session) {
     return (
       <div className="flex-1 flex items-center justify-center text-ops-subtext">
@@ -250,6 +323,43 @@ export default function ChatWindow() {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0">
+      {readWriteConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-30 flex items-center justify-center">
+          <div className="bg-ops-panel border border-ops-alert/40 rounded-xl p-5 w-[460px] shadow-2xl">
+            <h3 className="text-base font-semibold text-ops-alert">读写模式确认</h3>
+            <p className="text-sm text-ops-subtext mt-2 leading-relaxed">
+              当前会话已开启读写权限。AI 可能调用会改变目标系统状态的工具；高危工具仍会走后端审批。
+            </p>
+            <pre className="mt-3 max-h-32 overflow-y-auto whitespace-pre-wrap break-all bg-ops-dark border border-ops-surface0 rounded-lg p-2 text-xs text-ops-text">
+              {readWriteConfirm.message}
+            </pre>
+            <label className="mt-3 flex items-center gap-2 text-sm text-ops-text">
+              <input
+                type="checkbox"
+                checked={readWriteConfirm.remember}
+                onChange={(e) => setReadWriteConfirm({ ...readWriteConfirm, remember: e.target.checked })}
+                className="accent-ops-accent"
+              />
+              本会话不再提示
+            </label>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setReadWriteConfirm(null)}
+                className="px-4 py-2 text-sm text-ops-subtext hover:text-ops-text"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmReadWriteSend}
+                className="px-4 py-2 text-sm bg-ops-alert text-white rounded-lg font-medium hover:bg-ops-alert/80 transition-colors"
+              >
+                确认发送
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <ToolsetBar catalog={toolCatalog} session={session} />
       {/* Messages area */}
       <div 
         ref={messagesContainerRef}
@@ -266,6 +376,18 @@ export default function ChatWindow() {
 
       {/* Input area */}
       <div className="border-t border-ops-surface0 bg-ops-panel p-3">
+        {slashCommands.length > 0 && (
+          <QuickCommandDock
+            commands={slashCommands.slice(0, 5)}
+            onSelect={applySlashCommand}
+          />
+        )}
+        {visibleSlashCommands.length > 0 && (
+          <SlashCommandMenu
+            commands={visibleSlashCommands}
+            onSelect={applySlashCommand}
+          />
+        )}
         <div className="flex items-end gap-2">
           {/* Thinking Mode selector */}
           <select
@@ -294,7 +416,7 @@ export default function ChatWindow() {
     </optgroup>
   ))
             ) : (
-              <option value={modelName}>{modelName}</option>
+              <option value={modelName}>{modelName || '使用后端默认模型'}</option>
             )}
           </select>
 
@@ -319,7 +441,7 @@ export default function ChatWindow() {
             </button>
           ) : (
             <button
-              onClick={sendMessage}
+              onClick={() => sendMessage()}
               disabled={!input.trim()}
               className="bg-ops-accent text-ops-dark px-4 py-2 rounded-lg text-sm font-medium hover:bg-ops-accent/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
             >
@@ -329,6 +451,155 @@ export default function ChatWindow() {
         </div>
       </div>
     </div>
+  )
+}
+
+function buildSlashCommands(session: Session, catalog: SessionToolCatalog | null) {
+  const activeTools = catalog?.active_tools || []
+  const toolList = activeTools.length > 0 ? activeTools.join(', ') : '当前会话原生协议工具'
+  const target = `${session.asset_type}/${session.protocol} ${session.host}`
+  return [
+    {
+      id: 'inspect',
+      label: '/inspect 只读巡检',
+      description: '按当前协议执行系统、数据库或网络设备巡检',
+      prompt: `请对当前资产 ${target} 执行一次完整只读巡检。必须使用当前会话的原生协议工具，不要使用本地脚本。输出包括：关键健康状态、异常项、风险等级、建议下一步。`,
+    },
+    {
+      id: 'config',
+      label: '/config 当前配置',
+      description: '查看系统或实例关键配置',
+      prompt: `请查看当前资产 ${target} 的关键配置信息。必须使用当前会话的原生协议工具，不要重新登录或要求我提供账号密码。请按“基础信息、资源/版本、网络/监听、关键配置、异常项”输出。`,
+    },
+    {
+      id: 'status',
+      label: '/status 当前状态',
+      description: '快速确认在线状态和核心指标',
+      prompt: `请快速检查当前资产 ${target} 的运行状态。优先返回在线性、核心服务/实例状态、资源使用率、近期错误或告警线索。`,
+    },
+    {
+      id: 'tools',
+      label: '/tools 可用工具',
+      description: '解释当前会话会用哪些协议工具',
+      prompt: `请说明当前资产 ${target} 已启用的工具和正确使用边界。当前工具包括：${toolList}。请特别说明哪些操作只读可执行，哪些需要审批或会被硬拦截。`,
+    },
+    {
+      id: 'risk',
+      label: '/risk 风险排查',
+      description: '只读模式下做安全和稳定性风险扫描',
+      prompt: `请在只读模式下对当前资产 ${target} 做风险排查。禁止修改配置、重启服务、删除文件或写入数据。请输出高风险、中风险、低风险和需要人工确认的事项。`,
+    },
+  ]
+}
+
+function QuickCommandDock({
+  commands,
+  onSelect,
+}: {
+  commands: Array<{ id: string; label: string; description: string; prompt: string }>
+  onSelect: (prompt: string) => void
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <span className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">current asset actions</span>
+      {commands.map((cmd) => (
+        <button
+          key={cmd.id}
+          type="button"
+          onClick={() => onSelect(cmd.prompt)}
+          className="rounded-full border border-ops-surface1 bg-ops-dark/70 px-3 py-1 text-[11px] text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text"
+          title={cmd.description}
+        >
+          {cmd.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function SlashCommandMenu({
+  commands,
+  onSelect,
+}: {
+  commands: Array<{ id: string; label: string; description: string; prompt: string }>
+  onSelect: (prompt: string) => void
+}) {
+  return (
+    <div className="mb-3 max-w-3xl overflow-hidden rounded-xl border border-ops-surface1 bg-ops-dark/95 shadow-2xl">
+      <div className="border-b border-ops-surface0 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-ops-overlay">
+        slash commands
+      </div>
+      <div className="grid gap-1 p-2 sm:grid-cols-2">
+        {commands.map((cmd) => (
+          <button
+            key={cmd.id}
+            type="button"
+            onClick={() => onSelect(cmd.prompt)}
+            className="rounded-lg px-3 py-2 text-left transition-colors hover:bg-ops-surface0 focus:outline-none focus:ring-1 focus:ring-ops-accent"
+          >
+            <div className="font-mono text-xs text-ops-accent">{cmd.label}</div>
+            <div className="mt-1 text-[11px] text-ops-subtext">{cmd.description}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ToolsetBar({ catalog, session }: { catalog: SessionToolCatalog | null; session: Session }) {
+  const enabledToolsets = (catalog?.toolsets || []).filter((t) => t.enabled)
+  const activeTools = catalog?.active_tools || enabledToolsets.flatMap((t) => t.tools.filter((tool) => tool.enabled).map((tool) => tool.name))
+  const primaryToolsets = enabledToolsets.slice(0, 4)
+
+  return (
+    <div className="border-b border-ops-surface0 bg-ops-panel/80 px-4 py-3">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-ops-accent/30 bg-ops-accent/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-ops-accent">
+              {session.asset_type}/{session.protocol}
+            </span>
+            <span className="text-xs text-ops-subtext">
+              工具集由后端协议注册表生成，凭据从资产中心托管注入
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {primaryToolsets.length > 0 ? primaryToolsets.map((toolset) => (
+              <ToolsetPill key={toolset.id} toolset={toolset} />
+            )) : (
+              <span className="text-xs text-ops-overlay">正在读取当前会话工具集...</span>
+            )}
+          </div>
+        </div>
+        <div className="shrink-0 rounded-xl border border-ops-surface1 bg-ops-dark/60 px-3 py-2 text-right">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">active tools</div>
+          <div className="font-mono text-sm text-ops-text">{activeTools.length}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ToolsetPill({ toolset }: { toolset: ToolsetInfo }) {
+  const enabledTools = toolset.tools.filter((tool) => tool.enabled)
+  return (
+    <details className="group">
+      <summary className="cursor-pointer list-none rounded-full border border-ops-surface1 bg-ops-dark/70 px-3 py-1.5 text-xs text-ops-text hover:border-ops-accent/50">
+        <span className="font-mono text-ops-accent">{toolset.id}</span>
+        <span className="ml-2 text-ops-overlay">{enabledTools.length}</span>
+      </summary>
+      <div className="absolute z-20 mt-2 w-80 rounded-xl border border-ops-surface1 bg-ops-panel p-3 shadow-2xl">
+        <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-ops-overlay">enabled tools</div>
+        <div className="space-y-2">
+          {enabledTools.map((tool) => (
+            <div key={tool.name} className="rounded-lg bg-ops-dark/70 p-2">
+              <div className="font-mono text-xs text-ops-text">{tool.name}</div>
+              <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-ops-subtext">{tool.description}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </details>
   )
 }
 
@@ -378,24 +649,7 @@ function MessageBubble({ message, onApproval }: {
               <span>执行轨迹 ({message.execTrace!.length})</span>
             </button>
             {traceOpen && (
-              <div className="mt-1 bg-ops-dark rounded-lg p-2 space-y-1 border border-ops-surface0">
-                {message.execTrace!.map((t, i) => (
-                  <div key={i} className="flex items-start gap-1">
-                    <span className={t.type === 'tool_start' ? 'text-ops-accent' : 'text-ops-success'}>
-                      {t.type === 'tool_start' ? '▶' : '✓'}
-                    </span>
-                    <div className="min-w-0">
-                      <span className="font-mono">{t.tool}</span>
-                      {t.args && (
-                        <pre className="text-ops-overlay mt-0.5 whitespace-pre-wrap break-all">{t.args.substring(0, 300)}</pre>
-                      )}
-                      {t.result && (
-                        <pre className="text-ops-subtext mt-0.5 whitespace-pre-wrap break-all max-h-40 overflow-y-auto">{t.result.substring(0, 500)}</pre>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <ToolTraceList items={message.execTrace!} />
             )}
           </div>
         )}
@@ -406,6 +660,7 @@ function MessageBubble({ message, onApproval }: {
             <div className="text-sm font-medium text-yellow-400">⚠️ AI 请求执行敏感操作</div>
             <div className="text-xs text-ops-subtext">
               <span className="font-mono text-ops-text">{approval.toolName}</span>
+              {approval.reason && <div className="mt-1 text-yellow-300">{approval.reason}</div>}
               <pre className="mt-1 whitespace-pre-wrap break-all">{approval.args.substring(0, 300)}</pre>
             </div>
             <div className="flex gap-2">
@@ -449,4 +704,80 @@ function MessageBubble({ message, onApproval }: {
       </div>
     </div>
   )
+}
+
+function ToolTraceList({ items }: { items: ExecTraceItem[] }) {
+  return (
+    <div className="mt-2 space-y-2">
+      {items.map((t, i) => (
+        <ToolTraceCard key={i} item={t} />
+      ))}
+    </div>
+  )
+}
+
+function ToolTraceCard({ item }: { item: ExecTraceItem }) {
+  const status = item.status || (item.type === 'tool_start' ? 'running' : 'done')
+  const elapsed = item.startedAt && item.completedAt
+    ? `${Math.max(0, ((item.completedAt - item.startedAt) / 1000)).toFixed(1)}s`
+    : item.startedAt
+      ? 'running'
+      : ''
+  const tone = status === 'error'
+    ? 'border-ops-alert/45 bg-ops-alert/5 text-ops-alert'
+    : status === 'running'
+      ? 'border-ops-accent/45 bg-ops-accent/5 text-ops-accent'
+      : 'border-ops-success/30 bg-ops-success/5 text-ops-success'
+
+  return (
+    <div className={`overflow-hidden rounded-xl border ${tone}`}>
+      <div className="flex items-center gap-2 px-3 py-2 text-xs">
+        <span className={`h-2 w-2 rounded-full ${status === 'running' ? 'bg-ops-accent animate-pulse' : status === 'error' ? 'bg-ops-alert' : 'bg-ops-success'}`} />
+        <span className="font-mono font-semibold text-ops-text">{item.tool}</span>
+        {elapsed && <span className="ml-auto font-mono text-[10px] text-ops-overlay">{elapsed}</span>}
+      </div>
+      {item.args && (
+        <div className="border-t border-ops-surface0/80 px-3 py-2">
+          <div className="mb-1 text-[10px] uppercase tracking-[0.18em] text-ops-overlay">args</div>
+          <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-ops-subtext">
+            {item.args.substring(0, 600)}
+          </pre>
+        </div>
+      )}
+      {item.result && (
+        <div className="border-t border-ops-surface0/80 px-3 py-2">
+          <div className="mb-1 text-[10px] uppercase tracking-[0.18em] text-ops-overlay">result</div>
+          <pre className="max-h-44 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-ops-subtext">
+            {item.result.substring(0, 1200)}
+          </pre>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function completeLastTrace(items: ExecTraceItem[], data: Record<string, unknown>): ExecTraceItem[] {
+  const result = String(data.result || '')
+  const status = result.includes('"BLOCKED"') || result.includes('"ERROR"') || result.includes('❌') ? 'error' : 'done'
+  const next = [...items]
+  for (let i = next.length - 1; i >= 0; i--) {
+    if (next[i].type === 'tool_start' && next[i].status === 'running') {
+      next[i] = {
+        ...next[i],
+        type: 'tool_end',
+        result,
+        status,
+        completedAt: Date.now(),
+      }
+      return next
+    }
+  }
+  next.push({
+    type: 'tool_end',
+    tool: String(data.tool || 'unknown'),
+    result,
+    status,
+    completedAt: Date.now(),
+  })
+  return next
 }

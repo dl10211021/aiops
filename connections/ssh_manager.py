@@ -5,6 +5,8 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+from core.asset_protocols import resolve_asset_identity
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,6 +35,7 @@ class SSHConnectionManager:
         agent_profile: str = "default",
         remark: str = "",
         asset_type: str = "ssh",
+        protocol: str | None = None,
         extra_args: dict | None = None,
         lazy: bool = False,
         tags: list[str] | None = None,
@@ -47,11 +50,15 @@ class SSHConnectionManager:
         if extra_args is None:
             extra_args = {}
         if not asset_type:
-            asset_type = "ssh"
+            asset_type = protocol or "virtual"
+        identity = resolve_asset_identity(asset_type, protocol, extra_args, host, port, remark)
+        asset_type = identity["asset_type"]
+        login_protocol = identity["protocol"]
+        extra_args = identity["extra_args"]
 
         import hashlib
 
-        unique_str = f"{asset_type}_{username}@{host}:{port}"
+        unique_str = f"{asset_type}_{login_protocol}_{username}@{host}:{port}"
         session_id = str(uuid.UUID(hashlib.md5(unique_str.encode()).hexdigest()))
 
         # 安全加固：如果该主机已有连接，先释放旧连接的资源，防止连接泄漏
@@ -65,10 +72,10 @@ class SSHConnectionManager:
                         pass
                 del self.active_sessions[session_id]
 
-        # 核心逻辑分离：如果不是 SSH，就不去尝试 paramiko 连接，只做凭证登记
-        if asset_type != "ssh":
+        # 核心逻辑分离：只有登录协议为 SSH 时才建立 Paramiko 长连接。
+        if login_protocol != "ssh":
             logger.info(
-                f"Registered Virtual Asset [{asset_type}] -> {username}@{host}:{port} (Profile: {agent_profile}, Extra: {extra_args})"
+                f"Registered Virtual Asset [{asset_type}/{login_protocol}] -> {username}@{host}:{port} (Profile: {agent_profile}, Extra: {extra_args})"
             )
             with self._sessions_lock:
                 self.active_sessions[session_id] = {
@@ -84,6 +91,7 @@ class SSHConnectionManager:
                         "agent_profile": agent_profile,
                         "remark": remark,
                         "asset_type": asset_type,
+                        "protocol": login_protocol,
                         "extra_args": extra_args,
                         "tags": tags,
                         "target_scope": target_scope,
@@ -97,7 +105,7 @@ class SSHConnectionManager:
             return {
                 "success": True,
                 "session_id": session_id,
-                "message": f"{asset_type.upper()} 资产已成功纳管登记",
+                "message": f"{asset_type.upper()} 资产已通过 {login_protocol.upper()} 协议纳管登记",
             }
 
         # 如果开启了惰性加载 (lazy)，则只保存配置，不实际发起物理连接
@@ -118,7 +126,8 @@ class SSHConnectionManager:
                         "active_skills": active_skills,
                         "agent_profile": agent_profile,
                         "remark": remark,
-                        "asset_type": "ssh",
+                        "asset_type": asset_type,
+                        "protocol": login_protocol,
                         "extra_args": extra_args,
                         "tags": tags,
                         "target_scope": target_scope,
@@ -166,7 +175,8 @@ class SSHConnectionManager:
                         "active_skills": active_skills,
                         "agent_profile": agent_profile,
                         "remark": remark,
-                        "asset_type": "ssh",
+                        "asset_type": asset_type,
+                        "protocol": login_protocol,
                         "extra_args": extra_args,
                         "tags": tags,
                         "target_scope": target_scope,
@@ -192,10 +202,16 @@ class SSHConnectionManager:
         agent_profile: str = "default",
         active_skills: list[str] | None = None,
         remark: str = "",
+        allow_modifications: bool = True,
+        tags: list[str] | None = None,
+        target_scope: str = "global",
+        scope_value: str | None = None,
     ) -> dict:
         """【本地总控】建立一个本地虚拟会话，不需要 SSH 目标机器。专供跑监控脚本的大模型使用。"""
         if not active_skills:
             active_skills = []  # 【解除绑定】
+        if not tags:
+            tags = ["全局会话"]
 
         session_id = str(uuid.uuid4())
         with self._sessions_lock:
@@ -207,13 +223,16 @@ class SSHConnectionManager:
                     "username": "opscore_agent",
                     "password": "",
                     "connected_at": time.time(),
-                    "allow_modifications": True,  # 本地脚本肯定需要执行权限
+                    "allow_modifications": allow_modifications,
                     "active_skills": active_skills,
                     "agent_profile": agent_profile,
                     "remark": remark,
                     "asset_type": "virtual",
+                    "protocol": "virtual",
                     "extra_args": {},
-                    "tags": ["本地会话"],
+                    "tags": tags,
+                    "target_scope": target_scope,
+                    "scope_value": scope_value,
                     "is_virtual": True,
                     "heartbeat_enabled": False,
                     "last_active": time.time(),
@@ -287,7 +306,7 @@ class SSHConnectionManager:
         if info.get("is_virtual"):
             return {
                 "success": False,
-                "error": "当前为监控专用的【本地宿主机虚拟会话】，请使用 `local_execute_script` 工具去执行 `manage-engine` 卡带中的 Python 脚本，而不要调用 `linux_execute_command`。",
+                "error": "当前为【本地宿主机虚拟会话】（无实际SSH连接）。请按照你当前挂载的 Skill 指示，使用 `local_execute_script` 调用对应的本地脚本（如果是 API/监控类资产）。绝不允许自行猜测或盲目调用未挂载的脚本！",
             }
 
         client = self._get_or_create_client(session_id)
@@ -303,6 +322,93 @@ class SSHConnectionManager:
             return future.result(timeout=timeout + 5)
         except Exception as e:
             return {"success": False, "error": f"指令执行超时或崩溃: {str(e)}"}
+
+    def execute_network_cli_command(
+        self, session_id: str, command: str, timeout: int = 30
+    ) -> dict:
+        """Execute commands on SSH-based network devices via an interactive CLI.
+
+        Many switches/routers, including H3C/Comware, authenticate over SSH but
+        do not support Linux-style exec_command reliably. They expect commands
+        to be sent through an interactive shell channel.
+        """
+        if session_id not in self.active_sessions:
+            return {"success": False, "error": "会话已过期或不存在，请重新连接"}
+
+        info = self.active_sessions[session_id]["info"]
+        if info.get("is_virtual"):
+            return {"success": False, "error": "虚拟会话不支持网络设备 CLI。"}
+
+        client = self._get_or_create_client(session_id)
+        if not client:
+            return {
+                "success": False,
+                "error": "无法建立或恢复到目标网络设备的 SSH 连接。请检查网络或凭据。",
+            }
+
+        future = self.executor.submit(
+            self._do_network_cli_execute, client, command, timeout
+        )
+        try:
+            return future.result(timeout=timeout + 5)
+        except Exception as e:
+            return {"success": False, "error": f"网络设备 CLI 执行超时或崩溃: {str(e)}"}
+
+    def _read_cli_until_idle(self, channel, timeout: int, idle_seconds: float = 0.8) -> str:
+        output = b""
+        start_time = time.time()
+        last_data_at = time.time()
+        while True:
+            if channel.recv_ready():
+                chunk = channel.recv(65535)
+                if not chunk:
+                    break
+                output += chunk
+                last_data_at = time.time()
+            elif output and time.time() - last_data_at >= idle_seconds:
+                break
+            elif time.time() - start_time > timeout:
+                break
+            else:
+                time.sleep(0.1)
+        return output.decode("utf-8", errors="replace")
+
+    def _do_network_cli_execute(self, client, command: str, timeout: int) -> dict:
+        channel = None
+        try:
+            channel = client.invoke_shell(width=200, height=1000)
+            channel.settimeout(2)
+            self._read_cli_until_idle(channel, min(timeout, 5))
+
+            # Disable paging for the current terminal session. Unknown commands
+            # are harmless and their output is discarded before user commands.
+            for prep_cmd in ("screen-length disable", "screen-length 0 temporary", "terminal length 0"):
+                channel.send(prep_cmd + "\n")
+                self._read_cli_until_idle(channel, min(timeout, 3), idle_seconds=0.4)
+
+            outputs = []
+            commands = [line.strip() for line in str(command or "").splitlines() if line.strip()]
+            if not commands:
+                return {"success": False, "error": "网络设备 CLI 命令为空。"}
+
+            for line in commands:
+                channel.send(line + "\n")
+                outputs.append(self._read_cli_until_idle(channel, timeout))
+
+            return {
+                "success": True,
+                "exit_status": 0,
+                "output": "\n".join(outputs).strip(),
+                "has_error": False,
+            }
+        except Exception as e:
+            return {"success": False, "error": f"网络设备 CLI 执行失败: {str(e)}"}
+        finally:
+            if channel:
+                try:
+                    channel.close()
+                except Exception:
+                    pass
 
     def _do_execute(self, client, command: str, timeout: int) -> dict:
         try:

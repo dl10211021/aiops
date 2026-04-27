@@ -1,4 +1,5 @@
 import { useStore } from '@/store'
+import { disconnectSession } from '@/api/client'
 import type { Session } from '@/types'
 
 export default function Sidebar() {
@@ -25,7 +26,6 @@ export default function Sidebar() {
   const handleDisconnect = async (sid: string, e: React.MouseEvent) => {
     e.stopPropagation()
     try {
-      const { disconnectSession } = await import('@/api/client')
       await disconnectSession(sid)
       removeSession(sid)
     } catch {
@@ -35,22 +35,31 @@ export default function Sidebar() {
 
   const protocolIcon = (p: string) => {
     switch (p) {
-      case 'ssh': return '🖥️'
-      case 'database': return '🗄️'
-      case 'api': return '🌐'
-      case 'winrm': return '🪟'
-      default: return '📡'
+      case 'ssh': return 'SSH'
+      case 'mysql':
+      case 'oracle':
+      case 'postgresql':
+      case 'mssql':
+      case 'database': return 'DB'
+      case 'http_api':
+      case 'api': return 'API'
+      case 'winrm': return 'WIN'
+      case 'snmp': return 'SN'
+      default: return 'IO'
     }
   }
 
   return (
-    <aside className="w-60 bg-ops-sidebar border-r border-ops-surface0 flex flex-col shrink-0 overflow-hidden">
+    <aside className="w-72 bg-ops-sidebar/82 border-r border-ops-surface0/80 flex flex-col shrink-0 overflow-hidden backdrop-blur-xl">
       {/* Header */}
-      <div className="p-3 border-b border-ops-surface0 flex items-center justify-between">
-        <span className="text-sm font-semibold text-ops-text">活跃会话</span>
+      <div className="p-4 border-b border-ops-surface0/80 flex items-center justify-between">
+        <div>
+          <span className="block text-sm font-semibold text-ops-text">活跃会话</span>
+          <span className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">asset linked agents</span>
+        </div>
         <button
           onClick={() => openModal('connect')}
-          className="text-xs bg-ops-accent/20 text-ops-accent px-2 py-1 rounded hover:bg-ops-accent/30 transition-colors"
+          className="text-xs bg-ops-accent text-ops-dark px-3 py-1.5 rounded-full font-semibold hover:bg-ops-accent/85 transition-colors"
         >
           + 新建
         </button>
@@ -82,17 +91,17 @@ export default function Sidebar() {
               <div
                 key={s.id}
                 onClick={() => { setCurrentSession(s.id); setView('chat') }}
-                className={`group flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer text-sm transition-colors
+                className={`group flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer text-sm transition-all border
                   ${s.id === currentSessionId
-                    ? 'bg-ops-accent/15 text-ops-accent'
-                    : 'text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text'}`}
+                    ? 'border-ops-accent/35 bg-ops-accent/12 text-ops-accent shadow-[0_0_28px_rgba(243,177,90,0.12)]'
+                    : 'border-transparent text-ops-subtext hover:bg-ops-surface0/70 hover:text-ops-text'}`}
               >
-                <span className="text-sm shrink-0">{protocolIcon(s.asset_type)}</span>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ops-dark/70 font-mono text-[10px] font-bold tracking-[0.08em]">{protocolIcon(s.protocol || s.asset_type)}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="truncate text-xs font-medium">
+                  <div className="truncate text-sm font-semibold">
                     {s.remark || s.host}
                   </div>
-                  <div className="truncate text-[10px] text-ops-overlay">
+                  <div className="truncate font-mono text-[10px] text-ops-overlay">
                     {s.user}@{s.host}
                   </div>
                 </div>

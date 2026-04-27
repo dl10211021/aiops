@@ -19,9 +19,9 @@ COPY . .
 # 暴露 FastAPI 的默认端口
 EXPOSE 8000
 
-# 健康检查：每 30 秒探测一次根路径，连续 3 次失败则标记为 unhealthy
+# 健康检查：每 30 秒探测一次结构化健康检查接口，连续 3 次失败则标记为 unhealthy
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')" || exit 1
 
 # 启动命令
 CMD ["python", "main.py"]

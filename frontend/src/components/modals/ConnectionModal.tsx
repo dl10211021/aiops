@@ -1,21 +1,31 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store'
-import { connectSession, testConnection, getSkillRegistry, batchImportAssets } from '@/api/client'
+import { connectSession, testConnection, inspectConnection, getSkillRegistry, batchImportAssets, getAssetTypes } from '@/api/client'
 import type { SkillInfo } from '@/types'
+
+type AssetSubType = { id: string, label: string, asset_type: string, defaultPort: number, authMode?: 'basic' | 'password_only' | 'custom_snmp' | 'none' }
 
 const ASSET_CATEGORIES = [
   { id: 'os', label: '操作系统与主机 (OS & Compute)' },
   { id: 'db', label: '数据库与缓存 (Database & Cache)' },
-  { id: 'cloud', label: '虚拟化与云原生 (Virtualization)' },
+  { id: 'container', label: '容器与云原生 (Container & Kubernetes)' },
+  { id: 'middleware', label: '中间件 (Middleware)' },
+  { id: 'virtualization', label: '虚拟化与私有云 (Virtualization)' },
   { id: 'network', label: '网络与安全 (Network & Security)' },
+  { id: 'storage', label: '存储与备份 (Storage & Backup)' },
   { id: 'monitor', label: '监控与告警 (Monitoring & APM)' },
   { id: 'oob', label: '硬件动环 (Hardware & OOB)' },
+  { id: 'security', label: '安全与身份 (Security & Identity)' },
 ]
 
-const ASSET_SUB_TYPES: Record<string, { id: string, label: string, asset_type: string, defaultPort: number, authMode?: 'basic' | 'password_only' | 'custom_snmp' | 'none' }[]> = {
+const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
+  ASSET_CATEGORIES.map((item) => [item.id, item.label])
+)
+
+const ASSET_SUB_TYPES: Record<string, AssetSubType[]> = {
   os: [
     { id: 'linux', label: 'Linux / Unix (SSH)', asset_type: 'ssh', defaultPort: 22 },
-    { id: 'winrm', label: 'Windows Server (WinRM)', asset_type: 'winrm', defaultPort: 5985 },
+    { id: 'windows', label: 'Windows Server (WinRM)', asset_type: 'winrm', defaultPort: 5985 },
   ],
   db: [
     { id: 'mysql', label: 'MySQL', asset_type: 'mysql', defaultPort: 3306 },
@@ -23,36 +33,129 @@ const ASSET_SUB_TYPES: Record<string, { id: string, label: string, asset_type: s
     { id: 'postgresql', label: 'PostgreSQL', asset_type: 'postgresql', defaultPort: 5432 },
     { id: 'mssql', label: 'SQL Server', asset_type: 'mssql', defaultPort: 1433 },
     { id: 'redis', label: 'Redis', asset_type: 'redis', defaultPort: 6379, authMode: 'password_only' },
-    { id: 'mongodb', label: 'MongoDB', asset_type: 'mysql', defaultPort: 27017 },
-    { id: 'elasticsearch', label: 'ElasticSearch', asset_type: 'mysql', defaultPort: 9200 },
+    { id: 'mongodb', label: 'MongoDB', asset_type: 'mongodb', defaultPort: 27017 },
+    { id: 'elasticsearch', label: 'ElasticSearch', asset_type: 'http_api', defaultPort: 9200 },
   ],
-  cloud: [
-    { id: 'vmware', label: 'VMware vCenter/ESXi', asset_type: 'api', defaultPort: 443 },
-    { id: 'k8s', label: 'Kubernetes (K8s)', asset_type: 'api', defaultPort: 6443 },
-    { id: 'zstack', label: 'ZStack', asset_type: 'api', defaultPort: 5000 },
+  container: [
+    { id: 'docker', label: 'Docker Host (SSH)', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'containerd', label: 'containerd Host (SSH)', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'podman', label: 'Podman Host (SSH)', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'harbor', label: 'Harbor Registry', asset_type: 'http_api', defaultPort: 443 },
+    { id: 'k8s', label: 'Kubernetes (K8s)', asset_type: 'k8s', defaultPort: 6443 },
+  ],
+  middleware: [
+    { id: 'nginx', label: 'Nginx', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'tomcat', label: 'Tomcat', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'kafka', label: 'Kafka', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'rabbitmq', label: 'RabbitMQ', asset_type: 'http_api', defaultPort: 15672 },
+    { id: 'rocketmq', label: 'RocketMQ', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'zookeeper', label: 'ZooKeeper', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'nacos', label: 'Nacos', asset_type: 'http_api', defaultPort: 8848 },
+    { id: 'consul', label: 'Consul', asset_type: 'http_api', defaultPort: 8500 },
+    { id: 'minio', label: 'MinIO', asset_type: 'http_api', defaultPort: 9000 },
+  ],
+  virtualization: [
+    { id: 'vmware', label: 'VMware vCenter/ESXi', asset_type: 'http_api', defaultPort: 443 },
+    { id: 'kvm', label: 'KVM / Libvirt Host (SSH)', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'openstack', label: 'OpenStack', asset_type: 'http_api', defaultPort: 5000 },
+    { id: 'proxmox', label: 'Proxmox VE', asset_type: 'http_api', defaultPort: 8006 },
+    { id: 'hyperv', label: 'Hyper-V (WinRM)', asset_type: 'winrm', defaultPort: 5985 },
+    { id: 'zstack', label: 'ZStack', asset_type: 'http_api', defaultPort: 5000 },
   ],
   network: [
-    { id: 'f5', label: 'F5 BIG-IP', asset_type: 'api', defaultPort: 443 },
+    { id: 'f5', label: 'F5 BIG-IP', asset_type: 'http_api', defaultPort: 443 },
     { id: 'switch', label: 'Switch / Router', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'firewall', label: 'Firewall', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'a10', label: 'A10 Load Balancer', asset_type: 'http_api', defaultPort: 443 },
+    { id: 'waf', label: 'WAF', asset_type: 'http_api', defaultPort: 443 },
+    { id: 'dns', label: 'DNS Server', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'vpn', label: 'VPN Gateway', asset_type: 'ssh', defaultPort: 22 },
+  ],
+  storage: [
+    { id: 'ceph', label: 'Ceph Cluster', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'nfs', label: 'NFS Server', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'nas', label: 'NAS / SAN (SNMP)', asset_type: 'snmp', defaultPort: 161, authMode: 'custom_snmp' },
+    { id: 'backup', label: 'Backup System', asset_type: 'http_api', defaultPort: 443 },
   ],
   monitor: [
-    { id: 'zabbix', label: 'Zabbix', asset_type: 'api', defaultPort: 80 },
-    { id: 'prometheus', label: 'Prometheus', asset_type: 'api', defaultPort: 9090 },
+    { id: 'zabbix', label: 'Zabbix', asset_type: 'http_api', defaultPort: 80 },
+    { id: 'prometheus', label: 'Prometheus', asset_type: 'http_api', defaultPort: 9090 },
+    { id: 'alertmanager', label: 'Alertmanager', asset_type: 'http_api', defaultPort: 9093 },
+    { id: 'grafana', label: 'Grafana', asset_type: 'http_api', defaultPort: 3000 },
+    { id: 'loki', label: 'Loki', asset_type: 'http_api', defaultPort: 3100 },
+    { id: 'victoriametrics', label: 'VictoriaMetrics', asset_type: 'http_api', defaultPort: 8428 },
+    { id: 'manageengine', label: 'ManageEngine / 卓豪监控', asset_type: 'http_api', defaultPort: 8443 },
   ],
   oob: [
-    { id: 'snmp', label: 'SNMP', asset_type: 'api', defaultPort: 161, authMode: 'custom_snmp' },
-    { id: 'redfish', label: 'Redfish/iLO/iDRAC', asset_type: 'api', defaultPort: 443 },
-  ]
+    { id: 'snmp', label: 'SNMP', asset_type: 'snmp', defaultPort: 161, authMode: 'custom_snmp' },
+    { id: 'redfish', label: 'Redfish/iLO/iDRAC', asset_type: 'redfish', defaultPort: 443 },
+    { id: 'ipmi', label: 'IPMI', asset_type: 'snmp', defaultPort: 161, authMode: 'custom_snmp' },
+  ],
+  security: [
+    { id: 'bastion', label: '堡垒机 / Bastion', asset_type: 'http_api', defaultPort: 443 },
+    { id: 'ldap', label: 'LDAP / Active Directory', asset_type: 'http_api', defaultPort: 389 },
+    { id: 'audit', label: 'Audit Platform', asset_type: 'http_api', defaultPort: 443 },
+  ],
 }
 
-const getAuthVisibility = (subType: string, category: string, extraArgs: any) => {
-  const currentSubInfo = ASSET_SUB_TYPES[category]?.find(s => s.id === subType);
+const authModeFor = (id: string): AssetSubType['authMode'] => {
+  if (id === 'redis') return 'password_only'
+  if (['snmp', 'ipmi', 'nas'].includes(id)) return 'custom_snmp'
+  return 'basic'
+}
+
+const getAuthVisibility = (subTypes: Record<string, AssetSubType[]>, subType: string, category: string, extraArgs: any) => {
+  const currentSubInfo = subTypes[category]?.find(s => s.id === subType);
   const authMode = currentSubInfo?.authMode || 'basic';
-  
+
   if (authMode === 'password_only') return { showUser: false, showPass: true };
   if (authMode === 'custom_snmp' && extraArgs?.snmp_version === 'v3') return { showUser: false, showPass: false };
   if (authMode === 'none') return { showUser: false, showPass: false };
   return { showUser: true, showPass: true };
+}
+
+const autoSelectSkills = (subType: string, allSkills: SkillInfo[]) => {
+  const skillMapping: Record<string, string[]> = {
+    linux: ['linux', 'linux-hardening-plan', 'nfs-ops'],
+    kvm: ['linux', 'linux-hardening-plan'],
+    windows: ['windows-admin'],
+    winrm: ['windows-admin'],
+    mysql: ['mysql-client', 'mysql-upgrade-expert', 'database'],
+    oracle: ['database'],
+    postgresql: ['database'],
+    mssql: ['database'],
+    redis: ['database'],
+    mongodb: ['database'],
+    elasticsearch: ['database'],
+    clickhouse: ['database'],
+    tidb: ['database'],
+    oceanbase: ['database'],
+    dameng: ['database'],
+    kingbase: ['database'],
+    k8s: ['k8s-ops'],
+    docker: ['linux'],
+    containerd: ['linux'],
+    podman: ['linux'],
+    nginx: ['linux'],
+    tomcat: ['linux'],
+    kafka: ['linux'],
+    ceph: ['linux'],
+    nfs: ['linux'],
+    switch: ['network-switch-inspector'],
+    firewall: ['network-switch-inspector'],
+    vpn: ['network-switch-inspector'],
+    prometheus: ['prometheus', 'prometheus_tools'],
+    alertmanager: ['prometheus', 'prometheus_tools'],
+    grafana: ['prometheus', 'prometheus_tools'],
+    loki: ['prometheus', 'prometheus_tools'],
+    victoriametrics: ['prometheus', 'prometheus_tools'],
+    manageengine: ['manage-engine'],
+    zstack: ['zstack-cloud-dev'],
+  };
+
+  const matchedIds = skillMapping[subType] || [];
+  const validIds = matchedIds.filter(id => allSkills.some(s => s.id === id));
+  return new Set(validIds);
 }
 
 export default function ConnectionModal() {
@@ -63,66 +166,134 @@ export default function ConnectionModal() {
 
   const [form, setForm] = useState({
     host: '', port: 22, username: 'root', password: '',
-    remark: '', asset_type: 'ssh', agent_profile: 'default',
+    remark: '', asset_type: 'linux', protocol: 'ssh', agent_profile: 'default',
     group_name: '未分组', allow_modifications: false,
     target_scope: 'asset', category: 'os', sub_type: 'linux',
     extra_args: {} as Record<string, unknown>,
   })
   const [skills, setSkills] = useState<SkillInfo[]>([])
+  const [assetCategories, setAssetCategories] = useState(ASSET_CATEGORIES)
+  const [assetSubTypes, setAssetSubTypes] = useState<Record<string, AssetSubType[]>>(ASSET_SUB_TYPES)
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set())
+  const [skillSearch, setSkillSearch] = useState('')
   const [testing, setTesting] = useState(false)
+  const [inspecting, setInspecting] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [inspectionResult, setInspectionResult] = useState<{
+    ok: boolean
+    summary: string
+    checks: Array<{ title: string; status: string; output: string }>
+  } | null>(null)
 
-  // Load skills and check for prefill
+  const getProtocolForSubType = (category: string, subType: string) =>
+    assetSubTypes[category]?.find(s => s.id === subType)?.asset_type || subType;
+
+  // Load backend asset catalog, then skills and optional asset prefill.
   useEffect(() => {
-    getSkillRegistry().then((r) => setSkills(r.data.registry?.filter((s) => !s.is_market) || [])).catch(() => {})
-
-    const prefill = sessionStorage.getItem('prefill_asset')
-    if (prefill) {
-      try {
-        const a = JSON.parse(prefill)
-        const extraArgs = a.extra_args || {}
-        let category = extraArgs.category || a.category
-        let sub_type = extraArgs.sub_type || a.sub_type
-
-        if (!category || !sub_type) {
-          const p = a.asset_type || 'ssh'
-          for (const [cat, subs] of Object.entries(ASSET_SUB_TYPES)) {
-            const match = subs.find(s => s.id === p)
-            if (match) {
-              category = cat
-              sub_type = match.id
-              break
-            }
-          }
-          if (!category || !sub_type) { category = 'os'; sub_type = 'linux' }
-        }
-
-        setForm({
-          host: a.host || '', port: a.port || 22, username: a.username || 'root',
-          password: a.password || '', remark: a.remark || '', asset_type: a.asset_type || 'ssh',
-          agent_profile: a.agent_profile || 'default', group_name: (a.tags && a.tags[0]) || '未分组',
-          allow_modifications: false, target_scope: 'asset', extra_args: extraArgs,
-          category, sub_type,
+    Promise.all([
+      getAssetTypes().catch(() => null),
+      getSkillRegistry().catch(() => null),
+    ]).then(([assetResponse, skillResponse]) => {
+      let effectiveSubTypes = ASSET_SUB_TYPES
+      const grouped: Record<string, AssetSubType[]> = {}
+      ;(assetResponse?.data.types || []).forEach((item) => {
+        if (!grouped[item.category]) grouped[item.category] = []
+        grouped[item.category].push({
+          id: item.id,
+          label: item.label,
+          asset_type: item.protocol,
+          defaultPort: item.default_port,
+          authMode: authModeFor(item.id),
         })
-        if (a.skills) setSelectedSkills(new Set(a.skills))
-      } catch { /* ignore */ }
-      sessionStorage.removeItem('prefill_asset')
-    }
+      })
+      if (Object.keys(grouped).length > 0) {
+        effectiveSubTypes = grouped
+        setAssetSubTypes(grouped)
+        const backendCategories = assetResponse?.data.categories || []
+        setAssetCategories(
+          backendCategories.length > 0
+            ? backendCategories.filter((c) => grouped[c.id]).map((c) => ({ id: c.id, label: c.label }))
+            : Object.keys(grouped).map((id) => ({
+                id,
+                label: CATEGORY_LABELS[id] || id.toUpperCase(),
+              }))
+        )
+      }
+
+      const protocolFor = (category: string, subType: string) =>
+        effectiveSubTypes[category]?.find(s => s.id === subType)?.asset_type || subType;
+
+      const loadedSkills = skillResponse?.data.registry?.filter((s) => !s.is_market) || [];
+      setSkills(loadedSkills);
+
+      const prefill = sessionStorage.getItem('prefill_asset');
+      if (prefill) {
+        try {
+          const a = JSON.parse(prefill);
+          const extraArgs = a.extra_args || {};
+          let category = extraArgs.category || a.category;
+          let sub_type = extraArgs.sub_type || a.sub_type;
+
+          if (!category || !sub_type) {
+            const p = a.asset_type || 'ssh';
+            const protocol = a.protocol || extraArgs.login_protocol || extraArgs.protocol;
+            for (const [cat, subs] of Object.entries(effectiveSubTypes)) {
+              const match = subs.find(s => s.id === p || s.asset_type === p || (s.asset_type === protocol && s.id === p));
+              if (match) {
+                category = cat;
+                sub_type = match.id;
+                break;
+              }
+            }
+            if (!category || !sub_type) { category = 'os'; sub_type = 'linux'; }
+          }
+
+          setForm(prev => ({
+            ...prev,
+            host: a.host || '', port: a.port || 22, username: a.username || 'root',
+            password: a.password || '', remark: a.remark || '',
+            asset_type: a.asset_type || sub_type || 'linux',
+            protocol: a.protocol || protocolFor(category, sub_type),
+            agent_profile: a.agent_profile || 'default', group_name: (a.tags && a.tags[0]) || '未分组',
+            allow_modifications: false, target_scope: 'asset', extra_args: extraArgs,
+            category, sub_type,
+          }));
+
+          if (a.skills && a.skills.length > 0) {
+            setSelectedSkills(new Set(a.skills));
+          } else {
+            setSelectedSkills(autoSelectSkills(sub_type, loadedSkills));
+          }
+        } catch { /* ignore */ }
+        sessionStorage.removeItem('prefill_asset');
+      } else {
+        setSelectedSkills(autoSelectSkills(form.sub_type, loadedSkills));
+      }
+    })
   }, [])
 
   const handleTest = async () => {
     setTesting(true)
     setTestResult(null)
+    setInspectionResult(null)
     try {
-      const isGlobal = form.target_scope === 'global'
+
+  const filteredSkills = skills.filter(sk =>
+    !skillSearch.trim() ||
+    sk.name?.toLowerCase().includes(skillSearch.toLowerCase()) ||
+    sk.id.toLowerCase().includes(skillSearch.toLowerCase()) ||
+    sk.description?.toLowerCase().includes(skillSearch.toLowerCase())
+  );
+
+  const isGlobal = form.target_scope === 'global'
       const host = isGlobal ? 'global' : form.host
       const username = isGlobal ? 'admin' : form.username
-      
+
       const res = await testConnection({
         host, port: form.port, username,
-        password: form.password, asset_type: form.sub_type,
+        password: form.password, asset_type: isGlobal ? 'virtual' : form.sub_type,
+        protocol: isGlobal ? 'virtual' : getProtocolForSubType(form.category, form.sub_type),
         extra_args: form.extra_args, active_skills: [],
         target_scope: form.target_scope,
         scope_value: form.target_scope === 'group' ? form.group_name : host,
@@ -134,8 +305,55 @@ export default function ConnectionModal() {
     setTesting(false)
   }
 
-  const handleConnect = async () => {
+  const handleInspect = async () => {
     const isGlobal = form.target_scope === 'global'
+    const host = isGlobal ? 'global' : form.host
+    const username = isGlobal ? 'admin' : form.username
+
+    if (!isGlobal && !form.host) { addToast('请输入主机地址', 'error'); return }
+    setInspecting(true)
+    setTestResult(null)
+    setInspectionResult(null)
+    try {
+      const res = await inspectConnection({
+        host, port: form.port, username,
+        password: form.password, asset_type: isGlobal ? 'virtual' : form.sub_type,
+        protocol: isGlobal ? 'virtual' : getProtocolForSubType(form.category, form.sub_type),
+        extra_args: form.extra_args,
+        active_skills: Array.from(selectedSkills),
+        agent_profile: form.agent_profile,
+        remark: form.remark,
+        tags: [form.group_name],
+        target_scope: form.target_scope,
+        scope_value: form.target_scope === 'group' ? form.group_name : host,
+        keep_session: false,
+      })
+      const inspection = res.data.inspection
+      setInspectionResult({
+        ok: res.status === 'success' && inspection.status !== 'error',
+        summary: inspection.summary || inspection.message || res.message,
+        checks: inspection.checks || [],
+      })
+    } catch (e: unknown) {
+      setInspectionResult({
+        ok: false,
+        summary: e instanceof Error ? e.message : '巡检失败',
+        checks: [],
+      })
+    }
+    setInspecting(false)
+  }
+
+  const handleConnect = async () => {
+
+  const filteredSkills = skills.filter(sk =>
+    !skillSearch.trim() ||
+    sk.name?.toLowerCase().includes(skillSearch.toLowerCase()) ||
+    sk.id.toLowerCase().includes(skillSearch.toLowerCase()) ||
+    sk.description?.toLowerCase().includes(skillSearch.toLowerCase())
+  );
+
+  const isGlobal = form.target_scope === 'global'
     const host = isGlobal ? 'global' : form.host
     const username = isGlobal ? 'admin' : form.username
 
@@ -144,7 +362,8 @@ export default function ConnectionModal() {
     try {
       const res = await connectSession({
         ...form,
-        host, username, asset_type: form.sub_type,
+        host, username, asset_type: isGlobal ? 'virtual' : form.sub_type,
+        protocol: isGlobal ? 'virtual' : getProtocolForSubType(form.category, form.sub_type),
         active_skills: Array.from(selectedSkills),
         tags: [form.group_name],
         target_scope: form.target_scope,
@@ -155,7 +374,9 @@ export default function ConnectionModal() {
         id: sid, host, remark: form.remark,
         isReadWriteMode: form.allow_modifications,
         skills: Array.from(selectedSkills), agentProfile: form.agent_profile,
-        user: username, asset_type: form.sub_type,
+        user: isGlobal ? 'opscore_agent' : username,
+        asset_type: isGlobal ? 'virtual' : form.sub_type,
+        protocol: isGlobal ? 'virtual' : getProtocolForSubType(form.category, form.sub_type),
         extra_args: form.extra_args, heartbeatEnabled: false,
         tags: [form.group_name], messages: [], isStreaming: false,
       })
@@ -169,7 +390,15 @@ export default function ConnectionModal() {
   }
 
   const handleSaveOnly = async () => {
-    const isGlobal = form.target_scope === 'global'
+
+  const filteredSkills = skills.filter(sk =>
+    !skillSearch.trim() ||
+    sk.name?.toLowerCase().includes(skillSearch.toLowerCase()) ||
+    sk.id.toLowerCase().includes(skillSearch.toLowerCase()) ||
+    sk.description?.toLowerCase().includes(skillSearch.toLowerCase())
+  );
+
+  const isGlobal = form.target_scope === 'global'
     const host = isGlobal ? 'global' : form.host
     const username = isGlobal ? 'admin' : form.username
 
@@ -178,7 +407,8 @@ export default function ConnectionModal() {
     try {
       await batchImportAssets([{
         host, username, password: form.password, port: form.port,
-        asset_type: form.sub_type,
+        asset_type: isGlobal ? 'virtual' : form.sub_type,
+        protocol: isGlobal ? 'virtual' : getProtocolForSubType(form.category, form.sub_type),
         remark: form.remark, agent_profile: form.agent_profile,
         extra_args: form.extra_args, skills: Array.from(selectedSkills),
         tags: [form.group_name]
@@ -199,6 +429,14 @@ export default function ConnectionModal() {
     if (next.has(id)) next.delete(id); else next.add(id)
     setSelectedSkills(next)
   }
+
+
+  const filteredSkills = skills.filter(sk =>
+    !skillSearch.trim() ||
+    sk.name?.toLowerCase().includes(skillSearch.toLowerCase()) ||
+    sk.id.toLowerCase().includes(skillSearch.toLowerCase()) ||
+    sk.description?.toLowerCase().includes(skillSearch.toLowerCase())
+  );
 
   const isGlobal = form.target_scope === 'global'
 
@@ -232,16 +470,17 @@ export default function ConnectionModal() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-ops-subtext mb-1 block">资产类别</label>
-                <select 
+                <select
                   value={form.category}
                   onChange={(e) => {
                     const newCat = e.target.value;
-                    const firstSub = ASSET_SUB_TYPES[newCat][0];
-                    setForm({ 
-                      ...form, 
-                      category: newCat, 
-                      sub_type: firstSub.id, 
-                      asset_type: firstSub.asset_type, 
+                    const firstSub = assetSubTypes[newCat][0];
+                    setForm({
+                      ...form,
+                      category: newCat,
+                      sub_type: firstSub.id,
+                      asset_type: firstSub.id,
+                      protocol: firstSub.asset_type,
                       port: firstSub.defaultPort,
                       extra_args: {
                         category: newCat,
@@ -249,10 +488,11 @@ export default function ConnectionModal() {
                         ...(newCat === 'db' ? { db_type: firstSub.id } : {})
                       }
                     });
+                    setSelectedSkills(autoSelectSkills(firstSub.id, skills));
                   }}
                   className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent appearance-none"
                 >
-                  {ASSET_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  {assetCategories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                 </select>
               </div>
               <div>
@@ -261,12 +501,13 @@ export default function ConnectionModal() {
                   value={form.sub_type}
                   onChange={(e) => {
                     const newSubId = e.target.value;
-                    const subInfo = ASSET_SUB_TYPES[form.category].find(s => s.id === newSubId);
+                    const subInfo = assetSubTypes[form.category].find(s => s.id === newSubId);
                     if (subInfo) {
                       setForm({
                         ...form,
                         sub_type: newSubId,
-                        asset_type: subInfo.asset_type,
+                        asset_type: newSubId,
+                        protocol: subInfo.asset_type,
                         port: subInfo.defaultPort,
                         extra_args: {
                           category: form.category,
@@ -274,11 +515,12 @@ export default function ConnectionModal() {
                           ...(form.category === 'db' ? { db_type: newSubId } : {})
                         }
                       });
+                      setSelectedSkills(autoSelectSkills(newSubId, skills));
                     }
                   }}
                   className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent appearance-none"
                 >
-                  {ASSET_SUB_TYPES[form.category]?.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  {assetSubTypes[form.category]?.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
               </div>
             </div>
@@ -301,7 +543,7 @@ export default function ConnectionModal() {
               </div>
 
               {(() => {
-                const authVis = getAuthVisibility(form.sub_type, form.category, form.extra_args);
+                const authVis = getAuthVisibility(assetSubTypes, form.sub_type, form.category, form.extra_args);
                 if (!authVis.showUser && !authVis.showPass) return null;
                 return (
                   <div className="grid grid-cols-2 gap-3">
@@ -456,7 +698,7 @@ export default function ConnectionModal() {
                 </div>
               )}
 
-              {['zabbix', 'elasticsearch', 'f5'].includes(form.sub_type) && (
+              {['zabbix', 'elasticsearch', 'f5', 'vmware', 'zstack', 'prometheus', 'redfish', 'manageengine'].includes(form.sub_type) && (
                 <div>
                   <label className="text-xs text-ops-subtext">API Token (Optional)</label>
                   <input type="password" value={(form.extra_args.api_token as string) || ''}
@@ -479,9 +721,18 @@ export default function ConnectionModal() {
           {/* Skills */}
           {skills.length > 0 && (
             <div>
-              <label className="text-xs text-ops-subtext mb-1.5 block">挂载技能</label>
-              <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-                {skills.map((sk) => (
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs text-ops-subtext block">挂载技能</label>
+                <input
+                  type="text"
+                  placeholder="搜索技能..."
+                  value={skillSearch}
+                  onChange={(e) => setSkillSearch(e.target.value)}
+                  className="bg-ops-dark border border-ops-surface1 rounded px-2 py-0.5 text-[11px] text-ops-text outline-none focus:border-ops-accent w-40"
+                />
+              </div>
+              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                {filteredSkills.map((sk) => (
                   <button key={sk.id} onClick={() => toggleSkill(sk.id)}
                     className={`text-[11px] px-2 py-1 rounded transition-colors ${selectedSkills.has(sk.id) ? 'bg-ops-accent/20 text-ops-accent' : 'bg-ops-surface0 text-ops-subtext hover:text-ops-text'}`}>
                     {sk.name || sk.id}
@@ -505,6 +756,21 @@ export default function ConnectionModal() {
               {testResult.msg}
             </div>
           )}
+          {inspectionResult && (
+            <div className={`text-xs p-2 rounded-lg space-y-2 ${inspectionResult.ok ? 'bg-ops-success/15 text-ops-success' : 'bg-ops-alert/15 text-ops-alert'}`}>
+              <div>{inspectionResult.summary}</div>
+              {inspectionResult.checks.length > 0 && (
+                <div className="space-y-1 max-h-40 overflow-y-auto text-ops-subtext">
+                  {inspectionResult.checks.map((check) => (
+                    <div key={check.title} className="bg-ops-dark/60 rounded p-1.5">
+                      <div className="font-medium text-ops-text">{check.status === 'success' ? 'OK' : check.status.toUpperCase()} · {check.title}</div>
+                      <pre className="whitespace-pre-wrap break-words text-[10px] mt-1">{check.output.slice(0, 800)}</pre>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Buttons */}
@@ -517,6 +783,10 @@ export default function ConnectionModal() {
             <button onClick={handleTest} disabled={testing || (!isGlobal && !form.host)}
               className="px-4 py-2 text-sm bg-ops-surface0 text-ops-subtext rounded-lg hover:text-ops-text disabled:opacity-40 transition-colors">
               {testing ? '测试中...' : '🔌 测试'}
+            </button>
+            <button onClick={handleInspect} disabled={inspecting || (!isGlobal && !form.host)}
+              className="px-4 py-2 text-sm bg-ops-surface0 text-ops-subtext rounded-lg hover:text-ops-text disabled:opacity-40 transition-colors">
+              {inspecting ? '巡检中...' : '🩺 巡检测试'}
             </button>
             <button onClick={handleConnect} disabled={connecting || (!isGlobal && !form.host)}
               className="px-4 py-2 text-sm bg-ops-accent text-ops-dark rounded-lg font-medium hover:bg-ops-accent/80 disabled:opacity-40 transition-colors">

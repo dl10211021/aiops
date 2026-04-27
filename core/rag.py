@@ -3,6 +3,7 @@ import lancedb
 import logging
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from core.lancedb_utils import ensure_lancedb_table, lancedb_table_names
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ class KnowledgeBaseManager:
             from core.agent import EMBEDDING_MODEL
             return EMBEDDING_MODEL
         except ImportError:
-            return "models/gemini-embedding-001"
+            return ""
 
     def _get_embedding_dim(self):
         try:
@@ -27,7 +28,7 @@ class KnowledgeBaseManager:
         except ImportError:
             return 3072
 
-    async def ingest_document(self, file_path, client):
+    async def ingest_document(self, file_path, client, embedding_model: str | None = None):
         """解析文档、分块、向量化并存入 LanceDB"""
         if not os.path.exists(file_path):
             return {"status": "error", "message": "文件不存在"}
@@ -50,8 +51,10 @@ class KnowledgeBaseManager:
         data = []
         for i, split in enumerate(splits):
             try:
-                # 调用 Gemini 向量模型
-                emb_res = await client.embeddings.create(input=split.page_content, model=self._get_embedding_model())
+                emb_res = await client.embeddings.create(
+                    input=split.page_content,
+                    model=embedding_model or self._get_embedding_model(),
+                )
                 vector = emb_res.data[0].embedding
                 data.append({
                     "id": f"{os.path.basename(file_path)}_{i}",
@@ -66,7 +69,7 @@ class KnowledgeBaseManager:
              return {"status": "error", "message": "文档内容提取或向量化失败"}
 
         # 创建或打开表
-        if table_name not in self.ldb.table_names():
+        if table_name not in lancedb_table_names(self.ldb):
             # 定义 schema
             import pyarrow as pa
             schema = pa.schema([
@@ -75,20 +78,23 @@ class KnowledgeBaseManager:
                 pa.field("content", pa.string()),
                 pa.field("vector", pa.list_(pa.float32(), self._get_embedding_dim())) # Configurable embedding dimension
             ])
-            tbl = self.ldb.create_table(table_name, schema=schema)
+            tbl = ensure_lancedb_table(self.ldb, table_name, schema)
         else:
             tbl = self.ldb.open_table(table_name)
             
         tbl.add(data)
         return {"status": "success", "message": f"成功将 {os.path.basename(file_path)} 注入知识库，共 {len(data)} 个知识块。"}
 
-    async def search(self, query, client, limit=10):
+    async def search(self, query, client, embedding_model: str | None = None, limit=10):
         """根据问题检索最相关的知识片段"""
-        if "knowledge_base" not in self.ldb.table_names():
+        if "knowledge_base" not in lancedb_table_names(self.ldb):
             return "当前企业知识库为空，无参考文档。"
             
         try:
-            emb_res = await client.embeddings.create(input=query, model=self._get_embedding_model())
+            emb_res = await client.embeddings.create(
+                input=query,
+                model=embedding_model or self._get_embedding_model(),
+            )
             query_vector = emb_res.data[0].embedding
             
             tbl = self.ldb.open_table("knowledge_base")
@@ -108,7 +114,7 @@ class KnowledgeBaseManager:
 
     async def list_documents(self):
         """列出所有已注入的文档"""
-        if "knowledge_base" not in self.ldb.table_names():
+        if "knowledge_base" not in lancedb_table_names(self.ldb):
             return []
         try:
             tbl = self.ldb.open_table("knowledge_base")
@@ -124,7 +130,7 @@ class KnowledgeBaseManager:
 
     async def delete_document(self, filename: str):
         """删除指定文档的所有块"""
-        if "knowledge_base" not in self.ldb.table_names():
+        if "knowledge_base" not in lancedb_table_names(self.ldb):
             return {"status": "error", "message": "知识库为空"}
         try:
             tbl = self.ldb.open_table("knowledge_base")

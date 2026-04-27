@@ -5,9 +5,14 @@ import os
 import logging
 import datetime
 import asyncio
+import sys
+from contextlib import contextmanager
 import pyarrow as pa
 import lancedb
 from cryptography.fernet import Fernet
+
+from core.asset_protocols import normalize_protocol, resolve_asset_identity
+from core.lancedb_utils import ensure_lancedb_table, lancedb_table_names
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +26,8 @@ class MemoryDB:
         self.root_dir = os.path.dirname(os.path.dirname(__file__))
         self.db_path = os.path.join(self.root_dir, "opscore.db")
         self.lancedb_path = os.path.join(self.root_dir, "opscore_lancedb")
+        self.ldb = None
+        self.ltm_enabled = False
 
         # Init LanceDB Vector Table Schema
         self.ltm_schema = pa.schema(
@@ -57,9 +64,52 @@ class MemoryDB:
             "v3_priv_pass",
             "community_string",
             "enable_pass",
+            "enable_password",
         ]
+        self._encrypted_prefix = "fernet:"
 
         self.init_db()
+
+    @contextmanager
+    def _connect(self):
+        conn = sqlite3.connect(self.db_path)
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def _encrypt_secret(self, value, old_value=None):
+        if value in (None, ""):
+            return value
+        if value == "********":
+            return old_value or ""
+        if not self._fernet or not isinstance(value, str):
+            return value
+        if value.startswith(self._encrypted_prefix):
+            return value
+        try:
+            encrypted = self._fernet.encrypt(value.encode("utf-8")).decode("utf-8")
+            return f"{self._encrypted_prefix}{encrypted}"
+        except Exception as e:
+            logger.error(f"Secret encryption failed: {e}")
+            return value
+
+    def _decrypt_secret(self, value):
+        if value in (None, ""):
+            return value
+        if not self._fernet or not isinstance(value, str):
+            return value
+        if not value.startswith(self._encrypted_prefix):
+            return value
+        try:
+            token = value[len(self._encrypted_prefix) :]
+            return self._fernet.decrypt(token.encode("utf-8")).decode("utf-8")
+        except Exception:
+            return value
 
     def _get_embedding_model(self):
         try:
@@ -67,7 +117,7 @@ class MemoryDB:
 
             return EMBEDDING_MODEL
         except ImportError:
-            return "models/gemini-embedding-001"
+            return ""
 
     def _get_embedding_dim(self):
         try:
@@ -80,7 +130,7 @@ class MemoryDB:
     def init_db(self):
         try:
             # Init SQLite
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connect() as conn:
                 conn.execute("PRAGMA journal_mode=WAL;")
                 try:
                     conn.execute(
@@ -113,6 +163,7 @@ class MemoryDB:
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+                self._ensure_assets_protocol_column(conn)
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS tags (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,14 +181,59 @@ class MemoryDB:
                 """)
             logger.info(f"SQLite 记忆库已就绪: {self.db_path}")
 
-            # Init LanceDB
-            self.ldb = lancedb.connect(self.lancedb_path)
-            if "long_term_memory" not in self.ldb.table_names():
-                self.ldb.create_table("long_term_memory", schema=self.ltm_schema)
-            logger.info(f"LanceDB 长效记忆库已就绪: {self.lancedb_path}")
+            self._init_lancedb()
 
         except Exception as e:
             logger.error(f"初始化数据库失败: {e}")
+
+    def _init_lancedb(self):
+        if os.environ.get("OPSCORE_DISABLE_LTM", "").lower() in {"1", "true", "yes"}:
+            logger.info("LanceDB 长效记忆已通过 OPSCORE_DISABLE_LTM 禁用。")
+            return
+        if "unittest" in sys.modules and os.environ.get("OPSCORE_ENABLE_LTM_IN_TESTS", "").lower() not in {"1", "true", "yes"}:
+            logger.info("测试环境默认禁用 LanceDB 长效记忆。")
+            return
+        normalized_path = self.lancedb_path.replace("\\", "/").lower()
+        if "/.codex/.sandbox/" in normalized_path:
+            logger.info("当前运行在 Codex 文件系统沙箱内，LanceDB 长效记忆已禁用。")
+            return
+
+        try:
+            os.makedirs(self.lancedb_path, exist_ok=True)
+            probe_path = os.path.join(self.lancedb_path, ".write_probe")
+            with open(probe_path, "w", encoding="utf-8") as f:
+                f.write("ok")
+            try:
+                os.remove(probe_path)
+            except OSError:
+                pass
+        except Exception as e:
+            logger.warning(f"LanceDB 路径不可写，长效记忆已禁用: {e}")
+            return
+
+        try:
+            self.ldb = lancedb.connect(self.lancedb_path)
+            self._ensure_lancedb_table("long_term_memory", self.ltm_schema)
+            self.ltm_enabled = True
+            logger.info(f"LanceDB 长效记忆库已就绪: {self.lancedb_path}")
+        except Exception as e:
+            self.ldb = None
+            self.ltm_enabled = False
+            logger.warning(f"LanceDB 初始化失败，长效记忆已禁用: {e}")
+
+    def _lancedb_table_names(self) -> list[str]:
+        return lancedb_table_names(self.ldb)
+
+    def _ensure_lancedb_table(self, table_name: str, schema) -> None:
+        ensure_lancedb_table(self.ldb, table_name, schema)
+
+    def _ensure_assets_protocol_column(self, conn):
+        try:
+            columns = [row[1] for row in conn.execute("PRAGMA table_info(assets)")]
+            if "protocol" not in columns:
+                conn.execute("ALTER TABLE assets ADD COLUMN protocol TEXT")
+        except Exception as e:
+            logger.warning(f"资产表 protocol 字段检查失败: {e}")
 
     def _encrypt_extra_args(self, new_args, old_args=None):
         if not new_args:
@@ -181,33 +277,59 @@ class MemoryDB:
     # -------- 资产持久化管理 --------
     def save_assets_batch(self, items: list[dict]):
         try:
-            with self._db_lock, sqlite3.connect(self.db_path) as conn:
+            with self._db_lock, self._connect() as conn:
                 cursor = conn.cursor()
+                self._ensure_assets_protocol_column(conn)
                 for item in items:
                     host = item["host"]
-                    asset_type = item["asset_type"]
+                    identity = resolve_asset_identity(
+                        item.get("asset_type"),
+                        item.get("protocol") or item.get("login_protocol"),
+                        item.get("extra_args", {}),
+                        host,
+                        item.get("port"),
+                        item.get("remark"),
+                    )
+                    asset_type = identity["asset_type"]
+                    protocol = identity["protocol"]
+                    extra_args = identity["extra_args"]
                     tags = item.get("tags") or ["未分组"]
 
                     cursor.execute(
-                        "SELECT id, extra_args_json FROM assets WHERE host = ? AND asset_type = ?",
-                        (host, asset_type),
+                        "SELECT id, password, extra_args_json, asset_type, protocol, remark, port FROM assets WHERE host = ?",
+                        (host,),
                     )
-                    row = cursor.fetchone()
+                    rows = cursor.fetchall()
+                    row = None
+                    for candidate in rows:
+                        old_args = json.loads(candidate[2]) if candidate[2] else {}
+                        old_identity = resolve_asset_identity(
+                            candidate[3], candidate[4], old_args, host, candidate[6], candidate[5]
+                        )
+                        if old_identity["asset_type"] == asset_type and old_identity["protocol"] == protocol:
+                            row = candidate
+                            break
                     if row:
                         asset_id = row[0]
-                        old_extra_args = json.loads(row[1]) if row[1] else {}
+                        old_password = row[1]
+                        old_extra_args = json.loads(row[2]) if row[2] else {}
                         new_extra_args = self._encrypt_extra_args(
-                            item.get("extra_args", {}), old_extra_args
+                            extra_args, old_extra_args
+                        )
+                        new_password = self._encrypt_secret(
+                            item.get("password"), old_password
                         )
                         cursor.execute(
                             """
-                            UPDATE assets SET remark=?, port=?, username=?, password=?, agent_profile=?, extra_args_json=?, skills_json=? WHERE id=?
+                            UPDATE assets SET remark=?, port=?, username=?, password=?, asset_type=?, protocol=?, agent_profile=?, extra_args_json=?, skills_json=? WHERE id=?
                         """,
                             (
                                 item["remark"],
                                 item["port"],
                                 item["username"],
-                                item["password"],
+                                new_password,
+                                asset_type,
+                                protocol,
                                 item["agent_profile"],
                                 json.dumps(new_extra_args, ensure_ascii=False),
                                 json.dumps(item["skills"], ensure_ascii=False),
@@ -216,20 +338,22 @@ class MemoryDB:
                         )
                     else:
                         new_extra_args = self._encrypt_extra_args(
-                            item.get("extra_args", {})
+                            extra_args
                         )
+                        new_password = self._encrypt_secret(item.get("password"))
                         cursor.execute(
                             """
-                            INSERT INTO assets (remark, host, port, username, password, asset_type, agent_profile, extra_args_json, skills_json)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO assets (remark, host, port, username, password, asset_type, protocol, agent_profile, extra_args_json, skills_json)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                             (
                                 item["remark"],
                                 host,
                                 item["port"],
                                 item["username"],
-                                item["password"],
+                                new_password,
                                 asset_type,
+                                protocol,
                                 item["agent_profile"],
                                 json.dumps(new_extra_args, ensure_ascii=False),
                                 json.dumps(item["skills"], ensure_ascii=False),
@@ -266,33 +390,53 @@ class MemoryDB:
         extra_args,
         skills,
         tags=None,
+        protocol=None,
     ):
         if tags is None:
             tags = ["未分组"]
         try:
-            with self._db_lock, sqlite3.connect(self.db_path) as conn:
+            with self._db_lock, self._connect() as conn:
                 cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT id, extra_args_json FROM assets WHERE host = ? AND asset_type = ?",
-                    (host, asset_type),
+                self._ensure_assets_protocol_column(conn)
+                identity = resolve_asset_identity(
+                    asset_type, protocol, extra_args, host, port, remark
                 )
-                row = cursor.fetchone()
+                asset_type = identity["asset_type"]
+                protocol = identity["protocol"]
+                extra_args = identity["extra_args"]
+                cursor.execute(
+                    "SELECT id, password, extra_args_json, asset_type, protocol, remark, port FROM assets WHERE host = ?",
+                    (host,),
+                )
+                rows = cursor.fetchall()
+                row = None
+                for candidate in rows:
+                    old_args = json.loads(candidate[2]) if candidate[2] else {}
+                    old_identity = resolve_asset_identity(
+                        candidate[3], candidate[4], old_args, host, candidate[6], candidate[5]
+                    )
+                    if old_identity["asset_type"] == asset_type and old_identity["protocol"] == protocol:
+                        row = candidate
+                        break
                 if row:
                     asset_id = row[0]
-                    old_extra_args = json.loads(row[1]) if row[1] else {}
+                    old_password = row[1]
+                    old_extra_args = json.loads(row[2]) if row[2] else {}
                     new_extra_args = self._encrypt_extra_args(
                         extra_args, old_extra_args
                     )
+                    new_password = self._encrypt_secret(password, old_password)
                     cursor.execute(
                         """
-                        UPDATE assets SET remark=?, port=?, username=?, password=?, agent_profile=?, extra_args_json=?, skills_json=? WHERE id=?
+                        UPDATE assets SET remark=?, port=?, username=?, password=?, asset_type=?, protocol=?, agent_profile=?, extra_args_json=?, skills_json=? WHERE id=?
                     """,
                         (
                             remark,
                             port,
                             username,
-                            password,
+                            new_password,
                             asset_type,
+                            protocol,
                             agent_profile,
                             json.dumps(new_extra_args, ensure_ascii=False),
                             json.dumps(skills, ensure_ascii=False),
@@ -301,18 +445,20 @@ class MemoryDB:
                     )
                 else:
                     new_extra_args = self._encrypt_extra_args(extra_args)
+                    new_password = self._encrypt_secret(password)
                     cursor.execute(
                         """
-                        INSERT INTO assets (remark, host, port, username, password, asset_type, agent_profile, extra_args_json, skills_json)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO assets (remark, host, port, username, password, asset_type, protocol, agent_profile, extra_args_json, skills_json)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                         (
                             remark,
                             host,
                             port,
                             username,
-                            password,
+                            new_password,
                             asset_type,
+                            protocol,
                             agent_profile,
                             json.dumps(new_extra_args, ensure_ascii=False),
                             json.dumps(skills, ensure_ascii=False),
@@ -333,10 +479,12 @@ class MemoryDB:
                     )
         except Exception as e:
             logger.error(f"保存资产失败: {e}")
+            raise
 
     def get_all_assets(self) -> list:
         try:
-            with self._db_lock, sqlite3.connect(self.db_path) as conn:
+            with self._db_lock, self._connect() as conn:
+                self._ensure_assets_protocol_column(conn)
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute("""
@@ -354,7 +502,20 @@ class MemoryDB:
                     raw_extra_args = (
                         json.loads(r["extra_args_json"]) if r["extra_args_json"] else {}
                     )
+                    r["password"] = self._decrypt_secret(r.get("password"))
                     r["extra_args"] = self._decrypt_extra_args(raw_extra_args)
+                    identity = resolve_asset_identity(
+                        r.get("asset_type"),
+                        r.get("protocol"),
+                        r["extra_args"],
+                        r.get("host"),
+                        r.get("port"),
+                        r.get("remark"),
+                    )
+                    r["raw_asset_type"] = r.get("asset_type")
+                    r["asset_type"] = identity["asset_type"]
+                    r["protocol"] = identity["protocol"]
+                    r["extra_args"] = identity["extra_args"]
                     r["skills"] = (
                         json.loads(r["skills_json"]) if r["skills_json"] else []
                     )
@@ -368,19 +529,143 @@ class MemoryDB:
             logger.error(f"读取资产列表失败: {e}")
             return []
 
+    def get_asset(self, asset_id: int) -> dict | None:
+        try:
+            with self._db_lock, self._connect() as conn:
+                self._ensure_assets_protocol_column(conn)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT a.*, GROUP_CONCAT(t.name) as tags_concat
+                    FROM assets a
+                    LEFT JOIN asset_tags at ON a.id = at.asset_id
+                    LEFT JOIN tags t ON at.tag_id = t.id
+                    WHERE a.id = ?
+                    GROUP BY a.id
+                    """,
+                    (asset_id,),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                r = dict(row)
+                raw_extra_args = json.loads(r["extra_args_json"]) if r["extra_args_json"] else {}
+                r["password"] = self._decrypt_secret(r.get("password"))
+                r["extra_args"] = self._decrypt_extra_args(raw_extra_args)
+                identity = resolve_asset_identity(
+                    r.get("asset_type"),
+                    r.get("protocol"),
+                    r["extra_args"],
+                    r.get("host"),
+                    r.get("port"),
+                    r.get("remark"),
+                )
+                r["raw_asset_type"] = r.get("asset_type")
+                r["asset_type"] = identity["asset_type"]
+                r["protocol"] = identity["protocol"]
+                r["extra_args"] = identity["extra_args"]
+                r["skills"] = json.loads(r["skills_json"]) if r["skills_json"] else []
+                tags_str = r.pop("tags_concat", None)
+                r["tags"] = tags_str.split(",") if tags_str else []
+                return r
+        except Exception as e:
+            logger.error(f"读取资产失败: {e}")
+            return None
+
+    def update_asset(self, asset_id: int, item: dict) -> dict | None:
+        try:
+            with self._db_lock, self._connect() as conn:
+                cursor = conn.cursor()
+                self._ensure_assets_protocol_column(conn)
+                cursor.execute("SELECT password, extra_args_json FROM assets WHERE id = ?", (asset_id,))
+                old = cursor.fetchone()
+                if not old:
+                    return None
+
+                identity = resolve_asset_identity(
+                    item.get("asset_type"),
+                    item.get("protocol") or item.get("login_protocol"),
+                    item.get("extra_args", {}),
+                    item.get("host"),
+                    item.get("port"),
+                    item.get("remark"),
+                )
+                extra_args = self._encrypt_extra_args(
+                    identity["extra_args"],
+                    json.loads(old[1]) if old[1] else {},
+                )
+                password = self._encrypt_secret(item.get("password"), old[0])
+                cursor.execute(
+                    """
+                    UPDATE assets
+                    SET remark=?, host=?, port=?, username=?, password=?, asset_type=?, protocol=?, agent_profile=?, extra_args_json=?, skills_json=?
+                    WHERE id=?
+                    """,
+                    (
+                        item.get("remark", ""),
+                        item.get("host", ""),
+                        int(item.get("port") or 22),
+                        item.get("username", ""),
+                        password,
+                        identity["asset_type"],
+                        identity["protocol"],
+                        item.get("agent_profile", "default"),
+                        json.dumps(extra_args, ensure_ascii=False),
+                        json.dumps(item.get("skills", []), ensure_ascii=False),
+                        asset_id,
+                    ),
+                )
+
+                cursor.execute("DELETE FROM asset_tags WHERE asset_id = ?", (asset_id,))
+                for tag in item.get("tags") or ["未分组"]:
+                    cursor.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
+                    cursor.execute("SELECT id FROM tags WHERE name = ?", (tag,))
+                    tag_id = cursor.fetchone()[0]
+                    cursor.execute(
+                        "INSERT INTO asset_tags (asset_id, tag_id) VALUES (?, ?)",
+                        (asset_id, tag_id),
+                    )
+            return self.get_asset(asset_id)
+        except Exception as e:
+            logger.error(f"更新资产失败: {e}")
+            raise
+
     def delete_asset(self, asset_id: int):
         try:
-            with self._db_lock, sqlite3.connect(self.db_path) as conn:
+            with self._db_lock, self._connect() as conn:
                 conn.execute("DELETE FROM assets WHERE id = ?", (asset_id,))
         except Exception as e:
             logger.error(f"删除资产失败: {e}")
 
     # -------- 对话记忆管理 (STM + LTM) --------
 
+    def _is_protocol_retry_noise(self, msg: dict) -> bool:
+        """Drop obsolete local-script retry loops from model context.
+
+        Older prompts exposed local_execute_script for native protocol sessions,
+        which caused repeated "adjust command format" loops. Keeping those
+        messages in LLM context makes the model repeat the same bad path.
+        """
+        if msg.get("name") == "local_execute_script":
+            return True
+        content = str(msg.get("content") or "")
+        if "禁止在 local_execute_script 中使用 Shell 控制符" in content:
+            return True
+        if "调整命令格式" in content and "WinRM" in content and "Shell 控制符" in content:
+            return True
+        if "run_winrm.py" in content or "local_execute_script" in content:
+            return True
+        if "本地脚本" in content and ("WinRM" in content or "Windows" in content):
+            return True
+        if "无法获取明文密码" in content or "常见弱口令" in content:
+            return True
+        return False
+
     def get_messages(self, session_id: str, for_ui: bool = False) -> list:
         """获取 SQLite 中的短期记忆"""
         try:
-            with self._db_lock, sqlite3.connect(self.db_path) as conn:
+            with self._db_lock, self._connect() as conn:
                 cursor = conn.cursor()
                 if for_ui:
                     cursor.execute(
@@ -398,6 +683,8 @@ class MemoryDB:
                     try:
                         msg = json.loads(row[0])
                         if isinstance(msg, dict) and "role" in msg:
+                            if not for_ui and self._is_protocol_retry_noise(msg):
+                                continue
                             if (
                                 msg.get("role") == "user"
                                 and "[System Auto Reply] Tools execution complete."
@@ -517,7 +804,7 @@ class MemoryDB:
     def append_message(self, session_id: str, message_dict: dict):
         """存入 SQLite 作为短期记忆"""
         try:
-            with self._db_lock, sqlite3.connect(self.db_path) as conn:
+            with self._db_lock, self._connect() as conn:
                 conn.execute(
                     "INSERT INTO memory (session_id, message_json) VALUES (?, ?)",
                     (session_id, json.dumps(message_dict, ensure_ascii=False)),
@@ -528,13 +815,13 @@ class MemoryDB:
     def clear_history(self, session_id: str):
         """清空指定会话的短期记忆"""
         try:
-            with self._db_lock, sqlite3.connect(self.db_path) as conn:
+            with self._db_lock, self._connect() as conn:
                 conn.execute("DELETE FROM memory WHERE session_id = ?", (session_id,))
                 conn.commit()
             logger.info(f"已清空会话 {session_id} 的历史记忆")
 
             # 清理长期记忆向量碎片
-            if "long_term_memory" in self.ldb.table_names():
+            if self.ltm_enabled and self.ldb and "long_term_memory" in self._lancedb_table_names():
                 try:
                     tbl = self.ldb.open_table("long_term_memory")
                     tbl.cleanup_old_versions()
@@ -547,9 +834,11 @@ class MemoryDB:
 
     # -------- 长期记忆压缩与检索 (LanceDB) --------
     async def retrieve_ltm(
-        self, session_id: str, query: str, client, limit: int = 3
+        self, session_id: str, query: str, client, embedding_model: str | None = None, limit: int = 3
     ) -> str:
         """根据用户查询检索相关的长期记忆节点"""
+        if not self.ltm_enabled or not self.ldb:
+            return ""
         try:
             table = self.ldb.open_table("long_term_memory")
             if table.count_rows() == 0:
@@ -557,7 +846,7 @@ class MemoryDB:
 
             # 获取用户 Query 的向量
             res = await client.embeddings.create(
-                input=query, model=self._get_embedding_model()
+                input=query, model=embedding_model or self._get_embedding_model()
             )
             query_vector = res.data[0].embedding
 
@@ -586,11 +875,13 @@ class MemoryDB:
             return ""
 
     async def compress_and_store_ltm(
-        self, session_id: str, client
+        self, session_id: str, client, embedding_model: str | None = None
     ):
         """将超出短期窗口的历史对话进行总结并存入 LanceDB，然后从 SQLite 释放"""
+        if not self.ltm_enabled or not self.ldb:
+            return
         try:
-            with self._db_lock, sqlite3.connect(self.db_path) as conn:
+            with self._db_lock, self._connect() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     "SELECT id, message_json FROM memory WHERE session_id = ? AND is_compressed = 0 ORDER BY id ASC",
@@ -639,9 +930,8 @@ class MemoryDB:
             else:
                 prompt = f"以下是一段过往的对话日志。请提取其中的关键事实、配置信息、用户的偏好或系统状态，写成一段简洁客观的总结，便于未来作为长期记忆供 AI 检索。不需要任何寒暄，直接输出核心信息：\n\n{text_to_summarize}"
 
-                # 这里必须使用 emb_client (默认的基础小模型) 对应的模型名，而不是用户当前对话的昂贵模型名
-                # 从 .env 中读取专用摘要模型，默认使用 gemini-2.5-flash
-                compress_model = os.environ.get("COMPRESS_MODEL", "gemini-2.5-flash")
+                # 默认使用当前配置的模型，避免写死某个云厂商模型。
+                compress_model = os.environ.get("COMPRESS_MODEL") or embedding_model or self._get_embedding_model()
                 resp = await client.chat.completions.create(
                     model=compress_model,
                     messages=[{"role": "user", "content": prompt}],
@@ -651,7 +941,7 @@ class MemoryDB:
 
                 # 获取向量
                 emb_res = await client.embeddings.create(
-                    input=summary, model=self._get_embedding_model()
+                    input=summary, model=embedding_model or self._get_embedding_model()
                 )
                 vector = emb_res.data[0].embedding
 
@@ -679,7 +969,7 @@ class MemoryDB:
                 )
 
             # 标记短期记忆为已压缩
-            with self._db_lock, sqlite3.connect(self.db_path) as conn:
+            with self._db_lock, self._connect() as conn:
                 conn.execute(
                     f"UPDATE memory SET is_compressed = 1 WHERE id IN ({','.join('?' * len(ids_to_delete))})",
                     ids_to_delete,

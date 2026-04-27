@@ -1,14 +1,38 @@
 // API service layer for all OpsCore backend endpoints
-import type { ApiResponse, Asset, CronJob, KnowledgeFile, SkillInfo } from '@/types'
+import type {
+  AlertTrendPoint,
+  ApiResponse,
+  ApprovalRequest,
+  Asset,
+  AssetVerificationRun,
+  AssetCleanupPlan,
+  CronJob,
+  DashboardOverview,
+  InspectionReport,
+  InspectionRun,
+  InspectionTrendPoint,
+  InspectionTemplate,
+  KnowledgeFile,
+  ProtocolVerificationOverview,
+  RiskRankingItem,
+  SafetyPolicy,
+  SessionToolCatalog,
+  SkillInfo,
+} from '@/types'
 
 const BASE = '/api/v1'
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('OPSCORE_API_TOKEN')
+  return token ? { 'X-API-Key': token } : {}
+}
 
 async function request<T = Record<string, unknown>>(
   path: string,
   options?: RequestInit
 ): Promise<ApiResponse<T>> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...options?.headers },
     ...options,
   })
   if (!res.ok) {
@@ -23,7 +47,7 @@ export async function connectSession(params: {
   host: string; port: number; username: string; password?: string;
   private_key_path?: string; allow_modifications: boolean;
   active_skills: string[]; agent_profile: string; remark?: string;
-  asset_type: string; extra_args: Record<string, unknown>; group_name?: string;
+  asset_type: string; protocol?: string; extra_args: Record<string, unknown>; group_name?: string;
   tags?: string[]; target_scope?: string; scope_value?: string;
 }) {
   return request<{ session_id: string }>('/connect', {
@@ -33,11 +57,26 @@ export async function connectSession(params: {
 
 export async function testConnection(params: {
   host: string; port: number; username: string; password?: string;
-  asset_type: string; extra_args?: Record<string, unknown>;
+  asset_type: string; protocol?: string; extra_args?: Record<string, unknown>;
   active_skills?: string[];
   target_scope?: string; scope_value?: string;
 }) {
   return request('/connect/test', {
+    method: 'POST', body: JSON.stringify(params),
+  })
+}
+
+export async function inspectConnection(params: {
+  host: string; port: number; username: string; password?: string;
+  asset_type: string; protocol?: string; extra_args?: Record<string, unknown>;
+  active_skills?: string[]; agent_profile?: string; remark?: string;
+  tags?: string[]; target_scope?: string; scope_value?: string;
+  keep_session?: boolean;
+}) {
+  return request<{ inspection: {
+    status: string; supported: boolean; summary?: string; message?: string;
+    checks: Array<{ title: string; status: string; output: string }>;
+  } }>('/connect/inspect', {
     method: 'POST', body: JSON.stringify(params),
   })
 }
@@ -50,7 +89,7 @@ export async function getActiveSessions() {
   return request<{ sessions: Record<string, {
     id: string; host: string; remark: string; isReadWriteMode: boolean;
     skills: string[]; agentProfile: string; user: string;
-    asset_type: string; extra_args: Record<string, unknown>;
+    asset_type: string; protocol: string; extra_args: Record<string, unknown>;
     heartbeatEnabled: boolean; tags: string[];
   }> }>('/sessions/active')
 }
@@ -69,7 +108,7 @@ export function streamChat(
 ) {
   return fetch(`${BASE}/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ session_id: sessionId, message, model_name: modelName, thinking_mode: thinkingMode }),
     signal,
   })
@@ -119,6 +158,10 @@ export async function exportSessionHistory(sessionId: string) {
   return request<{ markdown: string }>(`/session/${sessionId}/export`)
 }
 
+export async function getSessionTools(sessionId: string) {
+  return request<SessionToolCatalog>(`/session/${sessionId}/tools`)
+}
+
 // ---- Skills ----
 export async function getSkillRegistry() {
   return request<{ registry: SkillInfo[] }>('/skills/registry')
@@ -157,10 +200,55 @@ export async function deleteAsset(assetId: number) {
   return request(`/assets/${assetId}`, { method: 'DELETE' })
 }
 
+export async function createAsset(asset: Partial<Asset>) {
+  return request('/assets', {
+    method: 'POST', body: JSON.stringify(asset),
+  })
+}
+
+export async function getAsset(assetId: number) {
+  return request<{ asset: Asset }>(`/assets/${assetId}`)
+}
+
+export async function getAssetVerificationMatrix(assetId: number) {
+  return request<{ matrix: ProtocolVerificationOverview['matrix'][number] }>(`/assets/${assetId}/verification`)
+}
+
+export async function verifyAsset(assetId: number) {
+  return request<{ run: AssetVerificationRun }>(`/assets/${assetId}/verify`, { method: 'POST' })
+}
+
+export async function getAssetVerificationRuns(assetId: number, limit = 20) {
+  return request<{ runs: AssetVerificationRun[] }>(`/assets/${assetId}/verification/runs?limit=${limit}`)
+}
+
+export async function getProtocolVerificationOverview() {
+  return request<ProtocolVerificationOverview>('/verification/protocols')
+}
+
+export async function updateAsset(assetId: number, asset: Partial<Asset>) {
+  return request<{ asset: Asset }>(`/assets/${assetId}`, {
+    method: 'PUT', body: JSON.stringify(asset),
+  })
+}
+
 export async function batchImportAssets(items: Partial<Asset>[]) {
   return request('/assets/batch_import', {
     method: 'POST', body: JSON.stringify(items),
   })
+}
+
+export async function previewAssetNormalization() {
+  return request<AssetCleanupPlan>('/assets/normalize/preview')
+}
+
+export async function applyAssetNormalization() {
+  return request<{
+    backup_path: string
+    removed_ids: number[]
+    merged_groups: Array<{ keep_id: number; remove_ids: number[]; host: string; port: number }>
+    summary: Record<string, unknown>
+  }>('/assets/normalize/apply', { method: 'POST' })
 }
 
 // ---- Knowledge Base ----
@@ -171,7 +259,7 @@ export async function listKnowledgeDocuments() {
 export async function uploadKnowledgeDocument(file: File) {
   const fd = new FormData()
   fd.append('file', file)
-  const res = await fetch(`${BASE}/knowledge/upload`, { method: 'POST', body: fd })
+  const res = await fetch(`${BASE}/knowledge/upload`, { method: 'POST', body: fd, headers: authHeaders() })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail || res.statusText)
@@ -191,12 +279,89 @@ export async function getCronJobs() {
 export async function addCronJob(params: {
   cron_expr: string; message: string; host: string;
   username: string; agent_profile?: string; password?: string;
+  asset_id?: number | null; target_scope?: string; scope_value?: string;
+  template_id?: string; notification_channel?: string; retry_count?: number;
 }) {
   return request('/cron/add', { method: 'POST', body: JSON.stringify(params) })
 }
 
+export async function updateCronJob(jobId: string, params: {
+  cron_expr: string; message: string; host: string;
+  username: string; agent_profile?: string; password?: string;
+  asset_id?: number | null; target_scope?: string; scope_value?: string;
+  template_id?: string; notification_channel?: string; retry_count?: number;
+}) {
+  return request<{ job: CronJob }>(`/cron/${jobId}`, { method: 'PUT', body: JSON.stringify(params) })
+}
+
+export async function pauseCronJob(jobId: string) {
+  return request<{ job: CronJob }>(`/cron/${jobId}/pause`, { method: 'POST' })
+}
+
+export async function resumeCronJob(jobId: string) {
+  return request<{ job: CronJob }>(`/cron/${jobId}/resume`, { method: 'POST' })
+}
+
+export async function runCronJobNow(jobId: string) {
+  return request<{ result: { status: string; job_id: string; run_id: string; target_count: number } }>(`/cron/${jobId}/run`, { method: 'POST' })
+}
+
 export async function deleteCronJob(jobId: string) {
   return request(`/cron/${jobId}`, { method: 'DELETE' })
+}
+
+export async function getCronJobRuns(jobId: string, limit = 5) {
+  return request<{ runs: InspectionRun[] }>(`/cron/${jobId}/runs?limit=${limit}`)
+}
+
+export async function getCronJobRun(runId: string) {
+  return request<{ run: InspectionRun }>(`/cron/runs/${runId}`)
+}
+
+export async function listInspectionRuns(params: { jobId?: string; assetId?: number; limit?: number } = {}) {
+  const search = new URLSearchParams()
+  if (params.jobId) search.set('job_id', params.jobId)
+  if (params.assetId) search.set('asset_id', String(params.assetId))
+  if (params.limit) search.set('limit', String(params.limit))
+  const suffix = search.toString() ? `?${search.toString()}` : ''
+  return request<{ runs: InspectionRun[] }>(`/inspection-runs${suffix}`)
+}
+
+export async function getInspectionRunReport(runId: string) {
+  return request<{ report: InspectionReport }>(`/inspection-runs/${runId}/report`)
+}
+
+export async function exportInspectionRunReport(runId: string, format: 'markdown' | 'json' = 'markdown') {
+  return request<{ format: string; content_type: string; content: string }>(
+    `/inspection-runs/${runId}/export?format=${format}`
+  )
+}
+
+export async function getDashboardInspectionRunTrend() {
+  return request<{ points: InspectionTrendPoint[] }>('/dashboard/inspection-runs/trend')
+}
+
+// ---- Inspection Templates ----
+export async function getInspectionTemplates() {
+  return request<{ templates: InspectionTemplate[] }>('/inspection-templates')
+}
+
+export async function createInspectionTemplate(template: InspectionTemplate) {
+  return request<{ template: InspectionTemplate }>('/inspection-templates', {
+    method: 'POST',
+    body: JSON.stringify(template),
+  })
+}
+
+export async function updateInspectionTemplate(templateId: string, template: InspectionTemplate) {
+  return request<{ template: InspectionTemplate }>(`/inspection-templates/${templateId}`, {
+    method: 'PUT',
+    body: JSON.stringify(template),
+  })
+}
+
+export async function deleteInspectionTemplate(templateId: string) {
+  return request(`/inspection-templates/${templateId}`, { method: 'DELETE' })
 }
 
 // ---- Config ----
@@ -216,6 +381,20 @@ export interface ModelGroup {
   models: { id: string; name: string }[];
 }
 
+export interface AssetTypeDefinition {
+  id: string;
+  label: string;
+  category: string;
+  protocol: string;
+  default_port: number;
+  inspection_profile?: string;
+}
+
+export interface AssetCategoryDefinition {
+  id: string;
+  label: string;
+}
+
 export async function getProviders() {
   return request<{ providers: ProviderConfig[] }>('/config/providers')
 }
@@ -226,10 +405,43 @@ export async function updateProviders(providers: ProviderConfig[]) {
   })
 }
 
-export async function getAvailableModels() {
-  return request<{ models: ModelGroup[] }>('/models')
+export async function getAvailableModels(providerId?: string, refresh = false) {
+  const params = new URLSearchParams()
+  if (providerId) params.set('provider_id', providerId)
+  if (refresh) params.set('refresh', 'true')
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  return request<{ models: ModelGroup[] }>(`/models${suffix}`)
 }
 
+export async function getAssetTypes() {
+  return request<{ types: AssetTypeDefinition[]; categories: AssetCategoryDefinition[] }>('/assets/types')
+}
+
+export async function getToolCatalog() {
+  return request<SessionToolCatalog>('/tools/catalog')
+}
+
+export async function getSessionCommands(sessionId: string) {
+  return request<{ commands: Array<{ id: string; label: string; description: string; prompt: string; category: string }> }>(
+    `/session/${sessionId}/commands`
+  )
+}
+
+export async function getDashboardOverview() {
+  return request<DashboardOverview>('/dashboard/overview')
+}
+
+export async function getDashboardAlertTrend() {
+  return request<{ points: AlertTrendPoint[] }>('/dashboard/alerts/trend')
+}
+
+export async function getDashboardRiskRanking() {
+  return request<{ ranking: RiskRankingItem[] }>('/dashboard/risk-ranking')
+}
+
+export async function getDashboardToolsets() {
+  return request<SessionToolCatalog>('/dashboard/toolsets')
+}
 
 
 export async function getNotificationConfig() {
@@ -245,6 +457,36 @@ export async function updateNotificationConfig(config: Record<string, unknown>) 
 export async function testNotificationChannel(channel: string) {
   return request('/config/notifications/test', {
     method: 'POST', body: JSON.stringify({ channel }),
+  })
+}
+
+export async function getSafetyPolicy() {
+  return request<{ policy: SafetyPolicy }>('/config/safety-policy')
+}
+
+export async function updateSafetyPolicy(policy: SafetyPolicy) {
+  return request<{ policy: SafetyPolicy }>('/config/safety-policy', {
+    method: 'POST', body: JSON.stringify({ policy }),
+  })
+}
+
+// ---- Approval Center ----
+export async function getApprovals(status?: string, limit = 100) {
+  const params = new URLSearchParams()
+  if (status && status !== 'all') params.set('status', status)
+  params.set('limit', String(limit))
+  return request<{ approvals: ApprovalRequest[] }>(`/approvals?${params.toString()}`)
+}
+
+export async function decideApproval(
+  approvalId: string,
+  approved: boolean,
+  operator = 'ops-admin',
+  note = ''
+) {
+  return request<{ approval: ApprovalRequest }>(`/approvals/${approvalId}/decision`, {
+    method: 'POST',
+    body: JSON.stringify({ approved, operator, note }),
   })
 }
 

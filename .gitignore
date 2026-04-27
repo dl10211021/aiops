@@ -8,11 +8,18 @@ __pycache__/
 venv/
 env/
 .env
+.env.local
+.env.*.local
+.fernet.key
+*.pem
+*.key
 
 # Build artifacts
 build/
 dist/
 *.egg-info/
+frontend/node_modules/
+node_modules/
 
 # IDE
 .idea/
@@ -26,17 +33,43 @@ opscore.db-shm
 opscore.db-wal
 cron_jobs.sqlite
 opscore_lancedb/
+memory/
+data/
 
 # Logs
 server_out.log
 server_err.log
+*.log
+backend*.log
+*.out.log
+*.err.log
 
 # Temporary/sandbox
 temp_sandbox/
+tmp*/
 tmp_history.json
+patch_*.py
+fix_*.py
+update_*.py
+.research/
+.agents/
+.pytest_cache/
+.ruff_cache/
+frontend/tsconfig.tsbuildinfo
 
 # OS files
 Thumbs.db
 .DS_Store
 
 providers.json
+safety_policy.json
+approval_requests.json
+inspection_runs.json
+inspection_templates.json
+protocol_verification_runs.json
+verification_runs.json
+asset_cleanup_backup_*.json
+backups/
+logs/
+.git_log_frontend.txt
+frontend/.vite/

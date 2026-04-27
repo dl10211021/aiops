@@ -3,16 +3,71 @@ import json
 import asyncio
 import logging
 from core.dispatcher import dispatcher
+from core.asset_protocols import API_PROTOCOLS, SQL_PROTOCOLS, normalize_protocol
+from core.redaction import redact_json_text, redact_text
+from core.safety_policy import approval_timeout_seconds
+from core.tool_registry import tool_registry
 
 cancel_flags = {}
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "models/gemini-embedding-001")
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "")
 EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "3072"))
+SENSITIVE_CONTEXT_KEYWORDS = {
+    "bearer_token",
+    "kubeconfig",
+    "api_token",
+    "v3_auth_pass",
+    "v3_priv_pass",
+    "community_string",
+    "enable_pass",
+    "password",
+    "secret",
+    "token",
+    "api_key",
+}
+
+
+def record_tool_approval_request(
+    *,
+    tool_call_id: str,
+    session_id: str,
+    tool_name: str,
+    args: dict,
+    reason: str,
+    context: dict,
+) -> dict:
+    from core.approval_queue import record_approval_request
+
+    return record_approval_request(
+        tool_call_id=tool_call_id,
+        session_id=session_id,
+        tool_name=tool_name,
+        args=args,
+        reason=reason,
+        context=context,
+        timeout_seconds=approval_timeout_seconds(),
+    )
+
+
+def format_extra_args_for_prompt(extra_args: dict) -> str:
+    return "\\n".join(
+        [
+            f"- {k}: {'(已托管，执行时自动注入)' if any(s in k.lower() for s in SENSITIVE_CONTEXT_KEYWORDS) else v}"
+            for k, v in extra_args.items()
+            if v
+        ]
+    )
 
 
 async def get_available_models() -> list:
+    return await get_available_models_for_provider()
+
+
+async def get_available_models_for_provider(
+    provider_id: str | None = None, refresh: bool = False
+) -> list:
     try:
         from core.llm_factory import get_all_providers
         from openai import AsyncOpenAI
@@ -20,15 +75,17 @@ async def get_available_models() -> list:
         import logging
         
         providers = get_all_providers()
+        if provider_id:
+            providers = [p for p in providers if p.get("id") == provider_id]
         
         async def fetch_provider_models(p):
             models_list = []
             manual_models = [m.strip() for m in p.get("models", "").split(",") if m.strip()]
             
-            if manual_models:
+            if manual_models and not refresh:
                 for m in manual_models:
                     models_list.append({"id": f"{p['id']}|{m}", "name": m})
-            elif p.get("protocol") == "openai":
+            if (refresh or not models_list) and p.get("protocol") == "openai":
                 try:
                     api_key = p.get("api_key")
                     if not api_key:
@@ -40,11 +97,14 @@ async def get_available_models() -> list:
                         
                     temp_client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=30.0)
                     response = await temp_client.models.list()
+                    models_list = []
                     for m in response.data:
                         models_list.append({"id": f"{p['id']}|{m.id}", "name": m.id})
                 except Exception as e:
                     import logging
                     logging.getLogger(__name__).warning(f"Failed to fetch models for {p.get('name')}: {e}")
+                    if manual_models:
+                        models_list = [{"id": f"{p['id']}|{m}", "name": m} for m in manual_models]
             
             if not models_list:
                 models_list.append({"id": f"{p['id']}|none", "name": "未获取到模型或配置错误"})
@@ -59,6 +119,67 @@ async def get_available_models() -> list:
         import logging
         logging.getLogger(__name__).error(f"Failed to fetch models: {e}")
         return []
+
+
+def protocol_tool_guidance(protocol: str, asset_type: str, host: str) -> str:
+    protocol = normalize_protocol(asset_type, protocol)
+    if protocol == "ssh" and asset_type in {"switch"}:
+        return (
+            f"连接状态：后端已经建立到网络设备 {host} 的 SSH CLI 会话。你已经在该交换机/路由器上下文内，"
+            "直接调用 `network_cli_execute_command` 执行 display/show/ping 等只读巡检命令；"
+            "不要使用 Linux 命令，不要编写连接脚本或重新登录。"
+        )
+    if protocol == "ssh":
+        return (
+            f"连接状态：后端已经建立到目标 {host} 的 SSH 会话。你已经在该资产上下文内，"
+            "直接调用 `linux_execute_command` 执行巡检命令；不要再编写连接脚本或尝试重新登录。"
+        )
+    if protocol == "winrm":
+        return (
+            f"连接状态：后端已经建立到 Windows 目标 {host} 的 WinRM 会话。你已经在该系统上下文内，"
+            "直接调用 `winrm_execute_command` 执行 PowerShell/CMD 巡检；不要再编写 WinRM/Python 连接脚本，"
+            "也不要向用户解释“无法通过本地脚本”。"
+        )
+    if protocol in SQL_PROTOCOLS:
+        return (
+            f"连接状态：后端已经建立到 {asset_type.upper()} 数据库 {host} 的托管会话。"
+            "你当前连接的是数据库实例，不是操作系统 Shell；直接调用 `db_execute_query` 执行 SQL 巡检，"
+            "不要在工具参数里填写 host/user/password，也不要尝试 SSH/WinRM 登录。"
+        )
+    if protocol == "redis":
+        return "当前 Redis 资产使用 `redis_execute_command`，凭据由资产中心托管注入。"
+    if protocol == "mongodb":
+        return "当前 MongoDB 资产使用 `mongodb_find` 做只读查询，凭据由资产中心托管注入。"
+    if protocol in API_PROTOCOLS:
+        return (
+            "当前 API/监控/虚拟化资产使用 `http_api_request` 调用目标 API；"
+            "Token、Basic Auth 等凭据由资产中心托管注入。"
+        )
+    if protocol == "snmp":
+        return "当前 SNMP 资产使用 `snmp_get` 读取 OID，Community/SNMP 凭据由资产中心托管注入。"
+    return (
+        "当前真实资产没有专用原生协议工具时，应直接报告工具缺口；"
+        "`local_execute_script` 只允许 VIRTUAL 技能研发会话使用，不能代替真实资产协议连接。"
+    )
+
+
+def protocol_tool_list(
+    protocol: str, has_skill_scripts: bool = False, asset_type: str = ""
+) -> str:
+    context = {
+        "target_scope": "asset",
+        "asset_type": asset_type,
+        "protocol": protocol,
+        "extra_args": {"login_protocol": protocol} if protocol == "virtual" else {},
+    }
+    lines = tool_registry.prompt_lines(context).splitlines()
+    if not has_skill_scripts:
+        lines = [line for line in lines if not line.startswith("- local_execute_script:")]
+    return "\n".join(lines)
+
+
+def allow_local_skill_scripts(protocol: str) -> bool:
+    return normalize_protocol(protocol=protocol) == "virtual"
 
 
 def update_embedding_config(model: str, dim: int):
@@ -79,14 +200,17 @@ from core.memory import memory_db
 async def chat_stream_agent(
     session_id: str,
     user_message: str,
-    model_name: str = "gemini-2.5-flash",
+    model_name: str | None = None,
     thinking_mode: str = "off",
 ):
     cancel_flags[session_id] = False
     from connections.ssh_manager import ssh_manager
-    from core.llm_factory import get_client_for_model
+    from core.llm_factory import get_client_for_model, get_default_model_id, get_embedding_client_and_model
 
-    emb_client, _ = get_client_for_model("gemini-2.5-flash")
+    if not model_name:
+        model_name = get_default_model_id()
+
+    emb_client, embedding_model = get_embedding_client_and_model(model_name)
 
     session_info = ssh_manager.active_sessions[session_id]["info"]
     allow_modifications = session_info.get("allow_modifications", False)
@@ -95,11 +219,13 @@ async def chat_stream_agent(
 
     # 获取资产协议凭证信息，构建模型上下文
     asset_type = session_info.get("asset_type", "ssh")
+    protocol = session_info.get("protocol", asset_type)
     is_virtual = session_info.get("is_virtual", False)
     host = session_info.get("host", "")
     port = session_info.get("port", "")
     username = session_info.get("username", "")
     extra_args = session_info.get("extra_args", {})
+    password = session_info.get("password")
 
     # 从外部 Markdown 文件加载 Agent 的核心人格 (Soul)
     profile_path = os.path.join(
@@ -117,44 +243,49 @@ async def chat_stream_agent(
 
     # 从 LanceDB 获取长期记忆（与当前话题相关的历史摘要）
     try:
-        ltm_context = await memory_db.retrieve_ltm(session_id, user_message, emb_client)
+        ltm_context = await memory_db.retrieve_ltm(
+            session_id, user_message, emb_client, embedding_model
+        )
     except Exception as e:
         logger.error(f"LTM retrieve error: {e}")
         ltm_context = ""
 
     # 凭证信息格式化为字符串 (已移除，防泄漏)
 
+    extra_creds_str = format_extra_args_for_prompt(extra_args)
+    active_skill_paths = dispatcher.get_active_skill_paths(active_skills)
+    local_skill_scripts_allowed = allow_local_skill_scripts(protocol)
     SYSTEM_PROMPT = f"""
 {base_prompt}
 
 [当前持有的资产凭证]
-一台通过{asset_type.upper()}协议纳管的资产：
+一台通过{protocol.upper()}协议纳管的 {asset_type.upper()} 资产：
 - 目标IP/主机名: {host}
 - 端口: {port}
 - 账号: {username}
 - 凭证信息: (已安全托管，底层工具执行时自动注入，无需在脚本中自行填写)\n{extra_creds_str}
-{"⚠️ 注意：这是一个虚拟会话，请不要使用 `linux_execute_command`。你应该使用 `local_execute_script` 工具去执行本地的 Python 脚本来获取数据。" if is_virtual else "直接使用 `linux_execute_command` 执行 bash 命令。"}
+{protocol_tool_guidance(protocol, asset_type, host)}
 
 [已知安全模式]
 1. 用户动态加载的「可用Skills」决定了你「什么时候能调什么路」。仔细阅读已加载的技能说明！
-2. 当前会话权限状态：{"**高级读写修改权限**：可以执行修改系统的操作" if allow_modifications else "**只读安全模式**：禁止修改系统的文件。除非用户强制要求，否则请确认后拒绝"}
+2. 当前会话权限状态：{"**高级读写修改权限**：可以执行修改系统的操作" if allow_modifications else "**只读巡检模式**：允许执行不改变目标状态的查询/巡检命令；禁止文件写入、服务启停、账号权限、数据修改、安装卸载等变更操作。"}
 3. 执行某些较高风险脚本时，请仔细参考技能说明中提供的 `<SKILL_ABSOLUTE_PATH>` 路径和 `cwd` 工作目录路径。不要自己凭空猜测目录。
 
 [AIOps 专家行为准则 (CRITICAL)]
 作为运维管理工程师现场助手级别的专业伙伴：
-- **主动规划 (Proactive Planning)**：在接到运维操作任务时，明确列出操作思路和步骤 (Step 1, Step 2...)，不要盲目执行指令
-- **根因分析 (Root Cause Analysis)**：不要肤浅地只看表面。要像一名工程师一样，一步一步深入地直接指向异常
+- **启用超能力 (Using Superpowers)**：你现在已被赋予 OpsCore 平台的“Superpowers”（超能力扩展）。你必须将已挂载的专业技能 (Skills) 视为你的第一准则。**只要有挂载的 Skill，你必须无条件、优先遵照 Skill 内部的 `<INSTRUCTIONS>` 步骤进行思考、规划和执行！绝对不允许跳过 Skill 的流程去自由发挥。**
+- **主动规划 (Proactive Planning)**：在接到运维操作任务时，明确列出操作思路和步骤 (Step 1, Step 2...)，不要盲目执行指令- **根因分析 (Root Cause Analysis)**：不要肤浅地只看表面。要像一名工程师一样，一步一步深入地直接指向异常
 - **闭环思维 (Closed-loop)**：操作、修复后自动执行修复验证确认修复
-- **防死循环与边界 (Anti-Loop & Boundary)**：如果针对当前目标资产（{host}）连续执行工具 3 次依然失败（例如认证失败、网络超时），请【立即停止重试】，并将错误信息原本反馈给用户。绝不允许为了解决目标资产的问题，而去获取宿主机（你自身所在的机器）的信息作为替代，这会造成极大的误导。
-- **自我进化与未知资产应对 (Self-Evolution)**：当用户要你「安装」「修复」「改」或「打一个新技能」时，不要说「没有权限」。使用 `evolve_skill` 去修复或变更你的代码。面对未知类型的设备，可使用 `local_execute_script` 动态生成脚本探测，但必须确保脚本是指向目标 {host} 的，而不是探测本机。
+- **连接失败与防死循环 (Anti-Loop & Boundary)**：对目标资产（{host}）的系统级交互【必须且只能】通过当前协议对应的原生工具完成。如果原生工具报错“认证失败”或“无法连接”，代表系统底层通信已断开。此时请【立即停止重试】并直接向用户报告失败。绝不允许编写 Paramiko/WinRM/数据库/API 脚本尝试绕过资产中心凭据，也绝不允许获取宿主机信息作为替代。
+- **自我进化与未知资产应对 (Self-Evolution)**：当用户要你「安装」「修复」「改」或「打一个新技能」时，使用 `evolve_skill` 去修复或变更你的代码。只有 `VIRTUAL` 技能研发会话允许使用本地脚本；Windows、Linux、数据库、API、SNMP 等真实资产会话禁止用本地脚本代替原生协议工具。
+- **工具执行表达规范**：真实资产会话中，不要说“无法通过本地脚本”“改用平台原生工具”这类解释；直接说明“正在通过当前会话的原生协议工具执行巡检”即可。
 
 [使用的基础执行工具]
-- linux_execute_command: 在远程的目标机器 {host} 上执行 bash 命令
-- local_execute_script: 在本地执行 Python 或 Shell 脚本
+{protocol_tool_list(protocol, local_skill_scripts_allowed and bool(active_skill_paths), asset_type)}
 
 [当前已加载专业技能说明 (Skills)]
 以下是当前专业技能的详细 <INSTRUCTIONS> 指令，请严格遵照其中的步骤进行操作
-{dispatcher.get_skill_instructions(active_skills)}
+{dispatcher.get_skill_instructions(active_skills, allow_local_scripts=local_skill_scripts_allowed)}
 
 {ltm_context}
 """
@@ -177,6 +308,14 @@ async def chat_stream_agent(
         "os_type": "linux",
         "allow_modifications": allow_modifications,
         "active_skills": active_skills,
+        "active_skill_paths": active_skill_paths if local_skill_scripts_allowed else [],
+        "asset_type": asset_type,
+        "protocol": protocol,
+        "host": host,
+        "port": port,
+        "username": username,
+        "password": password,
+        "extra_args": extra_args,
         "target_scope": session_info.get("target_scope", "asset"),
         "scope_value": session_info.get("scope_value", None),
     }
@@ -265,7 +404,7 @@ async def chat_stream_agent(
                     func_args = {}
                     parse_error = str(e)
 
-                display_cmd = func_args.get("command", str(func_args))
+                display_cmd = redact_text(str(func_args.get("command", str(func_args))))
                 if parse_error:
                     display_cmd = "JSON解析失败: " + parse_error
                 tc_id = tc.get("id", "")
@@ -283,11 +422,20 @@ async def chat_stream_agent(
                 needs_approval, reason = dispatcher.check_approval_needed(func_name, func_args, context)
                 
                 if needs_approval:
+                    record_tool_approval_request(
+                        tool_call_id=tc_id,
+                        session_id=session_id,
+                        tool_name=func_name,
+                        args=func_args,
+                        reason=reason,
+                        context=context,
+                    )
                     msg_ask = json.dumps({
                         "type": "tool_ask_approval", 
                         "tool_call_id": tc_id, # for new React frontend
                         "tool_name": func_name, # for new React frontend
                         "args": display_cmd, # for new React frontend
+                        "reason": reason,
                         "id": tc_id, 
                         "tool": func_name, 
                         "cmd": display_cmd
@@ -297,9 +445,15 @@ async def chat_stream_agent(
                     future = asyncio.Future()
                     dispatcher.pending_approvals[tc_id] = future
                     try:
-                        approved = await asyncio.wait_for(future, timeout=300.0) # wait up to 5 min
+                        approved = await asyncio.wait_for(future, timeout=float(approval_timeout_seconds()))
                     except asyncio.TimeoutError:
                         approved = False
+                        try:
+                            from core.approval_queue import mark_approval_timeout
+
+                            mark_approval_timeout(tc_id)
+                        except KeyError:
+                            pass
                     
                     if tc_id in dispatcher.pending_approvals:
                         del dispatcher.pending_approvals[tc_id]
@@ -336,8 +490,9 @@ async def chat_stream_agent(
                 tool_res = await dispatcher.route_and_execute(
                     func_name, func_args, context
                 )
+                safe_tool_res = redact_json_text(str(tool_res))
 
-                preview = tool_res[:300] + "..." if len(tool_res) > 300 else tool_res
+                preview = safe_tool_res[:300] + "..." if len(safe_tool_res) > 300 else safe_tool_res
                 msg_end = json.dumps(
                     {"type": "tool_end", "id": tc.get("id", ""), "result": preview}
                 )
@@ -348,7 +503,7 @@ async def chat_stream_agent(
                     "tool_call_id": tc.get("id", ""),
                     "role": "tool",
                     "name": func_name,
-                    "content": str(tool_res),
+                    "content": safe_tool_res,
                 }
                 messages.append(tool_msg)
                 memory_db.append_message(session_id, tool_msg)
@@ -368,14 +523,14 @@ async def chat_stream_agent(
 
         # ÿֶԻ׽󣬴ڼ첽ѹ (̨ǰ)
         asyncio.create_task(
-            memory_db.compress_and_store_ltm(session_id, emb_client)
+            memory_db.compress_and_store_ltm(session_id, emb_client, embedding_model)
         )
 
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Agent Loop Failed: {error_msg}")
         if "timeout" in error_msg.lower() or "connect" in error_msg.lower():
-            yield f"data: {json.dumps({'type': 'error', 'content': '❌ **超时** 无法连接到 AI 模型接口(Google Gemini)\\n\\n**可能原因**\\n1. 你的网络无法直接访问 API\\n2. 代理设置有误'})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'content': '❌ **超时** 无法连接到 AI 模型接口\\n\\n**可能原因**\\n1. 模型服务地址不可达\\n2. API Key 或模型名称配置不正确'})}\n\n"
         else:
             yield f"data: {json.dumps({'type': 'error', 'content': f'❌ AI 思考时发生异常，请稍后再试。详细信息：`{error_msg}`'})}\n\n"
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
@@ -446,12 +601,14 @@ async def headless_agent_chat(
     session_id: str,
     task_description: str,
     inherited_allow_mod: bool = False,
-    model_name: str = "gemini-2.5-flash",
+    model_name: str | None = None,
 ) -> str:
     """后台无头模式的 Agent 循环，用于协同任务的结果汇报。"""
     from connections.ssh_manager import ssh_manager
-    from core.llm_factory import get_client_for_model
+    from core.llm_factory import get_client_for_model, get_default_model_id
 
+    if not model_name:
+        model_name = get_default_model_id()
     client, _ = get_client_for_model(model_name)
 
     if session_id not in ssh_manager.active_sessions:
@@ -465,11 +622,13 @@ async def headless_agent_chat(
     active_skills = session_info.get("active_skills", [])
     agent_profile = session_info.get("agent_profile", "default")
     asset_type = session_info.get("asset_type", "ssh")
+    protocol = session_info.get("protocol", asset_type)
     is_virtual = session_info.get("is_virtual", False)
     host = session_info.get("host", "")
     port = session_info.get("port", "")
     username = session_info.get("username", "")
     extra_args = session_info.get("extra_args", {})
+    password = session_info.get("password")
 
     profile_path = os.path.join(
         os.path.dirname(os.path.dirname(__file__)),
@@ -483,17 +642,19 @@ async def headless_agent_chat(
     else:
         base_prompt = "你是 OpsCore 的高级 AI 运维专家。"
 
-    extra_creds_str = "\\n".join([f"- {k}: {v}" for k, v in extra_args.items() if v])
+    extra_creds_str = format_extra_args_for_prompt(extra_args)
+    active_skill_paths = dispatcher.get_active_skill_paths(active_skills)
+    local_skill_scripts_allowed = allow_local_skill_scripts(protocol)
 
     SYSTEM_PROMPT = f"""{base_prompt}
 
 [当前持有的资产凭证]
-一台通过{asset_type.upper()}协议纳管的资产：
+一台通过{protocol.upper()}协议纳管的 {asset_type.upper()} 资产：
 - 目标IP/主机名: {host}
 - 端口: {port}
 - 账号: {username}
 - 凭证信息: (已安全托管，底层工具执行时自动注入，无需在脚本中自行填写)\n{extra_creds_str}
-{"⚠️ 注意：这是一个虚拟会话，请不要使用 `linux_execute_command`，应使用 `local_execute_script` 工具。" if is_virtual else "直接使用 `linux_execute_command` 执行 bash 命令。"}
+{protocol_tool_guidance(protocol, asset_type, host)}
 
 [上级指挥官委派的任务]
 你是第一线的运维管理工程师调用的 Agent。
@@ -502,6 +663,10 @@ async def headless_agent_chat(
 
 请在当前的会话（{host}）内，利用你的技能和工具，全力完成该任务。
 在完成操作、修复或检查完成后，给出一份详细的「执行结果报告」。该报告将直接返回给上级指挥官作为你的工作内容。
+真实资产会话中，不要说“无法通过本地脚本”“改用平台原生工具”这类解释；直接通过当前会话的原生协议工具执行。
+
+[使用的基础执行工具]
+{protocol_tool_list(protocol, local_skill_scripts_allowed and bool(active_skill_paths), asset_type)}
 """
 
     messages = [
@@ -514,6 +679,14 @@ async def headless_agent_chat(
         "os_type": "linux",
         "allow_modifications": allow_modifications,
         "active_skills": active_skills,
+        "active_skill_paths": active_skill_paths if local_skill_scripts_allowed else [],
+        "asset_type": asset_type,
+        "protocol": protocol,
+        "host": host,
+        "port": port,
+        "username": username,
+        "password": password,
+        "extra_args": extra_args,
         "target_scope": session_info.get("target_scope", "asset"),
         "scope_value": session_info.get("scope_value", None),
     }

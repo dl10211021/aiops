@@ -21,12 +21,14 @@ class DatabaseExecutor:
                 port=port,
                 user=user,
                 password=password,
-                database=database,
+                database=database or None,
                 cursorclass=pymysql.cursors.DictCursor,
                 connect_timeout=10,
             ) as conn:
                 with conn.cursor() as cursor:
                     cursor.execute(sql)
+                    if cursor.description is None:
+                        return {"success": True, "affected_rows": cursor.rowcount, "data": []}
                     # 限制最大拉取 1000 条，防止内存溢出和前端卡死
                     result = cursor.fetchmany(1000)
                     return {"success": True, "count": len(result), "data": result}
@@ -71,12 +73,14 @@ class DatabaseExecutor:
         try:
             # 使用 psycopg2 的 RealDictCursor 生成可读友好的字典
             with psycopg2.connect(
-                host=host, port=port, user=user, password=password, database=database
+                host=host, port=port, user=user, password=password, database=database or user or "postgres"
             ) as conn:
                 with conn.cursor(
                     cursor_factory=psycopg2.extras.RealDictCursor
                 ) as cursor:
                     cursor.execute(sql)
+                    if cursor.description is None:
+                        return {"success": True, "affected_rows": cursor.rowcount, "data": []}
                     # 限制最大拉取 1000 条，防止大模型 token 爆仓
                     result = cursor.fetchmany(1000)
                     return {
@@ -86,6 +90,39 @@ class DatabaseExecutor:
                     }
         except Exception as e:
             logger.error(f"PostgreSQL 连接执行失败: {e}")
+            return {"success": False, "error": str(e)}
+
+    @staticmethod
+    def _execute_mssql(host, port, user, password, database, sql) -> dict:
+        try:
+            import pyodbc
+        except ImportError:
+            return {
+                "success": False,
+                "error": "缺少 pyodbc 依赖，请先安装 requirements.txt 中的 pyodbc，并确认系统已安装 SQL Server ODBC Driver。",
+            }
+
+        try:
+            driver = "{ODBC Driver 18 for SQL Server}"
+            database_part = f"DATABASE={database};" if database else ""
+            conn_str = (
+                f"DRIVER={driver};SERVER={host},{int(port)};{database_part}"
+                f"UID={user};PWD={password or ''};TrustServerCertificate=yes;"
+            )
+            with pyodbc.connect(conn_str, timeout=10) as conn:
+                cursor = conn.cursor()
+                cursor.execute(sql)
+                if cursor.description is None:
+                    return {"success": True, "affected_rows": cursor.rowcount, "data": []}
+                columns = [col[0] for col in cursor.description]
+                rows = cursor.fetchmany(1000)
+                return {
+                    "success": True,
+                    "count": len(rows),
+                    "data": [dict(zip(columns, row)) for row in rows],
+                }
+        except Exception as e:
+            logger.error(f"SQL Server 连接执行失败: {e}")
             return {"success": False, "error": str(e)}
 
     def execute_query(
@@ -108,10 +145,12 @@ class DatabaseExecutor:
             )  # database 此处意为 SID
         elif db_type in ["pg", "postgresql"]:
             res = self._execute_postgresql(host, port, user, password, database, sql)
+        elif db_type in ["mssql", "sqlserver", "sql_server"]:
+            res = self._execute_mssql(host, port, user, password, database, sql)
         else:
             res = {
                 "success": False,
-                "error": f"暂不支持的原生数据库类型: {db_type}。目前支持 mysql, oracle, postgresql。",
+                "error": f"暂不支持的原生数据库类型: {db_type}。目前支持 mysql, oracle, postgresql, mssql。",
             }
 
         return json.dumps(
