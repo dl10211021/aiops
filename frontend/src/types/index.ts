@@ -121,6 +121,7 @@ export interface CronJob {
   template_id?: string | null
   notification_channel?: string
   retry_count?: number
+  active_skills?: string[]
 }
 
 export interface DashboardOverview {

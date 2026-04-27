@@ -283,6 +283,7 @@ export async function addCronJob(params: {
   username: string; agent_profile?: string; password?: string;
   asset_id?: number | null; target_scope?: string; scope_value?: string;
   template_id?: string; notification_channel?: string; retry_count?: number;
+  active_skills?: string[];
 }) {
   return request('/cron/add', { method: 'POST', body: JSON.stringify(params) })
 }
@@ -292,6 +293,7 @@ export async function updateCronJob(jobId: string, params: {
   username: string; agent_profile?: string; password?: string;
   asset_id?: number | null; target_scope?: string; scope_value?: string;
   template_id?: string; notification_channel?: string; retry_count?: number;
+  active_skills?: string[];
 }) {
   return request<{ job: CronJob }>(`/cron/${jobId}`, { method: 'PUT', body: JSON.stringify(params) })
 }

@@ -33,6 +33,20 @@ def _duration_ms(started_at: str, completed_at: str) -> int:
         return 0
 
 
+def _normalize_skill_ids(skills: Any) -> list[str]:
+    if not isinstance(skills, list):
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for skill in skills:
+        skill_id = str(skill or "").strip()
+        if not skill_id or skill_id in seen:
+            continue
+        normalized.append(skill_id)
+        seen.add(skill_id)
+    return normalized
+
+
 def _safe_target_result(
     target: dict[str, Any],
     *,
@@ -66,6 +80,7 @@ def _safe_target_result(
 
 
 def _target_from_asset(asset: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
+    fallback_skills = _normalize_skill_ids(fallback.get("active_skills"))
     return {
         "asset_id": asset.get("id"),
         "host": asset.get("host") or fallback.get("host") or "",
@@ -77,6 +92,7 @@ def _target_from_asset(asset: dict[str, Any], fallback: dict[str, Any]) -> dict[
         "asset_type": asset.get("asset_type"),
         "protocol": asset.get("protocol"),
         "extra_args": asset.get("extra_args") or {},
+        "active_skills": fallback_skills or _normalize_skill_ids(asset.get("skills")),
         "tags": asset.get("tags") or [],
     }
 
@@ -109,6 +125,7 @@ def _resolve_targets(kwargs: dict[str, Any]) -> list[dict[str, Any]]:
         "password": kwargs.get("password"),
         "private_key_path": kwargs.get("private_key_path"),
         "agent_profile": kwargs.get("agent_profile") or "default",
+        "active_skills": _normalize_skill_ids(kwargs.get("active_skills")),
     }
     if target_scope == "asset" and not asset_id:
         return [{
@@ -122,6 +139,7 @@ def _resolve_targets(kwargs: dict[str, Any]) -> list[dict[str, Any]]:
             "asset_type": None,
             "protocol": None,
             "extra_args": {},
+            "active_skills": _normalize_skill_ids(fallback.get("active_skills")),
             "tags": [],
         }]
 
@@ -145,6 +163,7 @@ def _resolve_targets(kwargs: dict[str, Any]) -> list[dict[str, Any]]:
             "asset_type": None,
             "protocol": None,
             "extra_args": {},
+            "active_skills": _normalize_skill_ids(fallback.get("active_skills")),
             "tags": [],
         })
     return targets
@@ -168,6 +187,7 @@ async def _trigger_proactive_inspection(
     template_id: str | None = None,
     notification_channel: str = "auto",
     cron_expr: str | None = None,
+    active_skills: list[str] | None = None,
 ):
     """
     定时任务的实际执行体：
@@ -186,14 +206,19 @@ async def _trigger_proactive_inspection(
     from core.agent import headless_agent_chat
     
     from core.dispatcher import dispatcher
-    all_skills = list(dispatcher.skills_registry.keys())
+    available_skill_ids = set(dispatcher.skills_registry.keys())
+    selected_skills = [
+        skill_id
+        for skill_id in _normalize_skill_ids(active_skills)
+        if skill_id in available_skill_ids
+    ]
     
     # 1. 自动建立特权会话：判断是否是要求连远程，还是只是在本地跑卓豪监控脚本
     if host.lower() in ["localhost", "local", "127.0.0.1"]:
          conn_res = await asyncio.to_thread(
              ssh_manager.connect_local,
              agent_profile=agent_profile,
-             active_skills=all_skills
+             active_skills=selected_skills
          )
     else:
          conn_res = await asyncio.to_thread(
@@ -204,7 +229,7 @@ async def _trigger_proactive_inspection(
              password=password,
              key_filename=private_key_path,
              allow_modifications=False,
-             active_skills=all_skills,
+             active_skills=selected_skills,
              agent_profile=agent_profile,
              asset_type=asset_type,
              protocol=protocol,
@@ -269,6 +294,7 @@ async def _run_inspection_job(**kwargs) -> dict:
                 "asset_type": target.get("asset_type") or kwargs.get("asset_type") or "linux",
                 "protocol": target.get("protocol") or kwargs.get("protocol") or "ssh",
                 "extra_args": target.get("extra_args") or kwargs.get("extra_args") or {},
+                "active_skills": _normalize_skill_ids(target.get("active_skills") or kwargs.get("active_skills")),
                 "tags": target.get("tags") or kwargs.get("tags") or [],
                 "asset_id": target.get("asset_id"),
             }
@@ -384,6 +410,7 @@ class CronManager:
             "template_id": kwargs.get("template_id"),
             "notification_channel": kwargs.get("notification_channel", "auto"),
             "retry_count": kwargs.get("retry_count", 0),
+            "active_skills": _normalize_skill_ids(kwargs.get("active_skills")),
             "next_run": str(getattr(job, "next_run_time", None)) if getattr(job, "next_run_time", None) else None,
             "next_run_time": str(getattr(job, "next_run_time", None)) if getattr(job, "next_run_time", None) else "Paused",
             "status": "paused" if job.id in _PAUSED_JOB_IDS else "scheduled",
@@ -405,6 +432,7 @@ class CronManager:
         template_id: str | None = None,
         notification_channel: str = "auto",
         retry_count: int = 0,
+        active_skills: list[str] | None = None,
     ) -> str:
         """
         添加一个 Cron 定时任务
@@ -443,6 +471,7 @@ class CronManager:
                 "template_id": template_id,
                 "notification_channel": notification_channel,
                 "retry_count": max(0, int(retry_count or 0)),
+                "active_skills": _normalize_skill_ids(active_skills),
                 "cron_expr": cron_expr,
             },
             replace_existing=True,

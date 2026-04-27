@@ -7,13 +7,14 @@ import {
   getCronJobRuns,
   getCronJobs,
   getInspectionTemplates,
+  getSkillRegistry,
   getSavedAssets,
   pauseCronJob,
   resumeCronJob,
   runCronJobNow,
   updateCronJob,
 } from '@/api/client'
-import type { Asset, CronJob, InspectionRun, InspectionTemplate } from '@/types'
+import type { Asset, CronJob, InspectionRun, InspectionTemplate, SkillInfo } from '@/types'
 
 type CronForm = {
   id?: string
@@ -29,6 +30,7 @@ type CronForm = {
   template_id: string
   notification_channel: string
   retry_count: string
+  active_skills: string[]
 }
 
 const emptyForm: CronForm = {
@@ -44,6 +46,7 @@ const emptyForm: CronForm = {
   template_id: '',
   notification_channel: 'auto',
   retry_count: '0',
+  active_skills: [],
 }
 
 export default function CronManager() {
@@ -51,6 +54,7 @@ export default function CronManager() {
   const [jobs, setJobs] = useState<CronJob[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
   const [templates, setTemplates] = useState<InspectionTemplate[]>([])
+  const [skills, setSkills] = useState<SkillInfo[]>([])
   const [runsByJob, setRunsByJob] = useState<Record<string, InspectionRun[]>>({})
   const [showEditor, setShowEditor] = useState(false)
   const [form, setForm] = useState<CronForm>(emptyForm)
@@ -80,15 +84,18 @@ export default function CronManager() {
 
   const loadCatalogs = useCallback(async () => {
     try {
-      const [assetRes, templateRes] = await Promise.all([
+      const [assetRes, templateRes, skillRes] = await Promise.all([
         getSavedAssets(),
         getInspectionTemplates(),
+        getSkillRegistry(),
       ])
       setAssets(assetRes.data.assets || [])
       setTemplates(templateRes.data.templates || [])
+      setSkills((skillRes.data.registry || []).filter((skill) => !skill.is_market))
     } catch {
       setAssets([])
       setTemplates([])
+      setSkills([])
     }
   }, [])
 
@@ -117,6 +124,7 @@ export default function CronManager() {
       template_id: job.template_id || '',
       notification_channel: job.notification_channel || 'auto',
       retry_count: String(job.retry_count ?? 0),
+      active_skills: job.active_skills || [],
     })
     setShowEditor(true)
   }
@@ -131,7 +139,17 @@ export default function CronManager() {
       agent_profile: asset?.agent_profile || current.agent_profile,
       target_scope: 'asset',
       scope_value: assetId ? assetId : current.scope_value,
+      active_skills: asset?.skills || current.active_skills,
     }))
+  }
+
+  const toggleSkill = (skillId: string) => {
+    setForm((current) => {
+      const selected = new Set(current.active_skills)
+      if (selected.has(skillId)) selected.delete(skillId)
+      else selected.add(skillId)
+      return { ...current, active_skills: Array.from(selected) }
+    })
   }
 
   const payload = () => ({
@@ -147,6 +165,7 @@ export default function CronManager() {
     template_id: form.template_id || undefined,
     notification_channel: form.notification_channel || 'auto',
     retry_count: Math.max(0, Number(form.retry_count || 0)),
+    active_skills: form.active_skills,
   })
 
   const handleSave = async () => {
@@ -271,6 +290,7 @@ export default function CronManager() {
                       <span>角色：{job.agent_profile || 'default'}</span>
                       <span>通知：{job.notification_channel || 'auto'}</span>
                       <span>重试：{job.retry_count || 0}</span>
+                      <span>技能：{job.active_skills?.length ? job.active_skills.join(', ') : '未挂载'}</span>
                       <span>下次：{job.next_run || job.next_run_time || '-'}</span>
                     </div>
                   </div>
@@ -331,6 +351,40 @@ export default function CronManager() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs text-ops-subtext">任务技能</label>
+                    {form.active_skills.length > 0 && (
+                      <button
+                        onClick={() => setForm({ ...form, active_skills: [] })}
+                        className="text-[11px] text-ops-overlay hover:text-ops-text"
+                      >
+                        清空
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-2 flex max-h-28 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-ops-surface1 bg-ops-dark p-2">
+                    {skills.length > 0 ? (
+                      skills.map((skill) => {
+                        const selected = form.active_skills.includes(skill.id)
+                        return (
+                          <button
+                            key={skill.id}
+                            type="button"
+                            onClick={() => toggleSkill(skill.id)}
+                            className={`rounded px-2 py-1 text-[11px] transition ${selected ? 'bg-ops-accent text-ops-dark' : 'bg-ops-surface0 text-ops-subtext hover:text-ops-text'}`}
+                            title={skill.description || skill.name || skill.id}
+                          >
+                            {skill.name || skill.id}
+                          </button>
+                        )
+                      })
+                    ) : (
+                      <span className="px-1 py-0.5 text-xs text-ops-overlay">无可用技能</span>
+                    )}
+                  </div>
                 </div>
 
                 <div>

@@ -48,6 +48,7 @@ class TestInspectionJobs(unittest.TestCase):
             target_scope="asset",
             template_id="linux-basic",
             notification_channel="wechat",
+            active_skills=["linux-basic", "disk-check"],
         )
         self.assertEqual(job_id, "test_job_crud")
 
@@ -57,6 +58,7 @@ class TestInspectionJobs(unittest.TestCase):
         self.assertEqual(job["username"], "root")
         self.assertEqual(job["asset_id"], 7)
         self.assertEqual(job["template_id"], "linux-basic")
+        self.assertEqual(job["active_skills"], ["linux-basic", "disk-check"])
         self.assertEqual(job["status"], "scheduled")
 
         paused = CronManager.pause_job(job_id)
@@ -76,9 +78,11 @@ class TestInspectionJobs(unittest.TestCase):
             target_scope="asset",
             template_id="linux-basic",
             notification_channel="wechat",
+            active_skills=["linux-basic"],
         )
         self.assertEqual(updated["cron_expr"], "*/30 * * * *")
         self.assertEqual(updated["message"], "half-hour inspection")
+        self.assertEqual(updated["active_skills"], ["linux-basic"])
 
         with patch("core.cron_manager._trigger_proactive_inspection", new_callable=AsyncMock) as trigger:
             result = asyncio.run(CronManager.run_job_now(job_id))
@@ -97,6 +101,7 @@ class TestInspectionJobs(unittest.TestCase):
             target_scope="asset",
             template_id="linux-basic",
             notification_channel="wechat",
+            active_skills=["linux-basic"],
         )
 
         response = asyncio.run(routes.add_cron_job(payload))
@@ -114,9 +119,11 @@ class TestInspectionJobs(unittest.TestCase):
             target_scope="asset",
             template_id="linux-basic",
             notification_channel="wechat",
+            active_skills=["db-check"],
         )
         updated = asyncio.run(routes.update_cron_job(job_id, update_payload))
         self.assertEqual(updated.data["job"]["cron_expr"], "*/30 * * * *")
+        self.assertEqual(updated.data["job"]["active_skills"], ["db-check"])
 
         paused = asyncio.run(routes.pause_cron_job(job_id))
         self.assertEqual(paused.data["job"]["status"], "paused")
@@ -149,6 +156,78 @@ class TestInspectionJobs(unittest.TestCase):
         self.assertEqual(response.data["job"]["target_scope"], "tag")
         asyncio.run(routes.delete_cron_job(job_id))
 
+    def test_trigger_uses_selected_skills_instead_of_entire_registry(self):
+        from connections.ssh_manager import ssh_manager
+        from core import cron_manager
+        from core.dispatcher import dispatcher
+
+        with (
+            patch.object(dispatcher, "skills_registry", {"selected-skill": {}, "other-skill": {}}),
+            patch.object(ssh_manager, "connect", return_value={"success": True, "session_id": "sid-cron-skill"}) as connect,
+            patch.object(ssh_manager, "disconnect") as disconnect,
+            patch("core.agent.headless_agent_chat", new_callable=AsyncMock, return_value="ok") as headless,
+        ):
+            result = asyncio.run(
+                cron_manager._trigger_proactive_inspection(
+                    job_id="test_job_skills",
+                    host="10.0.0.10",
+                    agent_profile="default",
+                    message="inspect",
+                    username="root",
+                    password="secret",
+                    active_skills=["selected-skill", "missing-skill"],
+                )
+            )
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(connect.call_args.kwargs["active_skills"], ["selected-skill"])
+        self.assertNotIn("other-skill", connect.call_args.kwargs["active_skills"])
+        headless.assert_awaited_once()
+        disconnect.assert_called_once_with("sid-cron-skill")
+
+    def test_job_skills_override_asset_default_skills_for_scope_runs(self):
+        from core import inspection_results
+        from core.cron_manager import CronManager
+
+        class FakeMemoryDB:
+            def get_all_assets(self):
+                return [
+                    {
+                        "id": 201,
+                        "host": "10.0.0.201",
+                        "port": 22,
+                        "username": "root",
+                        "password": "p1",
+                        "asset_type": "linux",
+                        "protocol": "ssh",
+                        "agent_profile": "linux_ops",
+                        "extra_args": {"category": "os"},
+                        "skills": ["asset-default-skill"],
+                        "tags": ["prod"],
+                    }
+                ]
+
+        job_id = CronManager.add_inspection_job(
+            cron_expr="0 9 * * *",
+            host="",
+            username="",
+            agent_profile="default",
+            message="prod inspection",
+            job_id="test_job_skill_override",
+            target_scope="tag",
+            scope_value="prod",
+            active_skills=["job-selected-skill"],
+        )
+
+        with (
+            patch.object(inspection_results, "INSPECTION_RUN_STORE_PATH", self._run_store_path("skill_override")),
+            patch("core.memory.memory_db", FakeMemoryDB()),
+            patch("core.cron_manager._trigger_proactive_inspection", new_callable=AsyncMock, return_value="ok") as trigger,
+        ):
+            asyncio.run(CronManager.run_job_now(job_id))
+
+        self.assertEqual(trigger.await_args.kwargs["active_skills"], ["job-selected-skill"])
+
     def test_run_now_expands_asset_scope_and_persists_target_results(self):
         from core import inspection_results
         from core.cron_manager import CronManager
@@ -166,7 +245,7 @@ class TestInspectionJobs(unittest.TestCase):
                         "protocol": "ssh",
                         "agent_profile": "linux_ops",
                         "extra_args": {"category": "os"},
-                        "skills": [],
+                        "skills": ["linux-skill"],
                         "tags": ["prod", "linux"],
                     },
                     {
@@ -179,7 +258,7 @@ class TestInspectionJobs(unittest.TestCase):
                         "protocol": "mysql",
                         "agent_profile": "db_ops",
                         "extra_args": {"category": "database"},
-                        "skills": [],
+                        "skills": ["mysql-skill"],
                         "tags": ["prod", "db"],
                     },
                     {
@@ -225,9 +304,11 @@ class TestInspectionJobs(unittest.TestCase):
         self.assertEqual(first_call["asset_type"], "linux")
         self.assertEqual(first_call["protocol"], "ssh")
         self.assertEqual(first_call["port"], 22)
+        self.assertEqual(first_call["active_skills"], ["linux-skill"])
         self.assertEqual(second_call["asset_type"], "mysql")
         self.assertEqual(second_call["protocol"], "mysql")
         self.assertEqual(second_call["port"], 3306)
+        self.assertEqual(second_call["active_skills"], ["mysql-skill"])
         self.assertEqual(runs[0]["id"], result["run_id"])
         self.assertEqual(runs[0]["status"], "completed")
         self.assertEqual([target["host"] for target in runs[0]["targets"]], ["10.0.0.101", "10.0.0.102"])

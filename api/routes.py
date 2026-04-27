@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 from connections.ssh_manager import ssh_manager
 from fastapi.responses import StreamingResponse
@@ -2152,6 +2152,7 @@ class CronAddRequest(BaseModel):
     template_id: str | None = None
     notification_channel: str = "auto"
     retry_count: int = 0
+    active_skills: list[str] = Field(default_factory=list)
 
 
 @router.post("/cron/add", response_model=ResponseModel)
@@ -2174,6 +2175,7 @@ async def add_cron_job(req: CronAddRequest):
             template_id=req.template_id,
             notification_channel=req.notification_channel,
             retry_count=req.retry_count,
+            active_skills=req.active_skills,
         )
         return ResponseModel(
             status="success",
@@ -2225,6 +2227,7 @@ async def update_cron_job(job_id: str, req: CronAddRequest):
             template_id=req.template_id,
             notification_channel=req.notification_channel,
             retry_count=req.retry_count,
+            active_skills=req.active_skills,
         )
         return ResponseModel(status="success", message="巡检计划已更新", data={"job": job})
     except KeyError:
