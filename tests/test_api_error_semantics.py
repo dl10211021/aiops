@@ -86,6 +86,72 @@ class TestApiErrorSemantics(unittest.TestCase):
         self.assertEqual(list_ctx.exception.status_code, 500)
         self.assertEqual(delete_ctx.exception.status_code, 404)
 
+    def test_notification_test_missing_config_and_unknown_channel_use_http_errors(self):
+        with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaises(HTTPException) as wechat_ctx:
+                asyncio.run(
+                    routes.test_notification_channel(
+                        routes.TestNotificationRequest(channel="wechat")
+                    )
+                )
+            with self.assertRaises(HTTPException) as dingtalk_ctx:
+                asyncio.run(
+                    routes.test_notification_channel(
+                        routes.TestNotificationRequest(channel="dingtalk")
+                    )
+                )
+            with self.assertRaises(HTTPException) as email_ctx:
+                asyncio.run(
+                    routes.test_notification_channel(
+                        routes.TestNotificationRequest(channel="email")
+                    )
+                )
+            with self.assertRaises(HTTPException) as unknown_ctx:
+                asyncio.run(
+                    routes.test_notification_channel(
+                        routes.TestNotificationRequest(channel="sms")
+                    )
+                )
+
+        self.assertEqual(wechat_ctx.exception.status_code, 400)
+        self.assertEqual(dingtalk_ctx.exception.status_code, 400)
+        self.assertEqual(email_ctx.exception.status_code, 400)
+        self.assertEqual(unknown_ctx.exception.status_code, 422)
+
+    def test_notification_send_failure_returns_bad_gateway(self):
+        with (
+            patch.dict("os.environ", {"WECHAT_WEBHOOK_URL": "https://example.invalid/webhook"}, clear=True),
+            patch("urllib.request.urlopen", side_effect=OSError("network down")),
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                asyncio.run(
+                    routes.test_notification_channel(
+                        routes.TestNotificationRequest(channel="wechat")
+                    )
+                )
+
+        self.assertEqual(ctx.exception.status_code, 502)
+
+    def test_session_export_empty_and_internal_errors_use_http_status(self):
+        class EmptyMemoryDB:
+            def get_messages(self, *_args, **_kwargs):
+                return []
+
+        class FailingMemoryDB:
+            def get_messages(self, *_args, **_kwargs):
+                raise RuntimeError("db unavailable")
+
+        with patch("core.memory.memory_db", EmptyMemoryDB()):
+            with self.assertRaises(HTTPException) as empty_ctx:
+                asyncio.run(routes.export_session_history("sid-empty"))
+
+        with patch("core.memory.memory_db", FailingMemoryDB()):
+            with self.assertRaises(HTTPException) as failing_ctx:
+                asyncio.run(routes.export_session_history("sid-error"))
+
+        self.assertEqual(empty_ctx.exception.status_code, 404)
+        self.assertEqual(failing_ctx.exception.status_code, 500)
+
 
 if __name__ == "__main__":
     unittest.main()

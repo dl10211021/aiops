@@ -1269,9 +1269,7 @@ async def test_notification_channel(req: TestNotificationRequest):
     try:
         if channel == "wechat":
             if not wechat_webhook:
-                return ResponseModel(
-                    status="error", message="请先配置企业微信 Webhook 地址"
-                )
+                raise HTTPException(status_code=400, detail="请先配置企业微信 Webhook 地址")
             payload = {
                 "msgtype": "markdown",
                 "markdown": {"content": f"## {title}\n{content}"},
@@ -1288,9 +1286,7 @@ async def test_notification_channel(req: TestNotificationRequest):
 
         elif channel == "dingtalk":
             if not dingtalk_webhook:
-                return ResponseModel(
-                    status="error", message="请先配置钉钉 Webhook 地址"
-                )
+                raise HTTPException(status_code=400, detail="请先配置钉钉 Webhook 地址")
             payload = {
                 "msgtype": "markdown",
                 "markdown": {"title": title, "text": f"## {title}\n{content}"},
@@ -1307,11 +1303,11 @@ async def test_notification_channel(req: TestNotificationRequest):
 
         elif channel == "email":
             if not email_address:
-                return ResponseModel(status="error", message="请先配置接收人邮箱地址")
+                raise HTTPException(status_code=400, detail="请先配置接收人邮箱地址")
             if not smtp_server or not smtp_user or not smtp_pass:
-                return ResponseModel(
-                    status="error",
-                    message="发送失败：尚未配置完整的 SMTP 发件服务器参数。",
+                raise HTTPException(
+                    status_code=400,
+                    detail="发送失败：尚未配置完整的 SMTP 发件服务器参数。",
                 )
 
             import smtplib
@@ -1338,9 +1334,11 @@ async def test_notification_channel(req: TestNotificationRequest):
                 status="success", message=f"测试邮件已成功发送至 {email_address}！"
             )
         else:
-            return ResponseModel(status="error", message="不支持的渠道类型")
+            raise HTTPException(status_code=422, detail="不支持的渠道类型")
+    except HTTPException:
+        raise
     except Exception as e:
-        return ResponseModel(status="error", message=f"测试发送失败: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"测试发送失败: {str(e)}") from e
 
 
 @router.put("/session/{session_id}/permission", response_model=ResponseModel)
@@ -2388,7 +2386,7 @@ async def export_session_history(session_id: str):
             msg for msg in messages if msg.get("role") in ("user", "assistant")
         ]
         if not chat_history:
-            return ResponseModel(status="error", message="该会话没有可导出的历史记录。")
+            raise HTTPException(status_code=404, detail="该会话没有可导出的历史记录。")
 
         remark = ""
         if session_id in ssh_manager.active_sessions:
@@ -2400,8 +2398,10 @@ async def export_session_history(session_id: str):
             md_lines.append(f"## {role}\n{msg['content']}\n\n---\n")
 
         return ResponseModel(status="success", data={"markdown": "\n".join(md_lines)})
+    except HTTPException:
+        raise
     except Exception as e:
-        return ResponseModel(status="error", message=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/config/providers", response_model=ResponseModel)
