@@ -31,6 +31,13 @@ LOG_LEVELS = {
     "INFO": logging.INFO,
     "DEBUG": logging.DEBUG,
 }
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "X-Permitted-Cross-Domain-Policies": "none",
+}
 
 
 def get_runtime_host() -> str:
@@ -169,6 +176,15 @@ async def api_token_auth(request: Request, call_next):
                 content={"detail": "Missing or invalid OpsCore API token"},
             )
     return await call_next(request)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for header, value in SECURITY_HEADERS.items():
+        if header not in response.headers:
+            response.headers[header] = value
+    return response
 
 import sys
 

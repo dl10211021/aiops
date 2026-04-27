@@ -5,7 +5,15 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from main import DEFAULT_OPSCORE_HOST, DEFAULT_OPSCORE_PORT, app, get_log_level, get_runtime_host, get_runtime_port
+from main import (
+    DEFAULT_OPSCORE_HOST,
+    DEFAULT_OPSCORE_PORT,
+    SECURITY_HEADERS,
+    app,
+    get_log_level,
+    get_runtime_host,
+    get_runtime_port,
+)
 
 
 class TestProductionReadiness(unittest.TestCase):
@@ -22,6 +30,13 @@ class TestProductionReadiness(unittest.TestCase):
         self.assertEqual(payload["checks"]["cron_store"]["status"], "ok")
         self.assertIn("storage", payload["checks"])
         self.assertIn("version", payload)
+
+    def test_healthz_includes_baseline_security_headers(self):
+        client = TestClient(app)
+        response = client.get("/healthz")
+
+        for header, value in SECURITY_HEADERS.items():
+            self.assertEqual(response.headers[header], value)
 
     def test_env_example_documents_required_production_settings(self):
         env_example = Path(".env.example")
