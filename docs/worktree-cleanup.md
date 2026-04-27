@@ -17,6 +17,8 @@ The audit is read-only. It does not delete files, reset git, or rewrite history.
 
 `--check-staged` is a commit gate. It returns a non-zero exit code when staged files would add or modify dependency artifacts, secrets, runtime state, logs, temporary files, or frontend build output that was not explicitly allowed.
 
+The workspace also contains `.research/hermes-agent/`, which is Hermes source code kept for reference or separate work. The cleanup audit classifies this path as `external_source`; do not clean, format, delete, or commit changes under it during routine OpsCore work unless the user explicitly requests Hermes-scoped changes.
+
 Cleanup deletions for `node_modules`, logs, temporary files, and old generated assets are allowed because they remove noise from the repository. Secret and runtime-state deletions are still blocked by default because they need an explicit rotation, backup, or migration decision.
 
 Use `--allow-built-assets` only when `static_react` assets are intentionally served from this repository:
@@ -55,6 +57,7 @@ Use `stage_summary` to understand whether the noise is already staged or only lo
 - `runtime_output`: logs and command output files. Usually safe to ignore or delete after confirming no incident evidence is needed.
 - `frontend_build_artifact`: `static_react` generated assets and TypeScript build cache. Commit only if this repository intentionally serves built frontend assets.
 - `temporary_artifact`: patch/fix/update scripts, tmp files, local debug helpers.
+- `external_source`: `.research/hermes-agent/` and any future vendored/research source trees. Default read-only during OpsCore work.
 
 ## Safe Cleanup Policy
 
@@ -65,7 +68,8 @@ Use `stage_summary` to understand whether the noise is already staged or only lo
 5. Commit product changes in logical groups: backend, frontend, tests, docs, generated static frontend if required.
 6. Treat staged secret deletion as a deliberate secret-rotation change, not as incidental cleanup.
 7. Keep `runtime_state_do_not_commit` paths local or mounted in production storage.
-8. Run `python scripts/preflight.py --check-git` before a release commit.
+8. Do not touch `.research/hermes-agent/` during OpsCore cleanup unless the user explicitly asks for Hermes work.
+9. Run `python scripts/preflight.py --check-git` before a release commit.
 
 ## Current High-Risk Items To Review
 
@@ -82,6 +86,7 @@ Use `stage_summary` to understand whether the noise is already staged or only lo
 - `generated_frontend_assets`: built frontend assets to either commit or move to deployment-time build output.
 - `index_cleanup_required`: staged generated/sensitive/runtime-output entries that require deliberate Git index cleanup.
 - `runtime_state_do_not_commit`: local state and secrets that should not be part of product commits.
+- `external_source_do_not_touch`: external source paths that require explicit user direction before modification or commit.
 
 ## Rollback
 

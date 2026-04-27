@@ -32,6 +32,10 @@ RUNTIME_STATE_NAMES = {
     "verification_runs.json",
 }
 
+EXTERNAL_SOURCE_PREFIXES = (
+    ".research/hermes-agent/",
+)
+
 
 def _split_status(status: str) -> tuple[str, str]:
     if status == "??":
@@ -91,6 +95,14 @@ def classify_path(status: str, path: str) -> dict[str, object]:
     name = Path(normalized).name
     suffix = Path(normalized).suffix.lower()
     deleted = "D" in status
+
+    if normalized.startswith(EXTERNAL_SOURCE_PREFIXES):
+        return _with_git_state({
+            "path": normalized,
+            "category": "external_source",
+            "requires_human_review": True,
+            "recommendation": "Treat as read-only third-party or research source. Do not clean, format, or commit changes unless explicitly requested.",
+        }, status)
 
     if normalized.startswith("frontend/node_modules/") or "/node_modules/" in normalized:
         return _with_git_state({
@@ -202,6 +214,8 @@ def commit_blockers(
             continue
         if category in always_blocked_categories:
             reason = f"{category} must not be committed from this workspace."
+        elif category == "external_source":
+            reason = "External source changes require an explicit Hermes-scoped request."
         elif category in blocked_when_added_or_modified and not _is_staged_deletion(item):
             reason = f"{category} content must not be committed from this workspace."
         elif category == "frontend_build_artifact":
@@ -263,6 +277,11 @@ def build_report() -> dict[str, object]:
                 for item in items
                 if item["category"] in {"runtime_state", "sensitive_runtime_state"}
             ],
+            "external_source_do_not_touch": [
+                item["path"]
+                for item in items
+                if item["category"] == "external_source"
+            ],
         },
         "items": items,
         "commit_blockers": commit_blockers(items),
@@ -311,7 +330,7 @@ def main() -> int:
             if len(blockers) > 20:
                 print(f"- ... {len(blockers) - 20} more blocker(s)")
         else:
-            print("- passed: no staged generated, runtime, or sensitive artifacts")
+            print("- passed: no staged generated, runtime, sensitive, or external-source artifacts")
     print("\nNext steps:")
     for step in report["next_steps"]:
         print(f"- {step}")

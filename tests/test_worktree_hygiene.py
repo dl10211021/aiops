@@ -80,6 +80,13 @@ class TestWorktreeHygiene(unittest.TestCase):
         self.assertEqual(item["category"], "temporary_artifact")
         self.assertFalse(item["requires_human_review"])
 
+    def test_classifies_hermes_source_as_external_source(self):
+        item = classify_path("M ", ".research/hermes-agent/AGENTS.md")
+
+        self.assertEqual(item["category"], "external_source")
+        self.assertTrue(item["requires_human_review"])
+        self.assertIn("read-only", item["recommendation"])
+
     def test_classifies_root_manual_chat_tests_as_temporary_artifact(self):
         item = classify_path("??", "test_chat.py")
 
@@ -111,6 +118,12 @@ class TestWorktreeHygiene(unittest.TestCase):
         blockers = commit_blockers([classify_path("M ", "core/agent.py")])
 
         self.assertEqual(blockers, [])
+
+    def test_commit_gate_blocks_external_source_changes(self):
+        blockers = commit_blockers([classify_path("M ", ".research/hermes-agent/AGENTS.md")])
+
+        self.assertEqual([item["path"] for item in blockers], [".research/hermes-agent/AGENTS.md"])
+        self.assertIn("Hermes", blockers[0]["block_reason"])
 
     def test_commit_gate_blocks_frontend_cache_even_when_built_assets_allowed(self):
         blockers = commit_blockers(
