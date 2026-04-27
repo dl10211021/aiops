@@ -142,6 +142,7 @@ function ApprovalRow({
 }) {
   const argsText = JSON.stringify(approval.args || {}, null, 2)
   const context = approval.context || {}
+  const skillChange = approval.metadata?.skill_change
   return (
     <article className="grid gap-4 p-5 xl:grid-cols-[1fr_360px]">
       <div className="min-w-0">
@@ -151,6 +152,24 @@ function ApprovalRow({
           <span className="text-xs text-ops-overlay">{approval.id}</span>
         </div>
         <p className="mt-3 text-sm text-ops-text">{approval.reason || '命中后端审批策略'}</p>
+        {skillChange && (
+          <div className="mt-3 rounded-2xl border border-ops-accent/25 bg-ops-accent/5 p-3 text-xs text-ops-subtext">
+            <div className="grid gap-2 md:grid-cols-2">
+              <Info label="技能" value={skillChange.skill_id || '-'} />
+              <Info label="文件" value={skillChange.file_name || '-'} />
+              <Info label="行数" value={skillChange.content_lines ?? 0} />
+              <Info label="SHA256" value={(skillChange.content_sha256 || '').slice(0, 12) || '-'} />
+            </div>
+            {skillChange.validation?.issues?.length ? (
+              <div className="mt-3 rounded-xl border border-ops-alert/30 bg-ops-alert/10 px-3 py-2 text-ops-alert">
+                {skillChange.validation.issues.map((issue) => issue.message).join('；')}
+              </div>
+            ) : null}
+            <pre className="mt-3 max-h-36 overflow-auto whitespace-pre-wrap rounded-xl bg-ops-dark/45 p-3 text-[11px] leading-relaxed">
+              {skillChange.content_preview || '无内容预览'}
+            </pre>
+          </div>
+        )}
         <pre className="mt-3 max-h-44 overflow-auto rounded-2xl border border-ops-surface0 bg-ops-dark/45 p-3 text-xs leading-relaxed text-ops-subtext">
           {argsText}
         </pre>

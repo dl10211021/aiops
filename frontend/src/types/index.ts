@@ -364,6 +364,18 @@ export interface ApprovalRequest {
   session_id: string
   tool_name: string
   args: Record<string, unknown>
+  metadata?: {
+    skill_change?: {
+      type: string
+      skill_id: string
+      file_name: string
+      content_chars: number
+      content_lines: number
+      content_sha256: string
+      content_preview: string
+      validation?: SkillValidationResult
+    }
+  }
   reason: string
   context: {
     host?: string

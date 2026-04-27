@@ -38,6 +38,29 @@ class TestApprovalQueue(unittest.TestCase):
         self.assertEqual(pending[0]["args"]["password"], "***")
         self.assertNotIn("asset-secret", str(pending[0]))
 
+    def test_evolve_skill_approval_records_summary_instead_of_full_content(self):
+        from core import approval_queue
+
+        content = "---\nname: safe-skill\ndescription: demo\n---\n\n" + ("line\n" * 120)
+        store_path = self._store_path("skill_change")
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path):
+            request = approval_queue.record_approval_request(
+                tool_call_id="call-skill",
+                session_id="sid-skill",
+                tool_name="evolve_skill",
+                args={"skill_id": "safe-skill", "file_name": "SKILL.md", "content": content},
+                reason="AI 试图创建或修改平台技能，必须人工审批并审计。",
+                context={"session_id": "sid-skill", "asset_type": "virtual", "protocol": "virtual"},
+            )
+
+        skill_change = request["metadata"]["skill_change"]
+        self.assertEqual(skill_change["skill_id"], "safe-skill")
+        self.assertEqual(skill_change["file_name"], "SKILL.md")
+        self.assertTrue(skill_change["validation"]["valid"])
+        self.assertEqual(request["args"]["content"]["chars"], len(content))
+        self.assertNotEqual(request["args"]["content"], content)
+        self.assertNotIn("line\n" * 80, str(request))
+
     def test_resolve_approval_request_records_decision(self):
         from core import approval_queue
 

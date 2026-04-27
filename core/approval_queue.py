@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 import time
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from core.redaction import redact_value
+from core.skill_lifecycle import validate_skill_candidate
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -67,6 +69,55 @@ def _safe_context(context: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _preview_text(value: str, limit: int = 800) -> str:
+    text = str(value or "")
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}\n...<truncated {len(text) - limit} chars>"
+
+
+def _skill_change_metadata(args: dict[str, Any]) -> dict[str, Any]:
+    content = str((args or {}).get("content") or "")
+    validation = validate_skill_candidate(
+        str((args or {}).get("skill_id") or ""),
+        str((args or {}).get("file_name") or ""),
+        content,
+    )
+    return {
+        "type": "skill_change",
+        "skill_id": validation["skill_id"],
+        "file_name": validation["file_name"],
+        "content_chars": len(content),
+        "content_lines": len(content.splitlines()),
+        "content_sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+        "content_preview": _preview_text(content),
+        "validation": {
+            "valid": validation["valid"],
+            "issues": validation["issues"],
+            "warnings": validation["warnings"],
+        },
+    }
+
+
+def _approval_metadata(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+    if tool_name == "evolve_skill":
+        return {"skill_change": _skill_change_metadata(args)}
+    return {}
+
+
+def _safe_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+    safe_args = redact_value(args or {})
+    if tool_name == "evolve_skill" and isinstance(safe_args, dict) and "content" in safe_args:
+        content = str((args or {}).get("content") or "")
+        safe_args["content"] = {
+            "preview": _preview_text(content, limit=240),
+            "chars": len(content),
+            "lines": len(content.splitlines()),
+            "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+        }
+    return safe_args
+
+
 def _expire_pending(items: list[dict[str, Any]]) -> bool:
     changed = False
     now = _now()
@@ -104,8 +155,9 @@ def record_approval_request(
         "tool_call_id": approval_id,
         "session_id": str(session_id or context.get("session_id") or ""),
         "tool_name": str(tool_name or ""),
-        "args": redact_value(args or {}),
+        "args": _safe_args(str(tool_name or ""), args or {}),
         "reason": str(reason or ""),
+        "metadata": _approval_metadata(str(tool_name or ""), args or {}),
         "context": _safe_context({**(context or {}), "session_id": session_id or context.get("session_id")}),
         "status": "pending",
         "decision": None,
