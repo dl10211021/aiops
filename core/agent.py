@@ -332,7 +332,8 @@ async def chat_stream_agent(
             )
             if cancel_flags.get(session_id) is True:
                 cancel_flags[session_id] = False
-                yield f"data: {json.dumps({'type': 'error', 'content': '\u4efb\u52a1\u5df2\u88ab\u624b\u52a8\u4e2d\u6b62\u3002'})}\n\n"
+                cancel_payload = {"type": "error", "content": "任务已被手动中止。"}
+                yield f"data: {json.dumps(cancel_payload)}\n\n"
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
                 break
 
@@ -353,7 +354,10 @@ async def chat_stream_agent(
                     break
                 if chunk["type"] == "thinking":
                     if not is_thinking_stream:
-                        yield f"data: {json.dumps({'type': 'chunk', 'content': '<think>\\n'})}\n\n"
+                        think_start = json.dumps(
+                            {"type": "chunk", "content": "<think>\n"}
+                        )
+                        yield f"data: {think_start}\n\n"
                         is_thinking_stream = True
                     msg_chunk = json.dumps(
                         {"type": "chunk", "content": chunk["content"]}
@@ -362,7 +366,10 @@ async def chat_stream_agent(
                     thinking_content += chunk["content"]
                 elif chunk["type"] == "content":
                     if is_thinking_stream:
-                        yield f"data: {json.dumps({'type': 'chunk', 'content': '\\n</think>\\n'})}\n\n"
+                        think_end = json.dumps(
+                            {"type": "chunk", "content": "\n</think>\n"}
+                        )
+                        yield f"data: {think_end}\n\n"
                         is_thinking_stream = False
                     msg_chunk = json.dumps(
                         {"type": "chunk", "content": chunk["content"]}
@@ -371,12 +378,16 @@ async def chat_stream_agent(
                     assistant_content += chunk["content"]
                 elif chunk["type"] == "tool_calls":
                     if is_thinking_stream:
-                        yield f"data: {json.dumps({'type': 'chunk', 'content': '\\n</think>\\n'})}\n\n"
+                        think_end = json.dumps(
+                            {"type": "chunk", "content": "\n</think>\n"}
+                        )
+                        yield f"data: {think_end}\n\n"
                         is_thinking_stream = False
                     tool_calls = chunk["tool_calls"]
 
             if is_thinking_stream:
-                yield f"data: {json.dumps({'type': 'chunk', 'content': '\\n</think>\\n'})}\n\n"
+                think_end = json.dumps({"type": "chunk", "content": "\n</think>\n"})
+                yield f"data: {think_end}\n\n"
                 is_thinking_stream = False
 
             safe_msg = {"role": "assistant", "content": assistant_content}
@@ -518,7 +529,11 @@ async def chat_stream_agent(
             await asyncio.sleep(0.05)
 
         else:
-            yield f"data: {json.dumps({'type': 'error', 'content': '⚠️ 任务过于复杂，已达到 50 次最大思考上限，自动终止'})}\n\n"
+            max_steps_payload = {
+                "type": "error",
+                "content": "⚠️ 任务过于复杂，已达到 50 次最大思考上限，自动终止",
+            }
+            yield f"data: {json.dumps(max_steps_payload)}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
         # ÿֶԻ׽󣬴ڼ첽ѹ (̨ǰ)
@@ -530,9 +545,18 @@ async def chat_stream_agent(
         error_msg = str(e)
         logger.error(f"Agent Loop Failed: {error_msg}")
         if "timeout" in error_msg.lower() or "connect" in error_msg.lower():
-            yield f"data: {json.dumps({'type': 'error', 'content': '❌ **超时** 无法连接到 AI 模型接口\\n\\n**可能原因**\\n1. 模型服务地址不可达\\n2. API Key 或模型名称配置不正确'})}\n\n"
+            timeout_payload = {
+                "type": "error",
+                "content": "❌ **超时** 无法连接到 AI 模型接口\n\n"
+                "**可能原因**\n1. 模型服务地址不可达\n2. API Key 或模型名称配置不正确",
+            }
+            yield f"data: {json.dumps(timeout_payload)}\n\n"
         else:
-            yield f"data: {json.dumps({'type': 'error', 'content': f'❌ AI 思考时发生异常，请稍后再试。详细信息：`{error_msg}`'})}\n\n"
+            error_payload = {
+                "type": "error",
+                "content": f"❌ AI 思考时发生异常，请稍后再试。详细信息：`{error_msg}`",
+            }
+            yield f"data: {json.dumps(error_payload)}\n\n"
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
 
