@@ -559,6 +559,7 @@
 - `evolve_skill` 写入前校验 `skill_id` 与文件名，拒绝目录穿越和嵌套路径。
 - 更新 `SKILL.md` 时校验 YAML frontmatter，要求 `name` 与 `skill_id` 一致，并包含 `description`。
 - 覆盖已有技能文件前写入 `.versions/*.bak` 备份，文件内容通过临时文件和 `os.replace` 原子替换。
+- 新增技能版本列表与回滚接口，回滚前会校验版本路径和 `SKILL.md` frontmatter，并为当前文件再次生成备份。
 
 ## Phase 10: Productionization
 

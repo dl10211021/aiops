@@ -22,6 +22,7 @@ import asyncio
 import os
 import json
 import re
+import time
 from pathlib import Path
 
 webhook_locks = {}
@@ -45,6 +46,45 @@ def resolve_custom_skill_dir(target_dir_name: str) -> Path:
     if target.parent != base:
         raise HTTPException(status_code=422, detail="非法技能目标路径。")
     return target
+
+
+def resolve_custom_skill_file(skill_id: str, file_name: str) -> Path:
+    skill_dir = resolve_custom_skill_dir(skill_id)
+    safe_file = str(file_name or "").strip()
+    if not safe_file or os.path.basename(safe_file) != safe_file:
+        raise HTTPException(status_code=422, detail="file_name 只能是文件名，不能包含路径。")
+    target = (skill_dir / safe_file).resolve()
+    if target.parent != skill_dir.resolve():
+        raise HTTPException(status_code=422, detail="非法技能文件路径。")
+    return target
+
+
+def resolve_custom_skill_version_file(skill_id: str, version_id: str) -> Path:
+    skill_dir = resolve_custom_skill_dir(skill_id)
+    safe_version = str(version_id or "").strip()
+    if not safe_version or os.path.basename(safe_version) != safe_version:
+        raise HTTPException(status_code=422, detail="version_id 只能是版本文件名。")
+    versions_dir = (skill_dir / ".versions").resolve()
+    target = (versions_dir / safe_version).resolve()
+    if target.parent != versions_dir:
+        raise HTTPException(status_code=422, detail="非法版本文件路径。")
+    return target
+
+
+def atomic_replace_bytes(file_path: Path, content: bytes) -> None:
+    tmp_path = file_path.with_name(f".{file_path.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        with open(tmp_path, "wb") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, file_path)
+    finally:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
 
 
 # ----------------- 数据模型 -----------------
@@ -950,6 +990,11 @@ class MigrateRequest(BaseModel):
     target_dir_name: str
 
 
+class SkillRollbackRequest(BaseModel):
+    file_name: str = "SKILL.md"
+    version_id: str
+
+
 class CreateSkillRequest(BaseModel):
     skill_id: str
     description: str
@@ -1005,6 +1050,66 @@ async def create_skill(req: CreateSkillRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/skills/{skill_id}/versions", response_model=ResponseModel)
+async def list_skill_versions(skill_id: str, file_name: str = "SKILL.md"):
+    """列出 my_custom_skills 中某个技能文件的可回滚版本。"""
+    skill_file = resolve_custom_skill_file(skill_id, file_name)
+    versions_dir = skill_file.parent / ".versions"
+    if not skill_file.parent.exists():
+        raise HTTPException(status_code=404, detail="技能不存在。")
+
+    versions = []
+    if versions_dir.exists():
+        prefix = f"{skill_file.name}."
+        suffix = ".bak"
+        for item in versions_dir.iterdir():
+            if not item.is_file() or not item.name.startswith(prefix) or not item.name.endswith(suffix):
+                continue
+            stat = item.stat()
+            versions.append(
+                {
+                    "id": item.name,
+                    "file_name": skill_file.name,
+                    "size": stat.st_size,
+                    "created_at_ts": stat.st_mtime,
+                }
+            )
+    versions.sort(key=lambda item: item["created_at_ts"], reverse=True)
+    return ResponseModel(status="success", data={"versions": versions})
+
+
+@router.post("/skills/{skill_id}/rollback", response_model=ResponseModel)
+async def rollback_skill_version(skill_id: str, req: SkillRollbackRequest):
+    """将 my_custom_skills 中的技能文件回滚到指定备份版本。"""
+    from core.dispatcher import dispatcher
+
+    target_file = resolve_custom_skill_file(skill_id, req.file_name)
+    version_file = resolve_custom_skill_version_file(skill_id, req.version_id)
+    if not target_file.parent.exists():
+        raise HTTPException(status_code=404, detail="技能不存在。")
+    if not version_file.is_file():
+        raise HTTPException(status_code=404, detail="版本不存在。")
+
+    content = version_file.read_bytes()
+    if target_file.name == "SKILL.md":
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise HTTPException(status_code=422, detail="SKILL.md 版本必须是 UTF-8 文本。") from e
+        valid, reason = dispatcher._validate_skill_frontmatter(skill_id, text)
+        if not valid:
+            raise HTTPException(status_code=422, detail=reason)
+
+    backup_path = dispatcher._backup_existing_skill_file(str(target_file))
+    atomic_replace_bytes(target_file, content)
+    dispatcher.refresh_skills(force=True)
+    return ResponseModel(
+        status="success",
+        message=f"技能文件 {req.file_name} 已回滚到版本 {req.version_id}",
+        data={"backup_path": backup_path, "version_id": req.version_id},
+    )
 
 
 @router.post("/skills/migrate", response_model=ResponseModel)

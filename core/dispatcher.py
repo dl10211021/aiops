@@ -252,13 +252,11 @@ class SkillDispatcher:
 
     @staticmethod
     def _validate_skill_frontmatter(skill_id: str, content: str) -> tuple[bool, str]:
-        if not content.startswith("---\n"):
+        match = re.match(r"^---\r?\n(.*?)\r?\n---(?:\r?\n|$)", content, re.DOTALL)
+        if not match:
             return False, "SKILL.md 必须以 YAML frontmatter 开头"
-        end_marker = content.find("\n---", 4)
-        if end_marker < 0:
-            return False, "SKILL.md 缺少结束 frontmatter 标记"
         try:
-            frontmatter = yaml.safe_load(content[4:end_marker].strip()) or {}
+            frontmatter = yaml.safe_load(match.group(1).strip()) or {}
         except Exception as e:
             return False, f"SKILL.md frontmatter 解析失败: {e}"
         name = str(frontmatter.get("name") or "").strip()
