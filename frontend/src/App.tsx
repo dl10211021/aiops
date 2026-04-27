@@ -82,6 +82,8 @@ export default function App() {
             extra_args: sinfo.extra_args || {},
             heartbeatEnabled: sinfo.heartbeatEnabled || false,
             tags: sinfo.tags || ['未分组'],
+            target_scope: sinfo.target_scope || 'asset',
+            scope_value: sinfo.scope_value || null,
             messages: [],
             isStreaming: false,
           })

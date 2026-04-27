@@ -1472,6 +1472,8 @@ async def get_active_sessions():
             "extra_args": identity["extra_args"],
             "heartbeatEnabled": info.get("heartbeat_enabled", False),
             "tags": info.get("tags", ["未分组"]),
+            "target_scope": info.get("target_scope", "asset"),
+            "scope_value": info.get("scope_value"),
         }
 
     from core.memory import memory_db

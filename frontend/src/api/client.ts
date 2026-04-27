@@ -92,6 +92,7 @@ export async function getActiveSessions() {
     skills: string[]; agentProfile: string; user: string;
     asset_type: string; protocol: string; extra_args: Record<string, unknown>;
     heartbeatEnabled: boolean; tags: string[];
+    target_scope?: string; scope_value?: string | null;
   }> }>('/sessions/active')
 }
 

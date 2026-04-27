@@ -13,6 +13,8 @@ export interface Session {
   extra_args: Record<string, unknown>
   heartbeatEnabled: boolean
   tags: string[]
+  target_scope?: string
+  scope_value?: string | null
   // Frontend-only state
   messages: ChatMessage[]
   isStreaming: boolean

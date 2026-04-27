@@ -550,10 +550,16 @@ function ToolsetBar({ catalog, session }: { catalog: SessionToolCatalog | null; 
   const enabledToolsets = (catalog?.toolsets || []).filter((t) => t.enabled)
   const activeTools = catalog?.active_tools || enabledToolsets.flatMap((t) => t.tools.filter((tool) => tool.enabled).map((tool) => tool.name))
   const primaryToolsets = enabledToolsets.slice(0, 4)
+  const scope = session.target_scope || catalog?.context?.target_scope || 'asset'
+  const scopeValue = session.scope_value || catalog?.context?.host || session.host
+  const mode = session.isReadWriteMode ? '读写' : '只读'
+  const modeTone = session.isReadWriteMode
+    ? 'border-ops-alert/35 bg-ops-alert/10 text-ops-alert'
+    : 'border-ops-success/35 bg-ops-success/10 text-ops-success'
 
   return (
     <div className="border-b border-ops-surface0 bg-ops-panel/80 px-4 py-3">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-ops-accent/30 bg-ops-accent/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-ops-accent">
@@ -570,12 +576,42 @@ function ToolsetBar({ catalog, session }: { catalog: SessionToolCatalog | null; 
               <span className="text-xs text-ops-overlay">正在读取当前会话工具集...</span>
             )}
           </div>
+          <div className="mt-3 grid gap-2 text-[11px] text-ops-subtext md:grid-cols-2 xl:grid-cols-4">
+            <ContextCell label="目标" value={session.remark || session.host || '-'} />
+            <ContextCell label="账号" value={session.user || '-'} />
+            <ContextCell label="范围" value={`${scope}${scopeValue ? ` / ${scopeValue}` : ''}`} />
+            <ContextCell label="标签" value={(session.tags || []).slice(0, 3).join(', ') || '-'} />
+          </div>
         </div>
-        <div className="shrink-0 rounded-xl border border-ops-surface1 bg-ops-dark/60 px-3 py-2 text-right">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">active tools</div>
-          <div className="font-mono text-sm text-ops-text">{activeTools.length}</div>
+        <div className="grid shrink-0 grid-cols-3 gap-2 text-right">
+          <div className={`rounded-xl border px-3 py-2 ${modeTone}`}>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">mode</div>
+            <div className="font-mono text-sm">{mode}</div>
+          </div>
+          <div className="rounded-xl border border-ops-surface1 bg-ops-dark/60 px-3 py-2">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">active tools</div>
+            <div className="font-mono text-sm text-ops-text">{activeTools.length}</div>
+          </div>
+          <div className="rounded-xl border border-ops-surface1 bg-ops-dark/60 px-3 py-2">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">skills</div>
+            <div className="font-mono text-sm text-ops-text">{session.skills.length}</div>
+          </div>
         </div>
       </div>
+      <div className="mt-3 rounded-xl border border-ops-surface0 bg-ops-dark/35 px-3 py-2 text-xs text-ops-subtext">
+        {session.isReadWriteMode
+          ? '当前会话允许读写操作；高危工具仍会进入后端审批队列，硬拦截规则会直接拒绝。'
+          : '当前会话为只读模式；写入、重启、删除等动作会被策略拦截或要求重新授权。'}
+      </div>
+    </div>
+  )
+}
+
+function ContextCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-lg border border-ops-surface0 bg-ops-dark/35 px-2.5 py-2">
+      <div className="text-[10px] uppercase tracking-[0.16em] text-ops-overlay">{label}</div>
+      <div className="mt-1 truncate font-mono text-ops-text">{value}</div>
     </div>
   )
 }
