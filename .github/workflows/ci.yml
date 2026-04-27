@@ -32,7 +32,7 @@ jobs:
         run: npm ci
 
       - name: Backend unit tests
-        run: python -W default -m unittest discover -s tests -p "test*.py"
+        run: python scripts/ci_backend_tests.py
 
       - name: Secret scan
         run: python scripts/security_scan.py
