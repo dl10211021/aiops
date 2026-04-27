@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '@/store'
+import InspectionReportModal from '@/components/inspection/InspectionReportModal'
 import {
   applyAssetNormalization,
   deleteAsset,
@@ -9,10 +10,11 @@ import {
   getDashboardOverview,
   getProtocolVerificationOverview,
   getSavedAssets,
+  listInspectionRuns,
   previewAssetNormalization,
   verifyAsset,
 } from '@/api/client'
-import type { Asset, AssetVerificationMatrix, AssetVerificationRun, ProtocolVerificationOverview } from '@/types'
+import type { Asset, AssetVerificationMatrix, AssetVerificationRun, InspectionRun, ProtocolVerificationOverview } from '@/types'
 
 export default function AssetVault() {
   const assets = useStore((s) => s.assets)
@@ -29,9 +31,11 @@ export default function AssetVault() {
     asset: Asset
     matrix: AssetVerificationMatrix | null
     runs: AssetVerificationRun[]
+    inspectionRuns: InspectionRun[]
     loading: boolean
     running: boolean
   } | null>(null)
+  const [reportRunId, setReportRunId] = useState<string | null>(null)
 
   const loadAssets = useCallback(async () => {
     try {
@@ -91,16 +95,18 @@ export default function AssetVault() {
   }
 
   const openVerification = async (asset: Asset) => {
-    setVerificationPanel({ asset, matrix: null, runs: [], loading: true, running: false })
+    setVerificationPanel({ asset, matrix: null, runs: [], inspectionRuns: [], loading: true, running: false })
     try {
-      const [matrixRes, runsRes] = await Promise.all([
+      const [matrixRes, runsRes, inspectionRunsRes] = await Promise.all([
         getAssetVerificationMatrix(asset.id),
         getAssetVerificationRuns(asset.id, 10),
+        listInspectionRuns({ assetId: asset.id, limit: 8 }),
       ])
       setVerificationPanel({
         asset,
         matrix: matrixRes.data.matrix,
         runs: runsRes.data.runs || [],
+        inspectionRuns: inspectionRunsRes.data.runs || [],
         loading: false,
         running: false,
       })
@@ -294,8 +300,10 @@ export default function AssetVault() {
           panel={verificationPanel}
           onClose={() => setVerificationPanel(null)}
           onRun={() => void runVerification()}
+          onOpenInspectionReport={(runId) => setReportRunId(runId)}
         />
       )}
+      {reportRunId && <InspectionReportModal runId={reportRunId} onClose={() => setReportRunId(null)} />}
     </div>
   )
 }
@@ -361,16 +369,19 @@ function VerificationPanel({
   panel,
   onClose,
   onRun,
+  onOpenInspectionReport,
 }: {
   panel: {
     asset: Asset
     matrix: AssetVerificationMatrix | null
     runs: AssetVerificationRun[]
+    inspectionRuns: InspectionRun[]
     loading: boolean
     running: boolean
   }
   onClose: () => void
   onRun: () => void
+  onOpenInspectionReport: (runId: string) => void
 }) {
   const latest = panel.runs[0]
   return (
@@ -465,6 +476,56 @@ function VerificationPanel({
                 ))}
                 {panel.runs.length === 0 && (
                   <div className="py-8 text-center text-sm text-ops-subtext">暂无验证历史，点击“执行只读验证”开始。</div>
+                )}
+              </div>
+            </section>
+
+            <section className="mt-5 rounded-2xl border border-ops-surface0 bg-ops-dark/30 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-ops-text">巡检运行</h3>
+                  <p className="mt-1 text-xs text-ops-overlay">按资产过滤的定时巡检结果，可直接打开报告详情。</p>
+                </div>
+                <span className="rounded-full bg-ops-surface0 px-2.5 py-1 font-mono text-[11px] text-ops-accent">
+                  {panel.inspectionRuns.length} runs
+                </span>
+              </div>
+              <div className="space-y-3">
+                {panel.inspectionRuns.map((run) => (
+                  <div key={run.id} className="rounded-xl border border-ops-surface0 bg-ops-panel/70 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={`rounded px-2 py-0.5 text-[11px] ${
+                          run.status === 'completed'
+                            ? 'bg-ops-success/15 text-ops-success'
+                            : run.status === 'partial'
+                              ? 'bg-ops-accent/15 text-ops-accent'
+                              : 'bg-ops-alert/15 text-ops-alert'
+                        }`}>
+                          {run.status}
+                        </span>
+                        <span className="truncate font-mono text-[11px] text-ops-overlay">{run.id}</span>
+                      </div>
+                      <button
+                        onClick={() => onOpenInspectionReport(run.id)}
+                        className="rounded-lg bg-ops-accent/15 px-2.5 py-1 text-[11px] text-ops-accent hover:bg-ops-accent/25"
+                      >
+                        查看报告
+                      </button>
+                    </div>
+                    <div className="mt-2 grid gap-2 text-[11px] text-ops-subtext md:grid-cols-2">
+                      <span>任务：{run.job_id}</span>
+                      <span>范围：{run.target_scope} {run.scope_value || ''}</span>
+                      <span>目标：{run.target_count}</span>
+                      <span>完成：{run.completed_at || '-'}</span>
+                    </div>
+                    <div className="mt-2 truncate rounded-lg bg-ops-dark/45 px-3 py-2 text-xs text-ops-overlay">
+                      {run.message}
+                    </div>
+                  </div>
+                ))}
+                {panel.inspectionRuns.length === 0 && (
+                  <div className="py-8 text-center text-sm text-ops-subtext">暂无与该资产关联的巡检运行记录</div>
                 )}
               </div>
             </section>
