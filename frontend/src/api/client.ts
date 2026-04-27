@@ -19,6 +19,7 @@ import type {
   SafetyPolicy,
   SessionToolCatalog,
   SkillInfo,
+  SkillValidationResult,
 } from '@/types'
 
 const BASE = '/api/v1'
@@ -191,6 +192,15 @@ export async function createSkill(params: {
   script_name?: string; script_content?: string;
 }) {
   return request('/skills/create', { method: 'POST', body: JSON.stringify(params) })
+}
+
+export async function validateSkill(params: {
+  skill_id: string; file_name?: string; content: string;
+}) {
+  return request<SkillValidationResult>('/skills/validate', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
 }
 
 // ---- Assets ----

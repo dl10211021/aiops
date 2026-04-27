@@ -172,6 +172,51 @@ class TestSkillSecurity(unittest.TestCase):
             self.assertTrue((target_base / "new-skill" / "SKILL.md").exists())
             self.assertTrue((target_base / "new-skill" / "check.py").exists())
 
+    def test_validate_skill_accepts_valid_skill_md_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target_base = Path(tmp) / "custom"
+            request = routes.SkillValidationRequest(
+                skill_id="safe-skill",
+                file_name="SKILL.md",
+                content="---\nname: safe-skill\ndescription: demo\n---\n\nbody\n",
+            )
+
+            with patch.object(routes, "CUSTOM_SKILLS_DIR", target_base):
+                response = asyncio.run(routes.validate_skill(request))
+
+            self.assertFalse(target_base.exists())
+
+        self.assertEqual(response.status, "success")
+        self.assertTrue(response.data["valid"])
+        self.assertEqual(response.data["issues"], [])
+
+    def test_validate_skill_reports_id_and_path_issues(self):
+        request = routes.SkillValidationRequest(
+            skill_id="../escape",
+            file_name="nested/SKILL.md",
+            content="missing frontmatter",
+        )
+
+        response = asyncio.run(routes.validate_skill(request))
+
+        codes = {issue["code"] for issue in response.data["issues"]}
+        self.assertEqual(response.status, "success")
+        self.assertFalse(response.data["valid"])
+        self.assertIn("invalid_skill_id", codes)
+        self.assertIn("invalid_file_name", codes)
+
+    def test_validate_skill_warns_for_executable_sidecar(self):
+        request = routes.SkillValidationRequest(
+            skill_id="safe-skill",
+            file_name="check.py",
+            content="print('ok')\n",
+        )
+
+        response = asyncio.run(routes.validate_skill(request))
+
+        self.assertTrue(response.data["valid"])
+        self.assertEqual(response.data["warnings"][0]["code"], "executable_file")
+
     def test_migrate_skill_rejects_traversal_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

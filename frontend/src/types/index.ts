@@ -89,6 +89,19 @@ export interface SkillInfo {
   source_path?: string
 }
 
+export interface SkillValidationIssue {
+  code: string
+  message: string
+}
+
+export interface SkillValidationResult {
+  valid: boolean
+  issues: SkillValidationIssue[]
+  warnings: SkillValidationIssue[]
+  skill_id: string
+  file_name: string
+}
+
 export interface Asset {
   id: number
   remark: string
