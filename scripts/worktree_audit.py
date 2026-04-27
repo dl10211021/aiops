@@ -230,6 +230,26 @@ def commit_blockers(
     return blockers
 
 
+def next_steps_for_items(items: list[dict[str, object]]) -> list[str]:
+    if not items:
+        return ["No cleanup actions required; worktree is clean."]
+
+    categories = {str(item["category"]) for item in items}
+    steps: list[str] = []
+    if categories & {"runtime_state", "sensitive_runtime_state"}:
+        steps.append("Back up runtime_state and sensitive_runtime_state before any cleanup.")
+    if "dependency_artifact" in categories:
+        steps.append("Remove tracked dependency_artifact entries from git index only after human confirmation.")
+    if "external_source" in categories:
+        steps.append("Do not touch external_source paths such as .research/hermes-agent without an explicit Hermes-scoped request.")
+    if "product_change" in categories:
+        steps.append("Commit product_change entries in focused groups after review.")
+    if categories & {"runtime_output", "temporary_artifact", "frontend_build_artifact"}:
+        steps.append("Ignore or clean generated artifacts only after confirming they are not needed for debugging or deployment.")
+    steps.append("Do not use git reset --hard or recursive deletes for this cleanup.")
+    return steps
+
+
 def git_status_porcelain() -> list[dict[str, str]]:
     result = subprocess.run(
         ["git", "status", "--porcelain"],
@@ -285,12 +305,7 @@ def build_report() -> dict[str, object]:
         },
         "items": items,
         "commit_blockers": commit_blockers(items),
-        "next_steps": [
-            "Back up runtime_state and sensitive_runtime_state before any cleanup.",
-            "Remove tracked dependency_artifact entries from git index only after human confirmation.",
-            "Commit product_change entries in focused groups after review.",
-            "Do not use git reset --hard or recursive deletes for this cleanup.",
-        ],
+        "next_steps": next_steps_for_items(items),
     }
 
 

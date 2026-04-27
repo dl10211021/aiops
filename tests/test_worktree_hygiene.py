@@ -1,6 +1,6 @@
 import unittest
 
-from scripts.worktree_audit import classify_path, commit_blockers, parse_porcelain_line
+from scripts.worktree_audit import classify_path, commit_blockers, next_steps_for_items, parse_porcelain_line
 
 
 class TestWorktreeHygiene(unittest.TestCase):
@@ -152,6 +152,25 @@ class TestWorktreeHygiene(unittest.TestCase):
 
         self.assertEqual([blocked["path"] for blocked in commit_blockers([item])], ["memory/test_1m_tokens.md"])
         self.assertEqual(commit_blockers([item], allow_runtime_removal=True), [])
+
+    def test_next_steps_for_clean_worktree_avoid_stale_cleanup_advice(self):
+        steps = next_steps_for_items([])
+
+        self.assertEqual(steps, ["No cleanup actions required; worktree is clean."])
+
+    def test_next_steps_include_only_relevant_categories(self):
+        steps = next_steps_for_items(
+            [
+                classify_path("M ", "core/agent.py"),
+                classify_path("??", ".research/hermes-agent/README.md"),
+            ]
+        )
+
+        joined = "\n".join(steps)
+        self.assertIn("product_change", joined)
+        self.assertIn("Hermes-scoped request", joined)
+        self.assertNotIn("runtime_state", joined)
+        self.assertNotIn("dependency_artifact", joined)
 
 
 if __name__ == "__main__":
