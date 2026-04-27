@@ -137,6 +137,10 @@ class TestSkillSecurity(unittest.TestCase):
             backups = list((skill_dir / ".versions").glob("SKILL.md.*.bak"))
             self.assertEqual(payload["status"], "SUCCESS")
             self.assertEqual((skill_dir / "SKILL.md").read_text(encoding="utf-8"), new_content)
+            self.assertEqual(payload["skill_id"], "safe-skill")
+            self.assertEqual(payload["file_name"], "SKILL.md")
+            self.assertEqual(Path(payload["file_path"]).resolve(), (skill_dir / "SKILL.md").resolve())
+            self.assertEqual(Path(payload["backup_path"]).resolve().parent, (skill_dir / ".versions").resolve())
             self.assertEqual(len(backups), 1)
             self.assertEqual(backups[0].read_text(encoding="utf-8"), old_content)
 

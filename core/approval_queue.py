@@ -122,6 +122,21 @@ def _tool_result_success(result: str) -> bool:
     return True
 
 
+def _execution_artifacts(result: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(result)
+    except Exception:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    artifacts = {}
+    for key in ("skill_id", "file_name", "file_path", "backup_path", "version_id"):
+        value = parsed.get(key)
+        if value is not None:
+            artifacts[key] = redact_value(value)
+    return artifacts
+
+
 def _safe_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
     safe_args = redact_value(args or {})
     if tool_name == "evolve_skill" and isinstance(safe_args, dict) and "content" in safe_args:
@@ -137,13 +152,17 @@ def _safe_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
 
 def _execution_summary(tool_result: Any) -> dict[str, Any]:
     text = redact_json_text(str(tool_result or ""))
-    return {
+    summary = {
         "status": "success" if _tool_result_success(text) else "error",
         "result_chars": len(text),
         "result_preview": _preview_text(text, limit=800),
         "completed_at": _iso(),
         "completed_at_ts": _now(),
     }
+    artifacts = _execution_artifacts(text)
+    if artifacts:
+        summary["artifacts"] = artifacts
+    return summary
 
 
 def _expire_pending(items: list[dict[str, Any]]) -> bool:

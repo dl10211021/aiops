@@ -181,6 +181,12 @@ function ApprovalRow({
               </span>
               <span className="text-ops-overlay">{approval.execution.completed_at || '-'}</span>
             </div>
+            {approval.execution.artifacts && (
+              <div className="mb-2 grid gap-2 md:grid-cols-2">
+                <Info label="写入文件" value={approval.execution.artifacts.file_path || '-'} />
+                <Info label="备份版本" value={approval.execution.artifacts.backup_path || '-'} />
+              </div>
+            )}
             <pre className="max-h-28 overflow-auto whitespace-pre-wrap text-[11px] leading-relaxed">
               {approval.execution.result_preview || '无执行摘要'}
             </pre>

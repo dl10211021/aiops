@@ -106,11 +106,19 @@ class TestApprovalQueue(unittest.TestCase):
             approval_queue.resolve_approval_request("call-exec", approved=True, operator="ops-admin")
             executed = approval_queue.record_approval_execution(
                 "call-exec",
-                '{"status":"SUCCESS","message":"updated","api_key":"sk-testsecret1234567890"}',
+                (
+                    '{"status":"SUCCESS","message":"updated",'
+                    '"skill_id":"safe-skill","file_name":"SKILL.md",'
+                    '"file_path":"D:/tmp/safe-skill/SKILL.md",'
+                    '"backup_path":"D:/tmp/safe-skill/.versions/SKILL.md.1.bak",'
+                    '"api_key":"sk-testsecret1234567890"}'
+                ),
             )
 
         self.assertEqual(executed["execution"]["status"], "success")
         self.assertIn("updated", executed["execution"]["result_preview"])
+        self.assertEqual(executed["execution"]["artifacts"]["skill_id"], "safe-skill")
+        self.assertEqual(executed["execution"]["artifacts"]["backup_path"], "D:/tmp/safe-skill/.versions/SKILL.md.1.bak")
         self.assertNotIn("sk-testsecret1234567890", str(executed["execution"]))
 
     def test_pending_approval_expires_to_timeout(self):

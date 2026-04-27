@@ -902,6 +902,9 @@ class SkillDispatcher:
                     {
                         "status": "SUCCESS",
                         "message": f"技能卡带文件 {file_name} 已经成功更新并热重载！现在您可以告诉用户它已经生效了。",
+                        "skill_id": skill_id,
+                        "file_name": safe_file_name,
+                        "file_path": file_path,
                         "backup_path": backup_path,
                     }
                 )

@@ -380,6 +380,13 @@ export interface ApprovalRequest {
     status: 'success' | 'error' | string
     result_chars: number
     result_preview: string
+    artifacts?: {
+      skill_id?: string
+      file_name?: string
+      file_path?: string
+      backup_path?: string | null
+      version_id?: string
+    }
     completed_at?: string
     completed_at_ts?: number
   }
