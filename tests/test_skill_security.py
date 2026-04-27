@@ -10,6 +10,69 @@ from api import routes
 
 
 class TestSkillSecurity(unittest.TestCase):
+    def test_create_skill_rejects_invalid_id_with_http_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(routes, "CUSTOM_SKILLS_DIR", Path(tmp) / "custom"):
+                with self.assertRaises(HTTPException) as ctx:
+                    asyncio.run(
+                        routes.create_skill(
+                            routes.CreateSkillRequest(
+                                skill_id="../escape",
+                                description="bad",
+                                instructions="bad",
+                            )
+                        )
+                    )
+
+        self.assertEqual(ctx.exception.status_code, 422)
+
+    def test_create_skill_duplicate_returns_conflict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target_base = Path(tmp) / "custom"
+            existing = target_base / "existing-skill"
+            existing.mkdir(parents=True)
+            (existing / "SKILL.md").write_text(
+                "---\nname: existing-skill\ndescription: demo\n---\n",
+                encoding="utf-8",
+            )
+
+            with patch.object(routes, "CUSTOM_SKILLS_DIR", target_base):
+                with self.assertRaises(HTTPException) as ctx:
+                    asyncio.run(
+                        routes.create_skill(
+                            routes.CreateSkillRequest(
+                                skill_id="existing-skill",
+                                description="demo",
+                                instructions="body",
+                            )
+                        )
+                    )
+
+        self.assertEqual(ctx.exception.status_code, 409)
+
+    def test_create_skill_writes_to_custom_skills_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target_base = Path(tmp) / "custom"
+            with (
+                patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch("core.dispatcher.dispatcher.refresh_skills"),
+            ):
+                response = asyncio.run(
+                    routes.create_skill(
+                        routes.CreateSkillRequest(
+                            skill_id="new-skill",
+                            description="demo",
+                            instructions="body",
+                            script_name="../check.py",
+                            script_content="print('ok')",
+                        )
+                    )
+                )
+
+            self.assertEqual(response.status, "success")
+            self.assertTrue((target_base / "new-skill" / "SKILL.md").exists())
+            self.assertTrue((target_base / "new-skill" / "check.py").exists())
+
     def test_migrate_skill_rejects_traversal_target(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

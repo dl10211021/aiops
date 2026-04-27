@@ -960,42 +960,34 @@ class CreateSkillRequest(BaseModel):
 @router.post("/skills/create", response_model=ResponseModel)
 async def create_skill(req: CreateSkillRequest):
     """【新功能】用户在页面上手动创建新的定制技能卡带"""
-    import os
-
     # 强制校验 ID 格式 (只能包含英文字母、数字和横线)
-    import re
-
     if not re.match(r"^[a-zA-Z0-9\-]+$", req.skill_id):
-        return ResponseModel(
-            status="error",
-            message="技能 ID 只能包含英文字母、数字和横线 (如 my-first-skill)。",
+        raise HTTPException(
+            status_code=422,
+            detail="技能 ID 只能包含英文字母、数字和横线 (如 my-first-skill)。",
         )
 
-    target_base = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "my_custom_skills"
-    )
-    os.makedirs(target_base, exist_ok=True)
-
-    dest_path = os.path.join(target_base, req.skill_id)
+    CUSTOM_SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    dest_path = resolve_custom_skill_dir(req.skill_id)
 
     try:
-        if os.path.exists(dest_path):
-            return ResponseModel(
-                status="error",
-                message=f"该技能包 ID ({req.skill_id}) 已存在，请换一个名称。",
+        if dest_path.exists():
+            raise HTTPException(
+                status_code=409,
+                detail=f"该技能包 ID ({req.skill_id}) 已存在，请换一个名称。",
             )
 
-        os.makedirs(dest_path)
+        dest_path.mkdir()
 
         # 写入 SKILL.md
         md_content = f"---\nname: {req.skill_id}\ndescription: {req.description}\n---\n\n{req.instructions}\n"
-        with open(os.path.join(dest_path, "SKILL.md"), "w", encoding="utf-8") as f:
+        with open(dest_path / "SKILL.md", "w", encoding="utf-8") as f:
             f.write(md_content)
 
         # 如果提供了脚本内容，一并写入
         if req.script_name and req.script_content:
             safe_script_name = os.path.basename(req.script_name)
-            script_path = os.path.join(dest_path, safe_script_name)
+            script_path = dest_path / safe_script_name
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(req.script_content)
 
@@ -1008,8 +1000,10 @@ async def create_skill(req: CreateSkillRequest):
             status="success",
             message=f"全新定制技能 {req.skill_id} 创建成功，已自动加载就绪！",
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        return ResponseModel(status="error", message=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/skills/migrate", response_model=ResponseModel)
@@ -1026,7 +1020,7 @@ async def migrate_skill(req: MigrateRequest):
         raise HTTPException(status_code=422, detail="source_path 必须包含 SKILL.md。")
 
     try:
-        if os.path.exists(dest_path):
+        if dest_path.exists():
             shutil.rmtree(dest_path)
 
         shutil.copytree(source_path, dest_path)
@@ -1039,8 +1033,10 @@ async def migrate_skill(req: MigrateRequest):
         return ResponseModel(
             status="success", message=f"卡带 {req.target_dir_name} 已成功导入专属库！"
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        return ResponseModel(status="error", message=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/models", response_model=ResponseModel)
