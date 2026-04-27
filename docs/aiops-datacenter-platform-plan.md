@@ -561,6 +561,7 @@
 - 覆盖已有技能文件前写入 `.versions/*.bak` 备份，文件内容通过临时文件和 `os.replace` 原子替换。
 - 新增技能版本列表与回滚接口，回滚前会校验版本路径和 `SKILL.md` frontmatter，并为当前文件再次生成备份。
 - 新增 `POST /skills/validate` 静态校验入口，返回 `valid/issues/warnings`，不写文件、不执行脚本，用作后续审批与测试验证的前置门。
+- 创建技能时复用统一静态校验，拒绝不完整 frontmatter 与嵌套脚本路径，并通过原子写入生成初始文件。
 
 ## Phase 10: Productionization
 

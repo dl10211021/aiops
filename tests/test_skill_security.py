@@ -162,7 +162,7 @@ class TestSkillSecurity(unittest.TestCase):
                             skill_id="new-skill",
                             description="demo",
                             instructions="body",
-                            script_name="../check.py",
+                            script_name="check.py",
                             script_content="print('ok')",
                         )
                     )
@@ -171,6 +171,46 @@ class TestSkillSecurity(unittest.TestCase):
             self.assertEqual(response.status, "success")
             self.assertTrue((target_base / "new-skill" / "SKILL.md").exists())
             self.assertTrue((target_base / "new-skill" / "check.py").exists())
+
+    def test_create_skill_rejects_empty_description_via_validation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target_base = Path(tmp) / "custom"
+            with patch.object(routes, "CUSTOM_SKILLS_DIR", target_base):
+                with self.assertRaises(HTTPException) as ctx:
+                    asyncio.run(
+                        routes.create_skill(
+                            routes.CreateSkillRequest(
+                                skill_id="new-skill",
+                                description="",
+                                instructions="body",
+                            )
+                        )
+                    )
+
+            self.assertFalse((target_base / "new-skill").exists())
+
+        self.assertEqual(ctx.exception.status_code, 422)
+
+    def test_create_skill_rejects_nested_script_name_before_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target_base = Path(tmp) / "custom"
+            with patch.object(routes, "CUSTOM_SKILLS_DIR", target_base):
+                with self.assertRaises(HTTPException) as ctx:
+                    asyncio.run(
+                        routes.create_skill(
+                            routes.CreateSkillRequest(
+                                skill_id="new-skill",
+                                description="demo",
+                                instructions="body",
+                                script_name="../check.py",
+                                script_content="print('ok')",
+                            )
+                        )
+                    )
+
+            self.assertFalse((target_base / "new-skill").exists())
+
+        self.assertEqual(ctx.exception.status_code, 422)
 
     def test_validate_skill_accepts_valid_skill_md_without_writing(self):
         with tempfile.TemporaryDirectory() as tmp:

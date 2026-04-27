@@ -136,6 +136,13 @@ def validate_skill_candidate(skill_id: str, file_name: str, content: str) -> dic
     }
 
 
+def reject_invalid_skill_candidate(validation: dict) -> None:
+    if validation["valid"]:
+        return
+    detail = "；".join(issue["message"] for issue in validation["issues"])
+    raise HTTPException(status_code=422, detail=detail or "技能校验失败。")
+
+
 # ----------------- 数据模型 -----------------
 class ConnectionRequest(BaseModel):
     host: str
@@ -1061,12 +1068,14 @@ class CreateSkillRequest(BaseModel):
 @router.post("/skills/create", response_model=ResponseModel)
 async def create_skill(req: CreateSkillRequest):
     """【新功能】用户在页面上手动创建新的定制技能卡带"""
-    # 强制校验 ID 格式 (只能包含英文字母、数字和横线)
-    if not re.match(r"^[a-zA-Z0-9\-]+$", req.skill_id):
-        raise HTTPException(
-            status_code=422,
-            detail="技能 ID 只能包含英文字母、数字和横线 (如 my-first-skill)。",
-        )
+    md_content = f"---\nname: {req.skill_id}\ndescription: {req.description}\n---\n\n{req.instructions}\n"
+    reject_invalid_skill_candidate(validate_skill_candidate(req.skill_id, "SKILL.md", md_content))
+    script_validation = None
+    if req.script_name or req.script_content:
+        if not req.script_name or req.script_content is None:
+            raise HTTPException(status_code=422, detail="脚本名称和脚本内容必须同时提供。")
+        script_validation = validate_skill_candidate(req.skill_id, req.script_name, req.script_content)
+        reject_invalid_skill_candidate(script_validation)
 
     CUSTOM_SKILLS_DIR.mkdir(parents=True, exist_ok=True)
     dest_path = resolve_custom_skill_dir(req.skill_id)
@@ -1080,17 +1089,12 @@ async def create_skill(req: CreateSkillRequest):
 
         dest_path.mkdir()
 
-        # 写入 SKILL.md
-        md_content = f"---\nname: {req.skill_id}\ndescription: {req.description}\n---\n\n{req.instructions}\n"
-        with open(dest_path / "SKILL.md", "w", encoding="utf-8") as f:
-            f.write(md_content)
+        atomic_replace_bytes(dest_path / "SKILL.md", md_content.encode("utf-8"))
 
         # 如果提供了脚本内容，一并写入
-        if req.script_name and req.script_content:
-            safe_script_name = os.path.basename(req.script_name)
-            script_path = dest_path / safe_script_name
-            with open(script_path, "w", encoding="utf-8") as f:
-                f.write(req.script_content)
+        if script_validation:
+            script_path = dest_path / script_validation["file_name"]
+            atomic_replace_bytes(script_path, req.script_content.encode("utf-8"))
 
         # 通知 Dispatcher 重新加载
         from core.dispatcher import dispatcher
