@@ -56,6 +56,21 @@ class TestProductionReadiness(unittest.TestCase):
         ):
             self.assertIn(marker, preflight)
 
+    def test_root_readme_documents_onboarding_and_boundaries(self):
+        readme = Path("README.md")
+        self.assertTrue(readme.exists(), "README.md is required for agent and operator onboarding")
+        content = readme.read_text(encoding="utf-8")
+
+        for marker in (
+            "python scripts/preflight.py --check-git",
+            "http://localhost:8000",
+            "/healthz",
+            "docs/architecture/README.md",
+            ".research/hermes-agent/",
+            "worktree_audit.py --check-staged",
+        ):
+            self.assertIn(marker, content)
+
     def test_deployment_and_backup_docs_exist(self):
         for path in (
             Path("docs/deployment-production.md"),

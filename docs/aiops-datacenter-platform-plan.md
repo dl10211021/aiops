@@ -260,7 +260,7 @@
 
 本轮验证：
 - `npm run build` 通过。
-- `python -W default -m unittest discover -s tests -p "test*.py"` 通过，160 个测试。
+- `python -W default -m unittest discover -s tests -p "test*.py"` 后端全量测试通过。
 - `python scripts/security_scan.py` 通过。
 - `python -m pip check` 通过。
 - GitHub Actions `quality` 工作流已在 `master` 分支通过。
@@ -573,6 +573,6 @@
 - 新增 `docs/worktree-cleanup.md`，定义清理策略、分类、风险项和 rollback。
 - `.gitignore` 补充 `approval_requests.json`、`inspection_runs.json`、`inspection_templates.json`、`verification_runs.json`、`backups/`、`logs/`、`.git_log_frontend.txt`、`frontend/.vite/`。
 - 已停止跟踪 `frontend/node_modules`、运行时数据库/JSON、日志和本地密钥等不应入库文件。
-- CI 已覆盖 `master` 分支，并通过 160 个后端测试、安全扫描、`pip check` 和前端构建。
+- CI 已覆盖 `master` 分支，并通过后端全量测试、安全扫描、`pip check` 和前端构建。
 - 当前审计摘要：无 staged/unstaged/untracked 产品变更。
 - 高风险项：`.fernet.key` 已不在最新树中，但旧提交仍包含历史密钥；生产发布前必须轮换密钥。若要从 Git 历史彻底清除，需要单独执行历史重写和强制推送流程。
