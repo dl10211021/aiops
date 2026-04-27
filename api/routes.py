@@ -1406,7 +1406,7 @@ async def poll_all_sessions_messages():
 async def poll_session_messages(session_id: str):
     """【新功能】前端长轮询获取后台心跳主动推送的消息"""
     if session_id not in ssh_manager.active_sessions:
-        return ResponseModel(status="error", message="Session disconnected")
+        raise HTTPException(status_code=404, detail="Session disconnected")
 
     with ssh_manager._sessions_lock:
         pending = ssh_manager.active_sessions[session_id]["info"].get(
@@ -1432,7 +1432,7 @@ async def get_session_history(session_id: str):
         ]
         return ResponseModel(status="success", data={"messages": chat_history})
     except Exception as e:
-        return ResponseModel(status="error", message=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/session/{session_id}/history", response_model=ResponseModel)
@@ -1444,7 +1444,7 @@ async def delete_session_history(session_id: str):
         memory_db.clear_history(session_id)
         return ResponseModel(status="success", message="会话记录已清空")
     except Exception as e:
-        return ResponseModel(status="error", message=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.put("/session/{session_id}/skills", response_model=ResponseModel)
@@ -1639,7 +1639,7 @@ async def close_ssh_connection(session_id: str):
     """大模型或者前端关闭会话释放资源"""
     success = await asyncio.to_thread(ssh_manager.disconnect, session_id)
     if not success:
-        return ResponseModel(status="error", message="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found")
 
     return ResponseModel(status="success", message="Connection closed safely")
 
@@ -1969,16 +1969,20 @@ async def upload_knowledge_document(file: UploadFile = File(...)):
     import os
     import re
     import uuid
-    from core.rag import kb_manager
-    from core.llm_factory import get_embedding_client_and_model
-
-    client, embedding_model = get_embedding_client_and_model()
 
     original_name = os.path.basename(file.filename or "")
     stem, ext = os.path.splitext(original_name)
     allowed_exts = {".txt", ".md", ".pdf", ".doc", ".docx", ".log"}
     if ext.lower() not in allowed_exts:
-        return ResponseModel(status="error", message=f"不支持的知识库文件类型: {ext or 'unknown'}")
+        raise HTTPException(
+            status_code=415,
+            detail=f"不支持的知识库文件类型: {ext or 'unknown'}",
+        )
+
+    from core.rag import kb_manager
+    from core.llm_factory import get_embedding_client_and_model
+
+    client, embedding_model = get_embedding_client_and_model()
 
     safe_stem = re.sub(r"[^a-zA-Z0-9_.-]+", "_", stem).strip("._-") or "document"
     safe_filename = f"{safe_stem}-{uuid.uuid4().hex[:8]}{ext.lower()}"
@@ -1997,7 +2001,7 @@ async def upload_knowledge_document(file: UploadFile = File(...)):
                     os.remove(file_path)
                 except OSError:
                     pass
-                return ResponseModel(status="error", message="知识库文件超过 50MB 限制")
+                raise HTTPException(status_code=413, detail="知识库文件超过 50MB 限制")
             buffer.write(chunk)
 
     try:
@@ -2005,9 +2009,11 @@ async def upload_knowledge_document(file: UploadFile = File(...)):
         if res["status"] == "success":
             return ResponseModel(status="success", message=res["message"])
         else:
-            return ResponseModel(status="error", message=res["message"])
+            raise HTTPException(status_code=422, detail=res["message"])
+    except HTTPException:
+        raise
     except Exception as e:
-        return ResponseModel(status="error", message=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/knowledge/list", response_model=ResponseModel)
@@ -2019,7 +2025,7 @@ async def list_knowledge_documents():
         files = await kb_manager.list_documents()
         return ResponseModel(status="success", data={"files": files})
     except Exception as e:
-        return ResponseModel(status="error", message=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/knowledge/{filename}", response_model=ResponseModel)
@@ -2032,9 +2038,11 @@ async def delete_knowledge_document(filename: str):
         if res["status"] == "success":
             return ResponseModel(status="success", message=res["message"])
         else:
-            return ResponseModel(status="error", message=res["message"])
+            raise HTTPException(status_code=404, detail=res["message"])
+    except HTTPException:
+        raise
     except Exception as e:
-        return ResponseModel(status="error", message=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/webhook/alert", response_model=ResponseModel)
