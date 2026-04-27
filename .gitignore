@@ -32,9 +32,9 @@ opscore.db
 opscore.db-shm
 opscore.db-wal
 cron_jobs.sqlite
-opscore_lancedb/
-memory/
-data/
+/opscore_lancedb/
+/memory/
+/data/
 
 # Logs
 server_out.log
