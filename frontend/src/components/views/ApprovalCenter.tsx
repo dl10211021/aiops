@@ -173,6 +173,19 @@ function ApprovalRow({
         <pre className="mt-3 max-h-44 overflow-auto rounded-2xl border border-ops-surface0 bg-ops-dark/45 p-3 text-xs leading-relaxed text-ops-subtext">
           {argsText}
         </pre>
+        {approval.execution && (
+          <div className="mt-3 rounded-2xl border border-ops-surface0 bg-ops-dark/30 p-3 text-xs text-ops-subtext">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className={approval.execution.status === 'success' ? 'text-ops-success' : 'text-ops-alert'}>
+                执行结果：{approval.execution.status === 'success' ? '成功' : '异常'}
+              </span>
+              <span className="text-ops-overlay">{approval.execution.completed_at || '-'}</span>
+            </div>
+            <pre className="max-h-28 overflow-auto whitespace-pre-wrap text-[11px] leading-relaxed">
+              {approval.execution.result_preview || '无执行摘要'}
+            </pre>
+          </div>
+        )}
       </div>
       <aside className="rounded-2xl border border-ops-surface0 bg-ops-dark/30 p-4">
         <div className="space-y-2 text-xs text-ops-subtext">

@@ -86,6 +86,33 @@ class TestApprovalQueue(unittest.TestCase):
         self.assertEqual(resolved["operator"], "ops-admin")
         self.assertEqual(resolved["note"], "变更窗口外拒绝")
 
+    def test_record_approval_execution_attaches_redacted_result_summary(self):
+        from core import approval_queue
+
+        store_path = self._store_path("execution")
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path):
+            approval_queue.record_approval_request(
+                tool_call_id="call-exec",
+                session_id="sid-1",
+                tool_name="evolve_skill",
+                args={
+                    "skill_id": "safe-skill",
+                    "file_name": "SKILL.md",
+                    "content": "---\nname: safe-skill\ndescription: demo\n---\n\nbody\n",
+                },
+                reason="AI 试图创建或修改平台技能，必须人工审批并审计。",
+                context={"host": "virtual.local", "asset_type": "virtual", "protocol": "virtual"},
+            )
+            approval_queue.resolve_approval_request("call-exec", approved=True, operator="ops-admin")
+            executed = approval_queue.record_approval_execution(
+                "call-exec",
+                '{"status":"SUCCESS","message":"updated","api_key":"sk-testsecret1234567890"}',
+            )
+
+        self.assertEqual(executed["execution"]["status"], "success")
+        self.assertIn("updated", executed["execution"]["result_preview"])
+        self.assertNotIn("sk-testsecret1234567890", str(executed["execution"]))
+
     def test_pending_approval_expires_to_timeout(self):
         from core import approval_queue
 

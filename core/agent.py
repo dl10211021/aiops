@@ -465,8 +465,10 @@ async def chat_stream_agent(
 
                 # ======== NEW APPROVAL LOGIC ========
                 needs_approval, reason = dispatcher.check_approval_needed(func_name, func_args, context)
+                approval_required = False
                 
                 if needs_approval:
+                    approval_required = True
                     record_tool_approval_request(
                         tool_call_id=tc_id,
                         session_id=session_id,
@@ -535,6 +537,13 @@ async def chat_stream_agent(
                 tool_res = await dispatcher.route_and_execute(
                     func_name, func_args, context
                 )
+                if approval_required:
+                    try:
+                        from core.approval_queue import record_approval_execution
+
+                        record_approval_execution(tc_id, tool_res)
+                    except KeyError:
+                        pass
                 safe_tool_res = redact_json_text(str(tool_res))
 
                 preview = safe_tool_res[:300] + "..." if len(safe_tool_res) > 300 else safe_tool_res

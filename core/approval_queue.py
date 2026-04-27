@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from core.redaction import redact_value
+from core.redaction import redact_json_text, redact_value
 from core.skill_lifecycle import validate_skill_candidate
 
 
@@ -105,6 +105,23 @@ def _approval_metadata(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _tool_result_success(result: str) -> bool:
+    try:
+        parsed = json.loads(result)
+    except Exception:
+        return True
+    if not isinstance(parsed, dict):
+        return True
+    status = str(parsed.get("status") or "").upper()
+    if status in {"ERROR", "FAILED", "BLOCKED"}:
+        return False
+    if parsed.get("success") is False or parsed.get("has_error") is True:
+        return False
+    if parsed.get("error") or parsed.get("reason"):
+        return False
+    return True
+
+
 def _safe_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
     safe_args = redact_value(args or {})
     if tool_name == "evolve_skill" and isinstance(safe_args, dict) and "content" in safe_args:
@@ -116,6 +133,17 @@ def _safe_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
             "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
         }
     return safe_args
+
+
+def _execution_summary(tool_result: Any) -> dict[str, Any]:
+    text = redact_json_text(str(tool_result or ""))
+    return {
+        "status": "success" if _tool_result_success(text) else "error",
+        "result_chars": len(text),
+        "result_preview": _preview_text(text, limit=800),
+        "completed_at": _iso(),
+        "completed_at_ts": _now(),
+    }
 
 
 def _expire_pending(items: list[dict[str, Any]]) -> bool:
@@ -229,6 +257,19 @@ def resolve_approval_request(
             item["note"] = str(note or "")
             item["resolved_at"] = _iso(now)
             item["resolved_at_ts"] = now
+            _write_store(items)
+            return item
+    raise KeyError("审批请求不存在")
+
+
+def record_approval_execution(approval_id: str, tool_result: Any) -> dict[str, Any]:
+    execution = _execution_summary(tool_result)
+    with _LOCK:
+        items = _read_store()
+        for item in items:
+            if item.get("id") != approval_id:
+                continue
+            item["execution"] = execution
             _write_store(items)
             return item
     raise KeyError("审批请求不存在")

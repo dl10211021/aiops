@@ -376,6 +376,13 @@ export interface ApprovalRequest {
       validation?: SkillValidationResult
     }
   }
+  execution?: {
+    status: 'success' | 'error' | string
+    result_chars: number
+    result_preview: string
+    completed_at?: string
+    completed_at_ts?: number
+  }
   reason: string
   context: {
     host?: string
