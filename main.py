@@ -21,9 +21,41 @@ except ImportError:
 # 导入上面写好的 API 路由
 from api.routes import router as ssh_router
 
+
+DEFAULT_OPSCORE_HOST = "0.0.0.0"
+DEFAULT_OPSCORE_PORT = 8000
+LOG_LEVELS = {
+    "CRITICAL": logging.CRITICAL,
+    "ERROR": logging.ERROR,
+    "WARNING": logging.WARNING,
+    "INFO": logging.INFO,
+    "DEBUG": logging.DEBUG,
+}
+
+
+def get_runtime_host() -> str:
+    return os.environ.get("OPSCORE_HOST", DEFAULT_OPSCORE_HOST).strip() or DEFAULT_OPSCORE_HOST
+
+
+def get_runtime_port() -> int:
+    raw_port = os.environ.get("OPSCORE_PORT", str(DEFAULT_OPSCORE_PORT)).strip()
+    try:
+        port = int(raw_port)
+    except ValueError as exc:
+        raise ValueError("OPSCORE_PORT must be an integer") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError("OPSCORE_PORT must be between 1 and 65535")
+    return port
+
+
+def get_log_level() -> int:
+    raw_level = os.environ.get("LOG_LEVEL", "INFO").strip().upper()
+    return LOG_LEVELS.get(raw_level, logging.INFO)
+
+
 # 设置基本日志格式，方便本地控制台看
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+    level=get_log_level(), format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
 # 资产重连状态跟踪，供前端查询
@@ -231,6 +263,9 @@ def index():
 
 if __name__ == "__main__":
     # 启动后端服务
-    print("\n[START] OpsCore Backend is starting on http://localhost:8000")
-    print("[INFO] You can visit http://localhost:8000/docs for API details\n")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    runtime_host = get_runtime_host()
+    runtime_port = get_runtime_port()
+    display_host = "localhost" if runtime_host in {"0.0.0.0", "::"} else runtime_host
+    print(f"\n[START] OpsCore Backend is starting on http://{display_host}:{runtime_port}")
+    print(f"[INFO] You can visit http://{display_host}:{runtime_port}/docs for API details\n")
+    uvicorn.run("main:app", host=runtime_host, port=runtime_port, reload=False)
