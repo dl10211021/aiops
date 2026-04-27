@@ -73,7 +73,7 @@ def main() -> int:
     parser.add_argument(
         "--with-npm-audit",
         action="store_true",
-        help="Also run npm audit. Requires registry access and npm cache write permission.",
+        help="Deprecated; npm audit is part of the default preflight gate.",
     )
     parser.add_argument(
         "--check-git",
@@ -106,6 +106,7 @@ def main() -> int:
         ("python compile", [sys.executable, "-m", "compileall", "core", "connections", "api", "scripts"], ROOT),
         ("secret scan", [sys.executable, "scripts/security_scan.py"], ROOT),
         ("python dependency check", [sys.executable, "-m", "pip", "check"], ROOT),
+        ("frontend npm audit", npm_command("audit", "--audit-level=high"), ROOT / "frontend"),
         ("frontend build", npm_command("run", "build"), ROOT / "frontend"),
     ]
     if args.check_git:
@@ -117,9 +118,6 @@ def main() -> int:
         if args.allow_runtime_removal:
             command.append("--allow-runtime-removal")
         checks.insert(0, ("staged commit gate", command, ROOT))
-    if args.with_npm_audit:
-        checks.append(("frontend npm audit", npm_command("audit", "--audit-level=high"), ROOT / "frontend"))
-
     for label, command, cwd in checks:
         code = run(label, command, cwd)
         if code:

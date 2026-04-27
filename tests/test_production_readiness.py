@@ -92,6 +92,8 @@ class TestProductionReadiness(unittest.TestCase):
             "python compile",
             "secret scan",
             "python dependency check",
+            "frontend npm audit",
+            "--audit-level=high",
             "frontend build",
         ):
             self.assertIn(marker, preflight)
@@ -132,6 +134,7 @@ class TestProductionReadiness(unittest.TestCase):
             "python scripts/ci_backend_tests.py",
             "python scripts/security_scan.py",
             "python -m pip check",
+            "npm audit --audit-level=high",
             "npm run build",
         ):
             self.assertIn(marker, content)
