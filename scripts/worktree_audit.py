@@ -137,7 +137,14 @@ def classify_path(status: str, path: str) -> dict[str, object]:
         normalized.startswith(".agents/")
         or normalized.startswith("tmp")
         or name.startswith(("patch_", "fix_", "update_"))
-        or normalized in {"tmp_history.json", ".git_log_frontend.txt"}
+        or normalized in {
+            "tmp_history.json",
+            ".git_log_frontend.txt",
+            "test_chat.py",
+            "test_chat_backend.py",
+            "test_superpowers.py",
+            "test_vllm.py",
+        }
     ):
         return _with_git_state({
             "path": normalized,

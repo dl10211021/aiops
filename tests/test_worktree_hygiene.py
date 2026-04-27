@@ -80,6 +80,12 @@ class TestWorktreeHygiene(unittest.TestCase):
         self.assertEqual(item["category"], "temporary_artifact")
         self.assertFalse(item["requires_human_review"])
 
+    def test_classifies_root_manual_chat_tests_as_temporary_artifact(self):
+        item = classify_path("??", "test_chat.py")
+
+        self.assertEqual(item["category"], "temporary_artifact")
+        self.assertFalse(item["requires_human_review"])
+
     def test_commit_gate_blocks_staged_sensitive_and_added_dependency_artifacts(self):
         items = [
             classify_path("D ", ".fernet.key"),
