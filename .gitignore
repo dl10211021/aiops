@@ -57,6 +57,7 @@ test_superpowers.py
 test_vllm.py
 .research/
 .agents/
+.worktrees/
 .pytest_cache/
 .ruff_cache/
 frontend/tsconfig.tsbuildinfo
