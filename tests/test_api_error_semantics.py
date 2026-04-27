@@ -152,6 +152,46 @@ class TestApiErrorSemantics(unittest.TestCase):
         self.assertEqual(empty_ctx.exception.status_code, 404)
         self.assertEqual(failing_ctx.exception.status_code, 500)
 
+    def test_legacy_approval_missing_request_returns_404(self):
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(
+                routes.approve_tool_call(
+                    "sid-1",
+                    routes.ToolApprovalRequest(
+                        tool_call_id="missing-approval",
+                        approved=True,
+                    ),
+                )
+            )
+
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_models_empty_result_returns_bad_gateway(self):
+        with patch("core.agent.get_available_models_for_provider", return_value=[]):
+            with self.assertRaises(HTTPException) as ctx:
+                asyncio.run(routes.get_models())
+
+        self.assertEqual(ctx.exception.status_code, 502)
+
+    def test_batch_asset_import_empty_and_internal_errors_use_http_status(self):
+        class FailingMemoryDB:
+            def save_assets_batch(self, _items):
+                raise RuntimeError("sqlite unavailable")
+
+        with self.assertRaises(HTTPException) as empty_ctx:
+            asyncio.run(routes.batch_import_assets([]))
+
+        item = routes.BatchAssetImportItem(
+            host="10.0.0.10",
+            username="root",
+        )
+        with patch("core.memory.memory_db", FailingMemoryDB()):
+            with self.assertRaises(HTTPException) as failing_ctx:
+                asyncio.run(routes.batch_import_assets([item]))
+
+        self.assertEqual(empty_ctx.exception.status_code, 422)
+        self.assertEqual(failing_ctx.exception.status_code, 500)
+
 
 if __name__ == "__main__":
     unittest.main()

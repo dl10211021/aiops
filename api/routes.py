@@ -358,8 +358,9 @@ async def approve_tool_call(session_id: str, req: ToolApprovalRequest):
     except KeyError:
         pass
 
-    return ResponseModel(
-        status="error", message="Pending tool call not found or already processed."
+    raise HTTPException(
+        status_code=404,
+        detail="Pending tool call not found or already processed.",
     )
 
 
@@ -1047,8 +1048,7 @@ async def get_models(provider_id: str | None = None, refresh: bool = False):
     models = await get_available_models_for_provider(provider_id=provider_id, refresh=refresh)
     if models:
         return ResponseModel(status="success", data={"models": models})
-    else:
-        return ResponseModel(status="error", message="Cannot fetch models.")
+    raise HTTPException(status_code=502, detail="Cannot fetch models.")
 
 
 @router.get("/config/llm", response_model=ResponseModel)
@@ -2359,20 +2359,16 @@ async def batch_import_assets(items: list[BatchAssetImportItem]):
     """【#25 新功能】批量导入资产到金库（通讯录），支持 JSON 数组格式"""
     from core.memory import memory_db
 
-    imported = 0
-    errors = []
+    if not items:
+        raise HTTPException(status_code=422, detail="批量导入资产列表不能为空。")
     try:
         await asyncio.to_thread(
             memory_db.save_assets_batch, [item.model_dump() for item in items]
         )
-        imported = len(items)
     except Exception as e:
-        errors.append(str(e))
+        raise HTTPException(status_code=500, detail=f"批量导入资产失败: {e}") from e
 
-    msg = f"成功导入 {imported}/{len(items)} 条资产。"
-    if errors:
-        msg += f" 失败 {len(errors)} 条: {'; '.join(errors[:5])}"
-    return ResponseModel(status="success" if imported > 0 else "error", message=msg)
+    return ResponseModel(status="success", message=f"成功导入 {len(items)}/{len(items)} 条资产。")
 
 
 @router.get("/session/{session_id}/export", response_model=ResponseModel)
