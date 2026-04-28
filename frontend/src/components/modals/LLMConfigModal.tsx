@@ -228,8 +228,7 @@ export default function LLMConfigModal() {
           </div>
 
           {/* 右下侧：保存与获取按钮 */}
-          <div className="p-4 border-t border-ops-surface0 flex justify-betw
-een items-center bg-ops-dark">
+          <div className="p-4 border-t border-ops-surface0 flex justify-between items-center bg-ops-dark">
             <div className="flex items-center gap-3">
               <button onClick={handleTestModels} disabled={testing || saving} className="text-xs bg-ops-surface1 hover:bg-ops-surface2 text-ops-text px-3 py-1.5 rounded transition-colors disabled:opacity-50">
                 {testing ? '⏳ 正在与当前模型供应商通信...' : '🔍 测试当前供应商 & 动态获取模型'}

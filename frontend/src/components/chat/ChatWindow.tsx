@@ -277,8 +277,29 @@ export default function ChatWindow() {
 
   const handleApproval = async (toolCallId: string, approved: boolean, autoAll = false) => {
     if (!currentSessionId) return
+    const action = approved ? '批准' : '拒绝'
+    if (autoAll) {
+      const confirmation = window.prompt('高风险操作：请输入“全部批准”以确认本会话后续高危工具自动放行。', '')
+      if (confirmation !== '全部批准') {
+        addToast('已取消全部批准', 'error')
+        return
+      }
+    } else if (!window.confirm(`确认${action}本次敏感工具调用？`)) {
+      return
+    }
+    const operator = window.prompt('请输入操作人', localStorage.getItem('OPSCORE_OPERATOR') || 'user') || ''
+    if (!operator.trim()) {
+      addToast('操作人不能为空', 'error')
+      return
+    }
+    localStorage.setItem('OPSCORE_OPERATOR', operator.trim())
+    const note = window.prompt(`请输入${action}原因`, autoAll ? '本会话后续同类工具调用由人工确认全部放行' : '') || ''
+    if (approved && !note.trim()) {
+      addToast('批准敏感操作必须填写原因', 'error')
+      return
+    }
     try {
-      await approveToolCall(currentSessionId, toolCallId, approved, autoAll)
+      await approveToolCall(currentSessionId, toolCallId, approved, autoAll, operator.trim(), note.trim())
       updateLastAssistantMessage(currentSessionId, (m) => ({
         ...m, toolApproval: m.toolApproval ? { ...m.toolApproval, resolved: true } : undefined,
       }))

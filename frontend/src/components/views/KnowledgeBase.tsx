@@ -3,6 +3,9 @@ import { useStore } from '@/store'
 import { listKnowledgeDocuments, uploadKnowledgeDocument, deleteKnowledgeDocument } from '@/api/client'
 import type { KnowledgeFile } from '@/types'
 
+const ACCEPTED_KNOWLEDGE_EXTENSIONS = ['.txt', '.md', '.pdf', '.doc', '.docx', '.log']
+const ACCEPTED_KNOWLEDGE_TYPES = ACCEPTED_KNOWLEDGE_EXTENSIONS.join(',')
+
 export default function KnowledgeBase() {
   const addToast = useStore((s) => s.addToast)
   const [files, setFiles] = useState<KnowledgeFile[]>([])
@@ -23,9 +26,17 @@ export default function KnowledgeBase() {
     const fileList = e.target.files
     if (!fileList || fileList.length === 0) return
 
+    const selectedFiles = Array.from(fileList)
+    const rejectedFiles = selectedFiles.filter((file) => !ACCEPTED_KNOWLEDGE_EXTENSIONS.some((ext) => file.name.toLowerCase().endsWith(ext)))
+    if (rejectedFiles.length > 0) {
+      addToast(`暂不支持：${rejectedFiles.map((file) => file.name).join('、')}`, 'error')
+      e.target.value = ''
+      return
+    }
+
     setUploading(true)
     let successCount = 0
-    for (const file of Array.from(fileList)) {
+    for (const file of selectedFiles) {
       try {
         await uploadKnowledgeDocument(file)
         successCount++
@@ -56,7 +67,7 @@ export default function KnowledgeBase() {
     if (name.endsWith('.pdf')) return '📕'
     if (name.endsWith('.md') || name.endsWith('.txt')) return '📄'
     if (name.endsWith('.docx') || name.endsWith('.doc')) return '📘'
-    if (name.endsWith('.csv') || name.endsWith('.xlsx')) return '📊'
+    if (name.endsWith('.log')) return '📋'
     return '📁'
   }
 
@@ -77,7 +88,7 @@ export default function KnowledgeBase() {
               <input
                 type="file"
                 multiple
-                accept=".pdf,.txt,.md,.docx,.csv,.xlsx"
+                accept={ACCEPTED_KNOWLEDGE_TYPES}
                 onChange={handleUpload}
                 className="hidden"
                 disabled={uploading}
@@ -122,7 +133,7 @@ export default function KnowledgeBase() {
           <div className="text-center text-ops-subtext py-20">
             <div className="text-4xl mb-3">📚</div>
             <p>知识库为空</p>
-            <p className="text-xs mt-1">上传 PDF、Markdown、TXT 等文档，AI 将自动学习</p>
+            <p className="text-xs mt-1">上传 PDF、Markdown、TXT、Word 或日志文档，AI 将自动学习</p>
           </div>
         )}
       </div>

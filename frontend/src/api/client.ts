@@ -37,11 +37,16 @@ async function request<T = Record<string, unknown>>(
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...options?.headers },
     ...options,
   })
+  const payload = await res.json().catch(() => null)
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || err.message || res.statusText)
+    const err = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {}
+    throw new Error(String(err.detail || err.message || res.statusText))
   }
-  return res.json()
+  if (payload && typeof payload === 'object' && 'status' in payload && payload.status === 'error') {
+    const err = payload as Record<string, unknown>
+    throw new Error(String(err.message || err.detail || '请求处理失败'))
+  }
+  return payload as ApiResponse<T>
 }
 
 // ---- Sessions ----
@@ -121,10 +126,23 @@ export async function stopChat(sessionId: string) {
   return request(`/session/${sessionId}/stop`, { method: 'POST' })
 }
 
-export async function approveToolCall(sessionId: string, toolCallId: string, approved: boolean, autoApproveAll = false) {
+export async function approveToolCall(
+  sessionId: string,
+  toolCallId: string,
+  approved: boolean,
+  autoApproveAll = false,
+  operator = 'user',
+  note = ''
+) {
   return request(`/session/${sessionId}/approve`, {
     method: 'POST',
-    body: JSON.stringify({ tool_call_id: toolCallId, approved, auto_approve_all: autoApproveAll }),
+    body: JSON.stringify({
+      tool_call_id: toolCallId,
+      approved,
+      auto_approve_all: autoApproveAll,
+      operator,
+      note,
+    }),
   })
 }
 

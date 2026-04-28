@@ -44,10 +44,20 @@ export default function ApprovalCenter() {
 
   const handleDecision = async (approval: ApprovalRequest, approved: boolean) => {
     const action = approved ? '批准' : '拒绝'
+    const operator = window.prompt('请输入操作人', localStorage.getItem('OPSCORE_OPERATOR') || 'user') || ''
+    if (!operator.trim()) {
+      addToast('操作人不能为空', 'error')
+      return
+    }
+    localStorage.setItem('OPSCORE_OPERATOR', operator.trim())
     const note = window.prompt(`请输入${action}原因，可留空`, '') || ''
+    if (approved && !note.trim()) {
+      addToast('批准敏感操作必须填写原因', 'error')
+      return
+    }
     setBusyId(approval.id)
     try {
-      await decideApproval(approval.id, approved, 'ops-admin', note)
+      await decideApproval(approval.id, approved, operator.trim(), note.trim())
       addToast(`审批已${action}`, 'success')
       await load()
     } catch (e: unknown) {
