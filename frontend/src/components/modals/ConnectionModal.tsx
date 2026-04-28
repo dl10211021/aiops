@@ -663,7 +663,7 @@ export default function ConnectionModal() {
                           className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
                       </div>
                       <div>
-                        <label className="text-xs text-ops-subtext">Auth Protocol</label>
+                        <label className="text-xs text-ops-subtext">认证协议</label>
                         <select value={(form.extra_args.v3_auth_protocol as string) || 'MD5'}
                           onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, v3_auth_protocol: e.target.value } })}
                           className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent appearance-none">
@@ -679,7 +679,7 @@ export default function ConnectionModal() {
                       </div>
                       <div className="col-span-1" />
                       <div>
-                        <label className="text-xs text-ops-subtext">Priv Protocol</label>
+                        <label className="text-xs text-ops-subtext">加密协议</label>
                         <select value={(form.extra_args.v3_priv_protocol as string) || 'DES'}
                           onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, v3_priv_protocol: e.target.value } })}
                           className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent appearance-none">

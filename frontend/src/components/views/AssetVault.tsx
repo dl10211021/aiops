@@ -186,7 +186,7 @@ export default function AssetVault() {
       <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-ops-accent">Datacenter Inventory</p>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-ops-accent">数据中心资产台账</p>
             <h1 className="mt-1 text-2xl font-black tracking-tight text-ops-text">资产中心</h1>
             <p className="text-sm text-ops-subtext mt-1">统一管理资产凭据、登录协议、巡检入口和 AI 会话上下文</p>
           </div>
@@ -392,7 +392,7 @@ function VerificationPanel({
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-ops-accent">Protocol Verification</p>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-ops-accent">协议验证</p>
             <h2 className="mt-1 text-xl font-black text-ops-text">{panel.asset.remark || panel.asset.host}</h2>
             <p className="mt-1 text-sm text-ops-subtext">
               {panel.asset.asset_type}/{panel.asset.protocol || panel.asset.asset_type} · {panel.asset.username}@{panel.asset.host}:{panel.asset.port}
@@ -487,7 +487,7 @@ function VerificationPanel({
                   <p className="mt-1 text-xs text-ops-overlay">按资产过滤的定时巡检结果，可直接打开报告详情。</p>
                 </div>
                 <span className="rounded-full bg-ops-surface0 px-2.5 py-1 font-mono text-[11px] text-ops-accent">
-                  {panel.inspectionRuns.length} runs
+                  {panel.inspectionRuns.length} 条记录
                 </span>
               </div>
               <div className="space-y-3">

@@ -85,7 +85,7 @@ export default function ApprovalCenter() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.24em] text-ops-accent">Risk Approval Queue</p>
+            <p className="text-[11px] uppercase tracking-[0.24em] text-ops-accent">风险审批队列</p>
             <h1 className="mt-1 text-3xl font-black tracking-tight text-ops-text">审批中心</h1>
             <p className="mt-1 text-sm text-ops-subtext">所有命中后端审批策略的高危工具调用都会进入这里，可查询、批准、拒绝和审计。</p>
           </div>

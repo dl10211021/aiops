@@ -54,7 +54,7 @@ export default function Dashboard() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.24em] text-ops-accent">AIOps Command Center</p>
+            <p className="text-[11px] uppercase tracking-[0.24em] text-ops-accent">AIOps 运维指挥中心</p>
             <h1 className="mt-1 text-3xl font-black tracking-tight text-ops-text">运维总览</h1>
             <p className="mt-1 text-sm text-ops-subtext">资产、会话、巡检、告警和工具覆盖的统一入口，后续大屏可直接复用这些接口。</p>
           </div>
@@ -73,11 +73,11 @@ export default function Dashboard() {
         )}
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          <MetricCard label="资产总数" value={summary.asset_total || 0} hint="Data center assets" />
-          <MetricCard label="在线会话" value={summary.active_sessions || 0} hint="Active AI sessions" tone="green" />
+          <MetricCard label="资产总数" value={summary.asset_total || 0} hint="数据中心资产" />
+          <MetricCard label="在线会话" value={summary.active_sessions || 0} hint="活跃 AI 会话" tone="green" />
           <MetricCard label="待处理告警" value={alerts?.by_status?.open || alerts?.total || 0} hint={`总告警 ${alerts?.total || 0}`} tone="red" />
           <MetricCard label="巡检任务" value={jobs?.total || 0} hint={`运行 ${jobs?.scheduled || 0} / 暂停 ${jobs?.paused || 0}`} tone="amber" />
-          <MetricCard label="巡检成功率" value={inspectionRuns?.success_rate || 0} suffix="%" hint={`${inspectionRuns?.completed || 0}/${inspectionRuns?.total_runs || 0} runs`} tone="green" />
+          <MetricCard label="巡检成功率" value={inspectionRuns?.success_rate || 0} suffix="%" hint={`${inspectionRuns?.completed || 0}/${inspectionRuns?.total_runs || 0} 次运行`} tone="green" />
         </div>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
@@ -102,7 +102,7 @@ export default function Dashboard() {
               <div className="rounded-2xl border border-ops-surface0 bg-ops-dark/35 p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-ops-text">工具集</span>
-                  <span className="font-mono text-xs text-ops-accent">{enabledToolsets.length} sets / {enabledTools.length} tools</span>
+                  <span className="font-mono text-xs text-ops-accent">{enabledToolsets.length} 组 / {enabledTools.length} 个工具</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {enabledToolsets.slice(0, 8).map((set) => (
@@ -124,7 +124,7 @@ export default function Dashboard() {
                 <h2 className="text-base font-bold text-ops-text">告警趋势</h2>
                 <p className="mt-1 text-xs text-ops-subtext">按日期聚合，后续大屏可替换为实时图表。</p>
               </div>
-              <span className="rounded-full bg-ops-surface0 px-3 py-1 text-xs text-ops-subtext">{trend.length} days</span>
+              <span className="rounded-full bg-ops-surface0 px-3 py-1 text-xs text-ops-subtext">{trend.length} 天</span>
             </div>
             <TrendStrip points={trend} />
           </section>
@@ -137,7 +137,7 @@ export default function Dashboard() {
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-ops-accent/15 font-mono text-xs text-ops-accent">{index + 1}</span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium text-ops-text">{item.host}</div>
-                    <div className="text-[11px] text-ops-overlay">{item.count} alerts</div>
+                    <div className="text-[11px] text-ops-overlay">{item.count} 条告警</div>
                   </div>
                   <span className="font-mono text-sm text-ops-alert">{item.score}</span>
                 </div>
@@ -154,7 +154,7 @@ export default function Dashboard() {
               <p className="mt-1 text-xs text-ops-subtext">来自定时巡检运行记录，可直接用于后续大屏 SLA 指标。</p>
             </div>
             <span className="rounded-full bg-ops-surface0 px-3 py-1 font-mono text-xs text-ops-accent">
-              targets {inspectionRuns?.targets_success || 0}/{inspectionRuns?.targets_total || 0}
+              目标 {inspectionRuns?.targets_success || 0}/{inspectionRuns?.targets_total || 0}
             </span>
           </div>
           <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
@@ -216,8 +216,8 @@ function InspectionTrendStrip({ points }: { points: InspectionTrendPoint[] }) {
             <div className="h-full rounded-full bg-ops-success" style={{ width: `${Math.max(4, Math.min(point.success_rate, 100))}%` }} />
           </div>
           <div className="mt-2 flex justify-between text-[11px] text-ops-overlay">
-            <span>{point.total_runs} runs</span>
-            <span>{Math.round(point.avg_duration_ms)} ms avg</span>
+            <span>{point.total_runs} 次运行</span>
+            <span>平均 {Math.round(point.avg_duration_ms)} ms</span>
           </div>
           <div className="mt-1 h-1 overflow-hidden rounded-full bg-ops-dark">
             <div className="h-full rounded-full bg-ops-accent" style={{ width: `${Math.max(4, Math.min((point.avg_duration_ms / maxDuration) * 100, 100))}%` }} />

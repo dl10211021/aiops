@@ -253,7 +253,7 @@ export default function CronManager() {
       <div className="mx-auto max-w-6xl">
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-ops-accent">Inspection Automation</p>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-ops-accent">自动化巡检</p>
             <h1 className="mt-1 text-2xl font-black tracking-tight text-ops-text">定时巡检</h1>
             <p className="mt-1 text-sm text-ops-subtext">面向资产中心的自动巡检计划，支持模板、通知渠道和立即执行。</p>
           </div>

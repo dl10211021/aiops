@@ -53,7 +53,7 @@ export default function BigScreen() {
       <div className="flex h-full flex-col">
         <header className="mb-5 flex items-start justify-between gap-5">
           <div>
-            <p className="text-[12px] uppercase tracking-[0.34em] text-ops-accent">AIOps Datacenter Wallboard</p>
+            <p className="text-[12px] uppercase tracking-[0.34em] text-ops-accent">数据中心态势墙</p>
             <h1 className="mt-2 text-5xl font-black tracking-tight">数据中心态势大屏</h1>
             <p className="mt-2 text-sm text-ops-subtext">资产、巡检、告警、风险的 60 秒自动刷新视图。</p>
           </div>
@@ -74,8 +74,8 @@ export default function BigScreen() {
               <div className="grid grid-cols-2 gap-4">
                 <BigMetric label="资产总数" value={summary.asset_total || 0} hint="Assets" />
                 <BigMetric label="在线会话" value={summary.active_sessions || 0} hint="Sessions" tone="green" />
-                <BigMetric label="巡检成功率" value={overview?.inspection_runs?.success_rate || 0} suffix="%" hint="Inspection SLA" tone="green" />
-                <BigMetric label="待处理告警" value={overview?.alerts?.by_status?.open || overview?.alerts?.total || 0} hint="Open alerts" tone="red" />
+                <BigMetric label="巡检成功率" value={overview?.inspection_runs?.success_rate || 0} suffix="%" hint="巡检 SLA" tone="green" />
+                <BigMetric label="待处理告警" value={overview?.alerts?.by_status?.open || overview?.alerts?.total || 0} hint="未处理告警" tone="red" />
               </div>
               <Panel title="资产分类覆盖">
                 <Distribution data={overview?.by_category || {}} />
@@ -132,7 +132,7 @@ export default function BigScreen() {
                           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ops-accent/15 font-mono text-sm text-ops-accent">{index + 1}</span>
                           <div className="min-w-0">
                             <div className="truncate text-base font-bold">{item.host}</div>
-                            <div className="text-xs text-ops-overlay">{item.count} alerts</div>
+                            <div className="text-xs text-ops-overlay">{item.count} 条告警</div>
                           </div>
                         </div>
                         <span className="font-mono text-2xl font-black text-ops-alert">{item.score}</span>
