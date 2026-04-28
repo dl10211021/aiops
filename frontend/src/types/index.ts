@@ -441,10 +441,28 @@ export interface SafetyPolicyCategory {
   hard_block_substrings?: string[]
 }
 
+export interface SafetyPolicyRule {
+  id: string
+  name: string
+  domain?: string
+  platform?: string
+  category?: string
+  resource?: string
+  action?: string
+  decision: 'allow' | 'approval' | 'deny'
+  description?: string
+  enabled?: boolean
+  matchers: Array<{
+    type: string
+    value: string
+  }>
+}
+
 export interface SafetyPolicy {
   version: number
   approval_timeout_seconds: number
   readwrite_chat_warning_enabled: boolean
+  rules?: SafetyPolicyRule[]
   categories: Record<string, SafetyPolicyCategory>
 }
 

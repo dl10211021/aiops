@@ -252,6 +252,95 @@ class TestSafetyPolicy(unittest.TestCase):
 
         self.assertEqual(result["decision"], "allow")
 
+    def test_semantic_rule_can_require_approval(self):
+        path = self.policy_path("safety_policy_test_semantic_approval.json")
+        self.cleanup_policy_file(path)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", path):
+                policy = get_safety_policy()
+                policy["rules"] = [
+                    {
+                        "id": "restart-nginx",
+                        "name": "重启 Nginx 需要审批",
+                        "domain": "os",
+                        "platform": "Linux",
+                        "category": "linux",
+                        "decision": "approval",
+                        "enabled": True,
+                        "matchers": [{"type": "command_prefix", "value": "systemctl restart nginx"}],
+                    }
+                ]
+                save_safety_policy(policy)
+                needs_approval, reason = check_approval_needed(
+                    "linux_execute_command",
+                    {"command": "systemctl restart nginx"},
+                    {"allow_modifications": True, "asset_type": "ssh", "protocol": "ssh"},
+                )
+        finally:
+            self.cleanup_policy_file(path)
+
+        self.assertTrue(needs_approval)
+        self.assertIn("重启 Nginx", reason)
+
+    def test_disabled_semantic_rule_is_ignored(self):
+        path = self.policy_path("safety_policy_test_semantic_disabled.json")
+        self.cleanup_policy_file(path)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", path):
+                policy = get_safety_policy()
+                policy["rules"] = [
+                    {
+                        "id": "disabled-deny",
+                        "name": "停用的禁止规则",
+                        "domain": "os",
+                        "platform": "Linux",
+                        "category": "linux",
+                        "decision": "deny",
+                        "enabled": False,
+                        "matchers": [{"type": "contains", "value": "uname"}],
+                    }
+                ]
+                save_safety_policy(policy)
+                result = explain_policy_decision(
+                    "linux_execute_command",
+                    {"command": "uname -a"},
+                    {"allow_modifications": False, "asset_type": "linux"},
+                )
+        finally:
+            self.cleanup_policy_file(path)
+
+        self.assertEqual(result["decision"], "allow")
+
+    def test_semantic_deny_rule_overrides_legacy_allow(self):
+        path = self.policy_path("safety_policy_test_semantic_deny.json")
+        self.cleanup_policy_file(path)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", path):
+                policy = get_safety_policy()
+                policy["rules"] = [
+                    {
+                        "id": "deny-public-bucket",
+                        "name": "禁止公开 Bucket",
+                        "domain": "storage",
+                        "platform": "S3",
+                        "category": "http",
+                        "decision": "deny",
+                        "enabled": True,
+                        "matchers": [{"type": "api_path_contains", "value": "publicAccessBlock"}],
+                    }
+                ]
+                save_safety_policy(policy)
+                result = explain_policy_decision(
+                    "storage_api_request",
+                    {"method": "PUT", "path": "/bucket?publicAccessBlock"},
+                    {"allow_modifications": True, "asset_type": "s3", "protocol": "http_api"},
+                )
+        finally:
+            self.cleanup_policy_file(path)
+
+        self.assertEqual(result["decision"], "deny")
+        self.assertIn("禁止公开 Bucket", result["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

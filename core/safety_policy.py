@@ -13,6 +13,7 @@ DEFAULT_SAFETY_POLICY: dict[str, Any] = {
     "version": 1,
     "approval_timeout_seconds": 300,
     "readwrite_chat_warning_enabled": True,
+    "rules": [],
     "categories": {
         "local": {
             "always_approval": True,
@@ -423,6 +424,45 @@ def _string_list(value: Any) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
+def _normalize_rules(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+
+    rules: list[dict[str, Any]] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            continue
+        decision = str(item.get("decision") or "").strip().lower()
+        if decision not in {"allow", "approval", "deny"}:
+            continue
+        matchers = []
+        for matcher in item.get("matchers", []):
+            if not isinstance(matcher, dict):
+                continue
+            matcher_type = str(matcher.get("type") or "").strip().lower()
+            matcher_value = str(matcher.get("value") or "").strip()
+            if matcher_type and matcher_value:
+                matchers.append({"type": matcher_type, "value": matcher_value})
+        if not matchers:
+            continue
+        rules.append(
+            {
+                "id": str(item.get("id") or f"rule-{index}"),
+                "name": str(item.get("name") or "未命名规则"),
+                "domain": str(item.get("domain") or ""),
+                "platform": str(item.get("platform") or ""),
+                "category": str(item.get("category") or ""),
+                "resource": str(item.get("resource") or ""),
+                "action": str(item.get("action") or ""),
+                "decision": decision,
+                "description": str(item.get("description") or ""),
+                "enabled": bool(item.get("enabled", True)),
+                "matchers": matchers,
+            }
+        )
+    return rules
+
+
 def normalize_safety_policy(policy: dict[str, Any] | None) -> dict[str, Any]:
     normalized = _deep_merge(DEFAULT_SAFETY_POLICY, policy or {})
     normalized["version"] = 1
@@ -434,6 +474,7 @@ def normalize_safety_policy(policy: dict[str, Any] | None) -> dict[str, Any]:
     normalized["readwrite_chat_warning_enabled"] = bool(
         normalized.get("readwrite_chat_warning_enabled", True)
     )
+    normalized["rules"] = _normalize_rules(normalized.get("rules", []))
 
     categories = normalized.setdefault("categories", {})
     for name, cfg in list(categories.items()):
@@ -514,8 +555,105 @@ def _regex_matches(patterns: list[str], text: str) -> bool:
     return False
 
 
+def _semantic_text(tool_call_name: str, args: dict[str, Any]) -> str:
+    parts = [
+        _command_text(tool_call_name, args),
+        str(args.get("method") or ""),
+        str(args.get("path") or ""),
+        str(args.get("oid") or ""),
+    ]
+    return " ".join(part for part in parts if part).strip()
+
+
+def _semantic_matcher_matches(matcher: dict[str, Any], text: str, args: dict[str, Any]) -> bool:
+    matcher_type = str(matcher.get("type") or "").lower()
+    value = str(matcher.get("value") or "").strip()
+    if not value:
+        return False
+
+    lower_text = text.lower()
+    lower_value = value.lower()
+    if matcher_type in {"contains", "substring"}:
+        return lower_value in lower_text
+    if matcher_type in {"prefix", "command_prefix"}:
+        return lower_text.strip().startswith(lower_value)
+    if matcher_type in {"equals", "exact"}:
+        return lower_text.strip() == lower_value
+    if matcher_type in {"http_method", "method"}:
+        return str(args.get("method") or "").upper() == value.upper()
+    if matcher_type in {"api_path_contains", "path_contains"}:
+        return lower_value in str(args.get("path") or "").lower()
+    if matcher_type in {"api_path_prefix", "path_prefix"}:
+        return str(args.get("path") or "").lower().startswith(lower_value)
+    if matcher_type == "regex":
+        try:
+            return bool(re.search(value, text, re.IGNORECASE))
+        except re.error:
+            return False
+    return False
+
+
+def _rule_applies(rule: dict[str, Any], tool_call_name: str, context: dict[str, Any]) -> bool:
+    if not rule.get("enabled", True):
+        return False
+
+    rule_category = str(rule.get("category") or "").strip()
+    tool_category = TOOL_CATEGORY.get(tool_call_name, "")
+    if rule_category and rule_category not in {tool_category, "http_api"}:
+        return False
+
+    platform = str(rule.get("platform") or "").strip().lower()
+    asset_type = str(context.get("asset_type") or "").strip().lower()
+    protocol = str(context.get("protocol") or "").strip().lower()
+    platform_aliases = {
+        "linux": {"linux", "ssh", "kvm"},
+        "windows": {"windows", "winrm"},
+        "kvm host": {"linux", "ssh", "kvm"},
+        "s3": {"s3", "minio", "ceph rgw", "oss", "cos", "obs", "http_api"},
+        "kubernetes": {"k8s", "kubernetes"},
+    }
+    aliases = platform_aliases.get(platform, {platform})
+    observed = {asset_type, protocol}
+    if platform and any(observed):
+        direct_match = any(alias and any(alias in item or item in alias for item in observed if item) for alias in aliases)
+        if not direct_match:
+            return False
+
+    return True
+
+
+def _matched_semantic_rule(
+    policy: dict[str, Any],
+    tool_call_name: str,
+    args: dict[str, Any],
+    context: dict[str, Any],
+    decisions: set[str],
+) -> dict[str, Any] | None:
+    text = _semantic_text(tool_call_name, args)
+    for rule in policy.get("rules", []):
+        if rule.get("decision") not in decisions:
+            continue
+        if not _rule_applies(rule, tool_call_name, context):
+            continue
+        if any(_semantic_matcher_matches(matcher, text, args) for matcher in rule.get("matchers", [])):
+            return rule
+    return None
+
+
+def _rule_reason(rule: dict[str, Any], fallback: str) -> str:
+    name = str(rule.get("name") or "安全策略规则")
+    description = str(rule.get("description") or "").strip()
+    if description:
+        return f"{name}: {description}"
+    return f"{name}: {fallback}"
+
+
 def check_approval_needed(tool_call_name: str, args: dict[str, Any], context: dict[str, Any]) -> tuple[bool, str]:
     policy = get_safety_policy()
+    semantic_rule = _matched_semantic_rule(policy, tool_call_name, args, context, {"approval"})
+    if semantic_rule:
+        return True, _rule_reason(semantic_rule, "该动作需要人工审批。")
+
     cfg = _category(tool_call_name, policy)
     if not cfg:
         return False, ""
@@ -559,6 +697,10 @@ def check_readonly_block(tool_call_name: str, args: dict[str, Any], context: dic
         return False, ""
 
     policy = get_safety_policy()
+    semantic_rule = _matched_semantic_rule(policy, tool_call_name, args, context, {"approval"})
+    if semantic_rule:
+        return True, _rule_reason(semantic_rule, "只读会话不执行需要审批的变更动作。")
+
     cfg = _category(tool_call_name, policy)
     if not cfg:
         return False, ""
@@ -591,6 +733,10 @@ def check_readonly_block(tool_call_name: str, args: dict[str, Any], context: dic
 
 def check_hard_block(tool_call_name: str, args: dict[str, Any]) -> tuple[bool, str]:
     policy = get_safety_policy()
+    semantic_rule = _matched_semantic_rule(policy, tool_call_name, args, {}, {"deny"})
+    if semantic_rule:
+        return True, _rule_reason(semantic_rule, "该动作被配置为禁止执行。")
+
     cfg = _category(tool_call_name, policy)
     command = _command_text(tool_call_name, args).lower()
     for marker in cfg.get("hard_block_substrings", []):

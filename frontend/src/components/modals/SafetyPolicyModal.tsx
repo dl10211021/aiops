@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '@/store'
 import { getSafetyPolicy, testSafetyPolicy, updateSafetyPolicy } from '@/api/client'
-import type { SafetyPolicy, SafetyPolicyCategory, SafetyPolicyTestResult } from '@/types'
+import type { SafetyPolicy, SafetyPolicyCategory, SafetyPolicyRule, SafetyPolicyTestResult } from '@/types'
 
 type CategoryKey = 'linux' | 'windows' | 'sql' | 'redis' | 'http' | 'network' | 'local' | 'skill_change'
 type Decision = 'approval' | 'deny'
@@ -196,28 +196,6 @@ function splitLines(value: string) {
   return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
 }
 
-function uniqueAppend(list: string[] | undefined, item: string) {
-  const next = [...(list || [])]
-  if (!next.some((entry) => entry.toLowerCase() === item.toLowerCase())) next.push(item)
-  return next
-}
-
-function escapeRegex(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function commandPattern(value: string, type: MatcherType) {
-  const trimmed = value.trim()
-  if (type === 'regex') return trimmed
-  if (type === 'prefix') return `^\\s*${escapeRegex(trimmed)}`
-  if (type === 'equals') return `^\\s*${escapeRegex(trimmed)}\\s*$`
-  return escapeRegex(trimmed)
-}
-
-function commandRoot(value: string) {
-  return value.trim().split(/\s+/)[0]?.toLowerCase() || ''
-}
-
 function categoryCount(category: SafetyPolicyCategory | undefined) {
   if (!category) return 0
   return [
@@ -255,6 +233,17 @@ function resolveToolName(domain: DomainDefinition, platform: string) {
   return 'linux_execute_command'
 }
 
+function semanticMatcherType(type: MatcherType) {
+  if (type === 'prefix') return 'command_prefix'
+  if (type === 'equals') return 'equals'
+  if (type === 'http_method') return 'http_method'
+  return type
+}
+
+function createRuleId() {
+  return `rule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 function testResultStyle(decision: string) {
   if (decision === 'allow') return 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
   if (decision === 'approval') return 'border-yellow-300/30 bg-yellow-300/10 text-yellow-200'
@@ -283,6 +272,7 @@ export default function SafetyPolicyModal() {
   const selectedPlatform = activeDomain.platforms.includes(form.platform) ? form.platform : activeDomain.platforms[0]
   const activeCategory = resolveCategory(activeDomain, selectedPlatform)
   const category = policy?.categories?.[activeCategory] || {}
+  const domainRules = (policy?.rules || []).filter((rule) => rule.domain === activeDomain.id)
 
   const totals = useMemo(() => {
     const categories = policy?.categories || {}
@@ -291,6 +281,10 @@ export default function SafetyPolicyModal() {
     Object.values(categories).forEach((item) => {
       approval += (item.approval_patterns?.length || 0) + (item.approval_commands?.length || 0) + (item.approval_methods?.length || 0)
       deny += item.hard_block_substrings?.length || 0
+    })
+    ;(policy?.rules || []).forEach((rule) => {
+      if (rule.decision === 'approval') approval += 1
+      if (rule.decision === 'deny') deny += 1
     })
     return { approval, deny }
   }, [policy])
@@ -324,32 +318,46 @@ export default function SafetyPolicyModal() {
     }
 
     const targetCategory = resolveCategory(activeDomain, selectedPlatform)
-    const current = policy.categories?.[targetCategory] || {}
-    const patch: Partial<SafetyPolicyCategory> = {}
-
-    if (form.decision === 'deny') {
-      patch.hard_block_substrings = uniqueAppend(current.hard_block_substrings, value.toLowerCase())
-    } else if (targetCategory === 'http' || form.matcherType === 'http_method') {
-      const method = form.matcherType === 'http_method' ? value.toUpperCase() : 'POST'
-      patch.approval_methods = uniqueAppend(current.approval_methods, method)
-      patch.readonly_block_methods = uniqueAppend(current.readonly_block_methods, method)
-    } else if (targetCategory === 'redis') {
-      const root = commandRoot(value)
-      if (!root) {
-        addToast('Redis 规则需要填写命令首词', 'error')
-        return
-      }
-      patch.approval_commands = uniqueAppend(current.approval_commands, root)
-      patch.readonly_block_commands = uniqueAppend(current.readonly_block_commands, root)
-    } else {
-      const pattern = commandPattern(value, form.matcherType)
-      patch.approval_patterns = uniqueAppend(current.approval_patterns, pattern)
-      patch.readonly_block_patterns = uniqueAppend(current.readonly_block_patterns, pattern)
+    const matcherType = targetCategory === 'http' && form.matcherType !== 'http_method'
+      ? 'api_path_contains'
+      : semanticMatcherType(form.matcherType)
+    const matcherValue = form.matcherType === 'http_method' ? value.toUpperCase() : value
+    const rule: SafetyPolicyRule = {
+      id: createRuleId(),
+      name: form.name.trim() || `${activeDomain.label} ${form.decision === 'deny' ? '禁止执行' : '需要审批'}规则`,
+      domain: activeDomain.id,
+      platform: selectedPlatform,
+      category: targetCategory,
+      resource: activeDomain.objects,
+      action: form.decision === 'deny' ? '禁止执行' : '需要审批',
+      decision: form.decision,
+      description: form.reason.trim() || `${selectedPlatform} 命中 ${value} 时${form.decision === 'deny' ? '禁止执行' : '需要人工审批'}。`,
+      enabled: true,
+      matchers: [{ type: matcherType, value: matcherValue }],
     }
 
-    updateCategory(targetCategory, patch)
+    setPolicy({
+      ...policy,
+      rules: [...(policy.rules || []), rule],
+    })
     setForm(DEFAULT_FORM)
     addToast(form.decision === 'deny' ? '已加入禁止执行规则，保存后生效' : '已加入审批规则，保存后生效', 'success')
+  }
+
+  const updateSemanticRule = (ruleId: string, patch: Partial<SafetyPolicyRule>) => {
+    if (!policy) return
+    setPolicy({
+      ...policy,
+      rules: (policy.rules || []).map((rule) => (rule.id === ruleId ? { ...rule, ...patch } : rule)),
+    })
+  }
+
+  const removeSemanticRule = (ruleId: string) => {
+    if (!policy) return
+    setPolicy({
+      ...policy,
+      rules: (policy.rules || []).filter((rule) => rule.id !== ruleId),
+    })
   }
 
   const runPolicyTest = async () => {
@@ -526,14 +534,65 @@ export default function SafetyPolicyModal() {
                 ))}
               </section>
 
+              <section className="mb-4 rounded-lg border border-ops-surface0 bg-ops-dark/45">
+                <div className="flex items-center justify-between border-b border-ops-surface0 px-4 py-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-ops-text">已配置动作规则</h4>
+                    <p className="mt-1 text-xs text-ops-subtext">这里展示通过普通表单保存的结构化规则，可直接启停或删除。</p>
+                  </div>
+                  <span className="text-xs text-ops-overlay">{domainRules.length} 条</span>
+                </div>
+                {domainRules.length === 0 ? (
+                  <div className="px-4 py-5 text-sm text-ops-subtext">当前资源域还没有结构化规则，可以在下方新增。</div>
+                ) : (
+                  <div className="divide-y divide-ops-surface0">
+                    {domainRules.map((rule) => (
+                      <div key={rule.id} className="grid grid-cols-[1.3fr_1fr_1fr_auto] items-center gap-3 px-4 py-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${DECISION_LABELS[rule.decision].className}`}>
+                              {DECISION_LABELS[rule.decision].label}
+                            </span>
+                            <span className="truncate text-sm font-medium text-ops-text">{rule.name}</span>
+                          </div>
+                          <p className="mt-1 truncate text-xs text-ops-subtext">{rule.description || '无说明'}</p>
+                        </div>
+                        <span className="text-xs text-ops-subtext">{rule.platform || '-'}</span>
+                        <span className="truncate font-mono text-xs text-ops-overlay">
+                          {rule.matchers?.map((matcher) => `${matcher.type}:${matcher.value}`).join(' / ')}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => updateSemanticRule(rule.id, { enabled: !rule.enabled })}
+                            className={`rounded-md border px-2 py-1 text-xs ${
+                              rule.enabled === false
+                                ? 'border-ops-surface1 text-ops-subtext hover:text-ops-text'
+                                : 'border-emerald-400/30 text-emerald-200 hover:bg-emerald-400/10'
+                            }`}
+                          >
+                            {rule.enabled === false ? '已停用' : '启用中'}
+                          </button>
+                          <button
+                            onClick={() => removeSemanticRule(rule.id)}
+                            className="rounded-md border border-red-400/30 px-2 py-1 text-xs text-red-200 hover:bg-red-400/10"
+                          >
+                            删除
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
               <section className="mb-4 rounded-lg border border-ops-surface0 bg-ops-surface0/30 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <h4 className="text-sm font-semibold text-ops-text">新增规则</h4>
-                    <p className="mt-1 text-xs text-ops-subtext">不用写正则也可以加入审批或禁止执行规则；保存策略后正式生效。</p>
+                    <p className="mt-1 text-xs text-ops-subtext">不用写正则也可以加入审批或禁止执行规则；名称、平台和匹配条件会作为结构化规则保存。</p>
                   </div>
                   <span className="rounded-full border border-ops-surface1 px-2 py-1 text-[11px] text-ops-subtext">
-                    写入 {CATEGORY_LABELS[activeCategory]}
+                    分类 {CATEGORY_LABELS[activeCategory]}
                   </span>
                 </div>
 
@@ -590,6 +649,15 @@ export default function SafetyPolicyModal() {
                       value={form.matcherValue}
                       onChange={(e) => setForm({ ...form, matcherValue: e.target.value })}
                       placeholder={activeCategory === 'http' ? '例如 DELETE 或 /api/v1/namespaces' : '例如 systemctl restart'}
+                      className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+                    />
+                  </label>
+                  <label className="col-span-2">
+                    <span className="text-xs text-ops-subtext">规则说明</span>
+                    <input
+                      value={form.reason}
+                      onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                      placeholder="例如：生产虚拟机删除必须由人工平台操作"
                       className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
                     />
                   </label>
