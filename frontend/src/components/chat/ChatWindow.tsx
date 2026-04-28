@@ -704,88 +704,117 @@ function ToolsetBar({
   onModelChange: (value: string) => void
   onThinkingModeChange: (value: string) => void
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const enabledToolsets = (catalog?.toolsets || []).filter((t) => t.enabled)
   const activeTools = catalog?.active_tools || enabledToolsets.flatMap((t) => t.tools.filter((tool) => tool.enabled).map((tool) => tool.name))
-  const primaryToolsets = enabledToolsets.slice(0, 4)
+  const primaryToolsets = enabledToolsets.slice(0, 3)
   const scope = session.target_scope || catalog?.context?.target_scope || 'asset'
   const scopeValue = session.scope_value || catalog?.context?.host || session.host
+  const targetLabel = session.remark || session.host || '-'
+  const toolsetSummary = primaryToolsets.length > 0
+    ? primaryToolsets.map((toolset) => `${toolset.id} ${toolset.tools.filter((tool) => tool.enabled).length}`).join(' / ')
+    : '读取工具集...'
 
   return (
-    <div className="border-b border-ops-surface0 bg-ops-panel/80 px-4 py-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-ops-accent/30 bg-ops-accent/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-ops-accent">
-              {session.asset_type}/{session.protocol}
-            </span>
-            <span className="text-xs text-ops-subtext">
-              工具集由后端协议注册表生成，凭据从资产中心托管注入
-            </span>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {primaryToolsets.length > 0 ? primaryToolsets.map((toolset) => (
-              <ToolsetPill key={toolset.id} toolset={toolset} />
-            )) : (
-              <span className="text-xs text-ops-overlay">正在读取当前会话工具集...</span>
-            )}
-          </div>
-          <div className="mt-3 grid gap-2 text-[11px] text-ops-subtext md:grid-cols-2 xl:grid-cols-4">
-            <ContextCell label="目标" value={session.remark || session.host || '-'} />
-            <ContextCell label="账号" value={session.user || '-'} />
-            <ContextCell label="范围" value={`${scope}${scopeValue ? ` / ${scopeValue}` : ''}`} />
-            <ContextCell label="标签" value={(session.tags || []).slice(0, 3).join(', ') || '-'} />
-          </div>
+    <div className="border-b border-ops-surface0 bg-ops-panel/80 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="shrink-0 rounded-full border border-ops-accent/30 bg-ops-accent/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ops-accent">
+            {session.asset_type}/{session.protocol}
+          </span>
+          <span className="truncate text-sm font-semibold text-ops-text">{targetLabel}</span>
+          <span className="hidden min-w-0 truncate font-mono text-[11px] text-ops-overlay md:inline">
+            {session.user}@{session.host}
+          </span>
+          <span className="hidden min-w-0 truncate rounded-full border border-ops-surface1/70 bg-ops-dark/45 px-2 py-1 font-mono text-[11px] text-ops-subtext xl:inline">
+            {toolsetSummary}
+          </span>
         </div>
-        <div className="grid w-full shrink-0 gap-2 lg:w-[360px]">
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-[0.18em] text-ops-overlay">模型</span>
-              <select
-                value={modelName}
-                onChange={(e) => onModelChange(e.target.value)}
-                className="w-full rounded-lg border border-ops-surface1 bg-ops-dark/70 px-2 py-2 text-xs text-ops-text outline-none focus:border-ops-accent"
-              >
-                {availableModels.length > 0 ? (
-                  availableModels.map((group) => (
-                    <optgroup key={group.provider_id} label={group.provider_name}>
-                      {group.models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </optgroup>
-                  ))
-                ) : (
-                  <option value={modelName}>{modelName || '使用后端默认模型'}</option>
-                )}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-[0.18em] text-ops-overlay">思考</span>
-              <select
-                value={thinkingMode}
-                onChange={(e) => onThinkingModeChange(e.target.value)}
-                className="w-full rounded-lg border border-ops-surface1 bg-ops-dark/70 px-2 py-2 text-xs text-ops-text outline-none focus:border-ops-accent"
-              >
-                <option value="off">关闭思考</option>
-                <option value="enabled">开启思考</option>
-                <option value="low">低度思考</option>
-                <option value="medium">中度思考</option>
-                <option value="high">高度思考</option>
-              </select>
-            </label>
+
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 rounded-lg border border-ops-surface1 bg-ops-dark/60 px-2 py-1.5">
+            <span className="text-[10px] text-ops-overlay">模型</span>
+            <select
+              value={modelName}
+              onChange={(e) => onModelChange(e.target.value)}
+              className="w-40 bg-transparent text-xs text-ops-text outline-none lg:w-48"
+              title="模型"
+            >
+              {availableModels.length > 0 ? (
+                availableModels.map((group) => (
+                  <optgroup key={group.provider_id} label={group.provider_name}>
+                    {group.models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </optgroup>
+                ))
+              ) : (
+                <option value={modelName}>{modelName || '使用后端默认模型'}</option>
+              )}
+            </select>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-right">
-            <div className="rounded-xl border border-ops-surface1 bg-ops-dark/60 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">工具</div>
-              <div className="font-mono text-sm text-ops-text">{activeTools.length}</div>
-            </div>
-            <div className="rounded-xl border border-ops-surface1 bg-ops-dark/60 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">技能</div>
-              <div className="font-mono text-sm text-ops-text">{session.skills.length}</div>
-            </div>
+
+          <div className="flex items-center gap-1.5 rounded-lg border border-ops-surface1 bg-ops-dark/60 px-2 py-1.5">
+            <span className="text-[10px] text-ops-overlay">思考</span>
+            <select
+              value={thinkingMode}
+              onChange={(e) => onThinkingModeChange(e.target.value)}
+              className="w-24 bg-transparent text-xs text-ops-text outline-none"
+              title="思考模式"
+            >
+              <option value="off">关闭</option>
+              <option value="enabled">开启</option>
+              <option value="low">低度</option>
+              <option value="medium">中度</option>
+              <option value="high">高度</option>
+            </select>
           </div>
+
+          <span className="hidden rounded-lg border border-ops-surface1 bg-ops-dark/45 px-2 py-1.5 text-right text-[11px] text-ops-subtext sm:inline-flex">
+            工具 <span className="ml-1 font-mono text-ops-text">{activeTools.length}</span>
+            <span className="mx-1 text-ops-overlay">/</span>
+            技能 <span className="ml-1 font-mono text-ops-text">{session.skills.length}</span>
+          </span>
+
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((open) => !open)}
+            className="rounded-lg border border-ops-surface1 bg-ops-dark/45 px-2.5 py-1.5 text-xs text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text"
+            aria-expanded={detailsOpen}
+          >
+            {detailsOpen ? '收起' : '详情'}
+          </button>
         </div>
       </div>
-      <div className="mt-3 rounded-xl border border-ops-surface0 bg-ops-dark/35 px-3 py-2 text-xs text-ops-subtext">
-        权限模式以顶部按钮为准；当前条只展示协议工具、模型选择和思考模式。高危工具仍会进入后端审批队列，硬拦截规则会直接拒绝。
-      </div>
+
+      {detailsOpen && (
+        <div className="mt-2 grid gap-2 border-t border-ops-surface0 pt-2 lg:grid-cols-[1fr_360px]">
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              {primaryToolsets.length > 0 ? primaryToolsets.map((toolset) => (
+                <ToolsetPill key={toolset.id} toolset={toolset} />
+              )) : (
+                <span className="text-xs text-ops-overlay">正在读取当前会话工具集...</span>
+              )}
+              {enabledToolsets.length > primaryToolsets.length && (
+                <span className="rounded-full border border-ops-surface1 bg-ops-dark/50 px-2 py-1 text-xs text-ops-overlay">
+                  +{enabledToolsets.length - primaryToolsets.length} 类
+                </span>
+              )}
+            </div>
+            <div className="grid gap-2 text-[11px] text-ops-subtext md:grid-cols-2 xl:grid-cols-4">
+              <ContextCell label="目标" value={targetLabel} />
+              <ContextCell label="账号" value={session.user || '-'} />
+              <ContextCell label="范围" value={`${scope}${scopeValue ? ` / ${scopeValue}` : ''}`} />
+              <ContextCell label="标签" value={(session.tags || []).slice(0, 3).join(', ') || '-'} />
+            </div>
+          </div>
+          <div className="rounded-lg border border-ops-surface0 bg-ops-dark/35 px-3 py-2 text-xs leading-relaxed text-ops-subtext">
+            <div className="font-semibold text-ops-text">安全边界</div>
+            <div className="mt-1">
+              凭据由资产中心托管注入；高危工具进入审批队列，硬拦截规则会直接拒绝。
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
