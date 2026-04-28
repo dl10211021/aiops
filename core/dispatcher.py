@@ -610,6 +610,7 @@ class SkillDispatcher:
                 password,
                 database,
                 sql,
+                extra_args,
             )
 
         elif tool_call_name == "redis_execute_command":

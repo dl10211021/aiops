@@ -183,6 +183,7 @@ class TestDispatcherProtocolTools(unittest.TestCase):
             "managed_secret",
             "ops",
             "SELECT 1",
+            {"db_name": "ops", "db_type": "mysql"},
         )
 
     def test_winrm_command_uses_managed_session_credentials(self):

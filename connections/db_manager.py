@@ -1,7 +1,16 @@
 import json
 import logging
+import os
+import threading
 
 logger = logging.getLogger(__name__)
+
+_ORACLE_CLIENT_LOCK = threading.Lock()
+_ORACLE_CLIENT_INIT_ATTEMPTED = False
+
+
+def _truthy(value) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 class DatabaseExecutor:
@@ -37,12 +46,66 @@ class DatabaseExecutor:
             return {"success": False, "error": str(e)}
 
     @staticmethod
-    def _execute_oracle(host, port, user, password, sid_or_service_name, sql) -> dict:
+    def _init_oracle_client_if_requested(oracledb, extra_args: dict | None) -> None:
+        global _ORACLE_CLIENT_INIT_ATTEMPTED
+        config = extra_args or {}
+        use_thick = _truthy(config.get("use_thick_mode")) or _truthy(
+            os.getenv("OPSCORE_ORACLE_THICK_MODE")
+        )
+        if not use_thick:
+            return
+
+        with _ORACLE_CLIENT_LOCK:
+            if _ORACLE_CLIENT_INIT_ATTEMPTED:
+                return
+            lib_dir = (
+                config.get("oracle_client_lib_dir")
+                or config.get("instant_client_dir")
+                or os.getenv("OPSCORE_ORACLE_CLIENT_LIB_DIR")
+                or None
+            )
+            kwargs = {"lib_dir": str(lib_dir)} if lib_dir else {}
+            oracledb.init_oracle_client(**kwargs)
+            _ORACLE_CLIENT_INIT_ATTEMPTED = True
+
+    @staticmethod
+    def _oracle_dsn(oracledb, host, port, sid_or_service_name, extra_args: dict | None) -> str:
+        config = extra_args or {}
+        sid = config.get("SID") or config.get("sid")
+        service_name = config.get("service_name")
+        connect_type = str(
+            config.get("oracle_connect_type") or config.get("connect_type") or ""
+        ).strip().lower()
+        if sid and not service_name:
+            return oracledb.makedsn(host, int(port), sid=str(sid))
+        if service_name:
+            return oracledb.makedsn(host, int(port), service_name=str(service_name))
+        if sid_or_service_name:
+            if connect_type in {"service", "service_name"}:
+                return oracledb.makedsn(host, int(port), service_name=str(sid_or_service_name))
+            return oracledb.makedsn(host, int(port), sid=str(sid_or_service_name))
+        return f"{host}:{port}/{sid_or_service_name}"
+
+    @staticmethod
+    def _oracle_error_message(error: Exception) -> str:
+        raw = str(error)
+        if "DPY-3015" in raw:
+            return (
+                f"{raw}\n"
+                "OpsCore 当前 Oracle 连接使用 python-oracledb thin mode；目标账号使用了旧版 "
+                "10G password verifier，thin mode 不支持。处理方式：让 DBA 重置该用户密码生成 "
+                "11G/12C verifier，或安装 Oracle Instant Client 并设置 "
+                "OPSCORE_ORACLE_THICK_MODE=true 和 OPSCORE_ORACLE_CLIENT_LIB_DIR。"
+            )
+        return raw
+
+    @staticmethod
+    def _execute_oracle(host, port, user, password, sid_or_service_name, sql, extra_args: dict | None = None) -> dict:
         import oracledb
 
         try:
-            # 开启 python-oracledb 的 Thin 模式，不需要安装任何额外的 Oracle Client 驱动，也不需要 JDBC 繁琐配置。非常牛。
-            dsn = f"{host}:{port}/{sid_or_service_name}"
+            DatabaseExecutor._init_oracle_client_if_requested(oracledb, extra_args)
+            dsn = DatabaseExecutor._oracle_dsn(oracledb, host, port, sid_or_service_name, extra_args)
             # 创建连接
             with oracledb.connect(user=user, password=password, dsn=dsn) as conn:
                 with conn.cursor() as cursor:
@@ -63,7 +126,7 @@ class DatabaseExecutor:
                     }
         except Exception as e:
             logger.error(f"Oracle 连接执行失败: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": DatabaseExecutor._oracle_error_message(e)}
 
     @staticmethod
     def _execute_postgresql(host, port, user, password, database, sql) -> dict:
@@ -134,6 +197,7 @@ class DatabaseExecutor:
         password: str | None,
         database: str,
         sql: str,
+        extra_args: dict | None = None,
     ) -> str:
         """根据数据库类型路由到对应的原生驱动"""
         db_type = db_type.lower()
@@ -141,8 +205,8 @@ class DatabaseExecutor:
             res = self._execute_mysql(host, port, user, password, database, sql)
         elif db_type == "oracle":
             res = self._execute_oracle(
-                host, port, user, password, database, sql
-            )  # database 此处意为 SID
+                host, port, user, password, database, sql, extra_args
+            )  # database 此处意为 SID 或 service_name
         elif db_type in ["pg", "postgresql"]:
             res = self._execute_postgresql(host, port, user, password, database, sql)
         elif db_type in ["mssql", "sqlserver", "sql_server"]:

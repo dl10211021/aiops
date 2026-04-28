@@ -156,6 +156,7 @@ async def _inspect_with_template(
                 info.get("password"),
                 database,
                 step.get("sql") or step.get("command"),
+                extra_args,
             )
             result = {"success": True, "output": result_str, "exit_status": 0}
         elif tool == "redis_execute_command":
@@ -379,6 +380,7 @@ async def _inspect_sql(info: dict[str, Any], asset_type: str, protocol: str) -> 
         info.get("password"),
         database,
         sql,
+        extra_args,
     )
     try:
         result = json.loads(result_str)

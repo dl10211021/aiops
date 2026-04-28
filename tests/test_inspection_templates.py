@@ -434,7 +434,7 @@ class TestInspectionTemplates(unittest.TestCase):
             def __init__(self):
                 self.calls = []
 
-            def execute_query(self, db_type, host, port, user, password, database, sql):
+            def execute_query(self, db_type, host, port, user, password, database, sql, extra_args=None):
                 self.calls.append(
                     {
                         "db_type": db_type,
@@ -444,6 +444,7 @@ class TestInspectionTemplates(unittest.TestCase):
                         "password": password,
                         "database": database,
                         "sql": sql,
+                        "extra_args": extra_args,
                     }
                 )
                 return '{"success": true, "data": []}'

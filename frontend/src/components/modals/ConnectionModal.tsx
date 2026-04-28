@@ -488,7 +488,8 @@ export default function ConnectionModal() {
                       extra_args: {
                         category: newCat,
                         sub_type: firstSub.id,
-                        ...(newCat === 'db' ? { db_type: firstSub.id } : {})
+                        ...(newCat === 'db' ? { db_type: firstSub.id } : {}),
+                        ...(firstSub.id === 'oracle' ? { oracle_connect_type: 'sid' } : {}),
                       }
                     });
                     setSelectedSkills(autoSelectSkills(firstSub.id, skills));
@@ -515,7 +516,8 @@ export default function ConnectionModal() {
                         extra_args: {
                           category: form.category,
                           sub_type: newSubId,
-                          ...(form.category === 'db' ? { db_type: newSubId } : {})
+                          ...(form.category === 'db' ? { db_type: newSubId } : {}),
+                          ...(newSubId === 'oracle' ? { oracle_connect_type: 'sid' } : {}),
                         }
                       });
                       setSelectedSkills(autoSelectSkills(newSubId, skills));
@@ -591,7 +593,9 @@ export default function ConnectionModal() {
               {form.category === 'db' && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-ops-subtext">Database Name / SID</label>
+                    <label className="text-xs text-ops-subtext">
+                      {form.sub_type === 'oracle' ? 'SID / Service Name' : 'Database Name / SID'}
+                    </label>
                     <input value={(form.extra_args.db_name as string) || (form.extra_args.database as string) || ''}
                       onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, db_name: e.target.value } })}
                       className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
@@ -604,6 +608,52 @@ export default function ConnectionModal() {
                       Use SSL
                     </label>
                   </div>
+                  {form.sub_type === 'oracle' && (
+                    <>
+                      <div>
+                        <label className="text-xs text-ops-subtext">Oracle 连接类型</label>
+                        <select
+                          value={(form.extra_args.oracle_connect_type as string) || (form.extra_args.connect_type as string) || 'sid'}
+                          onChange={(e) => setForm({
+                            ...form,
+                            extra_args: { ...form.extra_args, oracle_connect_type: e.target.value },
+                          })}
+                          className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent appearance-none"
+                        >
+                          <option value="sid">SID</option>
+                          <option value="service_name">Service Name</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center mt-6">
+                        <label className="flex items-center gap-2 text-sm text-ops-subtext cursor-pointer hover:text-ops-text">
+                          <input
+                            type="checkbox"
+                            checked={!!form.extra_args.use_thick_mode}
+                            onChange={(e) => setForm({
+                              ...form,
+                              extra_args: { ...form.extra_args, use_thick_mode: e.target.checked },
+                            })}
+                            className="accent-ops-accent"
+                          />
+                          Thick Mode
+                        </label>
+                      </div>
+                      {!!form.extra_args.use_thick_mode && (
+                        <div className="col-span-2">
+                          <label className="text-xs text-ops-subtext">Oracle Instant Client 目录</label>
+                          <input
+                            value={(form.extra_args.oracle_client_lib_dir as string) || ''}
+                            onChange={(e) => setForm({
+                              ...form,
+                              extra_args: { ...form.extra_args, oracle_client_lib_dir: e.target.value },
+                            })}
+                            className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent"
+                            placeholder="例如 C:\\oracle\\instantclient_21_13，已配置环境变量时可留空"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
 

@@ -672,6 +672,7 @@ async def test_connection(req: ConnectionRequest):
             restored_password,
             database,
             sql,
+            req.extra_args,
         )
         import json
 

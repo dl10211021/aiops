@@ -287,6 +287,7 @@ async def run_protocol_probe(asset: dict[str, Any]) -> dict[str, Any]:
             asset.get("password"),
             _database_name(asset, safe_asset),
             sql,
+            extra_args,
         )
         try:
             parsed = json.loads(result_text)
