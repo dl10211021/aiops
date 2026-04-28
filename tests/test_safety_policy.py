@@ -222,7 +222,7 @@ class TestSafetyPolicy(unittest.TestCase):
         self.assertEqual(result["label"], "禁止执行")
         self.assertTrue(result["checks"][0]["matched"])
 
-    def test_explain_policy_decision_marks_readonly_change_as_approval(self):
+    def test_explain_policy_decision_marks_readonly_change_as_block(self):
         path = self.policy_path("safety_policy_test_explain_approval.json")
         self.cleanup_policy_file(path)
         try:
@@ -235,8 +235,8 @@ class TestSafetyPolicy(unittest.TestCase):
         finally:
             self.cleanup_policy_file(path)
 
-        self.assertEqual(result["decision"], "approval")
-        self.assertIn("读写会话", result["reason"])
+        self.assertEqual(result["decision"], "readonly_block")
+        self.assertIn("只读安全模式", result["reason"])
 
     def test_explain_policy_decision_allows_safe_readonly_command(self):
         path = self.policy_path("safety_policy_test_explain_allow.json")

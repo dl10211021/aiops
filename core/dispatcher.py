@@ -348,6 +348,9 @@ class SkillDispatcher:
         if session_id and session_id in ssh_manager.active_sessions:
             if ssh_manager.active_sessions[session_id]["info"].get("auto_approve_all", False):
                 return False, ""
+        readonly_blocked, _ = check_readonly_block(tool_call_name, args, context)
+        if readonly_blocked:
+            return False, ""
         return policy_check_approval_needed(tool_call_name, args, context)
 
     def get_available_tools(

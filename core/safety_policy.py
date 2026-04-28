@@ -897,15 +897,6 @@ def explain_policy_decision(
         ]
     )
 
-    if readonly_blocked and needs_approval:
-        return {
-            "decision": "approval",
-            "label": "需要审批",
-            "mode": mode,
-            "reason": f"{readonly_reason}；读写会话中会进入人工审批。",
-            "checks": checks,
-        }
-
     if readonly_blocked:
         return {
             "decision": "readonly_block",

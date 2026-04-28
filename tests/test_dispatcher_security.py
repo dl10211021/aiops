@@ -1,6 +1,7 @@
 import os
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from core.dispatcher import SkillDispatcher
 
@@ -36,6 +37,31 @@ class TestDispatcherSecurity(unittest.TestCase):
 
         self.assertFalse(allowed)
         self.assertIn("Shell", reason)
+
+    def test_readonly_blocked_commands_do_not_request_approval(self):
+        policy_path = str(Path.cwd() / "dispatcher_security_policy_missing.json")
+        if os.path.exists(policy_path):
+            os.remove(policy_path)
+
+        dispatcher = SkillDispatcher.__new__(SkillDispatcher)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", policy_path):
+                readonly_needs_approval, _ = dispatcher.check_approval_needed(
+                    "linux_execute_command",
+                    {"command": "systemctl restart nginx"},
+                    {"allow_modifications": False},
+                )
+                readwrite_needs_approval, _ = dispatcher.check_approval_needed(
+                    "linux_execute_command",
+                    {"command": "systemctl restart nginx"},
+                    {"allow_modifications": True},
+                )
+        finally:
+            if os.path.exists(policy_path):
+                os.remove(policy_path)
+
+        self.assertFalse(readonly_needs_approval)
+        self.assertTrue(readwrite_needs_approval)
 
 
 if __name__ == "__main__":
