@@ -375,6 +375,14 @@ export interface ApprovalRequest {
       content_preview: string
       validation?: SkillValidationResult
     }
+    skill_rollback?: {
+      type: string
+      skill_id: string
+      file_name: string
+      version_id: string
+      target_file?: string
+      version_file?: string
+    }
   }
   execution?: {
     status: 'success' | 'error' | string

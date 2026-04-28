@@ -1001,6 +1001,7 @@ class MigrateRequest(BaseModel):
 class SkillRollbackRequest(BaseModel):
     file_name: str = "SKILL.md"
     version_id: str
+    approval_id: str | None = None
 
 
 class SkillValidationRequest(BaseModel):
@@ -1102,6 +1103,11 @@ async def list_skill_versions(skill_id: str, file_name: str = "SKILL.md"):
 async def rollback_skill_version(skill_id: str, req: SkillRollbackRequest):
     """将 my_custom_skills 中的技能文件回滚到指定备份版本。"""
     from core.dispatcher import dispatcher
+    from core.approval_queue import (
+        get_approval_request,
+        record_approval_execution,
+        record_approval_request,
+    )
 
     target_file = resolve_custom_skill_file(skill_id, req.file_name)
     version_file = resolve_custom_skill_version_file(skill_id, req.version_id)
@@ -1120,13 +1126,64 @@ async def rollback_skill_version(skill_id: str, req: SkillRollbackRequest):
         if not valid:
             raise HTTPException(status_code=422, detail=reason)
 
+    if not req.approval_id:
+        approval = record_approval_request(
+            tool_call_id=f"rollback-{skill_id}-{int(time.time_ns())}",
+            session_id="api",
+            tool_name="rollback_skill",
+            args={
+                "skill_id": skill_id,
+                "file_name": target_file.name,
+                "version_id": version_file.name,
+                "target_file": str(target_file),
+                "version_file": str(version_file),
+            },
+            reason="用户请求回滚平台技能文件，必须人工审批并审计。",
+            context={"asset_type": "platform", "protocol": "api", "trigger_source": "skills.rollback_api"},
+        )
+        return ResponseModel(
+            status="pending_approval",
+            message="技能回滚已进入审批队列，审批通过后请携带 approval_id 再次提交。",
+            data={"approval": approval, "approval_id": approval["id"]},
+        )
+
+    approval = get_approval_request(req.approval_id)
+    if not approval:
+        raise HTTPException(status_code=404, detail="审批请求不存在。")
+    if approval.get("tool_name") != "rollback_skill":
+        raise HTTPException(status_code=422, detail="审批请求类型不匹配。")
+    if approval.get("status") != "approved":
+        raise HTTPException(status_code=409, detail="技能回滚审批尚未批准。")
+    if approval.get("execution"):
+        raise HTTPException(status_code=409, detail="该技能回滚审批已经执行过。")
+    approved_args = approval.get("args") or {}
+    if (
+        approved_args.get("skill_id") != skill_id
+        or approved_args.get("file_name") != target_file.name
+        or approved_args.get("version_id") != version_file.name
+    ):
+        raise HTTPException(status_code=409, detail="审批请求与本次回滚目标不匹配。")
+
     backup_path = dispatcher._backup_existing_skill_file(str(target_file))
     atomic_replace_bytes(target_file, content)
     dispatcher.refresh_skills(force=True)
+    result = {
+        "status": "SUCCESS",
+        "skill_id": skill_id,
+        "file_name": req.file_name,
+        "file_path": str(target_file),
+        "backup_path": backup_path,
+        "version_id": req.version_id,
+        "restored_version_path": str(version_file),
+    }
+    try:
+        record_approval_execution(req.approval_id, json.dumps(result, ensure_ascii=False))
+    except KeyError:
+        pass
     return ResponseModel(
         status="success",
         message=f"技能文件 {req.file_name} 已回滚到版本 {req.version_id}",
-        data={"backup_path": backup_path, "version_id": req.version_id},
+        data=result,
     )
 
 

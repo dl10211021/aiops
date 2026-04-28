@@ -99,9 +99,22 @@ def _skill_change_metadata(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _skill_rollback_metadata(args: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "skill_rollback",
+        "skill_id": str((args or {}).get("skill_id") or "").strip(),
+        "file_name": str((args or {}).get("file_name") or "").strip(),
+        "version_id": str((args or {}).get("version_id") or "").strip(),
+        "target_file": redact_value(str((args or {}).get("target_file") or "")),
+        "version_file": redact_value(str((args or {}).get("version_file") or "")),
+    }
+
+
 def _approval_metadata(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
     if tool_name == "evolve_skill":
         return {"skill_change": _skill_change_metadata(args)}
+    if tool_name == "rollback_skill":
+        return {"skill_rollback": _skill_rollback_metadata(args)}
     return {}
 
 
@@ -130,7 +143,7 @@ def _execution_artifacts(result: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         return {}
     artifacts = {}
-    for key in ("skill_id", "file_name", "file_path", "backup_path", "version_id"):
+    for key in ("skill_id", "file_name", "file_path", "backup_path", "version_id", "restored_version_path"):
         value = parsed.get(key)
         if value is not None:
             artifacts[key] = redact_value(value)

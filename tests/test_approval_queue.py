@@ -61,6 +61,31 @@ class TestApprovalQueue(unittest.TestCase):
         self.assertNotEqual(request["args"]["content"], content)
         self.assertNotIn("line\n" * 80, str(request))
 
+    def test_rollback_skill_approval_records_target_metadata(self):
+        from core import approval_queue
+
+        store_path = self._store_path("rollback")
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path):
+            request = approval_queue.record_approval_request(
+                tool_call_id="call-rollback",
+                session_id="api",
+                tool_name="rollback_skill",
+                args={
+                    "skill_id": "safe-skill",
+                    "file_name": "SKILL.md",
+                    "version_id": "SKILL.md.1.bak",
+                    "target_file": "D:/tmp/safe-skill/SKILL.md",
+                    "version_file": "D:/tmp/safe-skill/.versions/SKILL.md.1.bak",
+                },
+                reason="用户请求回滚平台技能文件，必须人工审批并审计。",
+                context={"asset_type": "platform", "protocol": "api"},
+            )
+
+        rollback = request["metadata"]["skill_rollback"]
+        self.assertEqual(rollback["skill_id"], "safe-skill")
+        self.assertEqual(rollback["file_name"], "SKILL.md")
+        self.assertEqual(rollback["version_id"], "SKILL.md.1.bak")
+
     def test_resolve_approval_request_records_decision(self):
         from core import approval_queue
 

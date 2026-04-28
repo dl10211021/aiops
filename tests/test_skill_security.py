@@ -375,8 +375,11 @@ class TestSkillSecurity(unittest.TestCase):
         self.assertEqual(versions[0]["id"], "SKILL.md.20260428010101.1.bak")
 
     def test_rollback_skill_version_restores_backup_and_versions_current_file(self):
+        from core import approval_queue
+
         with tempfile.TemporaryDirectory() as tmp:
             target_base = Path(tmp) / "custom"
+            store_path = Path(tmp) / "approvals.json"
             skill_dir = target_base / "safe-skill"
             versions_dir = skill_dir / ".versions"
             versions_dir.mkdir(parents=True)
@@ -388,9 +391,10 @@ class TestSkillSecurity(unittest.TestCase):
 
             with (
                 patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path),
                 patch("core.dispatcher.dispatcher.refresh_skills"),
             ):
-                response = asyncio.run(
+                pending = asyncio.run(
                     routes.rollback_skill_version(
                         "safe-skill",
                         routes.SkillRollbackRequest(
@@ -399,12 +403,105 @@ class TestSkillSecurity(unittest.TestCase):
                         ),
                     )
                 )
+                self.assertEqual(pending.status, "pending_approval")
+                self.assertEqual((skill_dir / "SKILL.md").read_text(encoding="utf-8"), current)
+                approval_queue.resolve_approval_request(
+                    pending.data["approval_id"],
+                    approved=True,
+                    operator="ops-admin",
+                )
+                response = asyncio.run(
+                    routes.rollback_skill_version(
+                        "safe-skill",
+                        routes.SkillRollbackRequest(
+                            file_name="SKILL.md",
+                            version_id=version_id,
+                            approval_id=pending.data["approval_id"],
+                        ),
+                    )
+                )
+                approval = approval_queue.get_approval_request(pending.data["approval_id"])
+                with self.assertRaises(HTTPException) as repeat_ctx:
+                    asyncio.run(
+                        routes.rollback_skill_version(
+                            "safe-skill",
+                            routes.SkillRollbackRequest(
+                                file_name="SKILL.md",
+                                version_id=version_id,
+                                approval_id=pending.data["approval_id"],
+                            ),
+                        )
+                    )
 
             backups = list(versions_dir.glob("SKILL.md.*.bak"))
             self.assertEqual(response.status, "success")
             self.assertEqual((skill_dir / "SKILL.md").read_text(encoding="utf-8"), previous)
+            self.assertEqual(response.data["file_path"], str(skill_dir / "SKILL.md"))
+            self.assertEqual(response.data["restored_version_path"], str(versions_dir / version_id))
+            self.assertEqual(approval["execution"]["artifacts"]["version_id"], version_id)
+            self.assertEqual(repeat_ctx.exception.status_code, 409)
             self.assertGreaterEqual(len(backups), 2)
             self.assertTrue(any(path.read_text(encoding="utf-8") == current for path in backups))
+
+    def test_rollback_skill_version_requires_approved_matching_request(self):
+        from core import approval_queue
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target_base = Path(tmp) / "custom"
+            store_path = Path(tmp) / "approvals.json"
+            skill_dir = target_base / "safe-skill"
+            versions_dir = skill_dir / ".versions"
+            versions_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text(
+                "---\nname: safe-skill\ndescription: current\n---\n\ncurrent\n",
+                encoding="utf-8",
+            )
+            version_id = "SKILL.md.20260428010101.1.bak"
+            (versions_dir / version_id).write_text(
+                "---\nname: safe-skill\ndescription: previous\n---\n\nprevious\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path),
+            ):
+                pending = asyncio.run(
+                    routes.rollback_skill_version(
+                        "safe-skill",
+                        routes.SkillRollbackRequest(file_name="SKILL.md", version_id=version_id),
+                    )
+                )
+                with self.assertRaises(HTTPException) as pending_ctx:
+                    asyncio.run(
+                        routes.rollback_skill_version(
+                            "safe-skill",
+                            routes.SkillRollbackRequest(
+                                file_name="SKILL.md",
+                                version_id=version_id,
+                                approval_id=pending.data["approval_id"],
+                            ),
+                        )
+                    )
+                approval_queue.resolve_approval_request(
+                    pending.data["approval_id"],
+                    approved=True,
+                    operator="ops-admin",
+                )
+                with self.assertRaises(HTTPException) as mismatch_ctx:
+                    asyncio.run(
+                        routes.rollback_skill_version(
+                            "safe-skill",
+                            routes.SkillRollbackRequest(
+                                file_name="notes.md",
+                                version_id=version_id,
+                                approval_id=pending.data["approval_id"],
+                            ),
+                        )
+                    )
+
+        self.assertEqual(pending_ctx.exception.status_code, 409)
+        self.assertEqual(mismatch_ctx.exception.status_code, 409)
 
     def test_rollback_skill_version_rejects_traversal_version_id(self):
         with tempfile.TemporaryDirectory() as tmp:

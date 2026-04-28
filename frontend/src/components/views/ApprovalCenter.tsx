@@ -143,6 +143,7 @@ function ApprovalRow({
   const argsText = JSON.stringify(approval.args || {}, null, 2)
   const context = approval.context || {}
   const skillChange = approval.metadata?.skill_change
+  const skillRollback = approval.metadata?.skill_rollback
   return (
     <article className="grid gap-4 p-5 xl:grid-cols-[1fr_360px]">
       <div className="min-w-0">
@@ -168,6 +169,16 @@ function ApprovalRow({
             <pre className="mt-3 max-h-36 overflow-auto whitespace-pre-wrap rounded-xl bg-ops-dark/45 p-3 text-[11px] leading-relaxed">
               {skillChange.content_preview || '无内容预览'}
             </pre>
+          </div>
+        )}
+        {skillRollback && (
+          <div className="mt-3 rounded-2xl border border-ops-accent/25 bg-ops-accent/5 p-3 text-xs text-ops-subtext">
+            <div className="grid gap-2 md:grid-cols-2">
+              <Info label="回滚技能" value={skillRollback.skill_id || '-'} />
+              <Info label="目标文件" value={skillRollback.file_name || '-'} />
+              <Info label="回滚版本" value={skillRollback.version_id || '-'} />
+              <Info label="版本路径" value={skillRollback.version_file || '-'} />
+            </div>
           </div>
         )}
         <pre className="mt-3 max-h-44 overflow-auto rounded-2xl border border-ops-surface0 bg-ops-dark/45 p-3 text-xs leading-relaxed text-ops-subtext">
