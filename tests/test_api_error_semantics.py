@@ -167,6 +167,68 @@ class TestApiErrorSemantics(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
 
+    def test_user_interaction_response_resolves_pending_future(self):
+        from core.dispatcher import dispatcher
+
+        async def exercise():
+            future = asyncio.Future()
+            dispatcher.pending_interactions["interaction-1"] = {
+                "future": future,
+                "session_id": "sid-1",
+            }
+            try:
+                response = await routes.respond_user_interaction(
+                    "sid-1",
+                    routes.UserInteractionResponseRequest(
+                        request_id="interaction-1",
+                        value="blue team",
+                        label="蓝队方案",
+                    ),
+                )
+                self.assertEqual(response.status, "success")
+                self.assertEqual(future.result()["value"], "blue team")
+                self.assertEqual(future.result()["label"], "蓝队方案")
+            finally:
+                dispatcher.pending_interactions.pop("interaction-1", None)
+
+        asyncio.run(exercise())
+
+    def test_user_interaction_missing_request_returns_404(self):
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(
+                routes.respond_user_interaction(
+                    "sid-1",
+                    routes.UserInteractionResponseRequest(request_id="missing-interaction"),
+                )
+            )
+
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_user_interaction_wrong_session_returns_404(self):
+        from core.dispatcher import dispatcher
+
+        async def exercise():
+            future = asyncio.Future()
+            dispatcher.pending_interactions["interaction-2"] = {
+                "future": future,
+                "session_id": "sid-owner",
+            }
+            try:
+                with self.assertRaises(HTTPException) as ctx:
+                    await routes.respond_user_interaction(
+                        "sid-other",
+                        routes.UserInteractionResponseRequest(
+                            request_id="interaction-2",
+                            value="should-not-submit",
+                        ),
+                    )
+                self.assertEqual(ctx.exception.status_code, 404)
+                self.assertFalse(future.done())
+            finally:
+                dispatcher.pending_interactions.pop("interaction-2", None)
+
+        asyncio.run(exercise())
+
     def test_safety_policy_test_endpoint_previews_without_execution(self):
         response = asyncio.run(
             routes.test_safety_policy_endpoint(

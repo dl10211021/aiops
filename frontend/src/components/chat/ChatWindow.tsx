@@ -1,10 +1,10 @@
 import { useRef, useEffect, useState } from 'react'
 import { useStore } from '@/store'
-import { streamChat, stopChat, approveToolCall, getSafetyPolicy, getAvailableModels, getSessionTools, getSessionCommands } from '@/api/client'
+import { streamChat, stopChat, approveToolCall, respondUserInteraction, getSafetyPolicy, getAvailableModels, getSessionTools, getSessionCommands } from '@/api/client'
 import type { ModelGroup } from '@/api/client'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import type { ChatMessage, ExecTraceItem, Session, SessionToolCatalog, ToolApproval, ToolsetInfo } from '@/types'
+import type { ChatMessage, ExecTraceItem, Session, SessionToolCatalog, ToolApproval, ToolsetInfo, UserInteractionRequest } from '@/types'
 
 // Configure marked for async
 marked.setOptions({ breaks: true, gfm: true })
@@ -243,6 +243,33 @@ export default function ChatWindow() {
                 break
               }
 
+              case 'user_interaction_request': {
+                const options = Array.isArray(data.options)
+                  ? data.options
+                    .filter((item: unknown) => item && typeof item === 'object')
+                    .map((item: Record<string, unknown>) => ({
+                      label: String(item.label || item.value || '选项'),
+                      value: String(item.value || item.label || ''),
+                      description: item.description ? String(item.description) : undefined,
+                    }))
+                  : []
+                const interaction: UserInteractionRequest = {
+                  requestId: String(data.request_id || ''),
+                  prompt: String(data.prompt || '请补充信息'),
+                  inputType: String(data.input_type || 'text'),
+                  options,
+                  placeholder: String(data.placeholder || ''),
+                  required: data.required !== false,
+                  timeoutSeconds: Number(data.timeout_seconds || 300),
+                  resolved: false,
+                }
+                updateLastAssistantMessage(sid, (m) => ({
+                  ...m,
+                  userInteraction: interaction,
+                }))
+                break
+              }
+
               case 'chunk':
                 accumulatedMd += data.content || ''
                 updateLastAssistantMessage(sid, (m) => ({
@@ -279,6 +306,25 @@ export default function ChatWindow() {
     } finally {
       updateSession(currentSessionId, { isStreaming: false })
       setChatController(null)
+    }
+  }
+
+  const handleUserInteraction = async (requestId: string, value: string, label = '') => {
+    if (!currentSessionId) return
+    try {
+      await respondUserInteraction(currentSessionId, requestId, value, label)
+      updateLastAssistantMessage(currentSessionId, (m) => {
+        const interaction = m.userInteraction
+        const displayValue = interaction?.inputType === 'password' && value ? '******' : value
+        return {
+          ...m,
+          userInteraction: interaction
+            ? { ...interaction, resolved: true, value: displayValue, label }
+            : undefined,
+        }
+      })
+    } catch {
+      addToast('交互输入提交失败，可能已超时', 'error')
     }
   }
 
@@ -471,6 +517,7 @@ export default function ChatWindow() {
             key={msg.id}
             message={msg}
             onApproval={handleApproval}
+            onInteraction={handleUserInteraction}
           />
         ))}
       </div>
@@ -777,9 +824,10 @@ function ToolsetPill({ toolset }: { toolset: ToolsetInfo }) {
 
 // --- Message Bubble Sub-component ---
 
-function MessageBubble({ message, onApproval }: {
+function MessageBubble({ message, onApproval, onInteraction }: {
   message: ChatMessage
   onApproval: (toolCallId: string, approved: boolean, autoAll?: boolean) => void
+  onInteraction: (requestId: string, value: string, label?: string) => void
 }) {
   const [traceOpen, setTraceOpen] = useState(false)
 
@@ -806,6 +854,7 @@ function MessageBubble({ message, onApproval }: {
   // Assistant message
   const hasTrace = message.execTrace && message.execTrace.length > 0
   const approval = message.toolApproval
+  const interaction = message.userInteraction
   const assistantTime = new Date(message.timestamp).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
@@ -862,6 +911,10 @@ function MessageBubble({ message, onApproval }: {
           </div>
         )}
 
+        {interaction && (
+          <UserInteractionCard interaction={interaction} onSubmit={onInteraction} />
+        )}
+
         {/* Message content */}
         {message.content ? (
           <article className="w-full overflow-hidden rounded-xl border border-ops-surface1/55 bg-ops-panel/85 shadow-[0_12px_40px_rgba(0,0,0,0.18)]">
@@ -888,6 +941,93 @@ function MessageBubble({ message, onApproval }: {
         )}
       </div>
     </div>
+  )
+}
+
+function UserInteractionCard({
+  interaction,
+  onSubmit,
+}: {
+  interaction: UserInteractionRequest
+  onSubmit: (requestId: string, value: string, label?: string) => void
+}) {
+  const [value, setValue] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const isPassword = interaction.inputType === 'password'
+  const isChoice = interaction.inputType === 'choice'
+  const options = interaction.options || []
+
+  const submitValue = async (nextValue: string, label = '') => {
+    if (interaction.resolved || submitting) return
+    if (interaction.required !== false && !nextValue.trim()) return
+    setSubmitting(true)
+    try {
+      await Promise.resolve(onSubmit(interaction.requestId, nextValue, label))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-ops-accent/35 bg-ops-accent/5">
+      <div className="border-b border-ops-accent/20 px-4 py-3">
+        <div className="text-xs font-semibold text-ops-accent">需要你补充信息</div>
+        <div className="mt-1 text-[15px] leading-relaxed text-ops-text">{interaction.prompt}</div>
+      </div>
+
+      {interaction.resolved ? (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+          <span className="text-ops-success">已提交，AI 将继续处理。</span>
+          {(interaction.label || interaction.value) && (
+            <span className="max-w-[55%] truncate rounded-full border border-ops-surface1 bg-ops-panel px-3 py-1 text-xs text-ops-subtext">
+              {interaction.label || interaction.value}
+            </span>
+          )}
+        </div>
+      ) : isChoice ? (
+        <div className="grid gap-2 p-3 md:grid-cols-2">
+          {options.map((option, index) => (
+            <button
+              key={`${option.value}-${index}`}
+              type="button"
+              disabled={submitting}
+              onClick={() => submitValue(option.value, option.label)}
+              className="rounded-lg border border-ops-surface1 bg-ops-panel/80 px-3 py-2 text-left transition-colors hover:border-ops-accent/70 hover:bg-ops-surface0 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <div className="text-sm font-medium text-ops-text">{option.label}</div>
+              {option.description && (
+                <div className="mt-1 text-xs leading-relaxed text-ops-subtext">{option.description}</div>
+              )}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 p-3 sm:flex-row">
+          <input
+            value={value}
+            type={isPassword ? 'password' : 'text'}
+            autoComplete={isPassword ? 'new-password' : 'off'}
+            placeholder={interaction.placeholder || (isPassword ? '输入后仅用于本次会话' : '请输入补充信息')}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                submitValue(value)
+              }
+            }}
+            className="min-w-0 flex-1 rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
+          />
+          <button
+            type="button"
+            disabled={submitting || (interaction.required !== false && !value.trim())}
+            onClick={() => submitValue(value)}
+            className="rounded-lg bg-ops-accent px-4 py-2 text-sm font-semibold text-ops-dark transition-colors hover:bg-ops-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            提交
+          </button>
+        </div>
+      )}
+    </section>
   )
 }
 

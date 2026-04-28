@@ -359,6 +359,12 @@ class ToolApprovalRequest(BaseModel):
     note: str | None = ""
 
 
+class UserInteractionResponseRequest(BaseModel):
+    request_id: str = Field(..., min_length=1, max_length=200)
+    value: str | None = Field(default="", max_length=4000)
+    label: str | None = Field(default="", max_length=200)
+
+
 class ApprovalDecisionRequest(BaseModel):
     approved: bool
     operator: str | None = "user"
@@ -409,6 +415,29 @@ async def approve_tool_call(session_id: str, req: ToolApprovalRequest):
     raise HTTPException(
         status_code=404,
         detail="Pending tool call not found or already processed.",
+    )
+
+
+@router.post("/session/{session_id}/interaction", response_model=ResponseModel)
+async def respond_user_interaction(session_id: str, req: UserInteractionResponseRequest):
+    """提交前台聊天中的文本、密码或选项交互响应。"""
+    from core.dispatcher import dispatcher
+
+    entry = dispatcher.pending_interactions.get(req.request_id)
+    future = entry.get("future") if isinstance(entry, dict) else entry
+    expected_session_id = entry.get("session_id") if isinstance(entry, dict) else None
+    if expected_session_id and expected_session_id != session_id:
+        raise HTTPException(
+            status_code=404,
+            detail="交互请求不存在、已提交或已超时。",
+        )
+    if future and not future.done():
+        future.set_result({"value": req.value or "", "label": req.label or ""})
+        return ResponseModel(status="success", message="交互输入已提交。")
+
+    raise HTTPException(
+        status_code=404,
+        detail="交互请求不存在、已提交或已超时。",
     )
 
 

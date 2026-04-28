@@ -29,6 +29,8 @@ export interface ChatMessage {
   execTrace?: ExecTraceItem[]
   // For tool approval requests
   toolApproval?: ToolApproval
+  // For model-initiated user input or option selection
+  userInteraction?: UserInteractionRequest
 }
 
 export interface ExecTraceItem {
@@ -48,6 +50,25 @@ export interface ToolApproval {
   reason?: string
   uniqueId: string
   resolved: boolean
+}
+
+export interface UserInteractionOption {
+  label: string
+  value: string
+  description?: string
+}
+
+export interface UserInteractionRequest {
+  requestId: string
+  prompt: string
+  inputType: 'text' | 'password' | 'choice' | string
+  options?: UserInteractionOption[]
+  placeholder?: string
+  required?: boolean
+  timeoutSeconds?: number
+  resolved: boolean
+  value?: string
+  label?: string
 }
 
 export interface ToolDefinition {

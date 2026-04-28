@@ -71,6 +71,18 @@ class TestToolRegistry(unittest.TestCase):
 
         self.assertIn("execute_on_scope", names)
 
+    def test_interaction_tool_is_available_in_all_sessions(self):
+        names = enabled_tool_names(
+            {
+                "target_scope": "asset",
+                "asset_type": "linux",
+                "protocol": "ssh",
+                "extra_args": {},
+            }
+        )
+
+        self.assertIn("request_user_interaction", names)
+
 
 if __name__ == "__main__":
     unittest.main()

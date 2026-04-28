@@ -148,6 +148,22 @@ export async function approveToolCall(
   })
 }
 
+export async function respondUserInteraction(
+  sessionId: string,
+  requestId: string,
+  value: string,
+  label = ''
+) {
+  return request(`/session/${sessionId}/interaction`, {
+    method: 'POST',
+    body: JSON.stringify({
+      request_id: requestId,
+      value,
+      label,
+    }),
+  })
+}
+
 // ---- Session Settings ----
 export async function updatePermission(sessionId: string, allowModifications: boolean) {
   return request(`/session/${sessionId}/permission`, {

@@ -85,6 +85,88 @@ def record_headless_approval_block(
         return recorded
 
 
+def _normalize_interaction_options(options: object) -> list[dict[str, str]]:
+    if not isinstance(options, list):
+        return []
+    normalized = []
+    for index, item in enumerate(options[:8]):
+        if isinstance(item, dict):
+            label = str(item.get("label") or item.get("value") or f"选项 {index + 1}").strip()
+            value = str(item.get("value") or label).strip()
+            description = str(item.get("description") or "").strip()
+        else:
+            label = str(item or f"选项 {index + 1}").strip()
+            value = label
+            description = ""
+        if label and value:
+            normalized.append({"label": label[:80], "value": value[:500], "description": description[:300]})
+    return normalized
+
+
+def _build_interaction_payload(tool_call_id: str, args: dict) -> dict:
+    input_type = str(args.get("input_type") or "text").strip().lower()
+    if input_type not in {"text", "password", "choice"}:
+        input_type = "text"
+    options = _normalize_interaction_options(args.get("options"))
+    if input_type == "choice" and not options:
+        input_type = "text"
+    timeout_seconds = args.get("timeout_seconds")
+    try:
+        timeout_seconds = int(timeout_seconds)
+    except (TypeError, ValueError):
+        timeout_seconds = 300
+    timeout_seconds = max(30, min(timeout_seconds, 1800))
+    return {
+        "type": "user_interaction_request",
+        "request_id": tool_call_id,
+        "prompt": str(args.get("prompt") or "请补充信息").strip()[:1000],
+        "input_type": input_type,
+        "options": options,
+        "placeholder": str(args.get("placeholder") or "").strip()[:200],
+        "required": args.get("required") is not False,
+        "timeout_seconds": timeout_seconds,
+    }
+
+
+async def _wait_for_user_interaction(
+    tool_call_id: str,
+    payload: dict,
+    future: asyncio.Future,
+) -> tuple[str, str]:
+    try:
+        result = await asyncio.wait_for(future, timeout=float(payload["timeout_seconds"]))
+        value = str(result.get("value") or "")
+        label = str(result.get("label") or "")
+        tool_res = json.dumps(
+            {
+                "status": "success",
+                "input_type": payload["input_type"],
+                "value": value,
+                "label": label,
+            },
+            ensure_ascii=False,
+        )
+        safe_value = "******" if payload["input_type"] == "password" and value else value
+        safe_tool_res = json.dumps(
+            {
+                "status": "success",
+                "input_type": payload["input_type"],
+                "value": safe_value,
+                "label": label,
+            },
+            ensure_ascii=False,
+        )
+        return tool_res, safe_tool_res
+    except asyncio.TimeoutError:
+        timeout_res = json.dumps(
+            {"status": "timeout", "message": "交互式输入超时，用户未在规定时间内回复。"},
+            ensure_ascii=False,
+        )
+        return timeout_res, timeout_res
+    finally:
+        dispatcher.pending_interactions.pop(tool_call_id, None)
+
+
 def format_extra_args_for_prompt(extra_args: dict) -> str:
     return "\\n".join(
         [
@@ -312,6 +394,7 @@ async def chat_stream_agent(
 - **闭环思维 (Closed-loop)**：操作、修复后自动执行修复验证确认修复
 - **连接失败与防死循环 (Anti-Loop & Boundary)**：对目标资产（{host}）的系统级交互【必须且只能】通过当前协议对应的原生工具完成。如果原生工具报错“认证失败”或“无法连接”，代表系统底层通信已断开。此时请【立即停止重试】并直接向用户报告失败。绝不允许编写 Paramiko/WinRM/数据库/API 脚本尝试绕过资产中心凭据，也绝不允许获取宿主机信息作为替代。
 - **自我进化与未知资产应对 (Self-Evolution)**：当用户要你「安装」「修复」「改」或「打一个新技能」时，使用 `evolve_skill` 去修复或变更你的代码。只有 `VIRTUAL` 技能研发会话允许使用本地脚本；Windows、Linux、数据库、API、SNMP 等真实资产会话禁止用本地脚本代替原生协议工具。
+- **用户交互请求 (Interactive Input)**：当确实需要用户补充密码、选择方案、确认偏好或提供业务上下文时，调用 `request_user_interaction`，让前端弹出输入/选择卡片；不要在普通文本里等待用户输入。
 - **工具执行表达规范**：真实资产会话中，不要说“无法通过本地脚本”“改用平台原生工具”这类解释；直接说明“正在通过当前会话的原生协议工具执行巡检”即可。
 
 [使用的基础执行工具]
@@ -461,6 +544,33 @@ async def chat_stream_agent(
                     tool_msg = {"tool_call_id": tc_id, "role": "tool", "name": func_name, "content": tool_res}
                     messages.append(tool_msg)
                     memory_db.append_message(session_id, tool_msg)
+                    continue
+
+                if func_name == "request_user_interaction":
+                    payload = _build_interaction_payload(tc_id, func_args)
+                    future = asyncio.Future()
+                    dispatcher.pending_interactions[tc_id] = {
+                        "future": future,
+                        "session_id": session_id,
+                    }
+                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                    tool_res, safe_tool_res = await _wait_for_user_interaction(tc_id, payload, future)
+                    tool_msg = {
+                        "tool_call_id": tc_id,
+                        "role": "tool",
+                        "name": func_name,
+                        "content": tool_res,
+                    }
+                    messages.append(tool_msg)
+                    memory_db.append_message(
+                        session_id,
+                        {
+                            "tool_call_id": tc_id,
+                            "role": "tool",
+                            "name": func_name,
+                            "content": safe_tool_res,
+                        },
+                    )
                     continue
 
                 # ======== NEW APPROVAL LOGIC ========

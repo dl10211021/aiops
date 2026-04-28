@@ -30,6 +30,7 @@ class SkillDispatcher:
     def __init__(self):
         self.skills_registry = {}
         self.pending_approvals = {}
+        self.pending_interactions = {}
         self._last_refresh_time = 0
         self._refresh_interval = 30  # 30 秒缓存，避免每次调用都全量扫描文件系统
         self.skill_directories = [

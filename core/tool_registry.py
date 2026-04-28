@@ -195,6 +195,43 @@ def _register_builtin_tools() -> None:
     )
     tool_registry.register(
         ToolDefinition(
+            name="request_user_interaction",
+            toolset="interaction",
+            scope="base",
+            description=(
+                "向当前前台会话发起交互式输入或选择请求。用于必须由用户补充密码、文本、"
+                "业务偏好或从多个方案中选择时；不要用普通文本等待用户回复。"
+            ),
+            parameters=_obj(
+                {
+                    "prompt": {"type": "string", "description": "展示给用户的问题或说明"},
+                    "input_type": {
+                        "type": "string",
+                        "enum": ["text", "password", "choice"],
+                        "description": "text 为普通输入，password 为敏感输入，choice 为选项选择",
+                    },
+                    "options": {
+                        "type": "array",
+                        "description": "input_type=choice 时使用的候选项",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string"},
+                                "value": {"type": "string"},
+                                "description": {"type": "string"},
+                            },
+                        },
+                    },
+                    "placeholder": {"type": "string"},
+                    "timeout_seconds": {"type": "integer"},
+                    "required": {"type": "boolean"},
+                },
+                ["prompt"],
+            ),
+        )
+    )
+    tool_registry.register(
+        ToolDefinition(
             name="evolve_skill",
             toolset="skill-runtime",
             scope="base",
