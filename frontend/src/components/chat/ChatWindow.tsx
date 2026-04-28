@@ -45,6 +45,16 @@ export default function ChatWindow() {
   const [readWriteConfirm, setReadWriteConfirm] = useState<{ message: string; remember: boolean } | null>(null)
   const [toolCatalog, setToolCatalog] = useState<SessionToolCatalog | null>(null)
   const [backendCommands, setBackendCommands] = useState<Array<{ id: string; label: string; description: string; prompt: string }>>([])
+  const [inputHistory, setInputHistory] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('ops_chat_input_history')
+      const parsed = stored ? JSON.parse(stored) : []
+      return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+    } catch {
+      return []
+    }
+  })
+  const [historyIndex, setHistoryIndex] = useState<number | null>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -91,6 +101,10 @@ export default function ChatWindow() {
   }, [thinkingMode])
 
   useEffect(() => {
+    localStorage.setItem('ops_chat_input_history', JSON.stringify(inputHistory.slice(0, 20)))
+  }, [inputHistory])
+
+  useEffect(() => {
     if (!currentSessionId) {
       setToolCatalog(null)
       return
@@ -133,6 +147,8 @@ export default function ChatWindow() {
       content: text,
       timestamp: Date.now(),
     }
+    setInputHistory((prev) => [text, ...prev.filter((item) => item !== text)].slice(0, 20))
+    setHistoryIndex(null)
     appendMessage(currentSessionId, userMsg)
     setInput('')
 
@@ -308,7 +324,42 @@ export default function ChatWindow() {
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'ArrowUp' && inputHistory.length > 0 && !e.shiftKey) {
+      const atStart = e.currentTarget.selectionStart === 0
+      if (!input.trim() || atStart) {
+        e.preventDefault()
+        const nextIndex = historyIndex === null ? 0 : Math.min(historyIndex + 1, inputHistory.length - 1)
+        setHistoryIndex(nextIndex)
+        setInput(inputHistory[nextIndex])
+        requestAnimationFrame(() => {
+          const el = textareaRef.current
+          if (el) el.selectionStart = el.selectionEnd = el.value.length
+        })
+        return
+      }
+    }
+
+    if (e.key === 'ArrowDown' && inputHistory.length > 0 && !e.shiftKey) {
+      const atEnd = e.currentTarget.selectionStart === input.length
+      if (historyIndex !== null && atEnd) {
+        e.preventDefault()
+        const nextIndex = historyIndex - 1
+        if (nextIndex < 0) {
+          setHistoryIndex(null)
+          setInput('')
+          return
+        }
+        setHistoryIndex(nextIndex)
+        setInput(inputHistory[nextIndex])
+        requestAnimationFrame(() => {
+          const el = textareaRef.current
+          if (el) el.selectionStart = el.selectionEnd = el.value.length
+        })
+        return
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
@@ -327,6 +378,27 @@ export default function ChatWindow() {
 
   const applySlashCommand = (prompt: string) => {
     setInput(prompt)
+    setHistoryIndex(null)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }
+
+  const pickHistory = (direction: 'prev' | 'next') => {
+    if (inputHistory.length === 0) return
+    if (direction === 'prev') {
+      const nextIndex = historyIndex === null ? 0 : Math.min(historyIndex + 1, inputHistory.length - 1)
+      setHistoryIndex(nextIndex)
+      setInput(inputHistory[nextIndex])
+    } else {
+      if (historyIndex === null) return
+      const nextIndex = historyIndex - 1
+      if (nextIndex < 0) {
+        setHistoryIndex(null)
+        setInput('')
+      } else {
+        setHistoryIndex(nextIndex)
+        setInput(inputHistory[nextIndex])
+      }
+    }
     requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
@@ -380,7 +452,15 @@ export default function ChatWindow() {
           </div>
         </div>
       )}
-      <ToolsetBar catalog={toolCatalog} session={session} />
+      <ToolsetBar
+        catalog={toolCatalog}
+        session={session}
+        availableModels={availableModels}
+        modelName={modelName}
+        thinkingMode={thinkingMode}
+        onModelChange={setModelName}
+        onThinkingModeChange={setThinkingMode}
+      />
       {/* Messages area */}
       <div 
         ref={messagesContainerRef}
@@ -410,48 +490,41 @@ export default function ChatWindow() {
           />
         )}
         <div className="flex items-end gap-2">
-          {/* Thinking Mode selector */}
-          <select
-            value={thinkingMode}
-            onChange={(e) => setThinkingMode(e.target.value)}
-            className="bg-ops-surface0 text-ops-text text-xs rounded px-2 py-1.5 border border-ops-surface1 outline-none self-end"
-            title="思维推理模式"
-          >
-            <option value="off">关闭思考 (默认)</option>
-            <option value="enabled">开启思考 (自动)</option>
-            <option value="low">低度思考</option>
-            <option value="medium">中度思考</option>
-            <option value="high">高度思考</option>
-          </select>
-          
-          {/* Model selector */}
-          <select
-            value={modelName}
-            onChange={(e) => setModelName(e.target.value)}
-            className="bg-ops-surface0 text-ops-text text-xs rounded px-2 py-1.5 border border-ops-surface1 outline-none self-end"
-          >
-            {availableModels.length > 0 ? (
-              availableModels.map(group => (
-    <optgroup key={group.provider_id} label={group.provider_name}>
-      {group.models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-    </optgroup>
-  ))
-            ) : (
-              <option value={modelName}>{modelName || '使用后端默认模型'}</option>
-            )}
-          </select>
-
           {/* Textarea */}
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value)
+              setHistoryIndex(null)
+            }}
             onKeyDown={handleKeyDown}
-            placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
+            placeholder="输入消息... (Enter 发送, Shift+Enter 换行，上/下方向键选择历史输入)"
             rows={1}
             className="flex-1 bg-ops-dark text-ops-text rounded-lg px-3 py-2 text-sm resize-none outline-none border border-ops-surface1 focus:border-ops-accent transition-colors max-h-32 overflow-y-auto"
             style={{ minHeight: '38px' }}
           />
+
+          <div className="flex shrink-0 flex-col gap-1 self-end">
+            <button
+              type="button"
+              onClick={() => pickHistory('prev')}
+              disabled={inputHistory.length === 0}
+              className="h-[18px] w-8 rounded border border-ops-surface1 bg-ops-surface0 text-[10px] text-ops-subtext hover:text-ops-text disabled:opacity-35"
+              title="上一条历史输入"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              onClick={() => pickHistory('next')}
+              disabled={inputHistory.length === 0 || historyIndex === null}
+              className="h-[18px] w-8 rounded border border-ops-surface1 bg-ops-surface0 text-[10px] text-ops-subtext hover:text-ops-text disabled:opacity-35"
+              title="下一条历史输入"
+            >
+              ↓
+            </button>
+          </div>
 
           {isStreaming ? (
             <button
@@ -522,7 +595,7 @@ function QuickCommandDock({
 }) {
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
-      <span className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">current asset actions</span>
+      <span className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">当前资产快捷命令</span>
       {commands.map((cmd) => (
         <button
           key={cmd.id}
@@ -548,7 +621,7 @@ function SlashCommandMenu({
   return (
     <div className="mb-3 max-w-3xl overflow-hidden rounded-xl border border-ops-surface1 bg-ops-dark/95 shadow-2xl">
       <div className="border-b border-ops-surface0 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-ops-overlay">
-        slash commands
+        斜杠菜单
       </div>
       <div className="grid gap-1 p-2 sm:grid-cols-2">
         {commands.map((cmd) => (
@@ -567,16 +640,28 @@ function SlashCommandMenu({
   )
 }
 
-function ToolsetBar({ catalog, session }: { catalog: SessionToolCatalog | null; session: Session }) {
+function ToolsetBar({
+  catalog,
+  session,
+  availableModels,
+  modelName,
+  thinkingMode,
+  onModelChange,
+  onThinkingModeChange,
+}: {
+  catalog: SessionToolCatalog | null
+  session: Session
+  availableModels: ModelGroup[]
+  modelName: string
+  thinkingMode: string
+  onModelChange: (value: string) => void
+  onThinkingModeChange: (value: string) => void
+}) {
   const enabledToolsets = (catalog?.toolsets || []).filter((t) => t.enabled)
   const activeTools = catalog?.active_tools || enabledToolsets.flatMap((t) => t.tools.filter((tool) => tool.enabled).map((tool) => tool.name))
   const primaryToolsets = enabledToolsets.slice(0, 4)
   const scope = session.target_scope || catalog?.context?.target_scope || 'asset'
   const scopeValue = session.scope_value || catalog?.context?.host || session.host
-  const mode = session.isReadWriteMode ? '读写' : '只读'
-  const modeTone = session.isReadWriteMode
-    ? 'border-ops-alert/35 bg-ops-alert/10 text-ops-alert'
-    : 'border-ops-success/35 bg-ops-success/10 text-ops-success'
 
   return (
     <div className="border-b border-ops-surface0 bg-ops-panel/80 px-4 py-3">
@@ -604,25 +689,55 @@ function ToolsetBar({ catalog, session }: { catalog: SessionToolCatalog | null; 
             <ContextCell label="标签" value={(session.tags || []).slice(0, 3).join(', ') || '-'} />
           </div>
         </div>
-        <div className="grid shrink-0 grid-cols-3 gap-2 text-right">
-          <div className={`rounded-xl border px-3 py-2 ${modeTone}`}>
-            <div className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">mode</div>
-            <div className="font-mono text-sm">{mode}</div>
+        <div className="grid w-full shrink-0 gap-2 lg:w-[360px]">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-[10px] uppercase tracking-[0.18em] text-ops-overlay">模型</span>
+              <select
+                value={modelName}
+                onChange={(e) => onModelChange(e.target.value)}
+                className="w-full rounded-lg border border-ops-surface1 bg-ops-dark/70 px-2 py-2 text-xs text-ops-text outline-none focus:border-ops-accent"
+              >
+                {availableModels.length > 0 ? (
+                  availableModels.map((group) => (
+                    <optgroup key={group.provider_id} label={group.provider_name}>
+                      {group.models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </optgroup>
+                  ))
+                ) : (
+                  <option value={modelName}>{modelName || '使用后端默认模型'}</option>
+                )}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[10px] uppercase tracking-[0.18em] text-ops-overlay">思考</span>
+              <select
+                value={thinkingMode}
+                onChange={(e) => onThinkingModeChange(e.target.value)}
+                className="w-full rounded-lg border border-ops-surface1 bg-ops-dark/70 px-2 py-2 text-xs text-ops-text outline-none focus:border-ops-accent"
+              >
+                <option value="off">关闭思考</option>
+                <option value="enabled">开启思考</option>
+                <option value="low">低度思考</option>
+                <option value="medium">中度思考</option>
+                <option value="high">高度思考</option>
+              </select>
+            </label>
           </div>
-          <div className="rounded-xl border border-ops-surface1 bg-ops-dark/60 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">active tools</div>
-            <div className="font-mono text-sm text-ops-text">{activeTools.length}</div>
-          </div>
-          <div className="rounded-xl border border-ops-surface1 bg-ops-dark/60 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">skills</div>
-            <div className="font-mono text-sm text-ops-text">{session.skills.length}</div>
+          <div className="grid grid-cols-2 gap-2 text-right">
+            <div className="rounded-xl border border-ops-surface1 bg-ops-dark/60 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">工具</div>
+              <div className="font-mono text-sm text-ops-text">{activeTools.length}</div>
+            </div>
+            <div className="rounded-xl border border-ops-surface1 bg-ops-dark/60 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-ops-overlay">技能</div>
+              <div className="font-mono text-sm text-ops-text">{session.skills.length}</div>
+            </div>
           </div>
         </div>
       </div>
       <div className="mt-3 rounded-xl border border-ops-surface0 bg-ops-dark/35 px-3 py-2 text-xs text-ops-subtext">
-        {session.isReadWriteMode
-          ? '当前会话允许读写操作；高危工具仍会进入后端审批队列，硬拦截规则会直接拒绝。'
-          : '当前会话为只读模式；写入、重启、删除等动作会被策略拦截或要求重新授权。'}
+        权限模式以顶部按钮为准；当前条只展示协议工具、模型选择和思考模式。高危工具仍会进入后端审批队列，硬拦截规则会直接拒绝。
       </div>
     </div>
   )

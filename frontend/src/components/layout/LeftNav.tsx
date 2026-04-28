@@ -2,15 +2,14 @@ import { useStore } from '@/store'
 import type { ViewId } from '@/types'
 
 const NAV_ITEMS: Array<{ id: ViewId; icon: string; label: string }> = [
-  { id: 'dashboard', icon: 'DB', label: '总览' },
-  { id: 'bigscreen', icon: 'TV', label: '大屏' },
-  { id: 'chat', icon: 'AI', label: '对话' },
-  { id: 'assets', icon: 'DC', label: '资产' },
-  { id: 'cron', icon: 'CR', label: '巡检' },
-  { id: 'alerts', icon: 'EV', label: '告警事件' },
-  { id: 'approvals', icon: 'AP', label: '审批' },
-  { id: 'skills', icon: 'SK', label: '技能' },
-  { id: 'knowledge', icon: 'KB', label: '知识库' },
+  { id: 'dashboard', icon: '总', label: '总览大屏' },
+  { id: 'chat', icon: '会', label: 'AI 会话' },
+  { id: 'assets', icon: '资', label: '资产中心' },
+  { id: 'cron', icon: '巡', label: '自动化巡检' },
+  { id: 'alerts', icon: '警', label: '告警事件' },
+  { id: 'approvals', icon: '审', label: '审批中心' },
+  { id: 'skills', icon: '技', label: '技能市场' },
+  { id: 'knowledge', icon: '知', label: '知识库' },
 ]
 
 export default function LeftNav() {
@@ -29,7 +28,7 @@ export default function LeftNav() {
         <button
           key={item.id}
           onClick={() => setView(item.id)}
-          className={`w-11 h-11 rounded-xl flex items-center justify-center text-[11px] font-bold tracking-[0.16em] transition-all
+          className={`w-11 h-11 rounded-xl flex items-center justify-center text-base font-bold transition-all
             ${currentView === item.id
               ? 'bg-ops-accent text-ops-dark shadow-[0_0_26px_rgba(243,177,90,0.28)]'
               : 'text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text'}`}
@@ -44,24 +43,24 @@ export default function LeftNav() {
       {/* Settings */}
       <button
         onClick={() => openModal('llm-config')}
-        className="w-11 h-11 rounded-xl flex items-center justify-center text-[11px] font-bold tracking-[0.16em] text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text transition-colors"
+        className="w-11 h-11 rounded-xl flex items-center justify-center text-base font-bold text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text transition-colors"
         title="模型配置"
       >
-        LM
+        模
       </button>
       <button
         onClick={() => openModal('notifications')}
-        className="w-11 h-11 rounded-xl flex items-center justify-center text-[11px] font-bold tracking-[0.16em] text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text transition-colors"
+        className="w-11 h-11 rounded-xl flex items-center justify-center text-base font-bold text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text transition-colors"
         title="告警通道"
       >
-        AL
+        告
       </button>
       <button
         onClick={() => openModal('safety-policy')}
-        className="w-11 h-11 rounded-xl flex items-center justify-center text-[11px] font-bold tracking-[0.16em] text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text transition-colors"
+        className="w-11 h-11 rounded-xl flex items-center justify-center text-base font-bold text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text transition-colors"
         title="安全策略"
       >
-        SEC
+        安
       </button>
     </nav>
   )

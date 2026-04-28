@@ -6,7 +6,6 @@ import TopBar from '@/components/layout/TopBar'
 import ToastContainer from '@/components/layout/ToastContainer'
 import ChatWindow from '@/components/chat/ChatWindow'
 import Dashboard from '@/components/views/Dashboard'
-import BigScreen from '@/components/views/BigScreen'
 import AssetVault from '@/components/views/AssetVault'
 import ApprovalCenter from '@/components/views/ApprovalCenter'
 import SkillMarket from '@/components/views/SkillMarket'
@@ -26,7 +25,7 @@ function ViewRouter() {
   const currentView = useStore((s) => s.currentView)
   switch (currentView) {
     case 'dashboard': return <Dashboard />
-    case 'bigscreen': return <BigScreen />
+    case 'bigscreen': return <Dashboard />
     case 'chat': return <ChatWindow />
     case 'assets': return <AssetVault />
     case 'skills': return <SkillMarket />

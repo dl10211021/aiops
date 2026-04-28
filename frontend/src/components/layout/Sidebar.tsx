@@ -108,7 +108,6 @@ export default function Sidebar() {
                 {/* Status indicators */}
                 <div className="flex items-center gap-1 shrink-0">
                   {s.heartbeatEnabled && <span className="w-1.5 h-1.5 rounded-full bg-ops-success animate-pulse" title="心跳中" />}
-                  {s.isReadWriteMode && <span className="text-[9px] text-ops-alert" title="读写模式">RW</span>}
                 </div>
                 {/* Disconnect button */}
                 <button

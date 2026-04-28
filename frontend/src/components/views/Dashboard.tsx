@@ -55,8 +55,8 @@ export default function Dashboard() {
         <div className="mb-6 flex items-center justify-between gap-4">
           <div>
             <p className="text-[11px] uppercase tracking-[0.24em] text-ops-accent">AIOps 运维指挥中心</p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight text-ops-text">运维总览</h1>
-            <p className="mt-1 text-sm text-ops-subtext">资产、会话、巡检、告警和工具覆盖的统一入口，后续大屏可直接复用这些接口。</p>
+            <h1 className="mt-1 text-3xl font-black tracking-tight text-ops-text">总览大屏</h1>
+            <p className="mt-1 text-sm text-ops-subtext">合并运维总览和数据中心趋势视图，资产、会话、巡检、告警和 SLA 指标在同一个入口查看。</p>
           </div>
           <button
             onClick={() => void load()}
@@ -121,8 +121,8 @@ export default function Dashboard() {
           <section className="ops-glass rounded-3xl border p-5 xl:col-span-2">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-base font-bold text-ops-text">告警趋势</h2>
-                <p className="mt-1 text-xs text-ops-subtext">按日期聚合，后续大屏可替换为实时图表。</p>
+              <h2 className="text-base font-bold text-ops-text">数据中心告警趋势</h2>
+              <p className="mt-1 text-xs text-ops-subtext">来自原趋势大屏的核心视角，按日期聚合展示告警波动。</p>
               </div>
               <span className="rounded-full bg-ops-surface0 px-3 py-1 text-xs text-ops-subtext">{trend.length} 天</span>
             </div>
