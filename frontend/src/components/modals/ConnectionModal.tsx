@@ -14,7 +14,7 @@ const ASSET_CATEGORIES = [
   { id: 'network', label: '网络与安全 (Network & Security)' },
   { id: 'storage', label: '存储与备份 (Storage & Backup)' },
   { id: 'monitor', label: '监控与告警 (Monitoring & APM)' },
-  { id: 'oob', label: '硬件动环 (Hardware & OOB)' },
+  { id: 'oob', label: '硬件带外 (Hardware & OOB)' },
   { id: 'security', label: '安全与身份 (Security & Identity)' },
 ]
 
@@ -52,7 +52,6 @@ const ASSET_SUB_TYPES: Record<string, AssetSubType[]> = {
     { id: 'zookeeper', label: 'ZooKeeper', asset_type: 'ssh', defaultPort: 22 },
     { id: 'nacos', label: 'Nacos', asset_type: 'http_api', defaultPort: 8848 },
     { id: 'consul', label: 'Consul', asset_type: 'http_api', defaultPort: 8500 },
-    { id: 'minio', label: 'MinIO', asset_type: 'http_api', defaultPort: 9000 },
   ],
   virtualization: [
     { id: 'vmware', label: 'VMware vCenter/ESXi', asset_type: 'http_api', defaultPort: 443 },
@@ -75,6 +74,10 @@ const ASSET_SUB_TYPES: Record<string, AssetSubType[]> = {
     { id: 'ceph', label: 'Ceph Cluster', asset_type: 'ssh', defaultPort: 22 },
     { id: 'nfs', label: 'NFS Server', asset_type: 'ssh', defaultPort: 22 },
     { id: 'nas', label: 'NAS / SAN (SNMP)', asset_type: 'snmp', defaultPort: 161, authMode: 'custom_snmp' },
+    { id: 'minio', label: 'MinIO', asset_type: 'http_api', defaultPort: 9000 },
+    { id: 's3', label: 'S3 / Object Storage', asset_type: 'http_api', defaultPort: 443 },
+    { id: 'hdfs', label: 'HDFS', asset_type: 'ssh', defaultPort: 22 },
+    { id: 'glusterfs', label: 'GlusterFS', asset_type: 'ssh', defaultPort: 22 },
     { id: 'backup', label: 'Backup System', asset_type: 'http_api', defaultPort: 443 },
   ],
   monitor: [

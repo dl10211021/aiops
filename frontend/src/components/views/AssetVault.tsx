@@ -83,6 +83,7 @@ export default function AssetVault() {
   const addToast = useStore((s) => s.addToast)
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [assetTypeFilter, setAssetTypeFilter] = useState('all')
   const [protocolFilter, setProtocolFilter] = useState('all')
   const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>({})
   const [catalogCategories, setCatalogCategories] = useState<AssetCategoryDefinition[]>([])
@@ -219,8 +220,9 @@ export default function AssetVault() {
       || (a.asset_type || '').toLowerCase().includes(q)
       || protocol.toLowerCase().includes(q)
     const matchesCategory = categoryFilter === 'all' || category === categoryFilter
+    const matchesAssetType = assetTypeFilter === 'all' || normalizeFilterValue(a.asset_type || a.extra_args?.sub_type) === assetTypeFilter
     const matchesProtocol = protocolFilter === 'all' || protocol === protocolFilter
-    return matchesSearch && matchesCategory && matchesProtocol
+    return matchesSearch && matchesCategory && matchesAssetType && matchesProtocol
   })
 
   const availableCategories = Array.from(new Set([
@@ -230,13 +232,52 @@ export default function AssetVault() {
     .filter(Boolean)
     .sort((a, b) => orderIndex(CATEGORY_ORDER, a) - orderIndex(CATEGORY_ORDER, b) || a.localeCompare(b))
 
+  const typeCategoryMatches = (type: AssetTypeDefinition) => categoryFilter === 'all' || type.category === categoryFilter
+  const assetCategoryMatches = (asset: Asset) => categoryFilter === 'all' || normalizeFilterValue(asset.extra_args?.category, 'other') === categoryFilter
+  const scopedCatalogTypes = catalogTypes.filter(typeCategoryMatches)
+
+  const assetTypeLabels = {
+    ...Object.fromEntries(catalogTypes.map((t) => [t.id, t.label])),
+    unknown: '未知',
+  } as Record<string, string>
+  const catalogTypeOrder = new Map(catalogTypes.map((t, index) => [normalizeFilterValue(t.id), index]))
+
+  const availableAssetTypes = Array.from(new Set([
+    ...scopedCatalogTypes.map((t) => normalizeFilterValue(t.id)),
+    ...assets.filter(assetCategoryMatches).map((a) => normalizeFilterValue(a.asset_type || a.extra_args?.sub_type)),
+  ]))
+    .filter(Boolean)
+    .sort((a, b) => (catalogTypeOrder.get(a) ?? catalogTypes.length) - (catalogTypeOrder.get(b) ?? catalogTypes.length) || a.localeCompare(b))
+
+  const catalogTypeById = new Map(catalogTypes.map((t) => [normalizeFilterValue(t.id), t]))
+  const protocolMatchesSelectedType = (type: AssetTypeDefinition) =>
+    assetTypeFilter === 'all' || normalizeFilterValue(type.id) === assetTypeFilter
+  const assetTypeMatches = (asset: Asset) =>
+    assetTypeFilter === 'all' || normalizeFilterValue(asset.asset_type || asset.extra_args?.sub_type) === assetTypeFilter
+
   const availableProtocols = Array.from(new Set([
-    ...catalogTypes.map((t) => normalizeFilterValue(t.protocol)),
-    ...assets.map((a) => normalizeFilterValue(a.protocol || a.asset_type)),
+    ...scopedCatalogTypes.filter(protocolMatchesSelectedType).map((t) => normalizeFilterValue(t.protocol)),
+    ...assets.filter((a) => assetCategoryMatches(a) && assetTypeMatches(a)).map((a) => normalizeFilterValue(a.protocol || a.asset_type)),
   ]))
     .filter(Boolean)
     .sort((a, b) => orderIndex(PROTOCOL_ORDER, a) - orderIndex(PROTOCOL_ORDER, b) || a.localeCompare(b))
   const matrixByAssetId = new Map((verificationOverview?.matrix || []).map((item) => [item.asset.id, item]))
+
+  const handleCategoryFilterChange = (value: string) => {
+    setCategoryFilter(value)
+    setAssetTypeFilter('all')
+    setProtocolFilter('all')
+  }
+
+  const handleAssetTypeFilterChange = (value: string) => {
+    setAssetTypeFilter(value)
+    if (value === 'all') {
+      setProtocolFilter('all')
+      return
+    }
+    const protocol = catalogTypeById.get(value)?.protocol
+    setProtocolFilter(protocol ? normalizeFilterValue(protocol) : 'all')
+  }
 
   const grouped: Record<string, Asset[]> = {}
   filtered.forEach((a) => {
@@ -300,11 +341,11 @@ export default function AssetVault() {
           <div className="mb-3 flex items-center justify-between">
             <div>
               <div className="text-xs font-semibold text-ops-text">资产目录过滤</div>
-              <div className="text-[11px] text-ops-overlay">按分类和协议确认资产中心覆盖范围，筛选不会影响保存数据。</div>
+              <div className="text-[11px] text-ops-overlay">按分类、资产类型和协议联动确认资产中心覆盖范围，筛选不会影响保存数据。</div>
             </div>
-            {(categoryFilter !== 'all' || protocolFilter !== 'all' || search) && (
+            {(categoryFilter !== 'all' || assetTypeFilter !== 'all' || protocolFilter !== 'all' || search) && (
               <button
-                onClick={() => { setCategoryFilter('all'); setProtocolFilter('all'); setSearch('') }}
+                onClick={() => { setCategoryFilter('all'); setAssetTypeFilter('all'); setProtocolFilter('all'); setSearch('') }}
                 className="rounded-lg bg-ops-surface0 px-2.5 py-1 text-xs text-ops-subtext hover:text-ops-text"
               >
                 清空过滤
@@ -315,7 +356,13 @@ export default function AssetVault() {
             label="分类"
             value={categoryFilter}
             options={availableCategories.map((id) => ({ id, label: categoryLabels[id] || id.toUpperCase() }))}
-            onChange={setCategoryFilter}
+            onChange={handleCategoryFilterChange}
+          />
+          <FilterRow
+            label="类型"
+            value={assetTypeFilter}
+            options={availableAssetTypes.map((id) => ({ id, label: assetTypeLabels[id] || id.toUpperCase() }))}
+            onChange={handleAssetTypeFilterChange}
           />
           <FilterRow
             label="协议"
