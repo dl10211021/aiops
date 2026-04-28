@@ -1,8 +1,22 @@
 import { useStore } from '@/store'
 import { updateHeartbeat, updatePermission } from '@/api/client'
+import type { ViewId } from '@/types'
+
+const VIEW_LABELS: Record<ViewId, string> = {
+  dashboard: '总览大屏',
+  bigscreen: '总览大屏',
+  chat: 'AI 会话',
+  assets: '资产中心',
+  cron: '自动化巡检',
+  alerts: '告警事件',
+  approvals: '审批中心',
+  skills: '技能市场',
+  knowledge: '知识库',
+}
 
 export default function TopBar() {
   const currentSessionId = useStore((s) => s.currentSessionId)
+  const currentView = useStore((s) => s.currentView)
   const sessions = useStore((s) => s.sessions)
   const updateSession = useStore((s) => s.updateSession)
   const openModal = useStore((s) => s.openModal)
@@ -11,6 +25,7 @@ export default function TopBar() {
   const addToast = useStore((s) => s.addToast)
 
   const session = currentSessionId ? sessions[currentSessionId] : null
+  const isChatView = currentView === 'chat'
 
   const togglePermission = async () => {
     if (!session) return
@@ -47,7 +62,7 @@ export default function TopBar() {
         ☰
       </button>
 
-      {session ? (
+      {session && isChatView ? (
         <>
           {/* Session info */}
           <div className="flex min-w-0 items-center gap-3 text-sm">
@@ -103,7 +118,10 @@ export default function TopBar() {
         </>
       ) : (
         <>
-          <span className="text-sm text-ops-subtext">请选择或新建一个会话</span>
+          <div className="flex min-w-0 items-center gap-3 text-sm">
+            <span className="font-semibold text-ops-text">{VIEW_LABELS[currentView] || 'OpsCore'}</span>
+            {currentView === 'chat' && <span className="text-sm text-ops-subtext">请选择或新建一个会话</span>}
+          </div>
           <div className="flex-1" />
         </>
       )}
