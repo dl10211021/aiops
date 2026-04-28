@@ -808,8 +808,8 @@ function MessageBubble({ message, onApproval }: {
   const approval = message.toolApproval
 
   return (
-    <div className="flex justify-start">
-      <div className="max-w-[85%] space-y-2">
+    <div className="flex w-full justify-start">
+      <div className="w-full space-y-2">
         {/* Execution trace */}
         {hasTrace && (
           <div className="text-xs">
@@ -861,11 +861,11 @@ function MessageBubble({ message, onApproval }: {
         {/* Message content */}
         {message.content ? (
           <div
-            className="markdown-body bg-ops-panel rounded-2xl rounded-bl-md px-4 py-2.5 text-sm"
+            className="markdown-body w-full bg-ops-panel rounded-2xl rounded-bl-md px-4 py-2.5 text-sm"
             dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
           />
         ) : (
-          <div className="bg-ops-panel rounded-2xl rounded-bl-md px-4 py-2.5 text-sm">
+          <div className="w-full bg-ops-panel rounded-2xl rounded-bl-md px-4 py-2.5 text-sm">
             <span className="inline-flex gap-1">
               <span className="typing-dot w-1.5 h-1.5 bg-ops-accent rounded-full" />
               <span className="typing-dot w-1.5 h-1.5 bg-ops-accent rounded-full" />
