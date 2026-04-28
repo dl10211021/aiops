@@ -83,7 +83,15 @@ export default function Sidebar() {
             >
               <span className="text-[10px]">{collapsedGroups.has(group) ? '▶' : '▼'}</span>
               <span>{group}</span>
-              <span className="ml-auto text-ops-overlay">{items.length}</span>
+              <span className="ml-auto flex items-center gap-1.5 text-ops-overlay">
+                {items.some((s) => s.isStreaming) && (
+                  <span className="inline-flex items-center gap-1 text-ops-accent" title="有会话正在执行">
+                    <span className="h-1.5 w-1.5 rounded-full bg-ops-accent animate-pulse" />
+                    {items.filter((s) => s.isStreaming).length}
+                  </span>
+                )}
+                <span>{items.length}</span>
+              </span>
             </button>
 
             {/* Group items */}
@@ -98,8 +106,20 @@ export default function Sidebar() {
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ops-dark/70 font-mono text-[10px] font-bold tracking-[0.08em]">{protocolIcon(s.protocol || s.asset_type)}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="truncate text-sm font-semibold">
-                    {s.remark || s.host}
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-semibold">
+                      {s.remark || s.host}
+                    </span>
+                    {s.isStreaming && (
+                      <span
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-ops-accent/35 bg-ops-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-ops-accent"
+                        title="AI 正在执行"
+                        aria-label="AI 正在执行"
+                      >
+                        <span className="h-2 w-2 rounded-full border border-ops-accent/35 border-t-ops-accent animate-spin" />
+                        执行中
+                      </span>
+                    )}
                   </div>
                   <div className="truncate font-mono text-[10px] text-ops-overlay">
                     {s.user}@{s.host}
