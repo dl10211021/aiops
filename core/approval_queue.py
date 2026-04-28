@@ -306,6 +306,8 @@ def record_approval_execution(approval_id: str, tool_result: Any) -> dict[str, A
         for item in items:
             if item.get("id") != approval_id:
                 continue
+            if item.get("execution"):
+                raise ValueError("审批执行结果已存在，不能覆盖")
             item["execution"] = execution
             _write_store(items)
             return item
