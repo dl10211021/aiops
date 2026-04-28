@@ -6,6 +6,7 @@ from unittest.mock import patch
 from core.safety_policy import (
     check_approval_needed,
     check_readonly_block,
+    explain_policy_decision,
     get_safety_policy,
     save_safety_policy,
 )
@@ -202,6 +203,54 @@ class TestSafetyPolicy(unittest.TestCase):
             self.cleanup_policy_file(path)
 
         self.assertTrue(blocked)
+
+    def test_explain_policy_decision_previews_hard_block_without_execution(self):
+        path = self.policy_path("safety_policy_test_explain_hard.json")
+        self.cleanup_policy_file(path)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", path):
+                result = explain_policy_decision(
+                    "linux_execute_command",
+                    {"command": "rm -rf /"},
+                    {"allow_modifications": True},
+                )
+        finally:
+            self.cleanup_policy_file(path)
+
+        self.assertEqual(result["decision"], "deny")
+        self.assertEqual(result["label"], "禁止执行")
+        self.assertTrue(result["checks"][0]["matched"])
+
+    def test_explain_policy_decision_marks_readonly_change_as_approval(self):
+        path = self.policy_path("safety_policy_test_explain_approval.json")
+        self.cleanup_policy_file(path)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", path):
+                result = explain_policy_decision(
+                    "linux_execute_command",
+                    {"command": "systemctl restart nginx"},
+                    {"allow_modifications": False},
+                )
+        finally:
+            self.cleanup_policy_file(path)
+
+        self.assertEqual(result["decision"], "approval")
+        self.assertIn("读写会话", result["reason"])
+
+    def test_explain_policy_decision_allows_safe_readonly_command(self):
+        path = self.policy_path("safety_policy_test_explain_allow.json")
+        self.cleanup_policy_file(path)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", path):
+                result = explain_policy_decision(
+                    "linux_execute_command",
+                    {"command": "uname -a"},
+                    {"allow_modifications": False},
+                )
+        finally:
+            self.cleanup_policy_file(path)
+
+        self.assertEqual(result["decision"], "allow")
 
 
 if __name__ == "__main__":

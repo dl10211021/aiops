@@ -448,6 +448,30 @@ export interface SafetyPolicy {
   categories: Record<string, SafetyPolicyCategory>
 }
 
+export interface SafetyPolicyTestInput {
+  tool_name: string
+  command?: string
+  sql?: string
+  method?: string
+  path?: string
+  oid?: string
+  allow_modifications?: boolean
+  asset_type?: string
+  protocol?: string
+}
+
+export interface SafetyPolicyTestResult {
+  decision: 'allow' | 'approval' | 'deny' | 'readonly_block' | string
+  label: string
+  mode: 'readonly' | 'readwrite' | string
+  reason: string
+  checks: Array<{
+    name: string
+    matched: boolean
+    reason?: string
+  }>
+}
+
 export interface AssetCleanupPlan {
   summary: {
     assets_scanned: number

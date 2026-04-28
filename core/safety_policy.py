@@ -597,3 +597,83 @@ def check_hard_block(tool_call_name: str, args: dict[str, Any]) -> tuple[bool, s
         if marker and marker in command:
             return True, "指令触发硬拦截策略，已被系统拒绝。"
     return False, ""
+
+
+def explain_policy_decision(
+    tool_call_name: str,
+    args: dict[str, Any],
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Preview how a tool call would be handled without executing it."""
+    ctx = context or {}
+    mode = "readwrite" if ctx.get("allow_modifications", False) else "readonly"
+    checks: list[dict[str, Any]] = []
+
+    hard_blocked, hard_reason = check_hard_block(tool_call_name, args)
+    checks.append(
+        {
+            "name": "禁止执行",
+            "matched": hard_blocked,
+            "reason": hard_reason,
+        }
+    )
+    if hard_blocked:
+        return {
+            "decision": "deny",
+            "label": "禁止执行",
+            "mode": mode,
+            "reason": hard_reason,
+            "checks": checks,
+        }
+
+    needs_approval, approval_reason = check_approval_needed(tool_call_name, args, ctx)
+    readonly_blocked, readonly_reason = check_readonly_block(tool_call_name, args, ctx)
+    checks.extend(
+        [
+            {
+                "name": "需要审批",
+                "matched": needs_approval,
+                "reason": approval_reason,
+            },
+            {
+                "name": "只读保护",
+                "matched": readonly_blocked,
+                "reason": readonly_reason,
+            },
+        ]
+    )
+
+    if readonly_blocked and needs_approval:
+        return {
+            "decision": "approval",
+            "label": "需要审批",
+            "mode": mode,
+            "reason": f"{readonly_reason}；读写会话中会进入人工审批。",
+            "checks": checks,
+        }
+
+    if readonly_blocked:
+        return {
+            "decision": "readonly_block",
+            "label": "只读保护阻止",
+            "mode": mode,
+            "reason": readonly_reason,
+            "checks": checks,
+        }
+
+    if needs_approval:
+        return {
+            "decision": "approval",
+            "label": "需要审批",
+            "mode": mode,
+            "reason": approval_reason,
+            "checks": checks,
+        }
+
+    return {
+        "decision": "allow",
+        "label": "允许执行",
+        "mode": mode,
+        "reason": "未命中审批或禁止执行规则。",
+        "checks": checks,
+    }

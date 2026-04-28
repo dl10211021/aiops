@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '@/store'
-import { getSafetyPolicy, updateSafetyPolicy } from '@/api/client'
-import type { SafetyPolicy, SafetyPolicyCategory } from '@/types'
+import { getSafetyPolicy, testSafetyPolicy, updateSafetyPolicy } from '@/api/client'
+import type { SafetyPolicy, SafetyPolicyCategory, SafetyPolicyTestResult } from '@/types'
 
 type CategoryKey = 'linux' | 'windows' | 'sql' | 'redis' | 'http' | 'network' | 'local' | 'skill_change'
 type Decision = 'approval' | 'deny'
@@ -182,6 +182,12 @@ const DEFAULT_FORM = {
   reason: '',
 }
 
+const DEFAULT_TEST_FORM = {
+  input: '',
+  method: 'GET',
+  mode: 'readonly' as 'readonly' | 'readwrite',
+}
+
 function lines(value?: string[]) {
   return (value || []).join('\n')
 }
@@ -234,6 +240,27 @@ function resolveCategory(domain: DomainDefinition, platform: string): CategoryKe
   return domain.category
 }
 
+function resolveToolName(domain: DomainDefinition, platform: string) {
+  const normalized = platform.toLowerCase()
+  if (normalized.includes('windows') || normalized.includes('hyper-v')) return 'winrm_execute_command'
+  if (normalized.includes('redis')) return 'redis_execute_command'
+  if (domain.id === 'database') return 'db_execute_query'
+  if (domain.id === 'network') return 'network_cli_execute_command'
+  if (domain.id === 'cloudnative' && normalized.includes('kubernetes')) return 'k8s_api_request'
+  if (domain.id === 'virtualization') return 'virtualization_api_request'
+  if (domain.id === 'storage') return 'storage_api_request'
+  if (domain.id === 'monitoring') return 'monitoring_api_query'
+  if (domain.id === 'hardware') return 'http_api_request'
+  if (domain.id === 'platform') return 'local_execute_script'
+  return 'linux_execute_command'
+}
+
+function testResultStyle(decision: string) {
+  if (decision === 'allow') return 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
+  if (decision === 'approval') return 'border-yellow-300/30 bg-yellow-300/10 text-yellow-200'
+  return 'border-red-400/30 bg-red-400/10 text-red-200'
+}
+
 export default function SafetyPolicyModal() {
   const closeModal = useStore((s) => s.closeModal)
   const addToast = useStore((s) => s.addToast)
@@ -242,6 +269,9 @@ export default function SafetyPolicyModal() {
   const [saving, setSaving] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [form, setForm] = useState(DEFAULT_FORM)
+  const [testForm, setTestForm] = useState(DEFAULT_TEST_FORM)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<SafetyPolicyTestResult | null>(null)
 
   useEffect(() => {
     getSafetyPolicy()
@@ -250,7 +280,7 @@ export default function SafetyPolicyModal() {
   }, [addToast])
 
   const activeDomain = DOMAINS.find((domain) => domain.id === activeDomainId) || DOMAINS[0]
-  const selectedPlatform = form.platform || activeDomain.platforms[0]
+  const selectedPlatform = activeDomain.platforms.includes(form.platform) ? form.platform : activeDomain.platforms[0]
   const activeCategory = resolveCategory(activeDomain, selectedPlatform)
   const category = policy?.categories?.[activeCategory] || {}
 
@@ -320,6 +350,35 @@ export default function SafetyPolicyModal() {
     updateCategory(targetCategory, patch)
     setForm(DEFAULT_FORM)
     addToast(form.decision === 'deny' ? '已加入禁止执行规则，保存后生效' : '已加入审批规则，保存后生效', 'success')
+  }
+
+  const runPolicyTest = async () => {
+    const input = testForm.input.trim()
+    if (!input) {
+      addToast('请填写要测试的命令、SQL 或 API 路径', 'error')
+      return
+    }
+    const toolName = resolveToolName(activeDomain, selectedPlatform)
+    const payload = {
+      tool_name: toolName,
+      command: input,
+      sql: activeCategory === 'sql' ? input : undefined,
+      method: activeCategory === 'http' ? testForm.method : undefined,
+      path: activeCategory === 'http' ? input : undefined,
+      allow_modifications: testForm.mode === 'readwrite',
+      asset_type: selectedPlatform,
+      protocol: activeCategory === 'http' ? 'http_api' : undefined,
+    }
+
+    setTesting(true)
+    try {
+      const res = await testSafetyPolicy(payload)
+      setTestResult(res.data.result)
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '测试安全策略失败', 'error')
+    } finally {
+      setTesting(false)
+    }
   }
 
   const save = async () => {
@@ -549,6 +608,88 @@ export default function SafetyPolicyModal() {
                     加入规则
                   </button>
                 </div>
+              </section>
+
+              <section className="mb-4 rounded-lg border border-ops-surface0 bg-ops-dark/45 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-ops-text">规则测试器</h4>
+                    <p className="mt-1 text-xs text-ops-subtext">只做策略预演，不会连接或执行目标资产。适合保存前检查一条命令会被如何处理。</p>
+                  </div>
+                  <span className="rounded-full border border-ops-surface1 px-2 py-1 text-[11px] text-ops-subtext">
+                    {testForm.mode === 'readwrite' ? '读写会话' : '只读会话'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-[1fr_120px_120px_auto] gap-3">
+                  <label>
+                    <span className="text-xs text-ops-subtext">命令 / SQL / API 路径</span>
+                    <input
+                      value={testForm.input}
+                      onChange={(e) => setTestForm({ ...testForm, input: e.target.value })}
+                      placeholder={activeCategory === 'http' ? '例如 /api/v1/namespaces/prod' : '例如 systemctl restart nginx'}
+                      className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+                    />
+                  </label>
+                  <label>
+                    <span className="text-xs text-ops-subtext">HTTP 方法</span>
+                    <select
+                      value={testForm.method}
+                      onChange={(e) => setTestForm({ ...testForm, method: e.target.value })}
+                      disabled={activeCategory !== 'http'}
+                      className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent disabled:opacity-45"
+                    >
+                      <option value="GET">GET</option>
+                      <option value="POST">POST</option>
+                      <option value="PUT">PUT</option>
+                      <option value="PATCH">PATCH</option>
+                      <option value="DELETE">DELETE</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span className="text-xs text-ops-subtext">会话模式</span>
+                    <select
+                      value={testForm.mode}
+                      onChange={(e) => setTestForm({ ...testForm, mode: e.target.value as 'readonly' | 'readwrite' })}
+                      className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+                    >
+                      <option value="readonly">只读</option>
+                      <option value="readwrite">读写</option>
+                    </select>
+                  </label>
+                  <button
+                    onClick={runPolicyTest}
+                    disabled={testing}
+                    className="mt-5 rounded-lg border border-ops-accent/50 px-4 py-2 text-sm font-medium text-ops-accent transition-colors hover:bg-ops-accent/10 disabled:opacity-45"
+                  >
+                    {testing ? '测试中...' : '测试'}
+                  </button>
+                </div>
+
+                {testResult && (
+                  <div className="mt-3 rounded-lg border border-ops-surface0 bg-ops-panel/50 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${testResultStyle(testResult.decision)}`}>
+                        {testResult.label}
+                      </span>
+                      <span className="font-mono text-[11px] text-ops-overlay">{resolveToolName(activeDomain, selectedPlatform)}</span>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-ops-text">{testResult.reason}</p>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {testResult.checks.map((check) => (
+                        <div key={check.name} className="rounded-md border border-ops-surface0 bg-ops-dark/45 px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-medium text-ops-text">{check.name}</span>
+                            <span className={check.matched ? 'text-xs text-yellow-200' : 'text-xs text-ops-overlay'}>
+                              {check.matched ? '命中' : '未命中'}
+                            </span>
+                          </div>
+                          {check.reason && <p className="mt-1 text-[11px] leading-4 text-ops-subtext">{check.reason}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </section>
 
               <section className="mb-4 grid grid-cols-2 gap-4 rounded-lg border border-ops-surface0 bg-ops-dark/45 p-4">

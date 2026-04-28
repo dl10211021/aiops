@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fastapi import HTTPException, UploadFile
+from pydantic import ValidationError
 
 from api import routes
 
@@ -165,6 +166,27 @@ class TestApiErrorSemantics(unittest.TestCase):
             )
 
         self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_safety_policy_test_endpoint_previews_without_execution(self):
+        response = asyncio.run(
+            routes.test_safety_policy_endpoint(
+                routes.SafetyPolicyTestRequest(
+                    tool_name="linux_execute_command",
+                    command="rm -rf /",
+                    allow_modifications=True,
+                )
+            )
+        )
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data["result"]["decision"], "deny")
+
+    def test_safety_policy_test_request_rejects_unknown_tool(self):
+        with self.assertRaises(ValidationError):
+            routes.SafetyPolicyTestRequest(
+                tool_name="unknown_execute",
+                command="echo ok",
+            )
 
     def test_models_empty_result_returns_bad_gateway(self):
         with patch("core.agent.get_available_models_for_provider", return_value=[]):

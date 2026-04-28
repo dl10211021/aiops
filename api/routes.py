@@ -2663,6 +2663,78 @@ class SafetyPolicyUpdateRequest(BaseModel):
     policy: dict
 
 
+SAFETY_POLICY_TEST_TOOLS = {
+    "linux_execute_command",
+    "container_execute_command",
+    "middleware_execute_command",
+    "storage_execute_command",
+    "network_cli_execute_command",
+    "execute_on_scope",
+    "winrm_execute_command",
+    "db_execute_query",
+    "redis_execute_command",
+    "http_api_request",
+    "k8s_api_request",
+    "monitoring_api_query",
+    "virtualization_api_request",
+    "storage_api_request",
+    "local_execute_script",
+    "evolve_skill",
+}
+
+
+class SafetyPolicyTestRequest(BaseModel):
+    tool_name: str = Field(default="linux_execute_command", max_length=80)
+    command: str | None = Field(default=None, max_length=2000)
+    sql: str | None = Field(default=None, max_length=4000)
+    method: str | None = Field(default=None, max_length=16)
+    path: str | None = Field(default=None, max_length=1200)
+    oid: str | None = Field(default=None, max_length=120)
+    allow_modifications: bool = False
+    asset_type: str | None = Field(default=None, max_length=80)
+    protocol: str | None = Field(default=None, max_length=80)
+
+    @model_validator(mode="after")
+    def validate_test_input(self):
+        if self.tool_name not in SAFETY_POLICY_TEST_TOOLS:
+            raise ValueError("不支持的安全策略测试工具。")
+        if self.method and self.method.upper() not in {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"}:
+            raise ValueError("HTTP 方法只能是 GET、HEAD、POST、PUT、PATCH、DELETE。")
+        has_input = any(
+            str(value or "").strip()
+            for value in (self.command, self.sql, self.method, self.path, self.oid)
+        )
+        if not has_input:
+            raise ValueError("请至少填写命令、SQL、HTTP 方法、API 路径或 OID。")
+        return self
+
+    def tool_args(self) -> dict:
+        if self.tool_name == "db_execute_query":
+            return {"sql": self.sql or self.command or ""}
+        if self.tool_name in {
+            "http_api_request",
+            "k8s_api_request",
+            "monitoring_api_query",
+            "virtualization_api_request",
+            "storage_api_request",
+        }:
+            return {
+                "method": (self.method or "GET").upper(),
+                "path": self.path or self.command or "/",
+                "oid": self.oid or "",
+            }
+        if self.tool_name == "evolve_skill":
+            return {"skill_id": self.command or "", "file_name": self.path or ""}
+        return {"command": self.command or self.sql or self.path or ""}
+
+    def context(self) -> dict:
+        return {
+            "allow_modifications": self.allow_modifications,
+            "asset_type": self.asset_type or "",
+            "protocol": self.protocol or "",
+        }
+
+
 @router.get("/config/safety-policy", response_model=ResponseModel)
 async def get_safety_policy_endpoint():
     from core.safety_policy import get_safety_policy
@@ -2680,4 +2752,12 @@ async def update_safety_policy_endpoint(req: SafetyPolicyUpdateRequest):
         logger.error("保存安全策略失败: %s", e)
         raise HTTPException(status_code=500, detail=f"保存安全策略失败: {e}")
     return ResponseModel(status="success", message="安全策略已保存", data={"policy": policy})
+
+
+@router.post("/config/safety-policy/test", response_model=ResponseModel)
+async def test_safety_policy_endpoint(req: SafetyPolicyTestRequest):
+    from core.safety_policy import explain_policy_decision
+
+    result = explain_policy_decision(req.tool_name, req.tool_args(), req.context())
+    return ResponseModel(status="success", data={"result": result})
 
