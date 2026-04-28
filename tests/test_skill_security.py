@@ -232,6 +232,45 @@ class TestSkillSecurity(unittest.TestCase):
         self.assertIn("description: new", new_content)
         refresh.assert_called_once_with(force=True)
 
+    def test_create_skill_overwrite_versions_existing_script_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target_base = Path(tmp) / "custom"
+            existing = target_base / "existing-skill"
+            existing.mkdir(parents=True)
+            (existing / "SKILL.md").write_text(
+                "---\nname: existing-skill\ndescription: old\n---\n\nold\n",
+                encoding="utf-8",
+            )
+            old_script = "print('old')\n"
+            (existing / "check.py").write_text(old_script, encoding="utf-8")
+
+            with (
+                patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch("core.dispatcher.dispatcher.refresh_skills"),
+            ):
+                response = asyncio.run(
+                    routes.create_skill(
+                        routes.CreateSkillRequest(
+                            skill_id="existing-skill",
+                            description="new",
+                            instructions="new body",
+                            script_name="check.py",
+                            script_content="print('new')\n",
+                            overwrite_existing=True,
+                        )
+                    )
+                )
+
+            script_backups = list((existing / ".versions").glob("check.py.*.bak"))
+            script_backup_content = script_backups[0].read_text(encoding="utf-8") if script_backups else ""
+            script_content = (existing / "check.py").read_text(encoding="utf-8")
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(len(script_backups), 1)
+        self.assertIn(str(script_backups[0]), response.data["backup_paths"])
+        self.assertEqual(script_backup_content, old_script)
+        self.assertEqual(script_content, "print('new')\n")
+
     def test_create_skill_writes_to_custom_skills_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             target_base = Path(tmp) / "custom"

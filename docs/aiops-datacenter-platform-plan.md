@@ -568,7 +568,7 @@
 - `evolve_skill` 执行结果返回实际写入文件与 `.versions` 备份路径，审批执行记录会抽取这些引用，形成审批到版本备份的追溯链。
 - 技能回滚接口改为两阶段审批流程：先创建 `rollback_skill` 审批记录，审批通过后携带 `approval_id` 才会实际恢复版本并写回执行摘要。
 - 审批中心新增已批准回滚的后续执行闭环：`POST /approvals/{approval_id}/execute` 只执行支持的 `rollback_skill` 审批，并拒绝重复执行。
-- 人工创建技能接口支持显式 `overwrite_existing` 更新模式，覆盖前会把旧 `SKILL.md` 写入 `.versions`，默认重复创建仍返回 409。
+- 人工创建技能接口支持显式 `overwrite_existing` 更新模式，覆盖前会把旧 `SKILL.md` 和同名脚本写入 `.versions`，默认重复创建仍返回 409。
 
 ## Phase 10: Productionization
 
