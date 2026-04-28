@@ -457,10 +457,38 @@ def _normalize_rules(value: Any) -> list[dict[str, Any]]:
                 "decision": decision,
                 "description": str(item.get("description") or ""),
                 "enabled": bool(item.get("enabled", True)),
+                "scope": item.get("scope") if isinstance(item.get("scope"), dict) else {"type": "all", "value": ""},
+                "sources": _string_list(item.get("sources", [])),
                 "matchers": matchers,
             }
         )
     return rules
+
+
+def validate_safety_policy(policy: dict[str, Any]) -> list[str]:
+    """Return user-facing validation errors for editable safety policy rules."""
+    issues: list[str] = []
+    categories = policy.get("categories", {})
+    if isinstance(categories, dict):
+        for category_name, cfg in categories.items():
+            if not isinstance(cfg, dict):
+                continue
+            for field in ("approval_patterns", "readonly_block_patterns"):
+                for index, pattern in enumerate(_string_list(cfg.get(field, [])), start=1):
+                    try:
+                        re.compile(pattern)
+                    except re.error as exc:
+                        issues.append(f"{category_name}.{field} 第 {index} 行正则无效: {exc}")
+
+    for rule in policy.get("rules", []):
+        for matcher in rule.get("matchers", []):
+            if matcher.get("type") != "regex":
+                continue
+            try:
+                re.compile(str(matcher.get("value") or ""))
+            except re.error as exc:
+                issues.append(f"{rule.get('name') or rule.get('id')}: 正则无效: {exc}")
+    return issues
 
 
 def normalize_safety_policy(policy: dict[str, Any] | None) -> dict[str, Any]:
@@ -509,6 +537,9 @@ def get_safety_policy() -> dict[str, Any]:
 
 def save_safety_policy(policy: dict[str, Any]) -> dict[str, Any]:
     normalized = normalize_safety_policy(policy)
+    issues = validate_safety_policy(normalized)
+    if issues:
+        raise ValueError("；".join(issues[:5]))
     tmp_path = f"{POLICY_PATH}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(normalized, f, ensure_ascii=False, indent=2)
@@ -561,8 +592,59 @@ def _semantic_text(tool_call_name: str, args: dict[str, Any]) -> str:
         str(args.get("method") or ""),
         str(args.get("path") or ""),
         str(args.get("oid") or ""),
+        " ".join(_platform_actions(tool_call_name, args)),
     ]
     return " ".join(part for part in parts if part).strip()
+
+
+def _platform_actions(tool_call_name: str, args: dict[str, Any]) -> list[str]:
+    method = str(args.get("method") or "GET").upper()
+    path = str(args.get("path") or "").lower()
+    body_text = json.dumps(args.get("body") or {}, ensure_ascii=False).lower()
+    actions: list[str] = []
+
+    if tool_call_name == "k8s_api_request":
+        if method == "DELETE" and "/namespaces/" in path:
+            actions.append("k8s.delete_namespace")
+        if method in {"PATCH", "PUT", "POST"} and "deployments" in path and ("scale" in path or "replicas" in body_text):
+            actions.append("k8s.scale_deployment")
+        if method == "DELETE" and "/pods/" in path:
+            actions.append("k8s.delete_pod")
+        if method in {"PATCH", "PUT", "POST"} and ("secrets" in path or "rbac" in path):
+            actions.append("k8s.modify_sensitive_resource")
+
+    if tool_call_name == "virtualization_api_request":
+        if method == "DELETE" and any(token in path for token in ("vm", "server", "instance")):
+            actions.append("virtualization.delete_vm")
+        if method in {"POST", "PUT", "PATCH"} and any(token in path for token in ("reboot", "restart", "reset")):
+            actions.append("virtualization.reboot_vm")
+        if method in {"POST", "PUT", "PATCH"} and any(token in path for token in ("migrate", "relocate")):
+            actions.append("virtualization.migrate_vm")
+        if method in {"POST", "PUT", "PATCH"} and any(token in path for token in ("snapshot", "rollback", "revert")):
+            actions.append("virtualization.snapshot_or_rollback")
+
+    if tool_call_name == "storage_api_request":
+        is_bucket_root = path.count("/") <= 1 and bool(path.strip("/"))
+        if method == "GET" and not path.endswith("/"):
+            actions.append("s3.download_object")
+        if method == "DELETE" and is_bucket_root:
+            actions.append("s3.delete_bucket")
+        if method == "DELETE" and not is_bucket_root:
+            actions.append("s3.delete_object")
+        if method in {"PUT", "PATCH", "POST"} and any(token in path for token in ("policy", "acl", "publicaccessblock")):
+            actions.append("s3.change_bucket_policy")
+            if "public" in body_text or "publicaccessblock" in path:
+                actions.append("s3.public_bucket")
+
+    if tool_call_name == "monitoring_api_query":
+        if method == "POST" and "silence" in path:
+            actions.append("monitoring.create_silence")
+        if method in {"POST", "PUT", "PATCH"} and any(token in path for token in ("ruler", "rules", "alert")):
+            actions.append("monitoring.modify_rule")
+        if method == "DELETE" and any(token in path for token in ("ruler", "rules", "alert")):
+            actions.append("monitoring.delete_rule")
+
+    return actions
 
 
 def _semantic_matcher_matches(matcher: dict[str, Any], text: str, args: dict[str, Any]) -> bool:
@@ -585,6 +667,8 @@ def _semantic_matcher_matches(matcher: dict[str, Any], text: str, args: dict[str
         return lower_value in str(args.get("path") or "").lower()
     if matcher_type in {"api_path_prefix", "path_prefix"}:
         return str(args.get("path") or "").lower().startswith(lower_value)
+    if matcher_type == "platform_action":
+        return lower_value in _platform_actions("", {}) or lower_value in lower_text
     if matcher_type == "regex":
         try:
             return bool(re.search(value, text, re.IGNORECASE))
@@ -595,6 +679,11 @@ def _semantic_matcher_matches(matcher: dict[str, Any], text: str, args: dict[str
 
 def _rule_applies(rule: dict[str, Any], tool_call_name: str, context: dict[str, Any]) -> bool:
     if not rule.get("enabled", True):
+        return False
+
+    sources = _string_list(rule.get("sources", []))
+    trigger_source = str(context.get("trigger_source") or context.get("source") or "chat").strip().lower()
+    if sources and trigger_source not in {item.lower() for item in sources}:
         return False
 
     rule_category = str(rule.get("category") or "").strip()
@@ -617,6 +706,25 @@ def _rule_applies(rule: dict[str, Any], tool_call_name: str, context: dict[str, 
     if platform and any(observed):
         direct_match = any(alias and any(alias in item or item in alias for item in observed if item) for alias in aliases)
         if not direct_match:
+            return False
+
+    scope = rule.get("scope") if isinstance(rule.get("scope"), dict) else {}
+    scope_type = str(scope.get("type") or "all").strip().lower()
+    scope_value = str(scope.get("value") or "").strip().lower()
+    if scope_type and scope_type != "all" and scope_value:
+        tags = [str(item).lower() for item in context.get("tags", []) if str(item).strip()]
+        context_values = {
+            "asset_type": asset_type,
+            "protocol": protocol,
+            "asset_group": str(context.get("target_scope") or context.get("scope_value") or context.get("group_name") or "").lower(),
+            "tag": " ".join(tags),
+            "environment": str(context.get("environment") or "").lower(),
+            "asset": str(context.get("host") or context.get("asset_id") or "").lower(),
+        }
+        if scope_type == "tag":
+            if scope_value not in tags:
+                return False
+        elif scope_value not in context_values.get(scope_type, ""):
             return False
 
     return True
@@ -731,9 +839,9 @@ def check_readonly_block(tool_call_name: str, args: dict[str, Any], context: dic
     return False, ""
 
 
-def check_hard_block(tool_call_name: str, args: dict[str, Any]) -> tuple[bool, str]:
+def check_hard_block(tool_call_name: str, args: dict[str, Any], context: dict[str, Any] | None = None) -> tuple[bool, str]:
     policy = get_safety_policy()
-    semantic_rule = _matched_semantic_rule(policy, tool_call_name, args, {}, {"deny"})
+    semantic_rule = _matched_semantic_rule(policy, tool_call_name, args, context or {}, {"deny"})
     if semantic_rule:
         return True, _rule_reason(semantic_rule, "该动作被配置为禁止执行。")
 
@@ -755,7 +863,7 @@ def explain_policy_decision(
     mode = "readwrite" if ctx.get("allow_modifications", False) else "readonly"
     checks: list[dict[str, Any]] = []
 
-    hard_blocked, hard_reason = check_hard_block(tool_call_name, args)
+    hard_blocked, hard_reason = check_hard_block(tool_call_name, args, ctx)
     checks.append(
         {
             "name": "禁止执行",

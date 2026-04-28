@@ -2690,9 +2690,12 @@ class SafetyPolicyTestRequest(BaseModel):
     method: str | None = Field(default=None, max_length=16)
     path: str | None = Field(default=None, max_length=1200)
     oid: str | None = Field(default=None, max_length=120)
+    body: dict | None = None
     allow_modifications: bool = False
     asset_type: str | None = Field(default=None, max_length=80)
     protocol: str | None = Field(default=None, max_length=80)
+    trigger_source: str | None = Field(default="chat", max_length=80)
+    tags: list[str] = []
 
     @model_validator(mode="after")
     def validate_test_input(self):
@@ -2722,6 +2725,7 @@ class SafetyPolicyTestRequest(BaseModel):
                 "method": (self.method or "GET").upper(),
                 "path": self.path or self.command or "/",
                 "oid": self.oid or "",
+                "body": self.body or {},
             }
         if self.tool_name == "evolve_skill":
             return {"skill_id": self.command or "", "file_name": self.path or ""}
@@ -2732,6 +2736,8 @@ class SafetyPolicyTestRequest(BaseModel):
             "allow_modifications": self.allow_modifications,
             "asset_type": self.asset_type or "",
             "protocol": self.protocol or "",
+            "trigger_source": self.trigger_source or "chat",
+            "tags": self.tags,
         }
 
 
@@ -2748,6 +2754,8 @@ async def update_safety_policy_endpoint(req: SafetyPolicyUpdateRequest):
 
     try:
         policy = save_safety_policy(req.policy)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error("保存安全策略失败: %s", e)
         raise HTTPException(status_code=500, detail=f"保存安全策略失败: {e}")

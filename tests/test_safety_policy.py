@@ -9,6 +9,7 @@ from core.safety_policy import (
     explain_policy_decision,
     get_safety_policy,
     save_safety_policy,
+    validate_safety_policy,
 )
 
 
@@ -340,6 +341,160 @@ class TestSafetyPolicy(unittest.TestCase):
 
         self.assertEqual(result["decision"], "deny")
         self.assertIn("禁止公开 Bucket", result["reason"])
+
+    def test_semantic_rule_scope_limits_by_tag(self):
+        path = self.policy_path("safety_policy_test_semantic_scope.json")
+        self.cleanup_policy_file(path)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", path):
+                policy = get_safety_policy()
+                policy["rules"] = [
+                    {
+                        "id": "prod-restart",
+                        "name": "生产环境重启服务需要审批",
+                        "domain": "os",
+                        "platform": "Linux",
+                        "category": "linux",
+                        "decision": "approval",
+                        "scope": {"type": "tag", "value": "生产"},
+                        "matchers": [{"type": "command_prefix", "value": "systemctl restart"}],
+                    }
+                ]
+                save_safety_policy(policy)
+                test_args = {"command": "systemctl restart nginx"}
+                dev_result = explain_policy_decision(
+                    "linux_execute_command",
+                    test_args,
+                    {"allow_modifications": True, "asset_type": "ssh", "tags": ["测试"]},
+                )
+                prod_result = explain_policy_decision(
+                    "linux_execute_command",
+                    test_args,
+                    {"allow_modifications": True, "asset_type": "ssh", "tags": ["生产"]},
+                )
+        finally:
+            self.cleanup_policy_file(path)
+
+        self.assertEqual(dev_result["decision"], "approval")  # legacy default still catches restart
+        self.assertNotIn("生产环境", dev_result["reason"])
+        self.assertEqual(prod_result["decision"], "approval")
+        self.assertIn("生产环境", prod_result["reason"])
+
+    def test_scoped_semantic_deny_uses_context(self):
+        path = self.policy_path("safety_policy_test_scoped_deny_context.json")
+        self.cleanup_policy_file(path)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", path):
+                policy = get_safety_policy()
+                policy["rules"] = [
+                    {
+                        "id": "prod-deny-reboot",
+                        "name": "生产禁止重启",
+                        "domain": "os",
+                        "platform": "Linux",
+                        "category": "linux",
+                        "decision": "deny",
+                        "scope": {"type": "tag", "value": "生产"},
+                        "matchers": [{"type": "command_prefix", "value": "reboot"}],
+                    }
+                ]
+                save_safety_policy(policy)
+                dev_result = explain_policy_decision(
+                    "linux_execute_command",
+                    {"command": "reboot"},
+                    {"allow_modifications": True, "asset_type": "ssh", "tags": ["测试"]},
+                )
+                prod_result = explain_policy_decision(
+                    "linux_execute_command",
+                    {"command": "reboot"},
+                    {"allow_modifications": True, "asset_type": "ssh", "tags": ["生产"]},
+                )
+        finally:
+            self.cleanup_policy_file(path)
+
+        self.assertNotEqual(dev_result["decision"], "deny")
+        self.assertEqual(prod_result["decision"], "deny")
+
+    def test_semantic_platform_action_matches_k8s_namespace_delete(self):
+        path = self.policy_path("safety_policy_test_platform_action.json")
+        self.cleanup_policy_file(path)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", path):
+                policy = get_safety_policy()
+                policy["rules"] = [
+                    {
+                        "id": "deny-k8s-ns-delete",
+                        "name": "禁止删除 Kubernetes Namespace",
+                        "domain": "cloudnative",
+                        "platform": "Kubernetes",
+                        "category": "http",
+                        "decision": "deny",
+                        "matchers": [{"type": "platform_action", "value": "k8s.delete_namespace"}],
+                    }
+                ]
+                save_safety_policy(policy)
+                result = explain_policy_decision(
+                    "k8s_api_request",
+                    {"method": "DELETE", "path": "/api/v1/namespaces/prod"},
+                    {"allow_modifications": True, "asset_type": "k8s", "protocol": "k8s"},
+                )
+        finally:
+            self.cleanup_policy_file(path)
+
+        self.assertEqual(result["decision"], "deny")
+        self.assertIn("Namespace", result["reason"])
+
+    def test_semantic_rule_sources_limit_trigger_source(self):
+        path = self.policy_path("safety_policy_test_sources.json")
+        self.cleanup_policy_file(path)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", path):
+                policy = get_safety_policy()
+                policy["rules"] = [
+                    {
+                        "id": "alert-only",
+                        "name": "告警联动禁止删除 Pod",
+                        "domain": "cloudnative",
+                        "platform": "Kubernetes",
+                        "category": "http",
+                        "decision": "deny",
+                        "sources": ["alert"],
+                        "matchers": [{"type": "platform_action", "value": "k8s.delete_pod"}],
+                    }
+                ]
+                save_safety_policy(policy)
+                args = {"method": "DELETE", "path": "/api/v1/namespaces/default/pods/nginx"}
+                chat_result = explain_policy_decision(
+                    "k8s_api_request",
+                    args,
+                    {"allow_modifications": True, "asset_type": "k8s", "trigger_source": "chat"},
+                )
+                alert_result = explain_policy_decision(
+                    "k8s_api_request",
+                    args,
+                    {"allow_modifications": True, "asset_type": "k8s", "trigger_source": "alert"},
+                )
+        finally:
+            self.cleanup_policy_file(path)
+
+        self.assertNotEqual(chat_result["decision"], "deny")
+        self.assertEqual(alert_result["decision"], "deny")
+
+    def test_invalid_regex_policy_is_rejected(self):
+        policy = get_safety_policy()
+        policy["rules"] = [
+            {
+                "id": "bad-regex",
+                "name": "坏正则",
+                "decision": "deny",
+                "matchers": [{"type": "regex", "value": "["}],
+            }
+        ]
+
+        issues = validate_safety_policy(policy)
+
+        self.assertTrue(issues)
+        self.assertIn("正则无效", issues[0])
 
 
 if __name__ == "__main__":

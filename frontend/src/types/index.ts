@@ -452,6 +452,11 @@ export interface SafetyPolicyRule {
   decision: 'allow' | 'approval' | 'deny'
   description?: string
   enabled?: boolean
+  scope?: {
+    type: 'all' | 'tag' | 'asset_type' | 'asset_group' | 'environment' | 'asset' | string
+    value?: string
+  }
+  sources?: string[]
   matchers: Array<{
     type: string
     value: string
@@ -473,9 +478,12 @@ export interface SafetyPolicyTestInput {
   method?: string
   path?: string
   oid?: string
+  body?: Record<string, unknown>
   allow_modifications?: boolean
   asset_type?: string
   protocol?: string
+  trigger_source?: string
+  tags?: string[]
 }
 
 export interface SafetyPolicyTestResult {

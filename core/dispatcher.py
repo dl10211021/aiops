@@ -360,7 +360,7 @@ class SkillDispatcher:
         self, tool_call_name: str, args: Dict[str, Any], context: Dict[str, Any]
     ) -> str:
         """执行大模型的意图"""
-        hard_blocked, hard_reason = check_hard_block(tool_call_name, args)
+        hard_blocked, hard_reason = check_hard_block(tool_call_name, args, context)
         if hard_blocked:
             logger.warning(
                 "Hard blocked tool call %s for session %s: %s",
@@ -804,10 +804,10 @@ class SkillDispatcher:
                         if t_asset_type == "switch"
                         else "linux_execute_command"
                     )
-                    hard_blocked, hard_reason = check_hard_block(actual_tool, args)
+                    session_info = ssh_manager.active_sessions.get(t_sid, {}).get("info", {})
+                    hard_blocked, hard_reason = check_hard_block(actual_tool, args, {**context, **session_info})
                     if hard_blocked:
                         return t_host, {"success": False, "error": hard_reason}
-                    session_info = ssh_manager.active_sessions.get(t_sid, {}).get("info", {})
                     readonly_blocked, readonly_reason = check_readonly_block(
                         actual_tool, args, {**context, **session_info}
                     )

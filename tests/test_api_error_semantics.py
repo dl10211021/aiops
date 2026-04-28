@@ -188,6 +188,27 @@ class TestApiErrorSemantics(unittest.TestCase):
                 command="echo ok",
             )
 
+    def test_safety_policy_update_rejects_invalid_regex_with_422(self):
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(
+                routes.update_safety_policy_endpoint(
+                    routes.SafetyPolicyUpdateRequest(
+                        policy={
+                            "rules": [
+                                {
+                                    "id": "bad-regex",
+                                    "name": "坏正则",
+                                    "decision": "deny",
+                                    "matchers": [{"type": "regex", "value": "["}],
+                                }
+                            ]
+                        }
+                    )
+                )
+            )
+
+        self.assertEqual(ctx.exception.status_code, 422)
+
     def test_models_empty_result_returns_bad_gateway(self):
         with patch("core.agent.get_available_models_for_provider", return_value=[]):
             with self.assertRaises(HTTPException) as ctx:

@@ -5,7 +5,7 @@ import type { SafetyPolicy, SafetyPolicyCategory, SafetyPolicyRule, SafetyPolicy
 
 type CategoryKey = 'linux' | 'windows' | 'sql' | 'redis' | 'http' | 'network' | 'local' | 'skill_change'
 type Decision = 'approval' | 'deny'
-type MatcherType = 'contains' | 'prefix' | 'equals' | 'regex' | 'http_method'
+type MatcherType = 'contains' | 'prefix' | 'equals' | 'regex' | 'http_method' | 'platform_action'
 type ListField =
   | 'approval_patterns'
   | 'readonly_block_patterns'
@@ -180,6 +180,9 @@ const DEFAULT_FORM = {
   matcherValue: '',
   decision: 'approval' as Decision,
   reason: '',
+  scopeType: 'all',
+  scopeValue: '',
+  sources: ['chat', 'cron', 'alert'],
 }
 
 const DEFAULT_TEST_FORM = {
@@ -187,6 +190,140 @@ const DEFAULT_TEST_FORM = {
   method: 'GET',
   mode: 'readonly' as 'readonly' | 'readwrite',
 }
+
+const RULE_TEMPLATES: Array<{
+  id: string
+  name: string
+  description: string
+  rules: SafetyPolicyRule[]
+}> = [
+  {
+    id: 'production-standard',
+    name: '标准生产保护',
+    description: '生产标签下，重启/变更动作需要审批，删除类平台动作禁止执行。',
+    rules: [
+      {
+        id: 'tpl-prod-linux-restart',
+        name: '生产主机重启服务需要审批',
+        domain: 'os',
+        platform: 'Linux',
+        category: 'linux',
+        resource: '服务',
+        action: '重启',
+        decision: 'approval',
+        description: '生产主机重启服务会影响业务可用性，必须人工确认。',
+        enabled: true,
+        scope: { type: 'tag', value: '生产' },
+        sources: ['chat', 'cron', 'alert'],
+        matchers: [{ type: 'command_prefix', value: 'systemctl restart' }],
+      },
+      {
+        id: 'tpl-prod-vm-delete',
+        name: '生产环境禁止删除虚拟机',
+        domain: 'virtualization',
+        platform: 'VMware',
+        category: 'http',
+        resource: '虚拟机',
+        action: '删除',
+        decision: 'deny',
+        description: '生产虚拟机删除必须由人工平台操作，不允许 AI 执行。',
+        enabled: true,
+        scope: { type: 'tag', value: '生产' },
+        sources: ['chat', 'cron', 'alert'],
+        matchers: [{ type: 'platform_action', value: 'virtualization.delete_vm' }],
+      },
+    ],
+  },
+  {
+    id: 's3-data-protection',
+    name: 'S3 数据防泄露',
+    description: '下载对象需要审批，公开/删除 Bucket 直接禁止。',
+    rules: [
+      {
+        id: 'tpl-s3-download',
+        name: 'S3 下载对象需要审批',
+        domain: 'storage',
+        platform: 'S3',
+        category: 'http',
+        resource: 'Object',
+        action: '下载',
+        decision: 'approval',
+        description: '对象内容可能包含敏感数据，下载前需要人工确认。',
+        enabled: true,
+        scope: { type: 'all', value: '' },
+        sources: ['chat', 'cron', 'alert'],
+        matchers: [{ type: 'platform_action', value: 's3.download_object' }],
+      },
+      {
+        id: 'tpl-s3-public',
+        name: '禁止公开 Bucket',
+        domain: 'storage',
+        platform: 'S3',
+        category: 'http',
+        resource: 'Bucket Policy',
+        action: '公开',
+        decision: 'deny',
+        description: '公开 Bucket 会造成数据泄露风险。',
+        enabled: true,
+        scope: { type: 'all', value: '' },
+        sources: ['chat', 'cron', 'alert'],
+        matchers: [{ type: 'platform_action', value: 's3.public_bucket' }],
+      },
+      {
+        id: 'tpl-s3-delete-bucket',
+        name: '禁止删除 Bucket',
+        domain: 'storage',
+        platform: 'S3',
+        category: 'http',
+        resource: 'Bucket',
+        action: '删除',
+        decision: 'deny',
+        description: '删除 Bucket 是不可逆高危动作。',
+        enabled: true,
+        scope: { type: 'all', value: '' },
+        sources: ['chat', 'cron', 'alert'],
+        matchers: [{ type: 'platform_action', value: 's3.delete_bucket' }],
+      },
+    ],
+  },
+  {
+    id: 'k8s-strict',
+    name: 'K8s 严格保护',
+    description: '禁止删除 Namespace，扩缩容 Deployment 需要审批。',
+    rules: [
+      {
+        id: 'tpl-k8s-delete-namespace',
+        name: '禁止删除 Kubernetes Namespace',
+        domain: 'cloudnative',
+        platform: 'Kubernetes',
+        category: 'http',
+        resource: 'Namespace',
+        action: '删除',
+        decision: 'deny',
+        description: '删除 Namespace 会批量删除业务资源。',
+        enabled: true,
+        scope: { type: 'all', value: '' },
+        sources: ['chat', 'cron', 'alert'],
+        matchers: [{ type: 'platform_action', value: 'k8s.delete_namespace' }],
+      },
+      {
+        id: 'tpl-k8s-scale-deployment',
+        name: 'Deployment 扩缩容需要审批',
+        domain: 'cloudnative',
+        platform: 'Kubernetes',
+        category: 'http',
+        resource: 'Deployment',
+        action: '扩缩容',
+        decision: 'approval',
+        description: '扩缩容会改变业务容量，必须人工确认。',
+        enabled: true,
+        scope: { type: 'all', value: '' },
+        sources: ['chat', 'cron', 'alert'],
+        matchers: [{ type: 'platform_action', value: 'k8s.scale_deployment' }],
+      },
+    ],
+  },
+]
 
 function lines(value?: string[]) {
   return (value || []).join('\n')
@@ -237,11 +374,25 @@ function semanticMatcherType(type: MatcherType) {
   if (type === 'prefix') return 'command_prefix'
   if (type === 'equals') return 'equals'
   if (type === 'http_method') return 'http_method'
+  if (type === 'platform_action') return 'platform_action'
   return type
 }
 
 function createRuleId() {
   return `rule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function cloneTemplateRule(rule: SafetyPolicyRule) {
+  return { ...rule, id: `${rule.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` }
+}
+
+function isValidRegex(value: string) {
+  try {
+    new RegExp(value)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function testResultStyle(decision: string) {
@@ -316,9 +467,13 @@ export default function SafetyPolicyModal() {
       addToast('请填写匹配内容', 'error')
       return
     }
+    if (form.matcherType === 'regex' && !isValidRegex(value)) {
+      addToast('正则表达式无效，请检查括号、转义和字符范围', 'error')
+      return
+    }
 
     const targetCategory = resolveCategory(activeDomain, selectedPlatform)
-    const matcherType = targetCategory === 'http' && form.matcherType !== 'http_method'
+    const matcherType = targetCategory === 'http' && !['http_method', 'platform_action', 'regex'].includes(form.matcherType)
       ? 'api_path_contains'
       : semanticMatcherType(form.matcherType)
     const matcherValue = form.matcherType === 'http_method' ? value.toUpperCase() : value
@@ -333,6 +488,8 @@ export default function SafetyPolicyModal() {
       decision: form.decision,
       description: form.reason.trim() || `${selectedPlatform} 命中 ${value} 时${form.decision === 'deny' ? '禁止执行' : '需要人工审批'}。`,
       enabled: true,
+      scope: { type: form.scopeType, value: form.scopeValue.trim() },
+      sources: form.sources,
       matchers: [{ type: matcherType, value: matcherValue }],
     }
 
@@ -360,6 +517,24 @@ export default function SafetyPolicyModal() {
     })
   }
 
+  const applyTemplate = (templateId: string) => {
+    if (!policy) return
+    const template = RULE_TEMPLATES.find((item) => item.id === templateId)
+    if (!template) return
+    setPolicy({
+      ...policy,
+      rules: [...(policy.rules || []), ...template.rules.map(cloneTemplateRule)],
+    })
+    addToast(`已套用模板：${template.name}，保存后生效`, 'success')
+  }
+
+  const toggleSource = (source: string) => {
+    const next = form.sources.includes(source)
+      ? form.sources.filter((item) => item !== source)
+      : [...form.sources, source]
+    setForm({ ...form, sources: next })
+  }
+
   const runPolicyTest = async () => {
     const input = testForm.input.trim()
     if (!input) {
@@ -376,6 +551,7 @@ export default function SafetyPolicyModal() {
       allow_modifications: testForm.mode === 'readwrite',
       asset_type: selectedPlatform,
       protocol: activeCategory === 'http' ? 'http_api' : undefined,
+      trigger_source: 'chat',
     }
 
     setTesting(true)
@@ -534,6 +710,28 @@ export default function SafetyPolicyModal() {
                 ))}
               </section>
 
+              <section className="mb-4 rounded-lg border border-ops-surface0 bg-ops-dark/45 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-semibold text-ops-text">策略模板</h4>
+                    <p className="mt-1 text-xs text-ops-subtext">一键加入常用规则组合，保存后生效，可继续单条启停或删除。</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {RULE_TEMPLATES.map((template) => (
+                    <button
+                      key={template.id}
+                      onClick={() => applyTemplate(template.id)}
+                      className="rounded-lg border border-ops-surface1 bg-ops-panel/50 p-3 text-left transition-colors hover:border-ops-accent/60 hover:bg-ops-surface0/60"
+                    >
+                      <span className="block text-sm font-semibold text-ops-text">{template.name}</span>
+                      <span className="mt-1 block text-xs leading-5 text-ops-subtext">{template.description}</span>
+                      <span className="mt-2 block text-[11px] text-ops-overlay">{template.rules.length} 条规则</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
               <section className="mb-4 rounded-lg border border-ops-surface0 bg-ops-dark/45">
                 <div className="flex items-center justify-between border-b border-ops-surface0 px-4 py-3">
                   <div>
@@ -556,6 +754,9 @@ export default function SafetyPolicyModal() {
                             <span className="truncate text-sm font-medium text-ops-text">{rule.name}</span>
                           </div>
                           <p className="mt-1 truncate text-xs text-ops-subtext">{rule.description || '无说明'}</p>
+                          <p className="mt-1 truncate text-[11px] text-ops-overlay">
+                            范围：{rule.scope?.type === 'all' || !rule.scope?.type ? '全部资产' : `${rule.scope?.type}=${rule.scope?.value || '-'}`} · 来源：{rule.sources?.length ? rule.sources.join('/') : '全部'}
+                          </p>
                         </div>
                         <span className="text-xs text-ops-subtext">{rule.platform || '-'}</span>
                         <span className="truncate font-mono text-xs text-ops-overlay">
@@ -640,6 +841,7 @@ export default function SafetyPolicyModal() {
                       <option value="prefix">命令开头</option>
                       <option value="equals">完全等于</option>
                       <option value="http_method">HTTP 方法</option>
+                      <option value="platform_action">平台动作</option>
                       <option value="regex">正则匹配（高级）</option>
                     </select>
                   </label>
@@ -661,6 +863,52 @@ export default function SafetyPolicyModal() {
                       className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
                     />
                   </label>
+                  <label>
+                    <span className="text-xs text-ops-subtext">生效范围</span>
+                    <select
+                      value={form.scopeType}
+                      onChange={(e) => setForm({ ...form, scopeType: e.target.value })}
+                      className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+                    >
+                      <option value="all">全部资产</option>
+                      <option value="tag">资产标签</option>
+                      <option value="asset_group">资产组</option>
+                      <option value="asset_type">资产类型</option>
+                      <option value="environment">环境</option>
+                      <option value="asset">单资产</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span className="text-xs text-ops-subtext">范围值</span>
+                    <input
+                      value={form.scopeValue}
+                      onChange={(e) => setForm({ ...form, scopeValue: e.target.value })}
+                      disabled={form.scopeType === 'all'}
+                      placeholder={form.scopeType === 'tag' ? '例如：生产' : '全部资产无需填写'}
+                      className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent disabled:opacity-45"
+                    />
+                  </label>
+                  <div className="col-span-2">
+                    <span className="text-xs text-ops-subtext">操作来源</span>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {[
+                        ['chat', '会话'],
+                        ['cron', '定时巡检'],
+                        ['alert', '告警联动'],
+                        ['api', 'API'],
+                      ].map(([source, label]) => (
+                        <label key={source} className="inline-flex items-center gap-2 rounded-full border border-ops-surface1 px-3 py-1 text-xs text-ops-text">
+                          <input
+                            type="checkbox"
+                            checked={form.sources.includes(source)}
+                            onChange={() => toggleSource(source)}
+                            className="accent-ops-accent"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-ops-surface0 bg-ops-dark/45 px-3 py-2">
