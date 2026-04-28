@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpsCore 企业版控制台 Demo</title>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --panel: #ffffff;
+      --panel-2: #f8fafc;
+      --line: #d9e1ea;
+      --line-strong: #bdc9d6;
+      --text: #1e2936;
+      --muted: #647487;
+      --soft: #eef3f7;
+      --brand: #0f766e;
+      --brand-strong: #0b5f59;
+      --amber: #b7791f;
+      --amber-soft: #fff6df;
+      --red: #c24135;
+      --red-soft: #fff0ee;
+      --green: #15803d;
+      --green-soft: #eaf8ef;
+      --blue: #2563a8;
+      --blue-soft: #eaf3ff;
+      --shadow: 0 18px 45px rgba(28, 44, 64, 0.10);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 1180px;
+      min-height: 100vh;
+      color: var(--text);
+      background: var(--bg);
+      font: 14px/1.5 "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .app {
+      display: grid;
+      grid-template-columns: 232px 1fr;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      background: #101820;
+      color: #d9e7ee;
+      border-right: 1px solid rgba(255,255,255,0.08);
+      padding: 18px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 8px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: #0f766e;
+      color: white;
+      font-weight: 800;
+      letter-spacing: .05em;
+    }
+
+    .brand-title { font-size: 16px; font-weight: 800; }
+    .brand-sub { color: #90a4b2; font-size: 12px; margin-top: 2px; }
+
+    .nav-section-title {
+      color: #7f96a6;
+      font-size: 12px;
+      margin: 4px 8px;
+    }
+
+    .nav {
+      display: grid;
+      gap: 4px;
+    }
+
+    .nav button {
+      height: 38px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #c6d3dd;
+      display: grid;
+      grid-template-columns: 26px 1fr auto;
+      align-items: center;
+      gap: 9px;
+      padding: 0 10px;
+      text-align: left;
+    }
+
+    .nav button:hover { background: rgba(255,255,255,0.07); }
+    .nav button.active {
+      background: #e8f7f3;
+      color: #0b3f3b;
+      font-weight: 700;
+    }
+
+    .nav .badge {
+      min-width: 18px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+      text-align: center;
+      font-size: 11px;
+    }
+    .nav button.active .badge { background: rgba(15,118,110,0.16); }
+
+    .nav-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,0.08);
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .nav button.active .nav-icon { background: #0f766e; color: white; }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.04);
+      font-size: 12px;
+      color: #9fb1bf;
+    }
+
+    .content {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      height: 64px;
+      background: rgba(255,255,255,0.92);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .crumb { color: var(--muted); font-size: 13px; }
+    .crumb strong { color: var(--text); }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .search {
+      width: 280px;
+      height: 36px;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      border-radius: 6px;
+      padding: 0 12px;
+      color: var(--text);
+    }
+
+    .btn {
+      height: 36px;
+      border: 1px solid var(--line-strong);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 0 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 650;
+    }
+    .btn:hover { border-color: var(--brand); color: var(--brand-strong); }
+    .btn.primary { border-color: var(--brand); background: var(--brand); color: white; }
+    .btn.danger { border-color: #efb6b1; color: var(--red); background: var(--red-soft); }
+    .btn.small { height: 30px; padding: 0 10px; font-size: 12px; }
+
+    .page {
+      display: none;
+      padding: 22px 24px 34px;
+    }
+    .page.active { display: block; }
+
+    .page-title {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .eyebrow {
+      color: var(--brand);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      margin-bottom: 4px;
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; letter-spacing: -.02em; }
+    .desc { color: var(--muted); margin-top: 4px; }
+
+    .grid { display: grid; gap: 14px; }
+    .cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .layout-main { grid-template-columns: 1.35fr .65fr; }
+    .layout-assets { grid-template-columns: 1fr 360px; }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+    .card.pad { padding: 16px; }
+    .card-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .card-title { font-weight: 800; font-size: 15px; }
+    .card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .metric {
+      padding: 15px;
+      border-left: 4px solid var(--brand);
+    }
+    .metric.red { border-left-color: var(--red); }
+    .metric.amber { border-left-color: var(--amber); }
+    .metric.green { border-left-color: var(--green); }
+    .metric-label { color: var(--muted); font-size: 12px; }
+    .metric-value { font-size: 28px; font-weight: 850; margin-top: 5px; }
+    .metric-foot { color: var(--muted); font-size: 12px; margin-top: 5px; }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .status::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .ok { color: var(--green); background: var(--green-soft); }
+    .warn { color: var(--amber); background: var(--amber-soft); }
+    .bad { color: var(--red); background: var(--red-soft); }
+    .info { color: var(--blue); background: var(--blue-soft); }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      background: var(--panel-2);
+    }
+    tr:hover td { background: #fbfcfe; }
+
+    .bar {
+      height: 8px;
+      border-radius: 999px;
+      background: var(--soft);
+      overflow: hidden;
+    }
+    .bar > span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--brand);
+    }
+
+    .bars { display: grid; gap: 13px; padding: 16px; }
+    .bar-row {
+      display: grid;
+      grid-template-columns: 96px 1fr 44px;
+      gap: 10px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .timeline { display: grid; gap: 12px; padding: 16px; }
+    .step {
+      display: grid;
+      grid-template-columns: 28px 1fr auto;
+      gap: 12px;
+      align-items: start;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+    }
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #dff3ee;
+      color: var(--brand-strong);
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    .chat-shell {
+      display: grid;
+      grid-template-columns: 280px 1fr 320px;
+      gap: 14px;
+      min-height: 650px;
+    }
+    .session-list { display: grid; gap: 8px; padding: 12px; }
+    .session-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--panel);
+    }
+    .session-item.active { border-color: var(--brand); background: #f0faf7; }
+
+    .messages {
+      padding: 16px;
+      height: 520px;
+      overflow: auto;
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      background: #fbfcfd;
+      border-bottom: 1px solid var(--line);
+    }
+    .msg {
+      max-width: 78%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: white;
+    }
+    .msg.user { margin-left: auto; background: #eef8f5; border-color: #c7e8df; }
+    .msg .meta { color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+    .approval-box {
+      border: 1px solid #f0c4bd;
+      background: var(--red-soft);
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 10px;
+    }
+
+    .composer {
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+    }
+    .composer textarea {
+      height: 54px;
+      resize: none;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      outline-color: var(--brand);
+    }
+
+    .drawer {
+      border-left: 1px solid var(--line);
+      background: var(--panel);
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .kv { display: grid; gap: 8px; }
+    .kv-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .kv-row strong { color: var(--text); font-weight: 750; }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .toolbar input, .toolbar select {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      padding: 0 10px;
+      color: var(--text);
+    }
+
+    .pill-list { display: flex; flex-wrap: wrap; gap: 7px; }
+    .pill {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 12px;
+    }
+
+    .kanban {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .lane { background: var(--soft); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+    .lane-title { display: flex; justify-content: space-between; font-weight: 800; margin-bottom: 10px; }
+    .task { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      background: rgba(16, 24, 32, .46);
+      z-index: 20;
+    }
+    .modal-backdrop.show { display: grid; }
+    .modal {
+      width: 560px;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      box-shadow: 0 30px 80px rgba(0,0,0,.25);
+    }
+    .modal-head, .modal-foot { padding: 16px; border-bottom: 1px solid var(--line); }
+    .modal-foot { border-bottom: 0; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 10px; }
+    .modal-body { padding: 16px; display: grid; gap: 12px; }
+    .field label { display: block; color: var(--muted); font-weight: 750; font-size: 12px; margin-bottom: 6px; }
+    .field input, .field textarea, .field select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 9px 10px;
+      outline-color: var(--brand);
+    }
+    .field textarea { min-height: 76px; resize: vertical; }
+
+    .toast {
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      display: none;
+      background: #101820;
+      color: white;
+      border-radius: 8px;
+      padding: 12px 14px;
+      box-shadow: var(--shadow);
+      z-index: 30;
+    }
+    .toast.show { display: block; }
+
+    @media (max-width: 1200px) {
+      body { min-width: 980px; }
+      .app { grid-template-columns: 88px 1fr; }
+      .brand div:last-child, .nav span.label, .nav-section-title, .sidebar-footer { display: none; }
+      .nav button { grid-template-columns: 1fr; place-items: center; }
+      .nav .badge { display: none; }
+      .chat-shell { grid-template-columns: 1fr; }
+      .drawer { border-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">OP</div>
+        <div>
+          <div class="brand-title">OpsCore</div>
+          <div class="brand-sub">AIOps 运维平台 Demo</div>
+        </div>
+      </div>
+      <div>
+        <div class="nav-section-title">工作台</div>
+        <div class="nav">
+          <button class="active" data-page="overview"><span class="nav-icon">总</span><span class="label">运维总览</span><span class="badge">12</span></button>
+          <button data-page="assets"><span class="nav-icon">资</span><span class="label">资产中心</span><span class="badge">86</span></button>
+          <button data-page="chat"><span class="nav-icon">会</span><span class="label">AI 执行会话</span><span class="badge">5</span></button>
+          <button data-page="automation"><span class="nav-icon">巡</span><span class="label">自动化巡检</span><span class="badge">18</span></button>
+          <button data-page="alerts"><span class="nav-icon">告</span><span class="label">告警事件</span><span class="badge">9</span></button>
+          <button data-page="approvals"><span class="nav-icon">审</span><span class="label">审批中心</span><span class="badge">3</span></button>
+          <button data-page="skills"><span class="nav-icon">技</span><span class="label">技能与知识库</span><span class="badge">24</span></button>
+        </div>
+      </div>
+      <div class="sidebar-footer">
+        演示环境：华东生产域<br>
+        当前角色：运维管理员<br>
+        策略模式：审批优先
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div class="crumb">AIOps 控制台 / <strong id="crumbTitle">运维总览</strong></div>
+        <div class="top-actions">
+          <input class="search" placeholder="搜索资产、告警、任务或会话" />
+          <button class="btn">帮助</button>
+          <button class="btn primary" onclick="openModal('connect')">接入资产</button>
+        </div>
+      </header>
+
+      <section id="overview" class="page active">
+        <div class="page-title">
+          <div>
+            <div class="eyebrow">AIOps 运维指挥中心</div>
+            <h1>统一掌握资产、告警、巡检和 AI 执行风险</h1>
+            <p class="desc">首屏突出运维人员每天最关心的问题：哪里异常、谁在执行、是否需要审批、巡检是否可靠。</p>
+          </div>
+          <div class="toolbar">
+            <select><option>最近 24 小时</option><option>最近 7 天</option></select>
+            <button class="btn">导出报告</button>
+            <button class="btn primary">刷新态势</button>
+          </div>
+        </div>
+
+        <div class="grid cols-4">
+          <div class="card metric"><div class="metric-label">资产总数</div><div class="metric-value">1,286</div><div class="metric-foot">86 台未完成协议验证</div></div>
+          <div class="card metric green"><div class="metric-label">在线会话</div><div class="metric-value">42</div><div class="metric-foot">5 个读写会话正在执行</div></div>
+          <div class="card metric red"><div class="metric-label">待处理告警</div><div class="metric-value">17</div><div class="metric-foot">3 个严重级别</div></div>
+          <div class="card metric amber"><div class="metric-label">待审批动作</div><div class="metric-value">3</div><div class="metric-foot">包含 1 个技能回滚</div></div>
+        </div>
+
+        <div class="grid layout-main" style="margin-top:14px;">
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">资产与协议覆盖</div><div class="card-sub">从资产目录直接驱动工具、巡检和权限策略</div></div><span class="status ok">覆盖正常</span></div>
+            <div class="bars">
+              <div class="bar-row"><span>Linux/SSH</span><div class="bar"><span style="width:88%"></span></div><strong>584</strong></div>
+              <div class="bar-row"><span>K8s/API</span><div class="bar"><span style="width:62%"></span></div><strong>126</strong></div>
+              <div class="bar-row"><span>数据库</span><div class="bar"><span style="width:54%"></span></div><strong>98</strong></div>
+              <div class="bar-row"><span>SNMP 网络</span><div class="bar"><span style="width:45%"></span></div><strong>73</strong></div>
+              <div class="bar-row"><span>WinRM</span><div class="bar"><span style="width:28%"></span></div><strong>41</strong></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">今日处置队列</div><div class="card-sub">按风险和业务影响排序</div></div></div>
+            <div class="timeline">
+              <div class="step"><div class="step-num">1</div><div><strong>核心数据库连接数异常</strong><div class="card-sub">db-prod-03 / MySQL / 严重</div></div><span class="status bad">需处理</span></div>
+              <div class="step"><div class="step-num">2</div><div><strong>批准技能回滚</strong><div class="card-sub">safe-skill / SKILL.md / 等待执行</div></div><span class="status warn">待审批</span></div>
+              <div class="step"><div class="step-num">3</div><div><strong>网络设备巡检失败</strong><div class="card-sub">snmp-sw-17 / SNMPv3 / 认证失败</div></div><span class="status info">复核</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid cols-3" style="margin-top:14px;">
+          <div class="card pad"><h3>巡检健康度</h3><p class="desc">成功率 94.6%，平均耗时 38 秒</p><div class="bar" style="margin-top:16px;"><span style="width:94%"></span></div></div>
+          <div class="card pad"><h3>审批合规</h3><p class="desc">高危工具 100% 进入审批或阻断链路</p><div class="pill-list" style="margin-top:12px;"><span class="pill">命令执行</span><span class="pill">技能变更</span><span class="pill">数据库写入</span></div></div>
+          <div class="card pad"><h3>知识命中</h3><p class="desc">今日 AI 引用了 18 篇运维文档和 7 条历史故障经验</p><div class="pill-list" style="margin-top:12px;"><span class="pill">SOP</span><span class="pill">故障案例</span><span class="pill">客户禁忌</span></div></div>
+        </div>
+      </section>
+
+      <section id="assets" class="page">
+        <div class="page-title">
+          <div>
+            <div class="eyebrow">数据中心资产台账</div>
+            <h1>资产、协议、凭据和验证状态集中管理</h1>
+            <p class="desc">用户先选对象，再执行操作；减少表单心智负担，避免重复输入账号密码。</p>
+          </div>
+          <div class="toolbar"><input placeholder="搜索主机、标签、账号" /><select><option>全部协议</option><option>SSH</option><option>SNMP</option></select><button class="btn primary" onclick="openModal('connect')">新增资产</button></div>
+        </div>
+        <div class="grid layout-assets">
+          <div class="card">
+            <table>
+              <thead><tr><th>资产</th><th>类型/协议</th><th>状态</th><th>验证</th><th>标签</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td><strong>db-prod-03</strong><div class="card-sub">10.32.18.23 / dba</div></td><td>MySQL / 原生驱动</td><td><span class="status bad">异常</span></td><td>4/5</td><td><span class="pill">核心交易</span></td><td><button class="btn small">连接</button></td></tr>
+                <tr><td><strong>k8s-hz-prod</strong><div class="card-sub">api.k8s.local</div></td><td>K8s / API</td><td><span class="status ok">在线</span></td><td>5/5</td><td><span class="pill">容器平台</span></td><td><button class="btn small">验证</button></td></tr>
+                <tr><td><strong>sw-core-17</strong><div class="card-sub">172.20.1.17 / snmp</div></td><td>交换机 / SNMPv3</td><td><span class="status warn">需复核</span></td><td>2/5</td><td><span class="pill">网络核心</span></td><td><button class="btn small">修复</button></td></tr>
+                <tr><td><strong>vmware-vc-01</strong><div class="card-sub">vcenter.local</div></td><td>虚拟化 / HTTPS</td><td><span class="status ok">在线</span></td><td>4/5</td><td><span class="pill">私有云</span></td><td><button class="btn small">详情</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <aside class="card pad">
+            <h3>资产详情预览</h3>
+            <p class="desc">右侧抽屉直接承载详情、验证、巡检和报告，用户不必跳页。</p>
+            <div class="kv" style="margin-top:16px;">
+              <div class="kv-row"><span>当前资产</span><strong>db-prod-03</strong></div>
+              <div class="kv-row"><span>协议</span><strong>mysql</strong></div>
+              <div class="kv-row"><span>凭据</span><strong>资产中心托管</strong></div>
+              <div class="kv-row"><span>最近巡检</span><strong>部分失败</strong></div>
+              <div class="kv-row"><span>风险</span><strong>连接数超过阈值</strong></div>
+            </div>
+            <div class="timeline" style="padding:16px 0 0;">
+              <div class="step"><div class="step-num">验</div><div><strong>协议原生探测失败</strong><div class="card-sub">SHOW GLOBAL STATUS 超时</div></div><span class="status bad">失败</span></div>
+              <div class="step"><div class="step-num">报</div><div><strong>最近报告</strong><div class="card-sub">数据库连接池巡检</div></div><span class="status info">查看</span></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="chat" class="page">
+        <div class="page-title">
+          <div>
+            <div class="eyebrow">AI 执行会话</div>
+            <h1>先识别上下文，再给出可审批的动作</h1>
+            <p class="desc">聊天不是普通对话框，而是带资产、工具、审批和执行轨迹的运维工作台。</p>
+          </div>
+          <button class="btn primary">新建会话</button>
+        </div>
+        <div class="chat-shell">
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">会话列表</div><div class="card-sub">按资产和风险排序</div></div></div>
+            <div class="session-list">
+              <div class="session-item active"><strong>db-prod-03</strong><div class="card-sub">MySQL / 读写模式 / 需审批</div></div>
+              <div class="session-item"><strong>k8s-hz-prod</strong><div class="card-sub">K8s / 只读巡检</div></div>
+              <div class="session-item"><strong>sw-core-17</strong><div class="card-sub">SNMPv3 / 认证失败</div></div>
+            </div>
+          </div>
+          <div class="card" style="overflow:hidden;">
+            <div class="card-head"><div><div class="card-title">db-prod-03 执行会话</div><div class="card-sub">资产凭据托管，模型不能覆盖连接参数</div></div><span class="status warn">读写需审批</span></div>
+            <div class="messages">
+              <div class="msg user"><div class="meta">运维管理员</div>分析当前数据库连接数异常，给出排障步骤。</div>
+              <div class="msg"><div class="meta">OpsCore AI</div>已读取资产上下文：MySQL 原生驱动、核心交易标签、读写权限关闭。建议先执行只读诊断：连接数、活跃 SQL、锁等待和慢查询。</div>
+              <div class="msg"><div class="meta">工具执行轨迹</div><strong>db_execute_query</strong>：SHOW PROCESSLIST；SHOW ENGINE INNODB STATUS；慢查询摘要。<div class="approval-box"><strong>请求敏感操作审批</strong><p class="desc">工具：db_execute_query；原因：检测到 UPDATE 语句，可能改变生产数据。</p><div class="toolbar" style="margin-top:10px;"><button class="btn primary" onclick="openModal('approve')">批准一次</button><button class="btn danger">拒绝</button></div></div></div>
+            </div>
+            <div class="composer">
+              <textarea placeholder="输入排障目标，例如：检查连接池耗尽原因，并生成处置建议"></textarea>
+              <button class="btn primary">发送</button>
+            </div>
+          </div>
+          <div class="card drawer">
+            <div><h3>上下文与工具</h3><p class="desc">让用户知道 AI 能做什么、不能做什么。</p></div>
+            <div class="kv">
+              <div class="kv-row"><span>资产</span><strong>db-prod-03</strong></div>
+              <div class="kv-row"><span>协议</span><strong>MySQL</strong></div>
+              <div class="kv-row"><span>权限</span><strong>只读优先</strong></div>
+              <div class="kv-row"><span>审批策略</span><strong>数据库写入必须审批</strong></div>
+            </div>
+            <div class="pill-list"><span class="pill">db_execute_query</span><span class="pill">inspection_report</span><span class="pill">search_memory</span><span class="pill">create_ticket</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="automation" class="page">
+        <div class="page-title">
+          <div>
+            <div class="eyebrow">自动化巡检</div>
+            <h1>从定时任务升级为可审计的自动化运行</h1>
+            <p class="desc">每个任务都明确目标、模板、允许动作、审批模式、失败恢复和输出报告。</p>
+          </div>
+          <button class="btn primary">创建巡检任务</button>
+        </div>
+        <div class="kanban">
+          <div class="lane"><div class="lane-title"><span>计划中</span><span>6</span></div><div class="task"><strong>核心数据库每日巡检</strong><p class="desc">范围：核心交易标签；模板：数据库深度巡检</p><span class="status ok">已排程</span></div><div class="task"><strong>K8s 工作负载健康检查</strong><p class="desc">范围：k8s-hz-prod；每 30 分钟</p><span class="status ok">已排程</span></div></div>
+          <div class="lane"><div class="lane-title"><span>运行中</span><span>2</span></div><div class="task"><strong>网络核心 SNMP 巡检</strong><p class="desc">第 2 次重试，等待 SNMPv3 响应</p><span class="status warn">重试中</span></div><div class="task"><strong>Prometheus 告警收敛检查</strong><p class="desc">正在聚合 ALERTS 指标</p><span class="status info">执行中</span></div></div>
+          <div class="lane"><div class="lane-title"><span>需关注</span><span>3</span></div><div class="task"><strong>vCenter 容量巡检</strong><p class="desc">API token 即将过期</p><span class="status warn">需处理</span></div><div class="task"><strong>Windows 基线巡检</strong><p class="desc">WinRM 认证失败</p><span class="status bad">失败</span></div></div>
+        </div>
+      </section>
+
+      <section id="alerts" class="page">
+        <div class="page-title">
+          <div>
+            <div class="eyebrow">告警事件中心</div>
+            <h1>告警接入、认领、处置和 AI 会话关联</h1>
+            <p class="desc">告警不是只进聊天，而是作为事件资产沉淀，可查询、可关联、可复盘。</p>
+          </div>
+          <div class="toolbar"><select><option>未处理</option><option>处理中</option><option>已关闭</option></select><button class="btn">批量认领</button></div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>告警</th><th>资产</th><th>级别</th><th>状态</th><th>AI 建议</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr><td><strong>数据库连接数超过阈值</strong><div class="card-sub">Prometheus / 3 分钟前</div></td><td>db-prod-03</td><td><span class="status bad">严重</span></td><td>未处理</td><td>建议检查连接池和慢 SQL</td><td><button class="btn small">打开会话</button></td></tr>
+              <tr><td><strong>SNMP 认证失败</strong><div class="card-sub">Zabbix / 12 分钟前</div></td><td>sw-core-17</td><td><span class="status warn">警告</span></td><td>处理中</td><td>建议检查 v3 auth/priv 配置</td><td><button class="btn small">认领</button></td></tr>
+              <tr><td><strong>K8s 节点磁盘压力</strong><div class="card-sub">Alertmanager / 18 分钟前</div></td><td>k8s-node-08</td><td><span class="status warn">警告</span></td><td>未处理</td><td>建议清理镜像缓存</td><td><button class="btn small">生成报告</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="approvals" class="page">
+        <div class="page-title">
+          <div>
+            <div class="eyebrow">风险审批队列</div>
+            <h1>高危动作先审批，执行结果可追溯</h1>
+            <p class="desc">批准不是结束，执行摘要、版本备份和操作者都会写入审计记录。</p>
+          </div>
+          <button class="btn">查看安全策略</button>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>请求</th><th>风险原因</th><th>上下文</th><th>状态</th><th>执行</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr><td><strong>rollback_skill</strong><div class="card-sub">safe-skill / SKILL.md</div></td><td>技能回滚会修改平台能力</td><td>API / platform</td><td><span class="status warn">已批准</span></td><td>等待执行</td><td><button class="btn small primary" onclick="openModal('rollback')">执行回滚</button></td></tr>
+              <tr><td><strong>db_execute_query</strong><div class="card-sub">UPDATE orders SET...</div></td><td>数据库写操作</td><td>db-prod-03</td><td><span class="status warn">待审批</span></td><td>-</td><td><button class="btn small" onclick="openModal('approve')">处理</button></td></tr>
+              <tr><td><strong>linux_execute_command</strong><div class="card-sub">systemctl restart nginx</div></td><td>服务重启</td><td>web-prod-12</td><td><span class="status ok">已执行</span></td><td>成功</td><td><button class="btn small">查看</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="skills" class="page">
+        <div class="page-title">
+          <div>
+            <div class="eyebrow">技能与知识库</div>
+            <h1>平台能力、运维 SOP 和历史经验统一治理</h1>
+            <p class="desc">技能修改有版本、审批和回滚；知识库只接收后端支持的文档格式。</p>
+          </div>
+          <div class="toolbar"><button class="btn">验证技能</button><button class="btn primary">创建技能</button></div>
+        </div>
+        <div class="grid cols-2">
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">技能生命周期</div><div class="card-sub">创建、校验、审批、版本和回滚</div></div></div>
+            <table>
+              <thead><tr><th>技能</th><th>状态</th><th>版本</th><th>最近动作</th></tr></thead>
+              <tbody>
+                <tr><td><strong>mysql-diagnose</strong></td><td><span class="status ok">可用</span></td><td>12</td><td>覆盖前已备份</td></tr>
+                <tr><td><strong>safe-skill</strong></td><td><span class="status warn">待执行回滚</span></td><td>8</td><td>审批已通过</td></tr>
+                <tr><td><strong>k8s-runbook</strong></td><td><span class="status ok">可用</span></td><td>5</td><td>静态校验通过</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><div class="card-title">知识库</div><div class="card-sub">仅支持 PDF、Markdown、TXT、Word 和日志</div></div></div>
+            <div class="timeline">
+              <div class="step"><div class="step-num">文</div><div><strong>数据库故障 SOP.md</strong><div class="card-sub">42 个向量块 / 最近命中 9 次</div></div><span class="status ok">已索引</span></div>
+              <div class="step"><div class="step-num">案</div><div><strong>华东生产环境禁忌操作.docx</strong><div class="card-sub">用户/记忆分层候选</div></div><span class="status info">待治理</span></div>
+              <div class="step"><div class="step-num">志</div><div><strong>incident-20260428.log</strong><div class="card-sub">等待故障案例归档</div></div><span class="status warn">待处理</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modalBackdrop" class="modal-backdrop" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head"><h3 id="modalTitle">操作确认</h3><p id="modalSub" class="desc">确认后会写入审计记录。</p></div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-foot">
+        <button class="btn" onclick="hideModal()">取消</button>
+        <button class="btn primary" onclick="confirmModal()">确认</button>
+      </div>
+    </div>
+  </div>
+  <div id="toast" class="toast">操作已记录到审计队列</div>
+
+  <script>
+    const pageNames = {
+      overview: "运维总览",
+      assets: "资产中心",
+      chat: "AI 执行会话",
+      automation: "自动化巡检",
+      alerts: "告警事件中心",
+      approvals: "审批中心",
+      skills: "技能与知识库"
+    };
+
+    document.querySelectorAll(".nav button[data-page]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const page = btn.dataset.page;
+        document.querySelectorAll(".nav button").forEach((item) => item.classList.remove("active"));
+        btn.classList.add("active");
+        document.querySelectorAll(".page").forEach((item) => item.classList.remove("active"));
+        document.getElementById(page).classList.add("active");
+        document.getElementById("crumbTitle").textContent = pageNames[page] || "控制台";
+      });
+    });
+
+    function openModal(type) {
+      const title = document.getElementById("modalTitle");
+      const sub = document.getElementById("modalSub");
+      const body = document.getElementById("modalBody");
+      if (type === "connect") {
+        title.textContent = "接入新资产";
+        sub.textContent = "演示表单：先选资产类型，协议和默认端口自动带出。";
+        body.innerHTML = `
+          <div class="field"><label>资产名称</label><input value="oracle-prod-02"></div>
+          <div class="field"><label>资产类型</label><select><option>数据库 / Oracle</option><option>操作系统 / Linux</option><option>网络设备 / SNMP</option></select></div>
+          <div class="field"><label>连接地址</label><input value="10.32.22.18:1521"></div>
+          <div class="field"><label>托管凭据</label><input value="ops-oracle-readonly"></div>`;
+      } else if (type === "rollback") {
+        title.textContent = "执行已批准的技能回滚";
+        sub.textContent = "执行后会恢复指定版本，并记录备份路径、操作者和执行摘要。";
+        body.innerHTML = `
+          <div class="field"><label>审批单</label><input value="rollback-safe-skill-20260428" disabled></div>
+          <div class="field"><label>操作人</label><input value="ops-admin"></div>
+          <div class="field"><label>执行备注</label><textarea>按变更单 CR-20260428 回滚到稳定版本。</textarea></div>`;
+      } else {
+        title.textContent = "审批敏感操作";
+        sub.textContent = "批准高危动作必须填写操作人和原因。";
+        body.innerHTML = `
+          <div class="field"><label>操作人</label><input value="ops-admin"></div>
+          <div class="field"><label>审批原因</label><textarea>已确认变更窗口和回滚方案，允许执行一次。</textarea></div>
+          <div class="field"><label>风险摘要</label><input value="数据库写操作 / 生产资产 / 需审计" disabled></div>`;
+      }
+      document.getElementById("modalBackdrop").classList.add("show");
+    }
+
+    function hideModal() {
+      document.getElementById("modalBackdrop").classList.remove("show");
+    }
+
+    function closeModal(event) {
+      if (event.target.id === "modalBackdrop") hideModal();
+    }
+
+    function confirmModal() {
+      hideModal();
+      const toast = document.getElementById("toast");
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 2200);
+    }
+  </script>
+</body>
+</html>
