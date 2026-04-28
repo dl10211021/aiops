@@ -455,6 +455,47 @@ async def decide_approval_request(approval_id: str, req: ApprovalDecisionRequest
     return ResponseModel(status="success", message="审批已处理", data={"approval": approval})
 
 
+@router.post("/approvals/{approval_id}/execute", response_model=ResponseModel)
+async def execute_approval_request(approval_id: str):
+    """执行已经批准且支持后续执行的审批请求。"""
+    from core.approval_queue import get_approval_request as load_approval_request
+
+    approval = load_approval_request(approval_id)
+    if not approval:
+        raise HTTPException(status_code=404, detail="审批请求不存在")
+    if approval.get("status") != "approved":
+        raise HTTPException(status_code=409, detail="审批尚未批准，不能执行。")
+    if approval.get("execution"):
+        raise HTTPException(status_code=409, detail="该审批已经执行过。")
+    if approval.get("tool_name") != "rollback_skill":
+        raise HTTPException(status_code=422, detail="该审批类型暂不支持直接执行。")
+
+    args = approval.get("args") or {}
+    skill_id = str(args.get("skill_id") or "").strip()
+    file_name = str(args.get("file_name") or "").strip()
+    version_id = str(args.get("version_id") or "").strip()
+    if not skill_id or not file_name or not version_id:
+        raise HTTPException(status_code=422, detail="审批参数不完整，无法执行技能回滚。")
+
+    response = await rollback_skill_version(
+        skill_id,
+        SkillRollbackRequest(
+            file_name=file_name,
+            version_id=version_id,
+            approval_id=approval_id,
+        ),
+    )
+    executed_approval = load_approval_request(approval_id)
+    return ResponseModel(
+        status=response.status,
+        message=response.message or "审批动作已执行。",
+        data={
+            "approval": executed_approval or approval,
+            "result": response.data,
+        },
+    )
+
+
 @router.post("/session/{session_id}/stop", response_model=ResponseModel)
 async def stop_chat_session(session_id: str):
     """【新功能】终止当前会话中正在生成的长流响应/执行任务"""

@@ -394,6 +394,7 @@ export interface ApprovalRequest {
       file_path?: string
       backup_path?: string | null
       version_id?: string
+      restored_version_path?: string
     }
     completed_at?: string
     completed_at_ts?: number

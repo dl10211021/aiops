@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { decideApproval, getApprovals } from '@/api/client'
+import { decideApproval, executeApproval, getApprovals } from '@/api/client'
 import { useStore } from '@/store'
 import type { ApprovalRequest } from '@/types'
 
@@ -52,6 +52,19 @@ export default function ApprovalCenter() {
       await load()
     } catch (e: unknown) {
       addToast(e instanceof Error ? e.message : '审批处理失败', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const handleExecute = async (approval: ApprovalRequest) => {
+    setBusyId(approval.id)
+    try {
+      await executeApproval(approval.id)
+      addToast('审批动作已执行', 'success')
+      await load()
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '审批执行失败', 'error')
     } finally {
       setBusyId(null)
     }
@@ -120,6 +133,7 @@ export default function ApprovalCenter() {
                 busy={busyId === approval.id}
                 onApprove={() => void handleDecision(approval, true)}
                 onReject={() => void handleDecision(approval, false)}
+                onExecute={() => void handleExecute(approval)}
               />
             ))}
           </div>
@@ -134,16 +148,19 @@ function ApprovalRow({
   busy,
   onApprove,
   onReject,
+  onExecute,
 }: {
   approval: ApprovalRequest
   busy: boolean
   onApprove: () => void
   onReject: () => void
+  onExecute: () => void
 }) {
   const argsText = JSON.stringify(approval.args || {}, null, 2)
   const context = approval.context || {}
   const skillChange = approval.metadata?.skill_change
   const skillRollback = approval.metadata?.skill_rollback
+  const canExecuteRollback = approval.status === 'approved' && approval.tool_name === 'rollback_skill' && !approval.execution
   return (
     <article className="grid gap-4 p-5 xl:grid-cols-[1fr_360px]">
       <div className="min-w-0">
@@ -196,6 +213,9 @@ function ApprovalRow({
               <div className="mb-2 grid gap-2 md:grid-cols-2">
                 <Info label="写入文件" value={approval.execution.artifacts.file_path || '-'} />
                 <Info label="备份版本" value={approval.execution.artifacts.backup_path || '-'} />
+                {approval.execution.artifacts.restored_version_path && (
+                  <Info label="恢复版本" value={approval.execution.artifacts.restored_version_path} />
+                )}
               </div>
             )}
             <pre className="max-h-28 overflow-auto whitespace-pre-wrap text-[11px] leading-relaxed">
@@ -227,6 +247,20 @@ function ApprovalRow({
               className="rounded-xl bg-ops-alert/85 px-3 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-50"
             >
               拒绝
+            </button>
+          </div>
+        ) : canExecuteRollback ? (
+          <div className="mt-4 grid gap-2">
+            <div className="rounded-xl bg-ops-surface0 px-3 py-2 text-xs text-ops-subtext">
+              处理结果：已批准，等待执行
+              {approval.note ? `，备注：${approval.note}` : ''}
+            </div>
+            <button
+              disabled={busy}
+              onClick={onExecute}
+              className="rounded-xl bg-ops-accent px-3 py-2 text-sm font-semibold text-ops-dark transition-opacity disabled:opacity-50"
+            >
+              执行回滚
             </button>
           </div>
         ) : (

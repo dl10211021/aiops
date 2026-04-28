@@ -533,6 +533,13 @@ export async function decideApproval(
   })
 }
 
+export async function executeApproval(approvalId: string) {
+  return request<{ approval: ApprovalRequest; result: Record<string, unknown> }>(
+    `/approvals/${approvalId}/execute`,
+    { method: 'POST' }
+  )
+}
+
 // ---- Hydrate ----
 export async function getHydrateStatus() {
   return request<{ total: number; done: number; success: number; running: boolean }>(
