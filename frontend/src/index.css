@@ -76,6 +76,33 @@ button, input, textarea, select {
 .markdown-body {
   line-height: 1.7;
 }
+.ai-report-body {
+  font-size: 15.5px;
+  line-height: 1.78;
+  color: var(--color-ops-text);
+}
+.ai-report-body > :first-child {
+  margin-top: 0;
+}
+.ai-report-body > :last-child {
+  margin-bottom: 0;
+}
+.ai-report-body p,
+.ai-report-body ul,
+.ai-report-body ol {
+  margin: 0.55rem 0;
+}
+.ai-report-body h1,
+.ai-report-body h2,
+.ai-report-body h3 {
+  margin: 0.9rem 0 0.45rem;
+  color: var(--color-ops-text);
+  font-weight: 800;
+  line-height: 1.35;
+}
+.ai-report-body h1 { font-size: 1.18rem; }
+.ai-report-body h2 { font-size: 1.08rem; }
+.ai-report-body h3 { font-size: 1rem; }
 .markdown-body pre {
   background: var(--color-ops-dark);
   border-radius: 6px;

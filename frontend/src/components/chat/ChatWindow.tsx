@@ -806,6 +806,10 @@ function MessageBubble({ message, onApproval }: {
   // Assistant message
   const hasTrace = message.execTrace && message.execTrace.length > 0
   const approval = message.toolApproval
+  const assistantTime = new Date(message.timestamp).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 
   return (
     <div className="flex w-full justify-start">
@@ -860,12 +864,21 @@ function MessageBubble({ message, onApproval }: {
 
         {/* Message content */}
         {message.content ? (
-          <div
-            className="markdown-body w-full bg-ops-panel rounded-2xl rounded-bl-md px-4 py-2.5 text-sm"
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
-          />
+          <article className="w-full overflow-hidden rounded-xl border border-ops-surface1/55 bg-ops-panel/85 shadow-[0_12px_40px_rgba(0,0,0,0.18)]">
+            <div className="flex items-center justify-between gap-3 border-b border-ops-surface0/80 bg-ops-surface0/35 px-4 py-2">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-ops-success shadow-[0_0_14px_rgba(79,209,177,0.55)]" />
+                <span className="text-xs font-semibold text-ops-text">AI 输出报告</span>
+              </div>
+              <span className="font-mono text-[11px] text-ops-overlay">{assistantTime}</span>
+            </div>
+            <div
+              className="markdown-body ai-report-body w-full px-5 py-4"
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
+            />
+          </article>
         ) : (
-          <div className="w-full bg-ops-panel rounded-2xl rounded-bl-md px-4 py-2.5 text-sm">
+          <div className="w-full rounded-xl border border-ops-surface1/55 bg-ops-panel/85 px-5 py-4 text-[15px]">
             <span className="inline-flex gap-1">
               <span className="typing-dot w-1.5 h-1.5 bg-ops-accent rounded-full" />
               <span className="typing-dot w-1.5 h-1.5 bg-ops-accent rounded-full" />
