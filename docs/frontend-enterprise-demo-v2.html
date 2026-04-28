@@ -125,7 +125,7 @@
       display: grid;
       place-items: center;
       background: rgba(255,255,255,0.08);
-      font-size: 10px;
+      font-size: 13px;
       font-weight: 800;
       color: #d5dfeb;
     }
@@ -447,7 +447,7 @@
       height: calc(100vh - 98px);
       min-height: 680px;
       display: grid;
-      grid-template-columns: 288px minmax(0, 1fr) 330px;
+      grid-template-columns: 288px minmax(560px, 1fr) 260px;
       gap: 12px;
     }
 
@@ -489,13 +489,36 @@
     }
 
     .toolset {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-2);
+    }
+
+    .toolset-left {
+      min-width: 0;
       display: flex;
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--line);
-      background: var(--surface-2);
+    }
+
+    .toolset-left strong { white-space: nowrap; }
+
+    .session-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .session-controls select {
+      width: auto;
+      min-width: 126px;
+      background: var(--surface);
     }
 
     .tool-pill {
@@ -578,7 +601,7 @@
 
     .composer-row {
       display: grid;
-      grid-template-columns: 140px 168px minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) auto auto;
       gap: 8px;
       align-items: end;
     }
@@ -587,6 +610,19 @@
       min-height: 38px;
       max-height: 120px;
       resize: vertical;
+    }
+
+    .history-switch {
+      display: grid;
+      grid-template-columns: 30px 30px;
+      gap: 4px;
+      align-items: end;
+    }
+
+    .history-switch .btn {
+      min-width: 30px;
+      padding-left: 0;
+      padding-right: 0;
     }
 
     .side-stack { display: grid; gap: 12px; align-content: start; }
@@ -769,25 +805,25 @@
       <nav class="nav">
         <div class="nav-group">
           <div class="nav-label">工作台</div>
-          <button class="active" data-page="overview"><span class="nav-code">OV</span><span>运维总览</span><span class="nav-count">12</span></button>
-          <button data-page="chat"><span class="nav-code">AI</span><span>AI 会话</span><span class="nav-count">5</span></button>
-          <button data-page="assets"><span class="nav-code">AS</span><span>资产中心</span><span class="nav-count">86</span></button>
+          <button class="active" data-page="overview"><span class="nav-code">总</span><span>总览大屏</span><span class="nav-count">12</span></button>
+          <button data-page="chat"><span class="nav-code">会</span><span>AI 会话</span><span class="nav-count">5</span></button>
+          <button data-page="assets"><span class="nav-code">资</span><span>资产中心</span><span class="nav-count">86</span></button>
         </div>
 
         <div class="nav-group">
           <div class="nav-label">事件与自动化</div>
-          <button data-page="alerts"><span class="nav-code">EV</span><span>告警事件</span><span class="nav-count">9</span></button>
-          <button data-page="alert-config"><span class="nav-code">AC</span><span>告警配置</span><span class="nav-count">6</span></button>
-          <button data-page="automation"><span class="nav-code">CR</span><span>自动化巡检</span><span class="nav-count">18</span></button>
-          <button data-page="approvals"><span class="nav-code">AP</span><span>审批中心</span><span class="nav-count">3</span></button>
+          <button data-page="alerts"><span class="nav-code">警</span><span>告警事件</span><span class="nav-count">9</span></button>
+          <button data-page="alert-config"><span class="nav-code">配</span><span>告警配置</span><span class="nav-count">6</span></button>
+          <button data-page="automation"><span class="nav-code">巡</span><span>自动化巡检</span><span class="nav-count">18</span></button>
+          <button data-page="approvals"><span class="nav-code">审</span><span>审批中心</span><span class="nav-count">3</span></button>
         </div>
 
         <div class="nav-group">
           <div class="nav-label">平台治理</div>
-          <button data-page="security"><span class="nav-code">SC</span><span>安全策略</span><span class="nav-count">7</span></button>
-          <button data-page="models"><span class="nav-code">LM</span><span>模型配置</span><span class="nav-count">4</span></button>
-          <button data-page="skills"><span class="nav-code">SK</span><span>技能市场</span><span class="nav-count">24</span></button>
-          <button data-page="knowledge"><span class="nav-code">KB</span><span>知识库</span><span class="nav-count">42</span></button>
+          <button data-page="security"><span class="nav-code">安</span><span>安全策略</span><span class="nav-count">7</span></button>
+          <button data-page="models"><span class="nav-code">模</span><span>模型配置</span><span class="nav-count">4</span></button>
+          <button data-page="skills"><span class="nav-code">技</span><span>技能市场</span><span class="nav-count">24</span></button>
+          <button data-page="knowledge"><span class="nav-code">知</span><span>知识库</span><span class="nav-count">42</span></button>
         </div>
       </nav>
 
@@ -804,7 +840,7 @@
         <div class="crumb">
           <span>OpsCore</span>
           <span>/</span>
-          <strong id="crumbTitle">运维总览</strong>
+          <strong id="crumbTitle">总览大屏</strong>
         </div>
         <div class="top-actions">
           <span class="chip"><span class="dot"></span> 网关在线</span>
@@ -821,8 +857,8 @@
           <div class="page-head">
             <div>
               <div class="eyebrow">AIOps 运维中心</div>
-              <h1>以告警为入口，以 AI 会话和审批为执行闭环</h1>
-              <p class="desc">总览只展示需要运维关注的队列：关键告警、活动会话、自动化结果、模型和安全策略健康度。</p>
+              <h1>运维总览和数据中心趋势合并到一个工作台</h1>
+              <p class="desc">总览保留你当前首页的工作方式，同时把趋势大屏里的容量、告警、巡检和 SLA 曲线放进同一页。</p>
             </div>
             <div class="toolbar">
               <button class="btn">导出日报</button>
@@ -836,6 +872,39 @@
             <div class="metric"><div><div class="metric-label">自动巡检</div><div class="metric-value">18</div></div><div class="metric-note">2 个任务需重试</div></div>
             <div class="metric"><div><div class="metric-label">待审批</div><div class="metric-value">3</div></div><div class="metric-note">包含技能回滚和 SQL 写入</div></div>
             <div class="metric"><div><div class="metric-label">模型可用率</div><div class="metric-value">99.1%</div></div><div class="metric-note">备用模型已启用</div></div>
+          </div>
+
+          <div class="grid cols-2" style="margin-bottom:12px;">
+            <div class="panel">
+              <div class="panel-head">
+                <div><div class="panel-title">数据中心趋势大屏</div><div class="panel-sub">告警量、自动巡检、资产健康和 SLA 同屏观察</div></div>
+                <span class="status info">近 24 小时</span>
+              </div>
+              <div class="grid cols-4" style="padding:14px;">
+                <div class="metric"><div><div class="metric-label">告警峰值</div><div class="metric-value">37</div></div><div class="metric-note">09:20 生产库集中触发</div></div>
+                <div class="metric"><div><div class="metric-label">巡检成功率</div><div class="metric-value">94%</div></div><div class="metric-note">2 个任务自动重试</div></div>
+                <div class="metric"><div><div class="metric-label">资产在线率</div><div class="metric-value">98%</div></div><div class="metric-note">1 台网络设备认证失败</div></div>
+                <div class="metric"><div><div class="metric-label">处置 SLA</div><div class="metric-value">87%</div></div><div class="metric-note">P0 平均响应 4 分钟</div></div>
+              </div>
+              <div class="bar-stack" style="padding:0 14px 14px;">
+                <div class="bar-line"><span>00:00-06:00</span><div class="progress"><span style="width:34%;"></span></div><strong>低</strong></div>
+                <div class="bar-line"><span>06:00-12:00</span><div class="progress"><span style="width:82%; background:var(--red);"></span></div><strong>高</strong></div>
+                <div class="bar-line"><span>12:00-18:00</span><div class="progress"><span style="width:58%; background:var(--amber);"></span></div><strong>中</strong></div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-head">
+                <div><div class="panel-title">今日运维关注点</div><div class="panel-sub">从趋势中下钻到当前可处置事项</div></div>
+                <span class="status warn">2 项待跟进</span>
+              </div>
+              <table>
+                <tbody>
+                  <tr><td><strong>数据库连接异常</strong><div class="quiet">趋势峰值与 order_api 发布窗口重叠</div></td><td><span class="status bad">P0</span></td><td><button class="btn small" data-page-jump="chat">会话</button></td></tr>
+                  <tr><td><strong>K8s 磁盘压力</strong><div class="quiet">巡检任务失败 2 次，建议重跑并归档</div></td><td><span class="status warn">P1</span></td><td><button class="btn small" data-page-jump="automation">巡检</button></td></tr>
+                  <tr><td><strong>模型备用链路</strong><div class="quiet">本地模型延迟偏高但可作为降级</div></td><td><span class="status info">观察</span></td><td><button class="btn small" data-page-jump="models">模型</button></td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div class="split">
@@ -884,24 +953,31 @@
               </div>
               <div class="session-scroll">
                 <div class="muted" style="padding:6px 8px;font-weight:800;">生产数据库</div>
-                <div class="session-item active"><div class="session-top"><strong>db-prod-03</strong><span class="status bad">RW</span></div><div class="session-meta mono">dba@10.32.18.23 / mysql</div></div>
-                <div class="session-item"><div class="session-top"><strong>oracle-prod-02</strong><span class="status ok">RO</span></div><div class="session-meta mono">ops@10.32.22.18 / oracle</div></div>
+                <div class="session-item active"><div class="session-top"><strong>db-prod-03</strong><span class="status bad">异常</span></div><div class="session-meta mono">dba@10.32.18.23 / mysql</div></div>
+                <div class="session-item"><div class="session-top"><strong>oracle-prod-02</strong><span class="status ok">正常</span></div><div class="session-meta mono">ops@10.32.22.18 / oracle</div></div>
                 <div class="muted" style="padding:8px 8px 6px;font-weight:800;">云原生</div>
-                <div class="session-item"><div class="session-top"><strong>k8s-hz-prod</strong><span class="status ok">RO</span></div><div class="session-meta mono">api.k8s.local / kube-api</div></div>
-                <div class="session-item"><div class="session-top"><strong>docker-edge-11</strong><span class="status ok">RO</span></div><div class="session-meta mono">root@172.20.8.11 / ssh</div></div>
+                <div class="session-item"><div class="session-top"><strong>k8s-hz-prod</strong><span class="status warn">压力</span></div><div class="session-meta mono">api.k8s.local / kube-api</div></div>
+                <div class="session-item"><div class="session-top"><strong>docker-edge-11</strong><span class="status ok">正常</span></div><div class="session-meta mono">root@172.20.8.11 / ssh</div></div>
                 <div class="muted" style="padding:8px 8px 6px;font-weight:800;">网络设备</div>
-                <div class="session-item"><div class="session-top"><strong>sw-core-17</strong><span class="status warn">RO</span></div><div class="session-meta mono">snmp@172.20.1.17 / snmp</div></div>
+                <div class="session-item"><div class="session-top"><strong>sw-core-17</strong><span class="status warn">认证</span></div><div class="session-meta mono">snmp@172.20.1.17 / snmp</div></div>
               </div>
             </aside>
 
             <section class="panel chat-main">
               <div class="toolset">
-                <strong>当前资产 db-prod-03</strong>
-                <span class="tool-pill">mysql_query</span>
-                <span class="tool-pill">db_schema_inspect</span>
-                <span class="tool-pill">db_slowlog_read</span>
-                <span class="tool-pill">approval_required: write_sql</span>
-                <span class="status warn">读写会话需确认</span>
+                <div class="toolset-left">
+                  <strong>当前资产 db-prod-03</strong>
+                  <span class="status warn">读写模式</span>
+                  <span class="tool-pill">只读工具自动放行</span>
+                  <span class="tool-pill">写入动作需审批</span>
+                  <span class="tool-pill">硬拦截 DROP / TRUNCATE</span>
+                </div>
+                <div class="session-controls">
+                  <label class="quiet">模型</label>
+                  <select><option>DeepSeek-R1</option><option>GPT-4.1</option><option>Qwen3-32B</option></select>
+                  <label class="quiet">思考</label>
+                  <select><option>中度</option><option>关闭</option><option>高度</option></select>
+                </div>
               </div>
 
               <div class="messages">
@@ -938,11 +1014,14 @@
                   <button class="btn small">/tools 工具边界</button>
                 </div>
                 <div class="composer-row">
-                  <select><option>中度思考</option><option>关闭思考</option><option>高度思考</option></select>
-                  <select><option>DeepSeek-R1</option><option>GPT-4.1</option><option>Qwen3-32B</option></select>
-                  <textarea>继续只读分析应用连接来源，输出下一步处置建议。</textarea>
+                  <textarea id="chatInput">继续只读分析应用连接来源，输出下一步处置建议。</textarea>
+                  <div class="history-switch" title="上下选择历史输入">
+                    <button class="btn small" onclick="cycleHistory(-1)">上</button>
+                    <button class="btn small" onclick="cycleHistory(1)">下</button>
+                  </div>
                   <button class="btn primary">发送</button>
                 </div>
+                <div class="quiet" style="margin-top:6px;">输入框支持方向键上/下切换历史输入；这里用“上/下”按钮演示。</div>
               </div>
             </section>
 
@@ -950,7 +1029,7 @@
               <div class="panel pad">
                 <div class="panel-title">会话上下文</div>
                 <div class="mini-kpi" style="margin-top:10px;">
-                  <div><span class="quiet">模式</span><br><strong>读写</strong></div>
+                  <div><span class="quiet">权限</span><br><strong>见顶部</strong></div>
                   <div><span class="quiet">工具</span><br><strong>4</strong></div>
                   <div><span class="quiet">审批</span><br><strong>1</strong></div>
                 </div>
@@ -1077,7 +1156,7 @@
               <div class="risk-list">
                 <div class="risk-row"><span class="status bad">严重</span><div>生产数据库 -> DBA 值班</div><button class="btn small">编辑</button></div>
                 <div class="risk-row"><span class="status warn">警告</span><div>K8s -> 平台组</div><button class="btn small">编辑</button></div>
-                <div class="risk-row"><span class="status info">Info</span><div>夜间只归档不通知</div><button class="btn small">编辑</button></div>
+                <div class="risk-row"><span class="status info">归档</span><div>夜间只归档不通知</div><button class="btn small">编辑</button></div>
               </div>
             </div>
             <div class="panel">
@@ -1357,7 +1436,7 @@ TRUNCATE TABLE</textarea></div>
 
   <script>
     const pageNames = {
-      overview: "运维总览",
+      overview: "总览大屏",
       chat: "AI 会话",
       assets: "资产中心",
       alerts: "告警事件",
@@ -1448,6 +1527,36 @@ TRUNCATE TABLE</textarea></div>
       toast.textContent = message || "操作已记录";
       toast.classList.add("show");
       setTimeout(() => toast.classList.remove("show"), 2200);
+    }
+
+    const inputHistory = [
+      "继续只读分析应用连接来源，输出下一步处置建议。",
+      "只看慢查询和锁等待，不要执行任何写操作。",
+      "基于当前告警生成一份给 DBA 的处置摘要。",
+      "解释当前会话有哪些工具会触发审批。"
+    ];
+    let historyIndex = 0;
+
+    function cycleHistory(direction) {
+      const input = document.getElementById("chatInput");
+      if (!input) return;
+      historyIndex = (historyIndex + direction + inputHistory.length) % inputHistory.length;
+      input.value = inputHistory[historyIndex];
+      input.focus();
+    }
+
+    const chatInput = document.getElementById("chatInput");
+    if (chatInput) {
+      chatInput.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          cycleHistory(-1);
+        }
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          cycleHistory(1);
+        }
+      });
     }
   </script>
 </body>
