@@ -15,11 +15,16 @@ logger = logging.getLogger(__name__)
 def build_base_url(host: str, port: int | None, extra_args: dict | None = None) -> str:
     extra_args = extra_args or {}
     raw_host = str(host or "").strip()
+    configured_base_path = str(
+        extra_args.get("base_path") or extra_args.get("api_base_path") or ""
+    ).strip()
     if raw_host.startswith(("http://", "https://")):
         parsed = urllib.parse.urlparse(raw_host)
         scheme = parsed.scheme
         netloc = parsed.netloc
-        base_path = parsed.path.rstrip("/")
+        base_path = (configured_base_path or parsed.path).strip().rstrip("/")
+        if base_path and not base_path.startswith("/"):
+            base_path = f"/{base_path}"
         return urllib.parse.urlunparse((scheme, netloc, base_path, "", "", "")).rstrip("/")
 
     effective_port = int(port or 443)
@@ -27,7 +32,10 @@ def build_base_url(host: str, port: int | None, extra_args: dict | None = None) 
     parsed = urllib.parse.urlparse(f"//{raw_host}")
     hostname = parsed.hostname or raw_host
     host_port = parsed.port or effective_port
-    return f"{scheme}://{hostname}:{host_port}"
+    base_path = configured_base_path.rstrip("/")
+    if base_path and not base_path.startswith("/"):
+        base_path = f"/{base_path}"
+    return f"{scheme}://{hostname}:{host_port}{base_path}"
 
 
 class HttpApiExecutor:

@@ -123,7 +123,7 @@ class ConnectionRequest(BaseModel):
         )
         asset_type = identity["asset_type"]
         protocol = identity["protocol"]
-        if asset_type == "snmp":
+        if protocol == "snmp":
             if self.extra_args.get("snmp_version") == "v3":
                 auth_protocol = str(self.extra_args.get("v3_auth_protocol") or "none").lower()
                 priv_protocol = str(self.extra_args.get("v3_priv_protocol") or "none").lower()

@@ -512,10 +512,11 @@ export default function ChatWindow() {
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4"
       >
-        {messages.map((msg) => (
+        {messages.map((msg, index) => (
           <MessageBubble
             key={msg.id}
             message={msg}
+            isPending={isStreaming && index === messages.length - 1 && msg.role === 'assistant'}
             onApproval={handleApproval}
             onInteraction={handleUserInteraction}
           />
@@ -853,8 +854,9 @@ function ToolsetPill({ toolset }: { toolset: ToolsetInfo }) {
 
 // --- Message Bubble Sub-component ---
 
-function MessageBubble({ message, onApproval, onInteraction }: {
+function MessageBubble({ message, isPending = false, onApproval, onInteraction }: {
   message: ChatMessage
+  isPending?: boolean
   onApproval: (toolCallId: string, approved: boolean, autoAll?: boolean) => void
   onInteraction: (requestId: string, value: string, label?: string) => void
 }) {
@@ -884,6 +886,11 @@ function MessageBubble({ message, onApproval, onInteraction }: {
   const hasTrace = message.execTrace && message.execTrace.length > 0
   const approval = message.toolApproval
   const interaction = message.userInteraction
+  const hasContent = message.content.trim().length > 0
+  const shouldShowEmptyBubble = isPending && !hasContent && !approval && !interaction
+  if (!hasContent && !hasTrace && !approval && !interaction && !isPending) {
+    return null
+  }
   const assistantTime = new Date(message.timestamp).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
@@ -945,7 +952,7 @@ function MessageBubble({ message, onApproval, onInteraction }: {
         )}
 
         {/* Message content */}
-        {message.content ? (
+        {hasContent ? (
           <article className="w-full overflow-hidden rounded-xl border border-ops-surface1/55 bg-ops-panel/85 shadow-[0_12px_40px_rgba(0,0,0,0.18)]">
             <div className="flex items-center justify-between gap-3 border-b border-ops-surface0/80 bg-ops-surface0/35 px-4 py-2">
               <div className="flex items-center gap-2">
@@ -959,7 +966,7 @@ function MessageBubble({ message, onApproval, onInteraction }: {
               dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
             />
           </article>
-        ) : (
+        ) : shouldShowEmptyBubble ? (
           <div className="w-full rounded-xl border border-ops-surface1/55 bg-ops-panel/85 px-5 py-4 text-[15px]">
             <span className="inline-flex gap-1">
               <span className="typing-dot w-1.5 h-1.5 bg-ops-accent rounded-full" />
@@ -967,7 +974,7 @@ function MessageBubble({ message, onApproval, onInteraction }: {
               <span className="typing-dot w-1.5 h-1.5 bg-ops-accent rounded-full" />
             </span>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   )

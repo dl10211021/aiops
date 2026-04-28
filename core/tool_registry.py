@@ -271,9 +271,9 @@ def _register_builtin_tools() -> None:
             toolset="network-cli",
             scope="asset",
             protocols={"ssh"},
-            asset_types={"switch"},
+            asset_types=set(NETWORK_CLI_ASSET_TYPES),
             safety_category="network_cli",
-            description="当前已连接交换机/路由器 SSH CLI；直接执行 display/show/ping 等巡检命令，凭据由资产中心注入。",
+            description="当前已连接交换机/路由器/防火墙/VPN SSH CLI；直接执行 display/show/ping 等巡检命令，凭据由资产中心注入。",
             parameters=_obj({"command": {"type": "string"}}, ["command"]),
         )
     )
@@ -330,9 +330,9 @@ def _register_builtin_tools() -> None:
             toolset="storage-ssh",
             scope="asset",
             protocols={"ssh"},
-            asset_types={item for item in STORAGE_ASSET_TYPES if item in {"ceph", "nfs"}},
+            asset_types={item for item in STORAGE_ASSET_TYPES if item in {"ceph", "nfs", "hdfs", "glusterfs"}},
             safety_category="linux",
-            description="当前已连接存储节点；执行 Ceph/NFS/备份节点等只读巡检命令。",
+            description="当前已连接存储节点；执行 Ceph/NFS/HDFS/GlusterFS 等只读巡检命令。",
             parameters=_obj({"command": {"type": "string"}}, ["command"]),
         )
     )

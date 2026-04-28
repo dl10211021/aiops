@@ -10,6 +10,7 @@ warnings.filterwarnings(
 )
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from api import routes
 
@@ -140,6 +141,23 @@ class TestAssetCrudRoutes(unittest.TestCase):
         self.assertEqual(by_id["s3"]["protocol"], "http_api")
         self.assertEqual(by_id["hdfs"]["protocol"], "ssh")
         self.assertEqual(by_id["glusterfs"]["category"], "storage")
+
+    def test_snmp_protocol_validation_applies_to_nas_and_ipmi(self):
+        with self.assertRaises(ValidationError):
+            routes.ConnectionRequest(
+                host="nas.local",
+                port=161,
+                username="",
+                password="",
+                asset_type="nas",
+                protocol="snmp",
+                extra_args={
+                    "category": "storage",
+                    "sub_type": "nas",
+                    "snmp_version": "v3",
+                    "v3_auth_protocol": "SHA",
+                },
+            )
 
 
 if __name__ == "__main__":

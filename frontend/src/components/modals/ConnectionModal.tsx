@@ -191,6 +191,7 @@ export default function ConnectionModal() {
 
   const getProtocolForSubType = (category: string, subType: string) =>
     assetSubTypes[category]?.find(s => s.id === subType)?.asset_type || subType;
+  const currentProtocol = getProtocolForSubType(form.category, form.sub_type)
 
   // Load backend asset catalog, then skills and optional asset prefill.
   useEffect(() => {
@@ -689,7 +690,7 @@ export default function ConnectionModal() {
                 </div>
               )}
 
-              {form.sub_type === 'snmp' && (
+              {currentProtocol === 'snmp' && (
                 <div className="space-y-3">
                   <div>
                     <label className="text-xs text-ops-subtext">SNMP Version</label>
@@ -751,12 +752,42 @@ export default function ConnectionModal() {
                 </div>
               )}
 
-              {['zabbix', 'elasticsearch', 'f5', 'vmware', 'zstack', 'prometheus', 'redfish', 'manageengine'].includes(form.sub_type) && (
-                <div>
-                  <label className="text-xs text-ops-subtext">API Token (Optional)</label>
-                  <input type="password" value={(form.extra_args.api_token as string) || ''}
-                    onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, api_token: e.target.value } })}
-                    className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+              {['http_api', 'redfish'].includes(currentProtocol) && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-ops-subtext">访问协议</label>
+                    <select
+                      value={(form.extra_args.scheme as string) || (form.port === 443 ? 'https' : 'http')}
+                      onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, scheme: e.target.value } })}
+                      className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent appearance-none"
+                    >
+                      <option value="https">HTTPS</option>
+                      <option value="http">HTTP</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-ops-subtext">Base Path</label>
+                    <input
+                      value={(form.extra_args.base_path as string) || ''}
+                      onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, base_path: e.target.value } })}
+                      placeholder="/api 或留空"
+                      className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-ops-subtext">API Token</label>
+                    <input type="password" value={(form.extra_args.api_token as string) || ''}
+                      onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, api_token: e.target.value } })}
+                      className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-ops-subtext">Token Header</label>
+                    <input
+                      value={(form.extra_args.auth_header as string) || 'Authorization'}
+                      onChange={(e) => setForm({ ...form, extra_args: { ...form.extra_args, auth_header: e.target.value } })}
+                      className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent"
+                    />
+                  </div>
                 </div>
               )}
 

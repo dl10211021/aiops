@@ -10,6 +10,7 @@ from unittest.mock import patch
 from connections.ssh_manager import SSHConnectionManager
 from core.asset_protocols import get_asset_catalog, normalize_protocol, resolve_asset_identity
 from core.memory import MemoryDB
+from core.tool_registry import tool_registry
 
 
 class FakeSSHClient:
@@ -192,6 +193,27 @@ class TestAssetProtocolLayer(unittest.TestCase):
             self.assertIn(asset_type, by_id)
             self.assertEqual(by_id[asset_type]["protocol"], protocol)
             self.assertEqual(normalize_protocol(asset_type), protocol)
+
+    def test_each_catalog_asset_has_protocol_scoped_tool(self):
+        missing = []
+        for item in get_asset_catalog():
+            context = {
+                "target_scope": "asset",
+                "asset_type": item["id"],
+                "protocol": item["protocol"],
+                "extra_args": {"category": item["category"], "sub_type": item["id"]},
+                "host": "asset.local",
+                "port": item["default_port"],
+            }
+            active = [
+                tool.name
+                for tool in tool_registry.available(context)
+                if tool.scope == "asset"
+            ]
+            if not active:
+                missing.append((item["id"], item["protocol"]))
+
+        self.assertEqual(missing, [])
 
     def test_legacy_virtual_database_asset_is_resolved_from_port_and_metadata(self):
         identity = resolve_asset_identity(
