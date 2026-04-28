@@ -233,7 +233,7 @@ ASSET_CATALOG = [
     {
         "id": "minio",
         "label": "MinIO",
-        "category": "middleware",
+        "category": "storage",
         "protocol": "http_api",
         "default_port": 9000,
         "inspection_profile": "http_api",
@@ -423,6 +423,30 @@ ASSET_CATALOG = [
         "inspection_profile": "snmp",
     },
     {
+        "id": "s3",
+        "label": "S3 / Object Storage",
+        "category": "storage",
+        "protocol": "http_api",
+        "default_port": 443,
+        "inspection_profile": "http_api",
+    },
+    {
+        "id": "hdfs",
+        "label": "HDFS",
+        "category": "storage",
+        "protocol": "ssh",
+        "default_port": 22,
+        "inspection_profile": "linux",
+    },
+    {
+        "id": "glusterfs",
+        "label": "GlusterFS",
+        "category": "storage",
+        "protocol": "ssh",
+        "default_port": 22,
+        "inspection_profile": "linux",
+    },
+    {
         "id": "backup",
         "label": "Backup System",
         "category": "storage",
@@ -523,6 +547,14 @@ ASSET_PROTOCOL_MAP = {
     "nacos": "http_api",
     "consul": "http_api",
     "minio": "http_api",
+    "s3": "http_api",
+    "object_storage": "http_api",
+    "object-storage": "http_api",
+    "oss": "http_api",
+    "cos": "http_api",
+    "obs": "http_api",
+    "hdfs": "ssh",
+    "glusterfs": "ssh",
     "api": "http_api",
     "http_api": "http_api",
     "http": "http_api",
@@ -581,6 +613,11 @@ ASSET_TYPE_ALIASES = {
     "sqlserver": "mssql",
     "sql_server": "mssql",
     "san": "nas",
+    "object_storage": "s3",
+    "object-storage": "s3",
+    "oss": "s3",
+    "cos": "s3",
+    "obs": "s3",
     "ad": "ldap",
     "卓豪": "manageengine",
     "manage-engine": "manageengine",
@@ -607,7 +644,6 @@ MIDDLEWARE_ASSET_TYPES = {
     "zookeeper",
     "nacos",
     "consul",
-    "minio",
 }
 MONITORING_ASSET_TYPES = {
     "prometheus",
@@ -619,7 +655,7 @@ MONITORING_ASSET_TYPES = {
     "manageengine",
 }
 VIRTUALIZATION_ASSET_TYPES = {"vmware", "kvm", "openstack", "proxmox", "hyperv", "zstack"}
-STORAGE_ASSET_TYPES = {"ceph", "nfs", "nas", "backup"}
+STORAGE_ASSET_TYPES = {"ceph", "nfs", "nas", "minio", "s3", "hdfs", "glusterfs", "backup"}
 
 PORT_ASSET_HINTS = {
     22: "linux",
@@ -697,6 +733,17 @@ KEYWORD_ASSET_HINTS = [
     ("nacos", "nacos"),
     ("consul", "consul"),
     ("minio", "minio"),
+    ("object storage", "s3"),
+    ("object-storage", "s3"),
+    ("object_storage", "s3"),
+    ("s3", "s3"),
+    ("oss", "s3"),
+    ("cos", "s3"),
+    ("obs", "s3"),
+    ("对象存储", "s3"),
+    ("hdfs", "hdfs"),
+    ("glusterfs", "glusterfs"),
+    ("gluster", "glusterfs"),
     ("windows", "windows"),
     ("window", "windows"),
     ("winrm", "windows"),

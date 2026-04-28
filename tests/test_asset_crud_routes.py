@@ -127,6 +127,20 @@ class TestAssetCrudRoutes(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
 
+    def test_asset_types_response_exposes_datacenter_catalog_filters(self):
+        response = routes._asset_types_response()
+
+        category_labels = {item["id"]: item["label"] for item in response.data["categories"]}
+        self.assertEqual(category_labels["virtualization"], "虚拟化与私有云")
+        self.assertEqual(category_labels["storage"], "存储与备份")
+        self.assertEqual(category_labels["oob"], "硬件带外")
+
+        by_id = {item["id"]: item for item in response.data["types"]}
+        self.assertEqual(by_id["s3"]["category"], "storage")
+        self.assertEqual(by_id["s3"]["protocol"], "http_api")
+        self.assertEqual(by_id["hdfs"]["protocol"], "ssh")
+        self.assertEqual(by_id["glusterfs"]["category"], "storage")
+
 
 if __name__ == "__main__":
     unittest.main()

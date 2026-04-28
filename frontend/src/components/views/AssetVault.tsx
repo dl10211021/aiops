@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '@/store'
 import InspectionReportModal from '@/components/inspection/InspectionReportModal'
 import {
+  type AssetCategoryDefinition,
+  type AssetTypeDefinition,
   applyAssetNormalization,
   deleteAsset,
   getAssetTypes,
@@ -16,6 +18,64 @@ import {
 } from '@/api/client'
 import type { Asset, AssetVerificationMatrix, AssetVerificationRun, InspectionRun, ProtocolVerificationOverview } from '@/types'
 
+const CATEGORY_ORDER = [
+  'os',
+  'db',
+  'container',
+  'middleware',
+  'monitor',
+  'virtualization',
+  'network',
+  'storage',
+  'oob',
+  'security',
+  'other',
+]
+
+const PROTOCOL_ORDER = [
+  'ssh',
+  'winrm',
+  'mysql',
+  'oracle',
+  'postgresql',
+  'mssql',
+  'redis',
+  'mongodb',
+  'http_api',
+  'k8s',
+  'snmp',
+  'redfish',
+  'virtual',
+  'unknown',
+]
+
+const PROTOCOL_LABELS: Record<string, string> = {
+  ssh: 'SSH',
+  winrm: 'WinRM',
+  mysql: 'MySQL',
+  oracle: 'Oracle',
+  postgresql: 'PostgreSQL',
+  mssql: 'SQL Server',
+  redis: 'Redis',
+  mongodb: 'MongoDB',
+  http_api: 'HTTP API',
+  k8s: 'Kubernetes',
+  snmp: 'SNMP',
+  redfish: 'Redfish',
+  virtual: '虚拟 / 手动',
+  unknown: '未知',
+}
+
+function normalizeFilterValue(value: unknown, fallback = 'unknown') {
+  const text = String(value || '').trim().toLowerCase()
+  return text || fallback
+}
+
+function orderIndex(order: string[], id: string) {
+  const idx = order.indexOf(id)
+  return idx >= 0 ? idx : order.length
+}
+
 export default function AssetVault() {
   const assets = useStore((s) => s.assets)
   const setAssets = useStore((s) => s.setAssets)
@@ -25,6 +85,8 @@ export default function AssetVault() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [protocolFilter, setProtocolFilter] = useState('all')
   const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>({})
+  const [catalogCategories, setCatalogCategories] = useState<AssetCategoryDefinition[]>([])
+  const [catalogTypes, setCatalogTypes] = useState<AssetTypeDefinition[]>([])
   const [overview, setOverview] = useState<Record<string, number> | null>(null)
   const [verificationOverview, setVerificationOverview] = useState<ProtocolVerificationOverview | null>(null)
   const [verificationPanel, setVerificationPanel] = useState<{
@@ -52,9 +114,19 @@ export default function AssetVault() {
   useEffect(() => {
     getAssetTypes()
       .then((r) => {
-        setCategoryLabels(Object.fromEntries((r.data.categories || []).map((c) => [c.id, c.label])))
+        const categories = r.data.categories || []
+        setCatalogCategories(categories)
+        setCatalogTypes(r.data.types || [])
+        setCategoryLabels({
+          ...Object.fromEntries(categories.map((c) => [c.id, c.label])),
+          other: '其他',
+        })
       })
-      .catch(() => setCategoryLabels({}))
+      .catch(() => {
+        setCatalogCategories([])
+        setCatalogTypes([])
+        setCategoryLabels({ other: '其他' })
+      })
   }, [])
 
   const handleDelete = async (id: number) => {
@@ -138,8 +210,8 @@ export default function AssetVault() {
 
   const filtered = assets.filter((a) => {
     const q = search.toLowerCase()
-    const category = String(a.extra_args?.category || 'other')
-    const protocol = a.protocol || a.asset_type || 'unknown'
+    const category = normalizeFilterValue(a.extra_args?.category, 'other')
+    const protocol = normalizeFilterValue(a.protocol || a.asset_type)
     const matchesSearch = !q
       || a.host.toLowerCase().includes(q)
       || (a.remark || '').toLowerCase().includes(q)
@@ -151,13 +223,24 @@ export default function AssetVault() {
     return matchesSearch && matchesCategory && matchesProtocol
   })
 
-  const availableCategories = Array.from(new Set(assets.map((a) => String(a.extra_args?.category || 'other')))).sort()
-  const availableProtocols = Array.from(new Set(assets.map((a) => a.protocol || a.asset_type || 'unknown'))).sort()
+  const availableCategories = Array.from(new Set([
+    ...catalogCategories.map((c) => c.id),
+    ...assets.map((a) => normalizeFilterValue(a.extra_args?.category, 'other')),
+  ]))
+    .filter(Boolean)
+    .sort((a, b) => orderIndex(CATEGORY_ORDER, a) - orderIndex(CATEGORY_ORDER, b) || a.localeCompare(b))
+
+  const availableProtocols = Array.from(new Set([
+    ...catalogTypes.map((t) => normalizeFilterValue(t.protocol)),
+    ...assets.map((a) => normalizeFilterValue(a.protocol || a.asset_type)),
+  ]))
+    .filter(Boolean)
+    .sort((a, b) => orderIndex(PROTOCOL_ORDER, a) - orderIndex(PROTOCOL_ORDER, b) || a.localeCompare(b))
   const matrixByAssetId = new Map((verificationOverview?.matrix || []).map((item) => [item.asset.id, item]))
 
   const grouped: Record<string, Asset[]> = {}
   filtered.forEach((a) => {
-    const category = String(a.extra_args?.category || 'other')
+    const category = normalizeFilterValue(a.extra_args?.category, 'other')
     const g = `${categoryLabels[category] || category.toUpperCase()}`
     if (!grouped[g]) grouped[g] = []
     grouped[g].push(a)
@@ -177,6 +260,7 @@ export default function AssetVault() {
       k8s: 'bg-cyan-500/20 text-cyan-400',
       redfish: 'bg-amber-500/20 text-amber-400',
       snmp: 'bg-slate-500/20 text-slate-300',
+      virtual: 'bg-ops-accent/15 text-ops-accent',
     }
     return colors[p] || 'bg-ops-surface1 text-ops-subtext'
   }
@@ -236,7 +320,7 @@ export default function AssetVault() {
           <FilterRow
             label="协议"
             value={protocolFilter}
-            options={availableProtocols.map((id) => ({ id, label: id.toUpperCase() }))}
+            options={availableProtocols.map((id) => ({ id, label: PROTOCOL_LABELS[id] || id.toUpperCase() }))}
             onChange={setProtocolFilter}
           />
         </div>
@@ -256,13 +340,13 @@ export default function AssetVault() {
                       <div className="font-medium text-ops-text text-sm truncate">{asset.remark || asset.host}</div>
                       <div className="text-xs text-ops-overlay mt-0.5">{asset.username}@{asset.host}:{asset.port}</div>
                     </div>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${protocolBadge(asset.protocol || asset.asset_type)}`}>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${protocolBadge(normalizeFilterValue(asset.protocol || asset.asset_type))}`}>
                       {asset.asset_type.toUpperCase()} / {(asset.protocol || '').toUpperCase()}
                     </span>
                   </div>
                   <div className="mb-2 flex flex-wrap gap-1.5 text-[10px]">
                     <span className="rounded bg-ops-dark px-1.5 py-0.5 text-ops-overlay">
-                      {categoryLabels[String(asset.extra_args?.category || 'other')] || String(asset.extra_args?.category || 'other').toUpperCase()}
+                      {categoryLabels[normalizeFilterValue(asset.extra_args?.category, 'other')] || normalizeFilterValue(asset.extra_args?.category, 'other').toUpperCase()}
                     </span>
                     {(asset.tags || []).slice(0, 3).map((tag) => (
                       <span key={tag} className="rounded bg-ops-surface0 px-1.5 py-0.5 text-ops-subtext">{tag}</span>
