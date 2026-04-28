@@ -146,6 +146,42 @@ class TestApprovalQueue(unittest.TestCase):
         self.assertEqual(executed["execution"]["artifacts"]["backup_path"], "D:/tmp/safe-skill/.versions/SKILL.md.1.bak")
         self.assertNotIn("sk-testsecret1234567890", str(executed["execution"]))
 
+    def test_record_approval_request_rejects_duplicate_id_without_overwriting_audit(self):
+        from core import approval_queue
+
+        store_path = self._store_path("duplicate")
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path):
+            approval_queue.record_approval_request(
+                tool_call_id="call-dup",
+                session_id="sid-1",
+                tool_name="linux_execute_command",
+                args={"command": "systemctl restart nginx"},
+                reason="检测到可能改变 Linux/KVM 系统状态的命令。",
+                context={"host": "10.0.0.2", "asset_type": "linux", "protocol": "ssh"},
+            )
+            approval_queue.resolve_approval_request("call-dup", approved=True, operator="ops-admin")
+            approval_queue.record_approval_execution(
+                "call-dup",
+                '{"status":"SUCCESS","message":"service restarted"}',
+            )
+
+            with self.assertRaises(ValueError):
+                approval_queue.record_approval_request(
+                    tool_call_id="call-dup",
+                    session_id="sid-2",
+                    tool_name="linux_execute_command",
+                    args={"command": "rm -rf /tmp/demo"},
+                    reason="检测到可能改变 Linux/KVM 系统状态的命令。",
+                    context={"host": "10.0.0.3", "asset_type": "linux", "protocol": "ssh"},
+                )
+
+            existing = approval_queue.get_approval_request("call-dup")
+
+        self.assertEqual(existing["status"], "approved")
+        self.assertEqual(existing["operator"], "ops-admin")
+        self.assertIn("service restarted", existing["execution"]["result_preview"])
+        self.assertNotIn("rm -rf", str(existing))
+
     def test_pending_approval_expires_to_timeout(self):
         from core import approval_queue
 

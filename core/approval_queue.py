@@ -210,31 +210,36 @@ def record_approval_request(
     if not approval_id:
         raise ValueError("approval id 不能为空")
     timeout = max(30, min(int(timeout_seconds or 300), 1800))
-    item = {
-        "id": approval_id,
-        "tool_call_id": approval_id,
-        "session_id": str(session_id or context.get("session_id") or ""),
-        "tool_name": str(tool_name or ""),
-        "args": _safe_args(str(tool_name or ""), args or {}),
-        "reason": str(reason or ""),
-        "metadata": _approval_metadata(str(tool_name or ""), args or {}),
-        "context": _safe_context({**(context or {}), "session_id": session_id or context.get("session_id")}),
-        "status": "pending",
-        "decision": None,
-        "operator": None,
-        "note": "",
-        "requested_at": _iso(now),
-        "requested_at_ts": now,
-        "expires_at": _iso(now + timeout),
-        "expires_at_ts": now + timeout,
-        "resolved_at": None,
-        "resolved_at_ts": None,
-    }
     with _LOCK:
         items = _read_store()
-        next_items = [existing for existing in items if existing.get("id") != approval_id]
-        next_items.append(item)
-        _write_store(sorted(next_items, key=lambda value: value.get("requested_at_ts", 0), reverse=True))
+        changed = _expire_pending(items)
+        if any(existing.get("id") == approval_id for existing in items):
+            if changed:
+                _write_store(items)
+            raise ValueError("审批请求 ID 已存在，不能复用")
+
+        item = {
+            "id": approval_id,
+            "tool_call_id": approval_id,
+            "session_id": str(session_id or context.get("session_id") or ""),
+            "tool_name": str(tool_name or ""),
+            "args": _safe_args(str(tool_name or ""), args or {}),
+            "reason": str(reason or ""),
+            "metadata": _approval_metadata(str(tool_name or ""), args or {}),
+            "context": _safe_context({**(context or {}), "session_id": session_id or context.get("session_id")}),
+            "status": "pending",
+            "decision": None,
+            "operator": None,
+            "note": "",
+            "requested_at": _iso(now),
+            "requested_at_ts": now,
+            "expires_at": _iso(now + timeout),
+            "expires_at_ts": now + timeout,
+            "resolved_at": None,
+            "resolved_at_ts": None,
+        }
+        items.append(item)
+        _write_store(sorted(items, key=lambda value: value.get("requested_at_ts", 0), reverse=True))
     return item
 
 
