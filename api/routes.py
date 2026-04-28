@@ -1057,6 +1057,7 @@ class CreateSkillRequest(BaseModel):
     instructions: str
     script_name: str | None = None
     script_content: str | None = None
+    overwrite_existing: bool = False
 
 
 @router.post("/skills/create", response_model=ResponseModel)
@@ -1075,29 +1076,44 @@ async def create_skill(req: CreateSkillRequest):
     dest_path = resolve_custom_skill_dir(req.skill_id)
 
     try:
-        if dest_path.exists():
+        if dest_path.exists() and not req.overwrite_existing:
             raise HTTPException(
                 status_code=409,
                 detail=f"该技能包 ID ({req.skill_id}) 已存在，请换一个名称。",
             )
+        from core.dispatcher import dispatcher
 
-        dest_path.mkdir()
+        backup_paths = []
+        if dest_path.exists():
+            skill_backup = dispatcher._backup_existing_skill_file(str(dest_path / "SKILL.md"))
+            if skill_backup:
+                backup_paths.append(skill_backup)
+        else:
+            dest_path.mkdir()
 
         atomic_replace_bytes(dest_path / "SKILL.md", md_content.encode("utf-8"))
 
         # 如果提供了脚本内容，一并写入
         if script_validation:
             script_path = dest_path / script_validation["file_name"]
+            script_backup = dispatcher._backup_existing_skill_file(str(script_path))
+            if script_backup:
+                backup_paths.append(script_backup)
             atomic_replace_bytes(script_path, req.script_content.encode("utf-8"))
 
         # 通知 Dispatcher 重新加载
-        from core.dispatcher import dispatcher
-
         dispatcher.refresh_skills(force=True)
 
+        action = "更新" if req.overwrite_existing else "创建"
         return ResponseModel(
             status="success",
-            message=f"全新定制技能 {req.skill_id} 创建成功，已自动加载就绪！",
+            message=f"定制技能 {req.skill_id} {action}成功，已自动加载就绪！",
+            data={
+                "skill_id": req.skill_id,
+                "skill_path": str(dest_path),
+                "backup_paths": backup_paths,
+                "updated": bool(req.overwrite_existing),
+            },
         )
     except HTTPException:
         raise

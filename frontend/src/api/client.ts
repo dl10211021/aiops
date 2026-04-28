@@ -189,7 +189,7 @@ export async function migrateSkill(sourcePath: string, targetDirName: string) {
 
 export async function createSkill(params: {
   skill_id: string; description: string; instructions: string;
-  script_name?: string; script_content?: string;
+  script_name?: string; script_content?: string; overwrite_existing?: boolean;
 }) {
   return request('/skills/create', { method: 'POST', body: JSON.stringify(params) })
 }

@@ -197,6 +197,41 @@ class TestSkillSecurity(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 409)
 
+    def test_create_skill_overwrite_versions_existing_skill_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target_base = Path(tmp) / "custom"
+            existing = target_base / "existing-skill"
+            existing.mkdir(parents=True)
+            old_content = "---\nname: existing-skill\ndescription: old\n---\n\nold\n"
+            (existing / "SKILL.md").write_text(old_content, encoding="utf-8")
+
+            with (
+                patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch("core.dispatcher.dispatcher.refresh_skills") as refresh,
+            ):
+                response = asyncio.run(
+                    routes.create_skill(
+                        routes.CreateSkillRequest(
+                            skill_id="existing-skill",
+                            description="new",
+                            instructions="new body",
+                            overwrite_existing=True,
+                        )
+                    )
+                )
+
+            backups = list((existing / ".versions").glob("SKILL.md.*.bak"))
+            backup_content = backups[0].read_text(encoding="utf-8") if backups else ""
+            new_content = (existing / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertEqual(response.status, "success")
+        self.assertTrue(response.data["updated"])
+        self.assertEqual(len(response.data["backup_paths"]), 1)
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backup_content, old_content)
+        self.assertIn("description: new", new_content)
+        refresh.assert_called_once_with(force=True)
+
     def test_create_skill_writes_to_custom_skills_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             target_base = Path(tmp) / "custom"
