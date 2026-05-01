@@ -33,6 +33,7 @@ from core.session_webhook import (
     validate_webhook_url,
     webhook_payload_preview,
 )
+from core.session_export import format_session_history_markdown
 
 import logging
 import asyncio
@@ -2230,41 +2231,10 @@ def _build_session_history_markdown(session_id: str) -> str:
     from core.memory import memory_db
 
     messages = memory_db.get_messages(session_id, for_ui=True)
-    chat_history = [
-        msg for msg in messages if msg.get("role") in ("user", "assistant")
-    ]
-    if not chat_history:
-        return ""
-
     remark = ""
     if session_id in ssh_manager.active_sessions:
         remark = ssh_manager.active_sessions[session_id]["info"].get("remark", "")
-
-    md_lines = [f"# Chat History: {remark or session_id}\n"]
-    for msg in chat_history:
-        role = "User" if msg["role"] == "user" else "AI Assistant"
-        attachment_lines = []
-        for item in msg.get("attachments") or []:
-            if not isinstance(item, dict):
-                continue
-            details = [
-                str(item.get("ext") or item.get("kind") or "附件"),
-                f"{item.get('size')} bytes" if item.get("size") is not None else "",
-                f"{item.get('rows')} 行" if item.get("rows") is not None else "",
-                f"{item.get('pages')} 页" if item.get("pages") is not None else "",
-                "已截断" if item.get("truncated") else "",
-            ]
-            attachment_lines.append(
-                f"- {item.get('filename') or 'attachment'}"
-                + f" ({'；'.join(part for part in details if part)})"
-            )
-        attachment_block = (
-            "\n\n### Attachments\n" + "\n".join(attachment_lines)
-            if attachment_lines
-            else ""
-        )
-        md_lines.append(f"## {role}\n{msg['content']}{attachment_block}\n\n---\n")
-    return "\n".join(md_lines)
+    return format_session_history_markdown(messages, remark or session_id)
 
 
 async def _build_session_webhook_markdown(
@@ -3192,42 +3162,15 @@ async def export_session_history(session_id: str):
 
     try:
         messages = memory_db.get_messages(session_id, for_ui=True)
-        chat_history = [
-            msg for msg in messages if msg.get("role") in ("user", "assistant")
-        ]
-        if not chat_history:
-            raise HTTPException(status_code=404, detail="该会话没有可导出的历史记录。")
-
         remark = ""
         if session_id in ssh_manager.active_sessions:
             remark = ssh_manager.active_sessions[session_id]["info"].get("remark", "")
 
-        md_lines = [f"# Chat History: {remark or session_id}\n"]
-        for msg in chat_history:
-            role = "User" if msg["role"] == "user" else "AI Assistant"
-            attachment_lines = []
-            for item in msg.get("attachments") or []:
-                if not isinstance(item, dict):
-                    continue
-                details = [
-                    str(item.get("ext") or item.get("kind") or "附件"),
-                    f"{item.get('size')} bytes" if item.get("size") is not None else "",
-                    f"{item.get('rows')} 行" if item.get("rows") is not None else "",
-                    f"{item.get('pages')} 页" if item.get("pages") is not None else "",
-                    "已截断" if item.get("truncated") else "",
-                ]
-                attachment_lines.append(
-                    f"- {item.get('filename') or 'attachment'}"
-                    + f" ({'；'.join(part for part in details if part)})"
-                )
-            attachment_block = (
-                "\n\n### Attachments\n" + "\n".join(attachment_lines)
-                if attachment_lines
-                else ""
-            )
-            md_lines.append(f"## {role}\n{msg['content']}{attachment_block}\n\n---\n")
+        markdown = format_session_history_markdown(messages, remark or session_id)
+        if not markdown:
+            raise HTTPException(status_code=404, detail="该会话没有可导出的历史记录。")
 
-        return ResponseModel(status="success", data={"markdown": "\n".join(md_lines)})
+        return ResponseModel(status="success", data={"markdown": markdown})
     except HTTPException:
         raise
     except Exception as e:
