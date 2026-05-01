@@ -44,6 +44,10 @@ from core.notification_config import (
     build_notification_config,
     build_notification_env_values,
 )
+from core.notification_test import (
+    NotificationTestError,
+    send_notification_channel_test,
+)
 
 import logging
 import asyncio
@@ -1669,93 +1673,11 @@ class TestNotificationRequest(BaseModel):
 @router.post("/config/notifications/test", response_model=ResponseModel)
 async def test_notification_channel(req: TestNotificationRequest):
     """【新功能】测试通知渠道"""
-    channel = req.channel
-    wechat_webhook = os.environ.get("WECHAT_WEBHOOK_URL", "")
-    dingtalk_webhook = os.environ.get("DINGTALK_WEBHOOK_URL", "")
-    email_address = os.environ.get("ALERT_EMAIL_ADDRESS", "")
-    smtp_server = os.environ.get("SMTP_SERVER", "")
-    smtp_port = int(os.environ.get("SMTP_PORT", 465) or 465)
-    smtp_user = os.environ.get("SMTP_USER", "")
-    smtp_pass = os.environ.get("SMTP_PASS", "")
-
-    import urllib.request
-    import json
-    import datetime
-
-    title = "SkillOps 平台连通性测试"
-    content = f"这是一条来自 SkillOps 平台的测试消息。如果您看到此消息，说明告警通道配置正常。\n\n**发送时间**: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-
     try:
-        if channel == "wechat":
-            if not wechat_webhook:
-                raise HTTPException(status_code=400, detail="请先配置企业微信 Webhook 地址")
-            payload = {
-                "msgtype": "markdown",
-                "markdown": {"content": f"## {title}\n{content}"},
-            }
-            req_http = urllib.request.Request(
-                wechat_webhook,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-            )
-            urllib.request.urlopen(req_http, timeout=5)
-            return ResponseModel(
-                status="success", message="企业微信测试消息发送成功！请查看您的群组。"
-            )
-
-        elif channel == "dingtalk":
-            if not dingtalk_webhook:
-                raise HTTPException(status_code=400, detail="请先配置钉钉 Webhook 地址")
-            payload = {
-                "msgtype": "markdown",
-                "markdown": {"title": title, "text": f"## {title}\n{content}"},
-            }
-            req_http = urllib.request.Request(
-                dingtalk_webhook,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-            )
-            urllib.request.urlopen(req_http, timeout=5)
-            return ResponseModel(
-                status="success", message="钉钉测试消息发送成功！请查看您的群组。"
-            )
-
-        elif channel == "email":
-            if not email_address:
-                raise HTTPException(status_code=400, detail="请先配置接收人邮箱地址")
-            if not smtp_server or not smtp_user or not smtp_pass:
-                raise HTTPException(
-                    status_code=400,
-                    detail="发送失败：尚未配置完整的 SMTP 发件服务器参数。",
-                )
-
-            import smtplib
-            from email.mime.text import MIMEText
-            from email.mime.multipart import MIMEMultipart
-
-            msg = MIMEMultipart()
-            msg["From"] = smtp_user
-            msg["To"] = email_address
-            msg["Subject"] = title
-            msg.attach(MIMEText(content, "plain", "utf-8"))
-
-            if smtp_port == 465:
-                server = smtplib.SMTP_SSL(smtp_server, smtp_port)
-            else:
-                server = smtplib.SMTP(smtp_server, smtp_port)
-                server.starttls()
-
-            server.login(smtp_user, smtp_pass)
-            server.sendmail(smtp_user, email_address, msg.as_string())
-            server.quit()
-
-            return ResponseModel(
-                status="success", message=f"测试邮件已成功发送至 {email_address}！"
-            )
-        else:
-            raise HTTPException(status_code=422, detail="不支持的渠道类型")
-    except HTTPException:
-        raise
+        message = send_notification_channel_test(req.channel)
+        return ResponseModel(status="success", message=message)
+    except NotificationTestError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"测试发送失败: {str(e)}") from e
 
