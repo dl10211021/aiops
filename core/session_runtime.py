@@ -45,3 +45,13 @@ def set_session_heartbeat(
             info["extra_args"] = {}
         info["extra_args"]["master_interval"] = master_interval
     return info
+
+
+def set_session_skills(
+    active_sessions: MutableMapping[str, dict],
+    session_id: str,
+    active_skills: list[str],
+) -> MutableMapping:
+    info = require_session_info(active_sessions, session_id)
+    info["active_skills"] = active_skills
+    return info

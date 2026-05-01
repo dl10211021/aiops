@@ -52,6 +52,7 @@ from core.session_runtime import (
     SessionRuntimeError,
     set_session_heartbeat,
     set_session_permission,
+    set_session_skills,
 )
 
 import logging
@@ -1822,10 +1823,10 @@ async def delete_session_history_message(session_id: str, message_id: int):
 @router.put("/session/{session_id}/skills", response_model=ResponseModel)
 async def update_session_skills(session_id: str, req: SkillsUpdateRequest):
     """【新功能】动态修改挂载技能包：在不中断会话的情况下，挂载或卸载 AI 技能"""
-    if session_id not in ssh_manager.active_sessions:
-        raise HTTPException(status_code=404, detail="会话不存在或已断开")
-
-    ssh_manager.active_sessions[session_id]["info"]["active_skills"] = req.active_skills
+    try:
+        set_session_skills(ssh_manager.active_sessions, session_id, req.active_skills)
+    except SessionRuntimeError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     logger.info(f"Session {session_id} active skills changed to: {req.active_skills}")
 
     return ResponseModel(status="success", message="挂载技能已实时更新")

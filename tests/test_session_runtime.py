@@ -4,6 +4,7 @@ from core.session_runtime import (
     SessionRuntimeError,
     set_session_heartbeat,
     set_session_permission,
+    set_session_skills,
 )
 
 
@@ -40,3 +41,12 @@ class TestSessionRuntime(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "会话不存在或已断开")
+
+    def test_set_session_skills_updates_existing_session_info(self):
+        sessions = {"sid-1": {"info": {"active_skills": []}}}
+        selected_skills = ["linux-basic", "disk-check"]
+
+        info = set_session_skills(sessions, "sid-1", selected_skills)
+
+        self.assertIs(info, sessions["sid-1"]["info"])
+        self.assertEqual(info["active_skills"], selected_skills)
