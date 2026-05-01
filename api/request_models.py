@@ -13,6 +13,42 @@ class SafetyPolicyUpdateRequest(BaseModel):
     policy: dict
 
 
+class ProviderConfig(BaseModel):
+    id: str
+    name: str = ""
+    protocol: str = "openai"
+    base_url: str = ""
+    api_key: str = ""
+    models: str = ""
+
+
+class EmbeddingConfigRequest(BaseModel):
+    model: str
+    dim: int
+
+
+class AgentRuntimeConfigRequest(BaseModel):
+    chat_max_steps: int = Field(80, ge=10, le=200)
+    headless_max_steps: int = Field(60, ge=10, le=200)
+
+
+class NotificationConfigRequest(BaseModel):
+    wechat_enabled: bool = True
+    wechat_webhook: str = ""
+    dingtalk_enabled: bool = True
+    dingtalk_webhook: str = ""
+    email_enabled: bool = True
+    email_address: str = ""
+    smtp_server: str = ""
+    smtp_port: int = 465
+    smtp_user: str = ""
+    smtp_pass: str = ""
+
+
+class TestNotificationRequest(BaseModel):
+    channel: str
+
+
 class SafetyPolicyTestRequest(BaseModel):
     tool_name: str = Field(default="linux_execute_command", max_length=80)
     command: str | None = Field(default=None, max_length=2000)

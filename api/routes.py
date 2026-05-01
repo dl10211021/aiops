@@ -196,7 +196,15 @@ from core.session_interaction_service import (
     approve_session_tool_call,
     submit_user_interaction_response,
 )
-from api.request_models import SafetyPolicyTestRequest, SafetyPolicyUpdateRequest
+from api.request_models import (
+    AgentRuntimeConfigRequest,
+    EmbeddingConfigRequest,
+    NotificationConfigRequest,
+    ProviderConfig,
+    SafetyPolicyTestRequest,
+    SafetyPolicyUpdateRequest,
+    TestNotificationRequest,
+)
 
 import logging
 import asyncio
@@ -858,26 +866,6 @@ async def get_llm_config():
 
 
 
-from typing import List
-
-class ProviderConfig(BaseModel):
-    id: str
-    name: str = ""
-    protocol: str = "openai"
-    base_url: str = ""
-    api_key: str = ""
-    models: str = ""
-
-class EmbeddingConfigRequest(BaseModel):
-    model: str
-    dim: int
-
-
-class AgentRuntimeConfigRequest(BaseModel):
-    chat_max_steps: int = Field(80, ge=10, le=200)
-    headless_max_steps: int = Field(60, ge=10, le=200)
-
-
 @router.get("/config/agent-runtime", response_model=ResponseModel)
 async def get_agent_runtime_config_endpoint():
     return ResponseModel(status="success", data={"config": get_agent_runtime_config_record()})
@@ -909,19 +897,6 @@ async def update_embedding_config_endpoint(req: EmbeddingConfigRequest):
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
-class NotificationConfigRequest(BaseModel):
-    wechat_enabled: bool = True
-    wechat_webhook: str = ""
-    dingtalk_enabled: bool = True
-    dingtalk_webhook: str = ""
-    email_enabled: bool = True
-    email_address: str = ""
-    smtp_server: str = ""
-    smtp_port: int = 465
-    smtp_user: str = ""
-    smtp_pass: str = ""
-
-
 @router.get("/config/notifications", response_model=ResponseModel)
 async def get_notification_config():
     """【新功能】获取当前的告警通道配置"""
@@ -940,10 +915,6 @@ async def update_notification_config(req: NotificationConfigRequest):
 
     logger.info("Notification Webhooks updated.")
     return ResponseModel(status="success", message="告警通道配置已保存并生效")
-
-
-class TestNotificationRequest(BaseModel):
-    channel: str  # "wechat", "dingtalk", "email"
 
 
 @router.post("/config/notifications/test", response_model=ResponseModel)
@@ -1840,7 +1811,7 @@ async def get_providers_endpoint():
     return ResponseModel(status="success", data={"providers": providers})
 
 @router.post("/config/providers", response_model=ResponseModel)
-async def update_providers_endpoint(req: List[ProviderConfig]):
+async def update_providers_endpoint(req: list[ProviderConfig]):
     try:
         await asyncio.to_thread(save_provider_config_records, [p.model_dump() for p in req])
     except ProviderConfigServiceError as exc:
