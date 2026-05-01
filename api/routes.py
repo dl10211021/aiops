@@ -56,6 +56,12 @@ from core.session_runtime import (
     set_session_permission,
     set_session_skills,
 )
+from core.session_history import (
+    clear_session_history as clear_session_history_messages,
+    delete_session_message,
+    get_user_visible_session_history,
+    update_session_message_content,
+)
 
 import logging
 import asyncio
@@ -1768,11 +1774,7 @@ async def get_session_history(session_id: str):
     from core.memory import memory_db
 
     try:
-        messages = memory_db.get_messages(session_id, for_ui=True)
-        # 过滤掉系统提示词，只返回对用户有意义的历史
-        chat_history = [
-            msg for msg in messages if msg.get("role") in ("user", "assistant")
-        ]
+        chat_history = get_user_visible_session_history(memory_db, session_id)
         return ResponseModel(status="success", data={"messages": chat_history})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -1784,7 +1786,7 @@ async def delete_session_history(session_id: str):
     from core.memory import memory_db
 
     try:
-        memory_db.clear_history(session_id)
+        clear_session_history_messages(memory_db, session_id)
         return ResponseModel(status="success", message="会话记录已清空")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -1800,7 +1802,12 @@ async def update_session_history_message(
     from core.memory import memory_db
 
     try:
-        message = memory_db.update_message_content(session_id, message_id, req.content)
+        message = update_session_message_content(
+            memory_db,
+            session_id,
+            message_id,
+            req.content,
+        )
         return ResponseModel(status="success", data={"message": message}, message="消息已更新")
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -1814,7 +1821,7 @@ async def delete_session_history_message(session_id: str, message_id: int):
     from core.memory import memory_db
 
     try:
-        memory_db.delete_message(session_id, message_id)
+        delete_session_message(memory_db, session_id, message_id)
         return ResponseModel(status="success", message="消息已删除")
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
