@@ -10,13 +10,17 @@ from core.asset_protocols import (
     get_asset_catalog,
     resolve_asset_identity,
 )
-from core.connection_errors import classify_connection_error, connection_error_http_status
+from core.connection_errors import classify_connection_error
 from core.connection_request_service import (
     asset_matches_connection_request,
     get_login_protocol_from_request,
     normalize_private_key_path,
     restore_masked_extra_args,
     restore_masked_password,
+)
+from core.connection_session_service import (
+    ConnectionSessionServiceError,
+    create_connection_session,
 )
 from core.connection_test_service import run_connection_test
 from core.legacy_command_service import (
@@ -212,20 +216,6 @@ router = APIRouter()
 def connection_error_response(raw_error, protocol: str = "", context: str = "") -> "ResponseModel":
     error = classify_connection_error(raw_error, protocol, context)
     return ResponseModel(status="error", message=error["message"], data={"error": error})
-
-
-def raise_connection_error(result: dict, protocol: str = "") -> None:
-    if result.get("error_code") and result.get("error_category"):
-        error = {
-            "code": result.get("error_code"),
-            "category": result.get("error_category"),
-            "message": result.get("message") or "连接失败",
-            "raw_error": result.get("raw_error") or result.get("message") or "",
-            "protocol": protocol,
-        }
-    else:
-        error = classify_connection_error(result.get("message") or result.get("error"), protocol)
-    raise HTTPException(status_code=connection_error_http_status(error), detail=error)
 
 
 # ----------------- 数据模型 -----------------
@@ -728,86 +718,23 @@ async def inspect_connection(req: ConnectionInspectionRequest):
 @router.post("/connect", response_model=ResponseModel)
 async def create_ssh_connection(req: ConnectionRequest):
     """建立与远程系统的会话 (支持 SSH长连接 或 虚拟凭据会话)"""
-
-    if req.target_scope == "global":
-        result = await asyncio.to_thread(
-            ssh_manager.connect_local,
-            agent_profile=req.agent_profile,
-            active_skills=req.active_skills,
-            remark=req.remark or "全局总控",
-            allow_modifications=req.allow_modifications,
-            tags=req.tags or ["全局会话"],
-            target_scope="global",
-            scope_value=req.scope_value,
-        )
-        return ResponseModel(
-            status="success",
-            message="Global Session Established",
-            data={"session_id": result["session_id"]},
-        )
-
     restored_args = get_restored_args(req)
     req = ConnectionRequest(**{**req.model_dump(), "extra_args": restored_args})
     restored_password = get_restored_password(req)
-    identity = resolve_asset_identity(
-        req.asset_type, req.protocol, req.extra_args, req.host, req.port, req.remark
-    )
-    login_protocol = identity["protocol"]
-    asset_type = identity["asset_type"]
-    extra_args = identity["extra_args"]
 
-    logger.info(
-        f"API called: Connect to {req.host} as {asset_type}/{login_protocol} with profile {req.agent_profile}, remark: {req.remark}"
-    )
+    from core.memory import memory_db
 
-    key_path = normalize_private_key_path(req.private_key_path)
-
-    # 解决同步方法卡死 FastAPI 问题，将其投递到线程池
-    result = await asyncio.to_thread(
-        ssh_manager.connect,
-        host=req.host,
-        port=req.port,
-        username=req.username,
-        password=restored_password,
-        key_filename=key_path,
-        allow_modifications=req.allow_modifications,
-        active_skills=req.active_skills,  # 透传给底层会话
-        agent_profile=req.agent_profile,  # 透传 Agent 身份
-        remark=req.remark,  # 透传备注
-        asset_type=asset_type,  # 资产子类型
-        protocol=login_protocol,  # 登录协议
-        extra_args=extra_args,  # 透传扩展凭证 (API Key, DB Name 等)
-        tags=req.tags,  # 传递分组标签
-        target_scope=req.target_scope,
-        scope_value=req.scope_value,
-    )
-
-    if result["success"]:
-        # 将连接成功的资产信息自动沉淀到 SQLite 数据库中，实现“通讯录”功能
-        from core.memory import memory_db
-
-        memory_db.save_asset(
-            remark=req.remark,
-            host=req.host,
-            port=req.port,
-            username=req.username,
-            password=restored_password,
-            asset_type=asset_type,
-            protocol=login_protocol,
-            agent_profile=req.agent_profile,
-            extra_args=extra_args,
-            skills=req.active_skills,
-            tags=req.tags,
+    try:
+        result = await create_connection_session(
+            req,
+            ssh_manager,
+            memory_db,
+            restored_password=restored_password,
+            logger=logger,
         )
-
-    if not result["success"]:
-        raise_connection_error(result, login_protocol)
-
-    return ResponseModel(
-        status="success",
-        message="Session Established",
-        data={"session_id": result["session_id"]},
-    )
+    except ConnectionSessionServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(**result)
 
 
 @router.post("/execute", response_model=ResponseModel)
