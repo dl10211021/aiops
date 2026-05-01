@@ -48,6 +48,11 @@ from core.notification_test import (
     NotificationTestError,
     send_notification_channel_test,
 )
+from core.session_runtime import (
+    SessionRuntimeError,
+    set_session_heartbeat,
+    set_session_permission,
+)
 
 import logging
 import asyncio
@@ -1685,12 +1690,14 @@ async def test_notification_channel(req: TestNotificationRequest):
 @router.put("/session/{session_id}/permission", response_model=ResponseModel)
 async def update_session_permission(session_id: str, req: PermissionUpdateRequest):
     """【新功能】动态提权/降权：在不中断 SSH 的情况下，修改当前会话的 AI 修改权限"""
-    if session_id not in ssh_manager.active_sessions:
-        raise HTTPException(status_code=404, detail="会话不存在或已断开")
-
-    ssh_manager.active_sessions[session_id]["info"]["allow_modifications"] = (
-        req.allow_modifications
-    )
+    try:
+        set_session_permission(
+            ssh_manager.active_sessions,
+            session_id,
+            req.allow_modifications,
+        )
+    except SessionRuntimeError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     logger.info(
         f"Session {session_id} permissions changed to: {req.allow_modifications}"
     )
@@ -1701,23 +1708,17 @@ async def update_session_permission(session_id: str, req: PermissionUpdateReques
 @router.put("/session/{session_id}/heartbeat", response_model=ResponseModel)
 async def update_session_heartbeat(session_id: str, req: HeartbeatUpdateRequest):
     """【新功能】动态开启或关闭心跳巡检"""
-    if session_id not in ssh_manager.active_sessions:
-        raise HTTPException(status_code=404, detail="会话不存在或已断开")
-
-    ssh_manager.active_sessions[session_id]["info"]["heartbeat_enabled"] = (
-        req.heartbeat_enabled
-    )
-    if req.heartbeat_enabled:
-        ssh_manager.active_sessions[session_id]["info"]["last_active"] = (
-            0  # Trigger immediately on next poll
+    try:
+        set_session_heartbeat(
+            ssh_manager.active_sessions,
+            session_id,
+            req.heartbeat_enabled,
+            req.master_interval,
         )
+    except SessionRuntimeError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     if req.master_interval is not None:
-        if "extra_args" not in ssh_manager.active_sessions[session_id]["info"]:
-            ssh_manager.active_sessions[session_id]["info"]["extra_args"] = {}
-        ssh_manager.active_sessions[session_id]["info"]["extra_args"][
-            "master_interval"
-        ] = req.master_interval
         logger.info(
             f"Session {session_id} master_interval updated to: {req.master_interval}s"
         )
