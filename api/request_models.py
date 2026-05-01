@@ -49,6 +49,80 @@ class TestNotificationRequest(BaseModel):
     channel: str
 
 
+class PermissionUpdateRequest(BaseModel):
+    allow_modifications: bool
+
+
+class HeartbeatUpdateRequest(BaseModel):
+    heartbeat_enabled: bool
+    master_interval: int | None = None
+
+
+class SkillsUpdateRequest(BaseModel):
+    active_skills: list[str]
+
+
+class SessionGroupUpdateRequest(BaseModel):
+    group_name: str = Field(..., min_length=1, max_length=80)
+
+
+class MigrateRequest(BaseModel):
+    source_path: str
+    target_dir_name: str
+
+
+class SkillRollbackRequest(BaseModel):
+    file_name: str = "SKILL.md"
+    version_id: str
+    approval_id: str | None = None
+
+
+class SkillValidationRequest(BaseModel):
+    skill_id: str
+    file_name: str = "SKILL.md"
+    content: str
+
+
+class CreateSkillRequest(BaseModel):
+    skill_id: str
+    description: str
+    instructions: str
+    script_name: str | None = None
+    script_content: str | None = None
+    overwrite_existing: bool = False
+
+
+class CronAddRequest(BaseModel):
+    cron_expr: str = "0 9 * * *"
+    message: str = "执行每日系统深度体检，生成资源使用率报告并发送到群组。"
+    host: str = ""
+    username: str = ""
+    agent_profile: str = "default"
+    password: str | None = None
+    private_key_path: str | None = None
+    asset_id: int | None = None
+    target_scope: str = "asset"
+    scope_value: str | None = None
+    template_id: str | None = None
+    notification_channel: str = "auto"
+    retry_count: int = 0
+    active_skills: list[str] = Field(default_factory=list)
+
+
+class BatchAssetImportItem(BaseModel):
+    remark: str | None = ""
+    host: str
+    port: int = 22
+    username: str = ""
+    password: str | None = ""
+    asset_type: str = "ssh"
+    protocol: str | None = None
+    agent_profile: str = "default"
+    extra_args: dict = Field(default_factory=dict)
+    skills: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=lambda: ["未分组"])
+
+
 class SafetyPolicyTestRequest(BaseModel):
     tool_name: str = Field(default="linux_execute_command", max_length=80)
     command: str | None = Field(default=None, max_length=2000)
