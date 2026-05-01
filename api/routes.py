@@ -135,6 +135,7 @@ from core.knowledge_base_service import (
     list_knowledge_document_records,
     remove_knowledge_document_record,
 )
+from core.alert_webhook_service import handle_alert_webhook
 
 import logging
 import asyncio
@@ -2359,96 +2360,28 @@ async def delete_knowledge_document(filename: str):
 @router.post("/webhook/alert", response_model=ResponseModel)
 async def receive_webhook_alert(request: Request):
     """【AIOps 高级特性】接收外部告警 (Prometheus / ManageEngine) 并推入相关 AI 会话"""
-    from core.alert_events import create_alert_event
-
     try:
         payload = await request.json()
     except (ValueError, TypeError):
         payload = {}
 
-    alert_event = create_alert_event(payload)
-
-    # 兼容卓豪 (ManageEngine) 和 Prometheus 等常见告警系统的数据结构
-    # 提取主机/节点信息
-    host = alert_event["host"]
-
-    # 提取告警标题
-    alert_name = alert_event["alert_name"]
-
-    logger.info(
-        "Webhook alert received: host=%s alert=%s severity=%s keys=%s",
-        host,
-        alert_name,
-        payload.get("severity") or payload.get("priority") or payload.get("status") or "",
-        sorted(list(payload.keys()))[:20],
-    )
-
-    # 提取严重程度
-    severity = alert_event["severity"]
-
-    # 提取详情
-    description = alert_event["description"]
-
-    logger.info(
-        f"Parsed Alert -> Host: {host}, Name: {alert_name}, Severity: {severity}"
-    )
-
-    # 查找所有当前连接到该故障主机的活跃 SSH 会话（或者如果系统有总管身份，也会收到）
-    affected_sessions = []
-    for sid, sdata in list(ssh_manager.active_sessions.items()):
-        if (
-            sdata["info"]["host"] == host
-            or host == "all"
-            or sdata["info"]["host"] == "localhost"
-        ):  # localhost 监控总管也会兜底收到
-            affected_sessions.append(sid)
-
-    if not affected_sessions:
-        logger.warning(
-            f"Alert received but no active AI session is connected to {host} or localhost."
-        )
-        return ResponseModel(
-            status="success",
-            message="告警已接收，但目前无人值守，已记录日志。",
-            data={"alert": alert_event, "injected_count": 0},
-        )
-
-    # 从内存中提取 Agent 的对话历史，强行塞入一条【系统通知】
     from core.memory import memory_db
     from core.dispatcher import dispatcher
     from core.heartbeat import run_single_heartbeat
-    import asyncio
 
-    injection_msg = f"🔔 【监控告警接入】外部系统触发了级别为 [{str(severity).upper()}] 的告警。\n**告警名称**：{alert_name}\n**故障节点**：{host}\n**详细信息**：\n{description}\n\n作为监控专家，请主动分析此告警。如果你是负责整个环境的指挥官（例如你的连接是 localhost），请使用 `list_active_sessions` 查找合适的子节点并使用 `dispatch_sub_agents` 派发调查任务；如果你是具体服务器的节点 Agent，请立刻调用技能/工具去探查根因！"
-
-    injected_count = 0
-    for sid in affected_sessions:
-        info = ssh_manager.active_sessions[sid].get("info", {})
-
-        # 使用真实的 asyncio Lock 解决高并发告警风暴下的竞态条件 (Race Condition)
-        lock = webhook_locks.setdefault(sid, asyncio.Lock())
-        async with lock:
-            if info.get("heartbeat_in_progress"):
-                # 如果当前该 session 正在后台自主巡检，则退化为仅追加日志
-                memory_db.append_message(sid, {"role": "user", "content": injection_msg})
-                logger.info(f"Session {sid} is busy, appended alert to context only.")
-            else:
-                info["heartbeat_in_progress"] = True
-                logger.info(
-                    f"Actively triggering background AI task for session {sid} due to alert."
-                )
-                asyncio.create_task(
-                    run_single_heartbeat(
-                        sid, info, memory_db, dispatcher, trigger_msg=injection_msg
-                    )
-                )
-
-        injected_count += 1
+    result = await handle_alert_webhook(
+        payload,
+        ssh_manager.active_sessions,
+        webhook_locks,
+        memory_db,
+        dispatcher,
+        run_single_heartbeat,
+    )
 
     return ResponseModel(
         status="success",
-        message=f"告警已成功推送到 {injected_count} 个值班中的 AI 大脑中，并已唤醒 AI 进行排查！",
-        data={"alert": alert_event, "injected_count": injected_count},
+        message=result["message"],
+        data=result["data"],
     )
 
 
