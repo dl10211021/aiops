@@ -11,6 +11,13 @@ from core.asset_protocols import (
     resolve_asset_identity,
 )
 from core.connection_errors import classify_connection_error, connection_error_http_status
+from core.connection_request_service import (
+    asset_matches_connection_request,
+    get_login_protocol_from_request,
+    normalize_private_key_path,
+    restore_masked_extra_args,
+    restore_masked_password,
+)
 from core.legacy_command_service import (
     LegacyCommandServiceError,
     execute_legacy_command_record,
@@ -287,33 +294,11 @@ class ConnectionInspectionRequest(ConnectionRequest):
 
 
 def get_login_protocol(req: ConnectionRequest) -> str:
-    return resolve_asset_identity(
-        req.asset_type, req.protocol, req.extra_args, req.host, req.port, req.remark
-    )["protocol"]
+    return get_login_protocol_from_request(req)
 
 
 def asset_matches_request(asset: dict, req: ConnectionRequest) -> bool:
-    if (
-        asset.get("host") != req.host
-        or asset.get("port") != req.port
-        or asset.get("username") != req.username
-    ):
-        return False
-    asset_identity = resolve_asset_identity(
-        asset.get("asset_type"),
-        asset.get("protocol"),
-        asset.get("extra_args", {}),
-        asset.get("host"),
-        asset.get("port"),
-        asset.get("remark"),
-    )
-    req_identity = resolve_asset_identity(
-        req.asset_type, req.protocol, req.extra_args, req.host, req.port, req.remark
-    )
-    return (
-        asset_identity["asset_type"] == req_identity["asset_type"]
-        and asset_identity["protocol"] == req_identity["protocol"]
-    )
+    return asset_matches_connection_request(asset, req)
 
 
 class CommandRequest(BaseModel):
@@ -633,38 +618,16 @@ async def stop_chat_session(session_id: str):
 
 def get_restored_args(req: ConnectionRequest) -> dict:
     """如果 req 中包含被掩码的 extra_args，则从持久化存储中找回真实值，返回一个新的字典"""
-    if not hasattr(req, "extra_args") or not req.extra_args:
-        return {}
-    has_mask = any(v == "********" for v in req.extra_args.values())
-    if not has_mask:
-        return req.extra_args
-
-    restored = dict(req.extra_args)
     from core.memory import memory_db
 
-    assets = memory_db.get_all_assets()
-    for a in assets:
-        if asset_matches_request(a, req):
-            db_args = a.get("extra_args", {})
-            for k, v in restored.items():
-                if v == "********" and k in db_args:
-                    restored[k] = db_args[k]
-            break
-    return restored
+    return restore_masked_extra_args(req, memory_db)
 
 
 def get_restored_password(req: ConnectionRequest) -> str | None:
     """如果前端传回密码掩码，则从持久化资产中恢复真实密码。"""
-    if req.password != "********":
-        return req.password
-
     from core.memory import memory_db
 
-    assets = memory_db.get_all_assets()
-    for a in assets:
-        if asset_matches_request(a, req):
-            return a.get("password")
-    return None
+    return restore_masked_password(req, memory_db)
 
 
 @router.post("/connect/test", response_model=ResponseModel)
@@ -692,12 +655,7 @@ async def test_connection(req: ConnectionRequest):
     # SSH Test
     if login_protocol == "ssh":
 
-        key_path = (
-            req.private_key_path
-            if req.private_key_path
-            and req.private_key_path.strip().lower() not in ("string", "")
-            else None
-        )
+        key_path = normalize_private_key_path(req.private_key_path)
 
         import paramiko
 
@@ -916,9 +874,7 @@ async def inspect_connection(req: ConnectionInspectionRequest):
     asset_type = identity["asset_type"]
     extra_args = identity["extra_args"]
 
-    key_path = req.private_key_path
-    if key_path and key_path.strip().lower() in ("string", ""):
-        key_path = None
+    key_path = normalize_private_key_path(req.private_key_path)
 
     result = await asyncio.to_thread(
         ssh_manager.connect,
@@ -1004,9 +960,7 @@ async def create_ssh_connection(req: ConnectionRequest):
         f"API called: Connect to {req.host} as {asset_type}/{login_protocol} with profile {req.agent_profile}, remark: {req.remark}"
     )
 
-    key_path = req.private_key_path
-    if key_path and key_path.strip().lower() in ("string", ""):
-        key_path = None
+    key_path = normalize_private_key_path(req.private_key_path)
 
     # 解决同步方法卡死 FastAPI 问题，将其投递到线程池
     result = await asyncio.to_thread(
