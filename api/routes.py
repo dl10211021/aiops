@@ -24,20 +24,27 @@ from core.chat_attachments import (
     normalize_chat_attachments,
     preview_attachment_content,
 )
-from core.session_webhook import (
-    SessionWebhookError,
-    build_session_webhook_payload,
-    post_webhook,
-    validate_webhook_url,
-    webhook_payload_preview,
+from core.session_webhook_service import (
+    SessionWebhookServiceError,
+    preview_session_webhook_delivery,
+    send_session_webhook_delivery,
 )
-from core.dashboard_metrics import (
-    build_alert_trend,
-    build_dashboard_overview,
-    build_risk_ranking,
+from core.dashboard_service import (
+    build_dashboard_alert_trend_payload,
+    build_dashboard_inspection_run_trend_payload,
+    build_dashboard_overview_payload,
+    build_dashboard_risk_ranking_payload,
 )
-from core.asset_responses import mask_asset_response, mask_asset_responses
 from core.asset_catalog_response import build_asset_types_response
+from core.asset_service import (
+    AssetServiceError,
+    batch_import_asset_records,
+    get_saved_asset_record,
+    list_saved_asset_records,
+    remove_saved_asset_record,
+    save_asset_record,
+    update_saved_asset_record,
+)
 from core.notification_config import (
     build_notification_config,
     build_notification_env_values,
@@ -62,7 +69,66 @@ from core.session_history import (
     get_user_visible_session_history,
     update_session_message_content,
 )
+from core.session_commands import (
+    SessionCommandError,
+    build_session_commands_response,
+    list_custom_slash_commands as list_custom_slash_commands_data,
+    remove_custom_slash_command,
+    save_custom_slash_command,
+)
 from core.session_tool_context import build_session_tools_response
+from core.inspection_template_service import (
+    InspectionTemplateServiceError,
+    list_inspection_template_records,
+    remove_inspection_template_record,
+    save_inspection_template_record,
+)
+from core.session_inspection_response import build_inspection_response_payload
+from core.inspection_run_service import (
+    InspectionRunServiceError,
+    export_inspection_run_report_content,
+    get_inspection_run_record,
+    get_inspection_run_report_record,
+    inspection_run_summary,
+    list_inspection_run_records,
+)
+from core.inspection_job_service import (
+    InspectionJobServiceError,
+    create_inspection_job_record,
+    list_inspection_job_records,
+    pause_inspection_job_record,
+    remove_inspection_job_record,
+    resume_inspection_job_record,
+    run_inspection_job_record_now,
+    update_inspection_job_record,
+)
+from core.protocol_verification_service import (
+    ProtocolVerificationServiceError,
+    build_protocol_verification_matrix,
+    build_protocol_verification_overview,
+    list_protocol_verification_run_records,
+    run_protocol_verification_for_asset,
+)
+from core.safety_policy_service import (
+    SafetyPolicyServiceError,
+    explain_safety_policy_decision,
+    get_safety_policy_record,
+    save_safety_policy_record,
+)
+from core.provider_config_service import (
+    ProviderConfigServiceError,
+    list_provider_config_records,
+    save_provider_config_records,
+)
+from core.app_config_service import (
+    AppConfigServiceError,
+    build_llm_config_payload,
+    get_agent_runtime_config_record,
+    get_embedding_config_record,
+    save_agent_runtime_config_record,
+    save_embedding_config_record,
+    update_env_file_values,
+)
 
 import logging
 import asyncio
@@ -98,22 +164,6 @@ def raise_connection_error(result: dict, protocol: str = "") -> None:
         error = classify_connection_error(result.get("message") or result.get("error"), protocol)
     raise HTTPException(status_code=connection_error_http_status(error), detail=error)
 
-
-def update_env_file_values(values: dict[str, str]) -> None:
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    env_lines: list[str] = []
-    if env_path.exists():
-        env_lines = env_path.read_text(encoding="utf-8").splitlines(keepends=True)
-
-    keys = set(values)
-    filtered = [
-        line
-        for line in env_lines
-        if not any(line.startswith(f"{key}=") for key in keys)
-    ]
-    for key, value in values.items():
-        filtered.append(f"{key}={value}\n")
-    env_path.write_text("".join(filtered), encoding="utf-8")
 
 HTTP_API_TOOL_PRIORITY = (
     "monitoring_api_query",
@@ -1531,27 +1581,7 @@ async def get_models(provider_id: str | None = None, refresh: bool = False):
 @router.get("/config/llm", response_model=ResponseModel)
 async def get_llm_config():
     """【新功能】获取当前大模型配置"""
-    import os
-
-    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
-    base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
-    api_key = ""
-
-    if os.path.exists(env_path):
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("OPENAI_BASE_URL="):
-                    base_url = line.strip().split("=", 1)[1]
-                elif line.startswith("OPENAI_API_KEY="):
-                    api_key = line.strip().split("=", 1)[1]
-
-    return ResponseModel(
-        status="success",
-        data={
-            "base_url": os.environ.get("OPENAI_BASE_URL", base_url),
-            "api_key": "********" if os.environ.get("OPENAI_API_KEY", api_key) else "",
-        },
-    )
+    return ResponseModel(status="success", data=build_llm_config_payload())
 
 
 
@@ -1577,73 +1607,33 @@ class AgentRuntimeConfigRequest(BaseModel):
 
 @router.get("/config/agent-runtime", response_model=ResponseModel)
 async def get_agent_runtime_config_endpoint():
-    from core.agent import get_agent_runtime_config
-
-    return ResponseModel(status="success", data={"config": get_agent_runtime_config()})
+    return ResponseModel(status="success", data={"config": get_agent_runtime_config_record()})
 
 
 @router.post("/config/agent-runtime", response_model=ResponseModel)
 async def update_agent_runtime_config_endpoint(req: AgentRuntimeConfigRequest):
-    from core.agent import update_agent_runtime_config
-
     try:
-        config = update_agent_runtime_config(req.chat_max_steps, req.headless_max_steps)
-        update_env_file_values(
-            {
-                "OPSCORE_AGENT_MAX_STEPS": str(config["chat_max_steps"]),
-                "OPSCORE_HEADLESS_AGENT_MAX_STEPS": str(config["headless_max_steps"]),
-            }
-        )
-    except Exception as e:
-        logger.error("保存 Agent 执行保护配置失败: %s", e)
-        raise HTTPException(status_code=500, detail=f"保存 Agent 执行保护配置失败: {e}")
+        config = save_agent_runtime_config_record(req.chat_max_steps, req.headless_max_steps)
+    except AppConfigServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", data={"config": config}, message="Agent 执行保护配置已保存")
 
 
 @router.get("/config/embedding")
 async def get_embedding_config_endpoint():
-    from core.agent import get_embedding_config
-
-    model, dim = get_embedding_config()
-    return {"status": "success", "data": {"model": model, "dim": dim}}
+    return {"status": "success", "data": get_embedding_config_record()}
 
 
 @router.post("/config/embedding", response_model=ResponseModel)
 async def update_embedding_config_endpoint(req: EmbeddingConfigRequest):
-    from core.agent import update_embedding_config
-    import os
-
     try:
-        update_embedding_config(req.model, req.dim)
-        logger.info(
-            f"Embedding config updated via API: model={req.model}, dim={req.dim}"
-        )
-
-        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
-        env_lines = []
-        if os.path.exists(env_path):
-            with open(env_path, "r", encoding="utf-8") as f:
-                env_lines = f.readlines()
-
-        keys_to_filter = ["EMBEDDING_MODEL=", "EMBEDDING_DIM="]
-        env_lines = [
-            line
-            for line in env_lines
-            if not any(line.startswith(k) for k in keys_to_filter)
-        ]
-
-        env_lines.append(f"EMBEDDING_MODEL={req.model}\n")
-        env_lines.append(f"EMBEDDING_DIM={req.dim}\n")
-
-        with open(env_path, "w", encoding="utf-8") as f:
-            f.writelines(env_lines)
-
+        save_embedding_config_record(req.model, req.dim)
         return ResponseModel(
             status="success",
             message=f"Embedding 配置已更新: model={req.model}, dim={req.dim}",
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except AppConfigServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 class NotificationConfigRequest(BaseModel):
@@ -1899,32 +1889,18 @@ async def get_session_tools(session_id: str):
 @router.get("/session/{session_id}/commands", response_model=ResponseModel)
 async def get_session_commands(session_id: str):
     """返回当前会话可用 Slash Commands；由后端根据资产协议生成 prompt。"""
-    from core.slash_commands import render_builtin_templates, render_slash_commands
     from core.memory import memory_db
 
     if session_id not in ssh_manager.active_sessions:
         raise HTTPException(status_code=404, detail="会话不存在或已断开")
 
-    tools_response = await get_session_tools(session_id)
-    custom_commands = await asyncio.to_thread(memory_db.list_slash_commands)
-    commands = render_slash_commands(
-        tools_response.data["context"],
-        tools_response.data.get("active_tools") or [],
-        custom_commands,
-    )
-    builtin_commands = render_builtin_templates(
-        tools_response.data["context"],
-        tools_response.data.get("active_tools") or [],
-        custom_commands,
-    )
+    info = dict(ssh_manager.active_sessions[session_id]["info"])
+    info["session_id"] = session_id
+    tools_payload = build_session_tools_response(tool_registry, info)
+    custom_commands = await asyncio.to_thread(list_custom_slash_commands_data, memory_db)
     return ResponseModel(
         status="success",
-        data={
-            "commands": commands,
-            "builtin_commands": builtin_commands,
-            "custom_commands": custom_commands,
-            "context": tools_response.data["context"],
-        },
+        data=build_session_commands_response(tools_payload, custom_commands),
     )
 
 
@@ -1933,7 +1909,7 @@ async def list_custom_slash_commands():
     """列出用户自定义快捷命令。"""
     from core.memory import memory_db
 
-    commands = await asyncio.to_thread(memory_db.list_slash_commands)
+    commands = await asyncio.to_thread(list_custom_slash_commands_data, memory_db)
     return ResponseModel(status="success", data={"commands": commands})
 
 
@@ -1942,7 +1918,11 @@ async def create_custom_slash_command(req: SlashCommandPayload):
     """创建用户自定义快捷命令。"""
     from core.memory import memory_db
 
-    command = await asyncio.to_thread(memory_db.save_slash_command, req.model_dump())
+    command = await asyncio.to_thread(
+        save_custom_slash_command,
+        memory_db,
+        req.model_dump(),
+    )
     return ResponseModel(status="success", message="快捷命令已保存", data={"command": command})
 
 
@@ -1951,9 +1931,12 @@ async def update_custom_slash_command(command_id: str, req: SlashCommandPayload)
     """更新用户自定义快捷命令。"""
     from core.memory import memory_db
 
-    payload = req.model_dump()
-    payload["id"] = command_id
-    command = await asyncio.to_thread(memory_db.save_slash_command, payload)
+    command = await asyncio.to_thread(
+        save_custom_slash_command,
+        memory_db,
+        req.model_dump(),
+        command_id,
+    )
     return ResponseModel(status="success", message="快捷命令已更新", data={"command": command})
 
 
@@ -1962,53 +1945,49 @@ async def delete_custom_slash_command(command_id: str):
     """删除用户自定义快捷命令。"""
     from core.memory import memory_db
 
-    deleted = await asyncio.to_thread(memory_db.delete_slash_command, command_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="快捷命令不存在")
+    try:
+        await asyncio.to_thread(remove_custom_slash_command, memory_db, command_id)
+    except SessionCommandError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", message="快捷命令已删除")
 
 
 @router.get("/inspection-templates", response_model=ResponseModel)
 async def list_inspection_templates():
     """列出内置与自定义巡检模板。"""
-    from core.inspection_templates import list_templates
-
-    return ResponseModel(status="success", data={"templates": list_templates()})
+    return ResponseModel(
+        status="success",
+        data={"templates": list_inspection_template_records()},
+    )
 
 
 @router.post("/inspection-templates", response_model=ResponseModel)
 async def create_inspection_template(req: InspectionTemplatePayload):
     """创建巡检模板；模板必须通过只读安全校验。"""
-    from core.inspection_templates import save_template
-
     try:
-        template = save_template(req.model_dump())
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        template = save_inspection_template_record(req.model_dump())
+    except InspectionTemplateServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", message="巡检模板已保存", data={"template": template})
 
 
 @router.put("/inspection-templates/{template_id}", response_model=ResponseModel)
 async def update_inspection_template(template_id: str, req: InspectionTemplatePayload):
     """更新巡检模板；路径 ID 优先，避免请求体误改主键。"""
-    from core.inspection_templates import save_template
-
-    payload = req.model_dump()
-    payload["id"] = template_id
     try:
-        template = save_template(payload)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        template = save_inspection_template_record(req.model_dump(), template_id)
+    except InspectionTemplateServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", message="巡检模板已更新", data={"template": template})
 
 
 @router.delete("/inspection-templates/{template_id}", response_model=ResponseModel)
 async def delete_inspection_template(template_id: str):
     """删除巡检模板。"""
-    from core.inspection_templates import delete_template
-
-    if not delete_template(template_id):
-        raise HTTPException(status_code=404, detail="巡检模板不存在")
+    try:
+        remove_inspection_template_record(template_id)
+    except InspectionTemplateServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", message="巡检模板已删除")
 
 
@@ -2018,11 +1997,7 @@ async def inspect_active_session(session_id: str):
     from core.session_inspector import inspect_session
 
     report = await inspect_session(session_id)
-    return ResponseModel(
-        status="success" if report.get("status") in {"success", "warning"} else report.get("status", "error"),
-        message=report.get("summary") or report.get("message", ""),
-        data={"inspection": report},
-    )
+    return ResponseModel(**build_inspection_response_payload(report))
 
 
 @router.get("/session/{session_id}/profile", response_model=ResponseModel)
@@ -2050,152 +2025,52 @@ async def generate_active_session_profile(session_id: str, req: SessionProfileGe
     return ResponseModel(status="success", message="资产画像已生成", data={"profile": profile})
 
 
-def _build_session_history_markdown(session_id: str) -> str:
-    from core.memory import memory_db
-
-    return build_session_history_markdown_content(
-        memory_db,
-        ssh_manager.active_sessions,
-        session_id,
-    )
-
-
-async def _build_session_webhook_markdown(
-    session_id: str,
-    payload_type: str,
-    model_name: str | None,
-) -> tuple[str, dict | None]:
-    from core.session_profile import generate_session_profile, get_session_profile, profile_to_markdown
-
-    normalized = str(payload_type or "profile").lower()
-    if normalized == "markdown":
-        return await asyncio.to_thread(_build_session_history_markdown, session_id), None
-
-    profile = await asyncio.to_thread(get_session_profile, session_id)
-    if not profile:
-        profile = await generate_session_profile(session_id, model_name=model_name, include_inspection=False)
-    profile_md = profile_to_markdown(profile)
-    if normalized == "profile":
-        return profile_md, profile
-
-    history_md = await asyncio.to_thread(_build_session_history_markdown, session_id)
-    summary = history_md[:1800] if history_md else "当前会话暂无可发送的聊天摘要。"
-    return f"{profile_md}\n\n## 会话摘要\n\n{summary}", profile
-
-
-def _validate_webhook_url(url: str, allow_private_targets: bool = False) -> tuple[str, dict]:
-    try:
-        return validate_webhook_url(url, allow_private_targets)
-    except SessionWebhookError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-
-
-def _build_session_webhook_payload(
-    session_id: str,
-    payload_type: str,
-    channel: str,
-    title: str,
-    markdown: str,
-    profile: dict | None,
-) -> dict:
-    return build_session_webhook_payload(session_id, payload_type, channel, title, markdown, profile)
-
-
-def _webhook_payload_preview(payload: dict) -> dict:
-    return webhook_payload_preview(payload)
-
-
-def _post_webhook(url: str, payload: dict) -> tuple[int, str]:
-    return post_webhook(url, payload)
-
-
 @router.post("/session/{session_id}/webhook/send", response_model=ResponseModel)
 async def send_session_webhook(session_id: str, req: SessionWebhookSendRequest):
     """将会话画像、摘要或完整 Markdown 发送到指定 Webhook。"""
-    webhook_url, target = _validate_webhook_url(req.webhook_url, req.allow_private_targets)
-    payload_type = str(req.payload_type or "profile").lower()
-    if payload_type not in {"profile", "summary", "markdown"}:
-        raise HTTPException(status_code=422, detail="payload_type 仅支持 profile、summary、markdown。")
-    channel = str(req.channel or "generic").lower()
-    if channel not in {"generic", "wechat", "dingtalk"}:
-        raise HTTPException(status_code=422, detail="channel 仅支持 generic、wechat、dingtalk。")
-
-    markdown, profile = await _build_session_webhook_markdown(
-        session_id,
-        payload_type,
-        req.model_name,
-    )
-    if not markdown.strip():
-        raise HTTPException(status_code=404, detail="当前会话没有可发送内容。")
-
-    title = req.title or f"OpsCore 会话报告 {session_id}"
-    payload = _build_session_webhook_payload(session_id, payload_type, channel, title, markdown, profile)
-
     from core.memory import memory_db
 
     try:
-        status_code, response_body = await asyncio.to_thread(_post_webhook, webhook_url, payload)
-        record = {
-            "session_id": session_id,
-            "webhook_host": target["host"],
-            "channel": channel,
-            "payload_type": payload_type,
-            "title": title,
-            "status": "success" if status_code < 400 else "error",
-            "http_status": status_code,
-            "response_preview": response_body[:300],
-            "error": "" if status_code < 400 else f"HTTP {status_code}",
-        }
-        await asyncio.to_thread(memory_db.append_webhook_delivery, record)
-    except Exception as e:
-        record = {
-            "session_id": session_id,
-            "webhook_host": target["host"],
-            "channel": channel,
-            "payload_type": payload_type,
-            "title": title,
-            "status": "error",
-            "http_status": None,
-            "response_preview": "",
-            "error": str(e)[:500],
-        }
-        await asyncio.to_thread(memory_db.append_webhook_delivery, record)
-        raise
-
-    if status_code >= 400:
-        raise HTTPException(status_code=502, detail=f"Webhook 返回 HTTP {status_code}: {response_body[:300]}")
+        payload = await send_session_webhook_delivery(
+            memory_db,
+            ssh_manager.active_sessions,
+            session_id=session_id,
+            webhook_url=req.webhook_url,
+            payload_type=req.payload_type,
+            channel=req.channel,
+            title=req.title,
+            model_name=req.model_name,
+            allow_private_targets=req.allow_private_targets,
+        )
+    except SessionWebhookServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(
         status="success",
         message="Webhook 已发送",
-        data={"http_status": status_code, "response_preview": response_body[:300], "target": target},
+        data=payload,
     )
 
 
 @router.post("/session/{session_id}/webhook/preview", response_model=ResponseModel)
 async def preview_session_webhook(session_id: str, req: SessionWebhookSendRequest):
     """发送前预览会话 Webhook 目标和载荷，不实际发出请求。"""
-    _, target = _validate_webhook_url(req.webhook_url, req.allow_private_targets)
-    payload_type = str(req.payload_type or "profile").lower()
-    if payload_type not in {"profile", "summary", "markdown"}:
-        raise HTTPException(status_code=422, detail="payload_type 仅支持 profile、summary、markdown。")
-    channel = str(req.channel or "generic").lower()
-    if channel not in {"generic", "wechat", "dingtalk"}:
-        raise HTTPException(status_code=422, detail="channel 仅支持 generic、wechat、dingtalk。")
-    markdown, profile = await _build_session_webhook_markdown(session_id, payload_type, req.model_name)
-    if not markdown.strip():
-        raise HTTPException(status_code=404, detail="当前会话没有可发送内容。")
-    title = req.title or f"OpsCore 会话报告 {session_id}"
-    payload = _build_session_webhook_payload(session_id, payload_type, channel, title, markdown, profile)
-    return ResponseModel(
-        status="success",
-        data={
-            "target": target,
-            "payload_type": payload_type,
-            "channel": channel,
-            "title": title,
-            "payload": _webhook_payload_preview(payload),
-        },
-    )
+    from core.memory import memory_db
+
+    try:
+        payload = await preview_session_webhook_delivery(
+            memory_db,
+            ssh_manager.active_sessions,
+            session_id=session_id,
+            webhook_url=req.webhook_url,
+            payload_type=req.payload_type,
+            channel=req.channel,
+            title=req.title,
+            model_name=req.model_name,
+            allow_private_targets=req.allow_private_targets,
+        )
+    except SessionWebhookServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", data=payload)
 
 
 @router.get("/session/{session_id}/webhook/history", response_model=ResponseModel)
@@ -2222,8 +2097,8 @@ async def get_saved_assets():
     """【新功能】获取 SQLite 中持久化的所有资产信息（通讯录）"""
     from core.memory import memory_db
 
-    assets = await asyncio.to_thread(memory_db.get_all_assets)
-    return ResponseModel(status="success", data={"assets": mask_asset_responses(assets, memory_db.sensitive_keys)})
+    assets = await asyncio.to_thread(list_saved_asset_records, memory_db)
+    return ResponseModel(status="success", data={"assets": assets})
 
 
 @router.post("/assets", response_model=ResponseModel)
@@ -2231,20 +2106,7 @@ async def create_asset(req: AssetPayload):
     """创建或按 host+资产类型+协议更新资产；密码和敏感 extra_args 会加密保存。"""
     from core.memory import memory_db
 
-    await asyncio.to_thread(
-        memory_db.save_asset,
-        req.remark or "",
-        req.host,
-        req.port,
-        req.username,
-        req.password,
-        req.asset_type,
-        req.agent_profile,
-        req.extra_args,
-        req.skills,
-        req.tags,
-        req.protocol,
-    )
+    await asyncio.to_thread(save_asset_record, memory_db, req.model_dump())
     return ResponseModel(status="success", message="资产已保存")
 
 
@@ -2279,10 +2141,11 @@ async def get_asset(asset_id: int):
     """查询单个资产详情；响应会脱敏密码和敏感 extra_args。"""
     from core.memory import memory_db
 
-    asset = await asyncio.to_thread(memory_db.get_asset, asset_id)
-    if not asset:
-        raise HTTPException(status_code=404, detail="资产不存在")
-    return ResponseModel(status="success", data={"asset": mask_asset_response(asset, memory_db.sensitive_keys)})
+    try:
+        asset = await asyncio.to_thread(get_saved_asset_record, memory_db, asset_id)
+    except AssetServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", data={"asset": asset})
 
 
 @router.put("/assets/{asset_id}", response_model=ResponseModel)
@@ -2290,13 +2153,14 @@ async def update_asset(asset_id: int, req: AssetPayload):
     """按资产 ID 修改资产；传入 ******** 会保留原密码/密钥。"""
     from core.memory import memory_db
 
-    asset = await asyncio.to_thread(memory_db.update_asset, asset_id, req.model_dump())
-    if not asset:
-        raise HTTPException(status_code=404, detail="资产不存在")
+    try:
+        asset = await asyncio.to_thread(update_saved_asset_record, memory_db, asset_id, req.model_dump())
+    except AssetServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(
         status="success",
         message="资产已更新",
-        data={"asset": mask_asset_response(asset, memory_db.sensitive_keys)},
+        data={"asset": asset},
     )
 
 
@@ -2323,7 +2187,7 @@ async def delete_saved_asset(asset_id: int):
     """【新功能】删除持久化的资产"""
     from core.memory import memory_db
 
-    await asyncio.to_thread(memory_db.delete_asset, asset_id)
+    await asyncio.to_thread(remove_saved_asset_record, memory_db, asset_id)
     return ResponseModel(status="success", message="资产已成功移除金库。")
 
 
@@ -2331,22 +2195,9 @@ async def delete_saved_asset(asset_id: int):
 async def get_dashboard_overview():
     """大屏总览接口：资产、在线会话、协议、分类和基础风险计数。"""
     from core.memory import memory_db
-    from core.alert_events import alert_summary
-    from core.cron_manager import CronManager
-    from core.inspection_results import run_summary
 
-    assets = await asyncio.to_thread(memory_db.get_all_assets)
-    active = list(ssh_manager.active_sessions.values())
-    return ResponseModel(
-        status="success",
-        data=build_dashboard_overview(
-            assets,
-            active,
-            CronManager.get_all_jobs(),
-            alert_summary(),
-            run_summary(),
-        ),
-    )
+    data = await asyncio.to_thread(build_dashboard_overview_payload, memory_db, ssh_manager.active_sessions)
+    return ResponseModel(status="success", data=data)
 
 
 @router.get("/dashboard/toolsets", response_model=ResponseModel)
@@ -2359,67 +2210,61 @@ async def get_dashboard_toolsets():
 @router.get("/dashboard/alerts/trend", response_model=ResponseModel)
 async def get_dashboard_alert_trend():
     """大屏告警趋势接口，按日期聚合告警数量和严重级别。"""
-    from core.alert_events import list_alert_events
-
-    return ResponseModel(status="success", data={"points": build_alert_trend(list_alert_events(limit=5000))})
+    data = await asyncio.to_thread(build_dashboard_alert_trend_payload)
+    return ResponseModel(status="success", data=data)
 
 
 @router.get("/dashboard/risk-ranking", response_model=ResponseModel)
 async def get_dashboard_risk_ranking():
     """大屏风险排行接口，当前按告警数量和严重度聚合主机风险。"""
-    from core.alert_events import list_alert_events
-
-    return ResponseModel(status="success", data={"ranking": build_risk_ranking(list_alert_events(limit=5000))})
+    data = await asyncio.to_thread(build_dashboard_risk_ranking_payload)
+    return ResponseModel(status="success", data=data)
 
 
 @router.get("/dashboard/inspection-runs/trend", response_model=ResponseModel)
 async def get_dashboard_inspection_run_trend():
-    from core.inspection_results import run_trend
-
-    return ResponseModel(status="success", data={"points": run_trend()})
+    data = await asyncio.to_thread(build_dashboard_inspection_run_trend_payload)
+    return ResponseModel(status="success", data=data)
 
 
 @router.get("/verification/protocols", response_model=ResponseModel)
 async def get_protocol_verification_overview():
     """返回全量资产协议验证矩阵概览，不包含任何敏感凭据。"""
     from core.memory import memory_db
-    from core.protocol_verification import build_overview
 
-    assets = await asyncio.to_thread(memory_db.get_all_assets)
-    return ResponseModel(status="success", data=build_overview(assets))
+    data = await asyncio.to_thread(build_protocol_verification_overview, memory_db)
+    return ResponseModel(status="success", data=data)
 
 
 @router.get("/assets/{asset_id}/verification", response_model=ResponseModel)
 async def get_asset_verification_matrix(asset_id: int):
     """返回单资产协议验证矩阵，不包含任何敏感凭据。"""
     from core.memory import memory_db
-    from core.protocol_verification import build_asset_matrix
 
-    asset = await asyncio.to_thread(memory_db.get_asset, asset_id)
-    if not asset:
-        raise HTTPException(status_code=404, detail="资产不存在")
-    return ResponseModel(status="success", data={"matrix": build_asset_matrix(asset)})
+    try:
+        matrix = await asyncio.to_thread(build_protocol_verification_matrix, memory_db, asset_id)
+    except ProtocolVerificationServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", data={"matrix": matrix})
 
 
 @router.post("/assets/{asset_id}/verify", response_model=ResponseModel)
 async def verify_asset(asset_id: int):
     """执行单资产只读端到端验证，并持久化验证历史。"""
     from core.memory import memory_db
-    from core.protocol_verification import run_asset_verification
 
-    asset = await asyncio.to_thread(memory_db.get_asset, asset_id)
-    if not asset:
-        raise HTTPException(status_code=404, detail="资产不存在")
-    run = await run_asset_verification(asset)
+    try:
+        run = await run_protocol_verification_for_asset(memory_db, asset_id)
+    except ProtocolVerificationServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", data={"run": run})
 
 
 @router.get("/assets/{asset_id}/verification/runs", response_model=ResponseModel)
 async def list_asset_verification_runs(asset_id: int, limit: int = 20):
     """查询单资产验证历史。"""
-    from core.protocol_verification import list_verification_runs
-
-    return ResponseModel(status="success", data={"runs": list_verification_runs(asset_id=asset_id, limit=limit)})
+    runs = await asyncio.to_thread(list_protocol_verification_run_records, asset_id, limit)
+    return ResponseModel(status="success", data={"runs": runs})
 
 
 @router.get("/alerts", response_model=ResponseModel)
@@ -2668,173 +2513,116 @@ class CronAddRequest(BaseModel):
 @router.post("/cron/add", response_model=ResponseModel)
 async def add_cron_job(req: CronAddRequest):
     """【新功能】添加大模型定时巡检任务 (类似 openclaw cron add)"""
-    from core.cron_manager import CronManager
-
     try:
-        job_id = CronManager.add_inspection_job(
-            cron_expr=req.cron_expr,
-            host=req.host,
-            username=req.username,
-            agent_profile=req.agent_profile,
-            message=req.message,
-            password=req.password,
-            private_key_path=req.private_key_path,
-            asset_id=req.asset_id,
-            target_scope=req.target_scope,
-            scope_value=req.scope_value,
-            template_id=req.template_id,
-            notification_channel=req.notification_channel,
-            retry_count=req.retry_count,
-            active_skills=req.active_skills,
-        )
-        return ResponseModel(
-            status="success",
-            message=f"已成功添加定时巡检计划: {job_id}",
-            data={"job_id": job_id, "job": CronManager.get_job(job_id)},
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        payload = create_inspection_job_record(req.model_dump())
+    except InspectionJobServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(
+        status="success",
+        message=f"已成功添加定时巡检计划: {payload['job_id']}",
+        data=payload,
+    )
 
 
 @router.get("/cron/list", response_model=ResponseModel)
 async def list_cron_jobs():
     """【新功能】查看所有的定时巡检计划"""
-    from core.cron_manager import CronManager
-
-    jobs = CronManager.get_all_jobs()
+    jobs = await asyncio.to_thread(list_inspection_job_records)
     return ResponseModel(status="success", data={"jobs": jobs})
 
 
 @router.delete("/cron/{job_id}", response_model=ResponseModel)
 async def delete_cron_job(job_id: str):
     """【新功能】删除某个定时巡检计划"""
-    from core.cron_manager import CronManager
-
     try:
-        CronManager.remove_job(job_id)
-        return ResponseModel(status="success", message=f"巡检计划 {job_id} 已取消。")
-    except Exception:
-        raise HTTPException(status_code=404, detail="未找到该计划。")
+        await asyncio.to_thread(remove_inspection_job_record, job_id)
+    except InspectionJobServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", message=f"巡检计划 {job_id} 已取消。")
 
 
 @router.put("/cron/{job_id}", response_model=ResponseModel)
 async def update_cron_job(job_id: str, req: CronAddRequest):
-    from core.cron_manager import CronManager
-
     try:
-        job = CronManager.update_job(
-            job_id,
-            cron_expr=req.cron_expr,
-            host=req.host,
-            username=req.username,
-            agent_profile=req.agent_profile,
-            message=req.message,
-            password=req.password,
-            private_key_path=req.private_key_path,
-            asset_id=req.asset_id,
-            target_scope=req.target_scope,
-            scope_value=req.scope_value,
-            template_id=req.template_id,
-            notification_channel=req.notification_channel,
-            retry_count=req.retry_count,
-            active_skills=req.active_skills,
-        )
-        return ResponseModel(status="success", message="巡检计划已更新", data={"job": job})
-    except KeyError:
-        raise HTTPException(status_code=404, detail="未找到该计划。")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        job = await asyncio.to_thread(update_inspection_job_record, job_id, req.model_dump())
+    except InspectionJobServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", message="巡检计划已更新", data={"job": job})
 
 
 @router.post("/cron/{job_id}/pause", response_model=ResponseModel)
 async def pause_cron_job(job_id: str):
-    from core.cron_manager import CronManager
-
     try:
-        return ResponseModel(status="success", message="巡检计划已暂停", data={"job": CronManager.pause_job(job_id)})
-    except Exception:
-        raise HTTPException(status_code=404, detail="未找到该计划。")
+        job = await asyncio.to_thread(pause_inspection_job_record, job_id)
+    except InspectionJobServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", message="巡检计划已暂停", data={"job": job})
 
 
 @router.post("/cron/{job_id}/resume", response_model=ResponseModel)
 async def resume_cron_job(job_id: str):
-    from core.cron_manager import CronManager
-
     try:
-        return ResponseModel(status="success", message="巡检计划已恢复", data={"job": CronManager.resume_job(job_id)})
-    except Exception:
-        raise HTTPException(status_code=404, detail="未找到该计划。")
+        job = await asyncio.to_thread(resume_inspection_job_record, job_id)
+    except InspectionJobServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", message="巡检计划已恢复", data={"job": job})
 
 
 @router.post("/cron/{job_id}/run", response_model=ResponseModel)
 async def run_cron_job_now(job_id: str):
-    from core.cron_manager import CronManager
-
     try:
-        result = await CronManager.run_job_now(job_id)
-        return ResponseModel(status="success", message="巡检计划已手动触发", data={"result": result})
-    except KeyError:
-        raise HTTPException(status_code=404, detail="未找到该计划。")
+        result = await run_inspection_job_record_now(job_id)
+    except InspectionJobServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", message="巡检计划已手动触发", data={"result": result})
 
 
 @router.get("/cron/{job_id}/runs", response_model=ResponseModel)
 async def list_cron_job_runs(job_id: str, limit: int = 50, asset_id: int | None = None):
-    from core.inspection_results import list_runs
-
-    return ResponseModel(status="success", data={"runs": list_runs(job_id=job_id, limit=limit, asset_id=asset_id)})
+    return ResponseModel(
+        status="success",
+        data={"runs": list_inspection_run_records(job_id=job_id, limit=limit, asset_id=asset_id)},
+    )
 
 
 @router.get("/inspection-runs", response_model=ResponseModel)
 async def list_inspection_runs(job_id: str | None = None, asset_id: int | None = None, limit: int = 50):
-    from core.inspection_results import list_runs
-
-    return ResponseModel(status="success", data={"runs": list_runs(job_id=job_id, asset_id=asset_id, limit=limit)})
+    return ResponseModel(
+        status="success",
+        data={"runs": list_inspection_run_records(job_id=job_id, asset_id=asset_id, limit=limit)},
+    )
 
 
 @router.get("/cron/runs/summary", response_model=ResponseModel)
 async def get_cron_run_summary():
-    from core.inspection_results import run_summary
-
-    return ResponseModel(status="success", data={"summary": run_summary()})
+    return ResponseModel(status="success", data={"summary": inspection_run_summary()})
 
 
 @router.get("/cron/runs/{run_id}", response_model=ResponseModel)
 async def get_cron_job_run(run_id: str):
-    from core.inspection_results import get_run
-
-    run = get_run(run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="巡检运行记录不存在")
+    try:
+        run = get_inspection_run_record(run_id)
+    except InspectionRunServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", data={"run": run})
 
 
 @router.get("/inspection-runs/{run_id}/report", response_model=ResponseModel)
 async def get_inspection_run_report(run_id: str):
-    from core.inspection_results import build_report
-
-    report = build_report(run_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="巡检报告不存在")
+    try:
+        report = get_inspection_run_report_record(run_id)
+    except InspectionRunServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", data={"report": report})
 
 
 @router.get("/inspection-runs/{run_id}/export", response_model=ResponseModel)
 async def export_inspection_run_report(run_id: str, format: str = "markdown"):
-    from core.inspection_results import build_report, export_report_markdown
-
-    normalized = str(format or "markdown").lower()
-    if normalized in {"md", "markdown"}:
-        content = export_report_markdown(run_id)
-        content_type = "text/markdown"
-    elif normalized == "json":
-        report = build_report(run_id)
-        content = json.dumps(report, ensure_ascii=False, indent=2) if report else None
-        content_type = "application/json"
-    else:
-        raise HTTPException(status_code=422, detail="format 仅支持 markdown 或 json")
-    if content is None:
-        raise HTTPException(status_code=404, detail="巡检报告不存在")
-    return ResponseModel(status="success", data={"format": normalized, "content_type": content_type, "content": content})
+    try:
+        payload = export_inspection_run_report_content(run_id, format)
+    except InspectionRunServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", data=payload)
 
 
 # ----------------- 系统状态与高级功能 -----------------
@@ -2867,16 +2655,16 @@ async def batch_import_assets(items: list[BatchAssetImportItem]):
     """【#25 新功能】批量导入资产到金库（通讯录），支持 JSON 数组格式"""
     from core.memory import memory_db
 
-    if not items:
-        raise HTTPException(status_code=422, detail="批量导入资产列表不能为空。")
     try:
-        await asyncio.to_thread(
-            memory_db.save_assets_batch, [item.model_dump() for item in items]
+        result = await asyncio.to_thread(
+            batch_import_asset_records,
+            memory_db,
+            [item.model_dump() for item in items],
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"批量导入资产失败: {e}") from e
+    except AssetServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
-    return ResponseModel(status="success", message=f"成功导入 {len(items)}/{len(items)} 条资产。")
+    return ResponseModel(status="success", message=f"成功导入 {result['imported']}/{result['total']} 条资产。")
 
 
 @router.get("/session/{session_id}/export", response_model=ResponseModel)
@@ -2902,23 +2690,15 @@ async def export_session_history(session_id: str):
 
 @router.get("/config/providers", response_model=ResponseModel)
 async def get_providers_endpoint():
-    from core.llm_factory import get_all_providers, mask_provider_secrets
-    providers = mask_provider_secrets(get_all_providers())
+    providers = await asyncio.to_thread(list_provider_config_records)
     return ResponseModel(status="success", data={"providers": providers})
 
 @router.post("/config/providers", response_model=ResponseModel)
 async def update_providers_endpoint(req: List[ProviderConfig]):
-    from core.llm_factory import get_all_providers, merge_provider_secrets, save_providers
-
     try:
-        providers_dict = merge_provider_secrets(
-            [p.model_dump() for p in req],
-            get_all_providers(),
-        )
-        save_providers(providers_dict)
-    except Exception as e:
-        logger.error("保存模型供应商配置失败: %s", e)
-        raise HTTPException(status_code=500, detail=f"保存供应商配置失败: {e}")
+        await asyncio.to_thread(save_provider_config_records, [p.model_dump() for p in req])
+    except ProviderConfigServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", message="供应商配置已保存")
 
 
@@ -3035,29 +2815,20 @@ class SafetyPolicyTestRequest(BaseModel):
 
 @router.get("/config/safety-policy", response_model=ResponseModel)
 async def get_safety_policy_endpoint():
-    from core.safety_policy import get_safety_policy
-
-    return ResponseModel(status="success", data={"policy": get_safety_policy()})
+    return ResponseModel(status="success", data={"policy": get_safety_policy_record()})
 
 
 @router.post("/config/safety-policy", response_model=ResponseModel)
 async def update_safety_policy_endpoint(req: SafetyPolicyUpdateRequest):
-    from core.safety_policy import save_safety_policy
-
     try:
-        policy = save_safety_policy(req.policy)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        logger.error("保存安全策略失败: %s", e)
-        raise HTTPException(status_code=500, detail=f"保存安全策略失败: {e}")
+        policy = save_safety_policy_record(req.policy)
+    except SafetyPolicyServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", message="安全策略已保存", data={"policy": policy})
 
 
 @router.post("/config/safety-policy/test", response_model=ResponseModel)
 async def test_safety_policy_endpoint(req: SafetyPolicyTestRequest):
-    from core.safety_policy import explain_policy_decision
-
-    result = explain_policy_decision(req.tool_name, req.tool_args(), req.context())
+    result = explain_safety_policy_decision(req.tool_name, req.tool_args(), req.context())
     return ResponseModel(status="success", data={"result": result})
 
