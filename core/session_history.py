@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
+from core.session_export import format_session_history_markdown
+
 
 USER_VISIBLE_ROLES = {"user", "assistant"}
 
@@ -24,3 +28,25 @@ def update_session_message_content(
 
 def delete_session_message(memory_db, session_id: str, message_id: int) -> None:
     memory_db.delete_message(session_id, message_id)
+
+
+def session_history_export_title(
+    active_sessions: Mapping[str, dict],
+    session_id: str,
+) -> str:
+    remark = ""
+    if session_id in active_sessions:
+        remark = active_sessions[session_id]["info"].get("remark", "")
+    return remark or session_id
+
+
+def build_session_history_markdown(
+    memory_db,
+    active_sessions: Mapping[str, dict],
+    session_id: str,
+) -> str:
+    messages = memory_db.get_messages(session_id, for_ui=True)
+    return format_session_history_markdown(
+        messages,
+        session_history_export_title(active_sessions, session_id),
+    )

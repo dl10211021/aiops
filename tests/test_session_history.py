@@ -1,9 +1,11 @@
 import unittest
 
 from core.session_history import (
+    build_session_history_markdown,
     clear_session_history,
     delete_session_message,
     get_user_visible_session_history,
+    session_history_export_title,
     update_session_message_content,
 )
 
@@ -62,3 +64,28 @@ class TestSessionHistory(unittest.TestCase):
         self.assertEqual(memory_db.updated, [("sid-1", 7, "new")])
         self.assertEqual(updated, {"id": 7, "content": "new"})
         self.assertEqual(memory_db.deleted, [("sid-1", 7)])
+
+    def test_session_history_export_title_prefers_active_session_remark(self):
+        title = session_history_export_title(
+            {"sid-1": {"info": {"remark": "生产 MySQL"}}},
+            "sid-1",
+        )
+
+        self.assertEqual(title, "生产 MySQL")
+        self.assertEqual(session_history_export_title({}, "sid-1"), "sid-1")
+
+    def test_build_session_history_markdown_uses_for_ui_messages_and_title(self):
+        memory_db = FakeMemoryDB()
+
+        markdown = build_session_history_markdown(
+            memory_db,
+            {"sid-1": {"info": {"remark": "生产 MySQL"}}},
+            "sid-1",
+        )
+
+        self.assertEqual(memory_db.session_id, "sid-1")
+        self.assertTrue(memory_db.for_ui)
+        self.assertIn("# Chat History: 生产 MySQL", markdown)
+        self.assertIn("## User\nhi", markdown)
+        self.assertIn("## AI Assistant\nhello", markdown)
+        self.assertNotIn("hidden", markdown)

@@ -31,7 +31,6 @@ from core.session_webhook import (
     validate_webhook_url,
     webhook_payload_preview,
 )
-from core.session_export import format_session_history_markdown
 from core.dashboard_metrics import (
     build_alert_trend,
     build_dashboard_overview,
@@ -57,6 +56,7 @@ from core.session_runtime import (
     set_session_skills,
 )
 from core.session_history import (
+    build_session_history_markdown as build_session_history_markdown_content,
     clear_session_history as clear_session_history_messages,
     delete_session_message,
     get_user_visible_session_history,
@@ -2096,11 +2096,11 @@ async def generate_active_session_profile(session_id: str, req: SessionProfileGe
 def _build_session_history_markdown(session_id: str) -> str:
     from core.memory import memory_db
 
-    messages = memory_db.get_messages(session_id, for_ui=True)
-    remark = ""
-    if session_id in ssh_manager.active_sessions:
-        remark = ssh_manager.active_sessions[session_id]["info"].get("remark", "")
-    return format_session_history_markdown(messages, remark or session_id)
+    return build_session_history_markdown_content(
+        memory_db,
+        ssh_manager.active_sessions,
+        session_id,
+    )
 
 
 async def _build_session_webhook_markdown(
@@ -2928,12 +2928,11 @@ async def export_session_history(session_id: str):
     from core.memory import memory_db
 
     try:
-        messages = memory_db.get_messages(session_id, for_ui=True)
-        remark = ""
-        if session_id in ssh_manager.active_sessions:
-            remark = ssh_manager.active_sessions[session_id]["info"].get("remark", "")
-
-        markdown = format_session_history_markdown(messages, remark or session_id)
+        markdown = build_session_history_markdown_content(
+            memory_db,
+            ssh_manager.active_sessions,
+            session_id,
+        )
         if not markdown:
             raise HTTPException(status_code=404, detail="该会话没有可导出的历史记录。")
 
