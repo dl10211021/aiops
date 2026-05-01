@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from core.asset_protocols import resolve_asset_identity
@@ -54,3 +55,20 @@ def build_active_session_view(
         "scope_value": info.get("scope_value"),
         "isStreaming": is_streaming,
     }
+
+
+def build_active_sessions_response(
+    active_sessions: Mapping[str, dict],
+    *,
+    is_session_streaming: Callable[[str], bool],
+    sensitive_keys: list[str] | tuple[str, ...],
+) -> dict[str, dict[str, Any]]:
+    sessions_data: dict[str, dict[str, Any]] = {}
+    for session_id, session_data in list(active_sessions.items()):
+        sessions_data[session_id] = build_active_session_view(
+            session_id,
+            session_data["info"],
+            is_streaming=is_session_streaming(session_id),
+            sensitive_keys=sensitive_keys,
+        )
+    return sessions_data

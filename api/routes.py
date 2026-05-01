@@ -16,7 +16,7 @@ from core.asset_protocols import (
     resolve_asset_identity,
 )
 from core.connection_errors import classify_connection_error, connection_error_http_status
-from core.session_views import build_active_session_view
+from core.session_views import build_active_sessions_response
 from core.skill_lifecycle import validate_skill_candidate
 from core.tool_registry import tool_registry
 from core.chat_attachments import (
@@ -1867,15 +1867,11 @@ async def get_active_sessions():
     from core.chat_runs import is_chat_running
     from core.memory import memory_db
 
-    sessions_data = {}
-    for sid, sdata in list(ssh_manager.active_sessions.items()):
-        info = sdata["info"]
-        sessions_data[sid] = build_active_session_view(
-            sid,
-            info,
-            is_streaming=is_chat_running(sid),
-            sensitive_keys=memory_db.sensitive_keys,
-        )
+    sessions_data = build_active_sessions_response(
+        ssh_manager.active_sessions,
+        is_session_streaming=is_chat_running,
+        sensitive_keys=memory_db.sensitive_keys,
+    )
     return ResponseModel(status="success", data={"sessions": sessions_data})
 
 
