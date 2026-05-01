@@ -26,6 +26,10 @@ from core.custom_skill_storage import (
     resolve_custom_skill_file as resolve_custom_skill_file_path,
     resolve_custom_skill_version_file as resolve_custom_skill_version_file_path,
 )
+from core.custom_skill_version_service import (
+    CustomSkillVersionServiceError,
+    list_custom_skill_version_records,
+)
 from core.chat_attachments import (
     ChatAttachmentError,
     normalize_chat_attachments,
@@ -1380,28 +1384,10 @@ async def validate_skill(req: SkillValidationRequest):
 @router.get("/skills/{skill_id}/versions", response_model=ResponseModel)
 async def list_skill_versions(skill_id: str, file_name: str = "SKILL.md"):
     """列出 my_custom_skills 中某个技能文件的可回滚版本。"""
-    skill_file = resolve_custom_skill_file(skill_id, file_name)
-    versions_dir = skill_file.parent / ".versions"
-    if not skill_file.parent.exists():
-        raise HTTPException(status_code=404, detail="技能不存在。")
-
-    versions = []
-    if versions_dir.exists():
-        prefix = f"{skill_file.name}."
-        suffix = ".bak"
-        for item in versions_dir.iterdir():
-            if not item.is_file() or not item.name.startswith(prefix) or not item.name.endswith(suffix):
-                continue
-            stat = item.stat()
-            versions.append(
-                {
-                    "id": item.name,
-                    "file_name": skill_file.name,
-                    "size": stat.st_size,
-                    "created_at_ts": stat.st_mtime,
-                }
-            )
-    versions.sort(key=lambda item: item["created_at_ts"], reverse=True)
+    try:
+        versions = list_custom_skill_version_records(CUSTOM_SKILLS_DIR, skill_id, file_name)
+    except CustomSkillVersionServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", data={"versions": versions})
 
 
