@@ -129,6 +129,12 @@ from core.app_config_service import (
     save_embedding_config_record,
     update_env_file_values,
 )
+from core.knowledge_base_service import (
+    KnowledgeBaseServiceError,
+    ingest_knowledge_document,
+    list_knowledge_document_records,
+    remove_knowledge_document_record,
+)
 
 import logging
 import asyncio
@@ -2317,54 +2323,13 @@ from fastapi import UploadFile, File
 @router.post("/knowledge/upload", response_model=ResponseModel)
 async def upload_knowledge_document(file: UploadFile = File(...)):
     """【新功能】上传运维文档并注入 LanceDB 知识库"""
-    import os
-    import re
-    import uuid
-
-    original_name = os.path.basename(file.filename or "")
-    stem, ext = os.path.splitext(original_name)
-    allowed_exts = {".txt", ".md", ".pdf", ".doc", ".docx", ".log"}
-    if ext.lower() not in allowed_exts:
-        raise HTTPException(
-            status_code=415,
-            detail=f"不支持的知识库文件类型: {ext or 'unknown'}",
-        )
-
     from core.rag import kb_manager
-    from core.llm_factory import get_embedding_client_and_model
-
-    client, embedding_model = get_embedding_client_and_model()
-
-    safe_stem = re.sub(r"[^a-zA-Z0-9_.-]+", "_", stem).strip("._-") or "document"
-    safe_filename = f"{safe_stem}-{uuid.uuid4().hex[:8]}{ext.lower()}"
-    file_path = os.path.join(kb_manager.kb_dir, safe_filename)
-    max_bytes = 50 * 1024 * 1024
-    written = 0
-    with open(file_path, "wb") as buffer:
-        while True:
-            chunk = file.file.read(1024 * 1024)
-            if not chunk:
-                break
-            written += len(chunk)
-            if written > max_bytes:
-                buffer.close()
-                try:
-                    os.remove(file_path)
-                except OSError:
-                    pass
-                raise HTTPException(status_code=413, detail="知识库文件超过 50MB 限制")
-            buffer.write(chunk)
 
     try:
-        res = await kb_manager.ingest_document(file_path, client, embedding_model)
-        if res["status"] == "success":
-            return ResponseModel(status="success", message=res["message"])
-        else:
-            raise HTTPException(status_code=422, detail=res["message"])
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        message = await ingest_knowledge_document(kb_manager, file)
+    except KnowledgeBaseServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", message=message)
 
 
 @router.get("/knowledge/list", response_model=ResponseModel)
@@ -2373,10 +2338,10 @@ async def list_knowledge_documents():
     from core.rag import kb_manager
 
     try:
-        files = await kb_manager.list_documents()
-        return ResponseModel(status="success", data={"files": files})
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        files = await list_knowledge_document_records(kb_manager)
+    except KnowledgeBaseServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", data={"files": files})
 
 
 @router.delete("/knowledge/{filename}", response_model=ResponseModel)
@@ -2385,15 +2350,10 @@ async def delete_knowledge_document(filename: str):
     from core.rag import kb_manager
 
     try:
-        res = await kb_manager.delete_document(filename)
-        if res["status"] == "success":
-            return ResponseModel(status="success", message=res["message"])
-        else:
-            raise HTTPException(status_code=404, detail=res["message"])
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        message = await remove_knowledge_document_record(kb_manager, filename)
+    except KnowledgeBaseServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", message=message)
 
 
 @router.post("/webhook/alert", response_model=ResponseModel)
