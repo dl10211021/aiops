@@ -25,6 +25,12 @@ from core.custom_skill_storage import (
     resolve_custom_skill_file as resolve_custom_skill_file_path,
     resolve_custom_skill_version_file as resolve_custom_skill_version_file_path,
 )
+from core.custom_skill_catalog_service import (
+    CustomSkillCatalogServiceError,
+    get_custom_skill_detail as get_custom_skill_detail_record,
+    list_custom_skill_catalog,
+    scan_custom_skill_catalog,
+)
 from core.custom_skill_version_service import (
     CustomSkillVersionServiceError,
     list_custom_skill_version_records,
@@ -1232,8 +1238,8 @@ async def scan_skills():
     """【新功能】前端手动触发扫描本地磁盘目录，热加载新的技能"""
     from core.dispatcher import dispatcher
 
-    dispatcher.refresh_skills(force=True)
-    return ResponseModel(status="success", message="扫描完成！本地技能库已更新。")
+    result = scan_custom_skill_catalog(dispatcher)
+    return ResponseModel(status="success", message=result["message"])
 
 
 @router.get("/skills/registry", response_model=ResponseModel)
@@ -1241,11 +1247,7 @@ async def get_skill_registry():
     """【新功能】前端调用，获取所有已安装的技能卡带摘要以及外部市场待下载的卡带"""
     from core.dispatcher import dispatcher
 
-    registry = dispatcher.get_all_registered_skills()
-    market = dispatcher.get_market_skills()
-
-    # 合并返回给前端展示，前端根据 is_market 字段区分
-    return ResponseModel(status="success", data={"registry": registry + market})
+    return ResponseModel(status="success", data=list_custom_skill_catalog(dispatcher))
 
 
 @router.get("/skills/registry/{skill_id}", response_model=ResponseModel)
@@ -1253,31 +1255,11 @@ async def get_skill_detail(skill_id: str):
     """【新功能】前端调用，获取某个特定技能卡带的完整 Markdown 原文"""
     from core.dispatcher import dispatcher
 
-    # 优先找本地的
-    if skill_id in dispatcher.skills_registry:
-        skill = dispatcher.skills_registry[skill_id]
-        return ResponseModel(
-            status="success",
-            data={
-                "instructions": skill["instructions"],
-                "source_path": skill["source_path"],
-            },
-        )
-
-    # 如果本地没有，可能是在查看市场的详情，实时去市场读
-    market_skills = dispatcher.get_market_skills()
-    for s in market_skills:
-        if s["id"] == skill_id:
-            with open(
-                os.path.join(s["source_path"], "SKILL.md"), "r", encoding="utf-8"
-            ) as f:
-                content = f.read()
-            return ResponseModel(
-                status="success",
-                data={"instructions": content, "source_path": s["source_path"]},
-            )
-
-    raise HTTPException(status_code=404, detail="找不到该技能")
+    try:
+        detail = get_custom_skill_detail_record(dispatcher, skill_id)
+    except CustomSkillCatalogServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", data=detail)
 
 
 class MigrateRequest(BaseModel):
