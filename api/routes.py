@@ -84,7 +84,7 @@ from core.asset_service import (
 )
 from core.notification_config import (
     build_notification_config,
-    build_notification_env_values,
+    save_notification_config as save_notification_config_record,
 )
 from core.notification_test import (
     NotificationTestError,
@@ -167,7 +167,6 @@ from core.app_config_service import (
     get_embedding_config_record,
     save_agent_runtime_config_record,
     save_embedding_config_record,
-    update_env_file_values,
 )
 from core.knowledge_base_service import (
     KnowledgeBaseServiceError,
@@ -931,12 +930,10 @@ async def get_notification_config():
 @router.post("/config/notifications", response_model=ResponseModel)
 async def update_notification_config(req: NotificationConfigRequest):
     """【新功能】前端动态配置企业微信/钉钉告警机器人 Webhook 及邮件"""
-    env_values = build_notification_env_values(req.model_dump())
-    os.environ.update(env_values)
-
-    # Optional: Write to .env file for persistence
     try:
-        update_env_file_values(env_values)
+        from core.app_config_service import update_env_file_values
+
+        save_notification_config_record(req.model_dump(), persist=update_env_file_values)
     except Exception as e:
         logger.error(f"Failed to save .env file: {e}")
 

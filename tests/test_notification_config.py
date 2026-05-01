@@ -5,6 +5,7 @@ from core.notification_config import (
     build_notification_config,
     build_notification_env_values,
     env_or_existing,
+    save_notification_config,
 )
 
 
@@ -84,3 +85,29 @@ class TestNotificationConfig(unittest.TestCase):
         self.assertEqual(env_values["ALERT_EMAIL_ADDRESS"], "alerts@example.com")
         self.assertEqual(env_values["SMTP_PORT"], "2525")
         self.assertEqual(env_values["SMTP_PASS"], "old-password")
+
+    def test_save_notification_config_updates_env_and_persists_values(self):
+        persisted = []
+        env = {"SMTP_PASS": "old-password"}
+
+        values = save_notification_config(
+            {
+                "wechat_enabled": True,
+                "wechat_webhook": "https://wechat.example/hook",
+                "dingtalk_enabled": False,
+                "dingtalk_webhook": "",
+                "email_enabled": True,
+                "email_address": "ops@example.com",
+                "smtp_server": "smtp.example.com",
+                "smtp_port": 465,
+                "smtp_user": "ops",
+                "smtp_pass": MASKED_VALUE,
+            },
+            env=env,
+            persist=persisted.append,
+        )
+
+        self.assertEqual(env["WECHAT_WEBHOOK_URL"], "https://wechat.example/hook")
+        self.assertEqual(env["SMTP_PASS"], "old-password")
+        self.assertEqual(values["DINGTALK_ENABLED"], "0")
+        self.assertEqual(persisted, [values])

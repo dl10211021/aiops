@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from typing import Callable
 
 MASKED_VALUE = "********"
 
@@ -68,3 +69,17 @@ def build_notification_env_values(
         "SMTP_PASS": env_or_existing(str(config["smtp_pass"]), "SMTP_PASS", source),
     }
     return {key: values[key] for key in NOTIFICATION_ENV_KEYS}
+
+
+def save_notification_config(
+    config: Mapping[str, object],
+    *,
+    env: dict[str, str] | None = None,
+    persist: Callable[[dict[str, str]], None] | None = None,
+) -> dict[str, str]:
+    target_env = os.environ if env is None else env
+    values = build_notification_env_values(config, target_env)
+    target_env.update(values)
+    if persist:
+        persist(values)
+    return values
