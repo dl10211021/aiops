@@ -15,7 +15,6 @@ from core.asset_protocols import (
     get_asset_catalog,
     resolve_asset_identity,
 )
-from core.asset_capabilities import category_metadata, connector_metadata
 from core.connection_errors import classify_connection_error, connection_error_http_status
 from core.session_groups import apply_primary_session_group, normalize_session_group_name
 from core.session_views import build_active_session_view
@@ -40,6 +39,7 @@ from core.dashboard_metrics import (
     build_risk_ranking,
 )
 from core.asset_responses import mask_asset_response, mask_asset_responses
+from core.asset_catalog_response import build_asset_types_response
 
 import logging
 import asyncio
@@ -455,10 +455,6 @@ def _legacy_execute_tool_call(identity: dict, command: str) -> tuple[str, dict]:
         status_code=400,
         detail=f"/execute 不支持 {asset_type}/{protocol}；请使用聊天会话原生工具或巡检接口。",
     )
-
-
-def _category_label(category: str) -> str:
-    return category_metadata(category).get("label") or category.upper()
 
 
 # ----------------- 路由接口 -----------------
@@ -2432,32 +2428,7 @@ async def create_asset(req: AssetPayload):
 
 
 def _asset_types_response() -> ResponseModel:
-    types = get_asset_catalog()
-    categories = []
-    connector_groups = []
-    seen = set()
-    seen_connectors = set()
-    for item in types:
-        category = item.get("category") or "other"
-        if category in seen:
-            pass
-        else:
-            seen.add(category)
-            categories.append(category_metadata(category))
-        connector = ((item.get("capability") or {}).get("connector")) or "unknown"
-        if connector not in seen_connectors:
-            seen_connectors.add(connector)
-            connector_groups.append(connector_metadata(connector))
-    categories.sort(key=lambda item: (item.get("order", 999), item.get("label", "")))
-    connector_groups.sort(key=lambda item: (item.get("order", 999), item.get("label", "")))
-    return ResponseModel(
-        status="success",
-        data={
-            "types": types,
-            "categories": categories,
-            "connector_groups": connector_groups,
-        },
-    )
+    return ResponseModel(status="success", data=build_asset_types_response(get_asset_catalog()))
 
 
 @router.get("/assets/types", response_model=ResponseModel)
