@@ -293,11 +293,18 @@ def _register_builtin_tools() -> None:
             toolset="skill-runtime",
             scope="base",
             safety_category="skill_change",
-            description="创建或更新 my_custom_skills 下的技能文件。仅用于用户明确要求修改技能时。",
+            description=(
+                "创建或更新 my_custom_skills 下的技能文件。支持 SKILL.md 以及 scripts/"
+                "references/assets/evals/agents/eval-viewer 下的 bundled resource 文件；"
+                "仅用于用户明确要求修改技能时。"
+            ),
             parameters=_obj(
                 {
                     "skill_id": {"type": "string"},
-                    "file_name": {"type": "string"},
+                    "file_name": {
+                        "type": "string",
+                        "description": "例如 SKILL.md、scripts/helper.py、references/schema.md、evals/evals.json",
+                    },
                     "content": {"type": "string"},
                 },
                 ["skill_id", "file_name", "content"],

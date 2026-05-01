@@ -30,6 +30,10 @@ from core.custom_skill_version_service import (
     CustomSkillVersionServiceError,
     list_custom_skill_version_records,
 )
+from core.custom_skill_create_service import (
+    CustomSkillCreateServiceError,
+    create_custom_skill_record,
+)
 from core.chat_attachments import (
     ChatAttachmentError,
     normalize_chat_attachments,
@@ -249,13 +253,6 @@ def resolve_custom_skill_version_file(skill_id: str, version_id: str) -> Path:
         return resolve_custom_skill_version_file_path(CUSTOM_SKILLS_DIR, skill_id, version_id)
     except CustomSkillStorageError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-
-
-def reject_invalid_skill_candidate(validation: dict) -> None:
-    if validation["valid"]:
-        return
-    detail = "；".join(issue["message"] for issue in validation["issues"])
-    raise HTTPException(status_code=422, detail=detail or "技能校验失败。")
 
 
 # ----------------- 数据模型 -----------------
@@ -1316,62 +1313,22 @@ class CreateSkillRequest(BaseModel):
 @router.post("/skills/create", response_model=ResponseModel)
 async def create_skill(req: CreateSkillRequest):
     """【新功能】用户在页面上手动创建新的定制技能卡带"""
-    md_content = f"---\nname: {req.skill_id}\ndescription: {req.description}\n---\n\n{req.instructions}\n"
-    reject_invalid_skill_candidate(validate_skill_candidate(req.skill_id, "SKILL.md", md_content))
-    script_validation = None
-    if req.script_name or req.script_content:
-        if not req.script_name or req.script_content is None:
-            raise HTTPException(status_code=422, detail="脚本名称和脚本内容必须同时提供。")
-        script_validation = validate_skill_candidate(req.skill_id, req.script_name, req.script_content)
-        reject_invalid_skill_candidate(script_validation)
-
-    CUSTOM_SKILLS_DIR.mkdir(parents=True, exist_ok=True)
-    dest_path = resolve_custom_skill_dir(req.skill_id)
-
     try:
-        if dest_path.exists() and not req.overwrite_existing:
-            raise HTTPException(
-                status_code=409,
-                detail=f"该技能包 ID ({req.skill_id}) 已存在，请换一个名称。",
-            )
         from core.dispatcher import dispatcher
 
-        backup_paths = []
-        if dest_path.exists():
-            skill_backup = dispatcher._backup_existing_skill_file(str(dest_path / "SKILL.md"))
-            if skill_backup:
-                backup_paths.append(skill_backup)
-        else:
-            dest_path.mkdir()
-
-        atomic_replace_bytes(dest_path / "SKILL.md", md_content.encode("utf-8"))
-
-        # 如果提供了脚本内容，一并写入
-        if script_validation:
-            script_path = dest_path / script_validation["file_name"]
-            script_backup = dispatcher._backup_existing_skill_file(str(script_path))
-            if script_backup:
-                backup_paths.append(script_backup)
-            atomic_replace_bytes(script_path, req.script_content.encode("utf-8"))
-
-        # 通知 Dispatcher 重新加载
-        dispatcher.refresh_skills(force=True)
-
-        action = "更新" if req.overwrite_existing else "创建"
-        return ResponseModel(
-            status="success",
-            message=f"定制技能 {req.skill_id} {action}成功，已自动加载就绪！",
-            data={
-                "skill_id": req.skill_id,
-                "skill_path": str(dest_path),
-                "backup_paths": backup_paths,
-                "updated": bool(req.overwrite_existing),
-            },
+        result = create_custom_skill_record(
+            CUSTOM_SKILLS_DIR,
+            dispatcher,
+            skill_id=req.skill_id,
+            description=req.description,
+            instructions=req.instructions,
+            script_name=req.script_name,
+            script_content=req.script_content,
+            overwrite_existing=req.overwrite_existing,
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except CustomSkillCreateServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", message=result["message"], data=result["data"])
 
 
 @router.post("/skills/validate", response_model=ResponseModel)

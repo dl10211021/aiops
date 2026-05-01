@@ -7,9 +7,11 @@ import subprocess
 import logging
 import time
 import shlex
+from pathlib import Path
 from typing import Dict, Any, List
 
 from core.asset_protocols import API_PROTOCOLS, NETWORK_CLI_ASSET_TYPES, SQL_PROTOCOLS, STORAGE_ASSET_TYPES, resolve_asset_identity
+from core.custom_skill_storage import CustomSkillStorageError, resolve_custom_skill_resource_file
 from core.safety_policy import (
     check_approval_needed as policy_check_approval_needed,
     explain_policy_decision,
@@ -522,6 +524,7 @@ class SkillDispatcher:
                     logger.info(f"Executing Local Script: {cmd} in {cwd}")
                     env = os.environ.copy()
                     env["PYTHONIOENCODING"] = "utf-8"
+                    env["PYTHONUTF8"] = "1"
 
                     process = subprocess.Popen(
                         shlex.split(cmd, posix=os.name != "nt"),
@@ -1048,19 +1051,17 @@ class SkillDispatcher:
             target_base = self._custom_skills_base()
             os.makedirs(target_base, exist_ok=True)
 
-            validation = validate_skill_candidate(skill_id, file_name, content)
+            validation = validate_skill_candidate(skill_id, file_name, content, allow_nested=True)
             if not validation["valid"]:
                 detail = "；".join(issue["message"] for issue in validation["issues"])
                 return json.dumps({"error": detail}, ensure_ascii=False)
 
-            dest_folder = os.path.join(target_base, skill_id)
-            os.makedirs(dest_folder, exist_ok=True)
-
             safe_file_name = validation["file_name"]
-            file_path = os.path.join(dest_folder, safe_file_name)
             try:
-                backup_path = self._backup_existing_skill_file(file_path)
-                self._atomic_write_text(file_path, content)
+                file_path = resolve_custom_skill_resource_file(Path(target_base), skill_id, safe_file_name)
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                backup_path = self._backup_existing_skill_file(str(file_path))
+                self._atomic_write_text(str(file_path), content)
                 logger.info(f"AI 成功自我进化：更新了文件 -> {file_path}")
 
                 # 通知 Dispatcher 重新加载
@@ -1071,10 +1072,12 @@ class SkillDispatcher:
                         "message": f"技能卡带文件 {file_name} 已经成功更新并热重载！现在您可以告诉用户它已经生效了。",
                         "skill_id": skill_id,
                         "file_name": safe_file_name,
-                        "file_path": file_path,
+                        "file_path": str(file_path),
                         "backup_path": backup_path,
                     }
                 )
+            except CustomSkillStorageError as e:
+                return json.dumps({"error": e.detail}, ensure_ascii=False)
             except Exception as e:
                 return json.dumps({"error": f"写入文件失败: {str(e)}"})
 

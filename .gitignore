@@ -45,6 +45,7 @@ backend*.log
 *.err.log
 
 # Temporary/sandbox
+.tmp/
 temp_sandbox/
 tmp*/
 tmp_history.json

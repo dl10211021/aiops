@@ -1,7 +1,8 @@
-import os
 import re
 
 import yaml
+
+from core.custom_skill_storage import CustomSkillStorageError, normalize_custom_skill_file_name
 
 
 EXECUTABLE_SKILL_SUFFIXES = (".py", ".sh", ".ps1", ".bat", ".cmd")
@@ -24,7 +25,13 @@ def validate_skill_frontmatter(skill_id: str, content: str) -> tuple[bool, str]:
     return True, ""
 
 
-def validate_skill_candidate(skill_id: str, file_name: str, content: str) -> dict:
+def validate_skill_candidate(
+    skill_id: str,
+    file_name: str,
+    content: str,
+    *,
+    allow_nested: bool = False,
+) -> dict:
     normalized_skill_id = str(skill_id or "").strip()
     safe_file = str(file_name or "").strip()
     text = str(content or "")
@@ -39,13 +46,10 @@ def validate_skill_candidate(skill_id: str, file_name: str, content: str) -> dic
             }
         )
 
-    if not safe_file or os.path.basename(safe_file) != safe_file:
-        issues.append(
-            {
-                "code": "invalid_file_name",
-                "message": "非法文件名：file_name 只能是文件名，不能包含路径。",
-            }
-        )
+    try:
+        safe_file = normalize_custom_skill_file_name(safe_file, allow_nested=allow_nested)
+    except CustomSkillStorageError as exc:
+        issues.append({"code": "invalid_file_name", "message": exc.detail})
 
     if safe_file == "SKILL.md":
         valid, reason = validate_skill_frontmatter(normalized_skill_id, text)

@@ -5,8 +5,10 @@ from pathlib import Path
 from core.custom_skill_storage import (
     CustomSkillStorageError,
     atomic_replace_bytes,
+    normalize_custom_skill_file_name,
     resolve_custom_skill_dir,
     resolve_custom_skill_file,
+    resolve_custom_skill_resource_file,
     resolve_custom_skill_version_file,
 )
 
@@ -42,6 +44,39 @@ class TestCustomSkillStorage(unittest.TestCase):
         self.assertEqual(dir_ctx.exception.status_code, 422)
         self.assertEqual(file_ctx.exception.status_code, 422)
         self.assertEqual(version_ctx.exception.status_code, 422)
+
+    def test_resolves_nested_bundled_resource_paths_under_skill_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base_dir = Path(tmp) / "custom"
+
+            script_file = resolve_custom_skill_resource_file(
+                base_dir,
+                "safe-skill",
+                "scripts/helpers/check.py",
+            )
+            eval_file = resolve_custom_skill_resource_file(
+                base_dir,
+                "safe-skill",
+                "evals/evals.json",
+            )
+
+        self.assertEqual(script_file.parts[-3:], ("scripts", "helpers", "check.py"))
+        self.assertEqual(eval_file.parts[-2:], ("evals", "evals.json"))
+
+    def test_rejects_unsafe_nested_resource_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base_dir = Path(tmp) / "custom"
+
+            with self.assertRaises(CustomSkillStorageError) as traversal_ctx:
+                resolve_custom_skill_resource_file(base_dir, "safe-skill", "scripts/../SKILL.md")
+            with self.assertRaises(CustomSkillStorageError) as unknown_dir_ctx:
+                resolve_custom_skill_resource_file(base_dir, "safe-skill", "notes/internal.md")
+            with self.assertRaises(CustomSkillStorageError) as drive_ctx:
+                normalize_custom_skill_file_name("C:/secret.txt", allow_nested=True)
+
+        self.assertEqual(traversal_ctx.exception.status_code, 422)
+        self.assertEqual(unknown_dir_ctx.exception.status_code, 422)
+        self.assertEqual(drive_ctx.exception.status_code, 422)
 
     def test_atomic_replace_bytes_replaces_file_content(self):
         with tempfile.TemporaryDirectory() as tmp:

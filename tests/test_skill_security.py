@@ -11,7 +11,31 @@ from api import routes
 
 
 class TestSkillSecurity(unittest.TestCase):
-    def test_evolve_skill_rejects_nested_file_name(self):
+    def test_evolve_skill_allows_nested_bundled_resource_file_name(self):
+        from core.dispatcher import dispatcher
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target_base = Path(tmp) / "custom"
+            with patch.object(dispatcher, "_custom_skills_base", return_value=str(Path(tmp) / "custom")):
+                result = asyncio.run(
+                    dispatcher.route_and_execute(
+                        "evolve_skill",
+                        {
+                            "skill_id": "safe-skill",
+                            "file_name": "references/checklist.md",
+                            "content": "## Checklist\n",
+                        },
+                        {"allow_modifications": True},
+                    )
+                )
+            resource_file = target_base / "safe-skill" / "references" / "checklist.md"
+
+            payload = json.loads(result)
+            self.assertEqual(payload["status"], "SUCCESS")
+            self.assertEqual(payload["file_name"], "references/checklist.md")
+            self.assertEqual(resource_file.read_text(encoding="utf-8"), "## Checklist\n")
+
+    def test_evolve_skill_rejects_unsafe_nested_file_name(self):
         from core.dispatcher import dispatcher
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -28,7 +52,34 @@ class TestSkillSecurity(unittest.TestCase):
                     )
                 )
 
-        self.assertIn("非法文件名", json.loads(result)["error"])
+        self.assertIn("非法资源路径", json.loads(result)["error"])
+
+    def test_local_execute_script_sets_utf8_mode_for_skill_scripts(self):
+        from core.dispatcher import dispatcher
+
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_dir = Path(tmp) / "safe-skill"
+            skill_dir.mkdir()
+            (skill_dir / "check_env.py").write_text(
+                "import os\nprint(os.environ.get('PYTHONUTF8'))\n",
+                encoding="utf-8",
+            )
+
+            result = asyncio.run(
+                dispatcher.route_and_execute(
+                    "local_execute_script",
+                    {"command": "python check_env.py", "cwd": str(skill_dir)},
+                    {
+                        "protocol": "virtual",
+                        "active_skill_paths": [str(skill_dir)],
+                        "allow_modifications": True,
+                    },
+                )
+            )
+
+        payload = json.loads(result)
+        self.assertEqual(payload["status"], "SUCCESS")
+        self.assertIn("1", payload["output"])
 
     def test_evolve_skill_validates_skill_frontmatter(self):
         from core.dispatcher import dispatcher
