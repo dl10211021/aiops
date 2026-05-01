@@ -19,12 +19,6 @@ from core.connection_errors import classify_connection_error, connection_error_h
 from core.session_views import build_active_sessions_response
 from core.skill_lifecycle import validate_skill_candidate
 from core.tool_registry import tool_registry
-from core.custom_skill_storage import (
-    CustomSkillStorageError,
-    atomic_replace_bytes,
-    resolve_custom_skill_file as resolve_custom_skill_file_path,
-    resolve_custom_skill_version_file as resolve_custom_skill_version_file_path,
-)
 from core.custom_skill_catalog_service import (
     CustomSkillCatalogServiceError,
     get_custom_skill_detail as get_custom_skill_detail_record,
@@ -42,6 +36,10 @@ from core.custom_skill_create_service import (
 from core.custom_skill_migration_service import (
     CustomSkillMigrationServiceError,
     migrate_custom_skill_record,
+)
+from core.custom_skill_rollback_service import (
+    CustomSkillRollbackServiceError,
+    rollback_custom_skill_version as rollback_custom_skill_version_record,
 )
 from core.chat_attachments import (
     ChatAttachmentError,
@@ -195,7 +193,6 @@ import asyncio
 import os
 import json
 import re
-import time
 import zipfile
 from pathlib import Path
 
@@ -241,20 +238,6 @@ HTTP_API_TOOL_PRIORITY = (
     "oob_api_request",
     "http_api_request",
 )
-
-
-def resolve_custom_skill_file(skill_id: str, file_name: str) -> Path:
-    try:
-        return resolve_custom_skill_file_path(CUSTOM_SKILLS_DIR, skill_id, file_name)
-    except CustomSkillStorageError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-
-
-def resolve_custom_skill_version_file(skill_id: str, version_id: str) -> Path:
-    try:
-        return resolve_custom_skill_version_file_path(CUSTOM_SKILLS_DIR, skill_id, version_id)
-    except CustomSkillStorageError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 # ----------------- 数据模型 -----------------
@@ -1330,87 +1313,22 @@ async def list_skill_versions(skill_id: str, file_name: str = "SKILL.md"):
 async def rollback_skill_version(skill_id: str, req: SkillRollbackRequest):
     """将 my_custom_skills 中的技能文件回滚到指定备份版本。"""
     from core.dispatcher import dispatcher
-    from core.approval_queue import (
-        get_approval_request,
-        record_approval_execution,
-        record_approval_request,
-    )
 
-    target_file = resolve_custom_skill_file(skill_id, req.file_name)
-    version_file = resolve_custom_skill_version_file(skill_id, req.version_id)
-    if not target_file.parent.exists():
-        raise HTTPException(status_code=404, detail="技能不存在。")
-    if not version_file.is_file():
-        raise HTTPException(status_code=404, detail="版本不存在。")
-
-    content = version_file.read_bytes()
-    if target_file.name == "SKILL.md":
-        try:
-            text = content.decode("utf-8")
-        except UnicodeDecodeError as e:
-            raise HTTPException(status_code=422, detail="SKILL.md 版本必须是 UTF-8 文本。") from e
-        valid, reason = dispatcher._validate_skill_frontmatter(skill_id, text)
-        if not valid:
-            raise HTTPException(status_code=422, detail=reason)
-
-    if not req.approval_id:
-        approval = record_approval_request(
-            tool_call_id=f"rollback-{skill_id}-{int(time.time_ns())}",
-            session_id="api",
-            tool_name="rollback_skill",
-            args={
-                "skill_id": skill_id,
-                "file_name": target_file.name,
-                "version_id": version_file.name,
-                "target_file": str(target_file),
-                "version_file": str(version_file),
-            },
-            reason="用户请求回滚平台技能文件，必须人工审批并审计。",
-            context={"asset_type": "platform", "protocol": "api", "trigger_source": "skills.rollback_api"},
-        )
-        return ResponseModel(
-            status="pending_approval",
-            message="技能回滚已进入审批队列，审批通过后请携带 approval_id 再次提交。",
-            data={"approval": approval, "approval_id": approval["id"]},
-        )
-
-    approval = get_approval_request(req.approval_id)
-    if not approval:
-        raise HTTPException(status_code=404, detail="审批请求不存在。")
-    if approval.get("tool_name") != "rollback_skill":
-        raise HTTPException(status_code=422, detail="审批请求类型不匹配。")
-    if approval.get("status") != "approved":
-        raise HTTPException(status_code=409, detail="技能回滚审批尚未批准。")
-    if approval.get("execution"):
-        raise HTTPException(status_code=409, detail="该技能回滚审批已经执行过。")
-    approved_args = approval.get("args") or {}
-    if (
-        approved_args.get("skill_id") != skill_id
-        or approved_args.get("file_name") != target_file.name
-        or approved_args.get("version_id") != version_file.name
-    ):
-        raise HTTPException(status_code=409, detail="审批请求与本次回滚目标不匹配。")
-
-    backup_path = dispatcher._backup_existing_skill_file(str(target_file))
-    atomic_replace_bytes(target_file, content)
-    dispatcher.refresh_skills(force=True)
-    result = {
-        "status": "SUCCESS",
-        "skill_id": skill_id,
-        "file_name": req.file_name,
-        "file_path": str(target_file),
-        "backup_path": backup_path,
-        "version_id": req.version_id,
-        "restored_version_path": str(version_file),
-    }
     try:
-        record_approval_execution(req.approval_id, json.dumps(result, ensure_ascii=False))
-    except KeyError:
-        pass
+        result = rollback_custom_skill_version_record(
+            CUSTOM_SKILLS_DIR,
+            dispatcher,
+            skill_id=skill_id,
+            file_name=req.file_name,
+            version_id=req.version_id,
+            approval_id=req.approval_id,
+        )
+    except CustomSkillRollbackServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(
-        status="success",
-        message=f"技能文件 {req.file_name} 已回滚到版本 {req.version_id}",
-        data=result,
+        status=result["status"],
+        message=result["message"],
+        data=result["data"],
     )
 
 
