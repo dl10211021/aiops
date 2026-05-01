@@ -136,6 +136,12 @@ from core.knowledge_base_service import (
     remove_knowledge_document_record,
 )
 from core.alert_webhook_service import handle_alert_webhook
+from core.alert_event_service import (
+    AlertEventServiceError,
+    get_alert_event_record,
+    list_alert_event_records,
+    update_alert_event_record,
+)
 
 import logging
 import asyncio
@@ -2277,41 +2283,34 @@ async def list_asset_verification_runs(asset_id: int, limit: int = 20):
 @router.get("/alerts", response_model=ResponseModel)
 async def list_alert_events(status: str | None = None, severity: str | None = None, host: str | None = None, limit: int = 200):
     """查询告警事件。"""
-    from core.alert_events import list_alert_events as list_events
-
     return ResponseModel(
         status="success",
-        data={"alerts": list_events(status=status, severity=severity, host=host, limit=limit)},
+        data={"alerts": list_alert_event_records(status=status, severity=severity, host=host, limit=limit)},
     )
 
 
 @router.get("/alerts/{alert_id}", response_model=ResponseModel)
 async def get_alert_event(alert_id: str):
     """查询单个告警事件。"""
-    from core.alert_events import get_alert_event as get_event
-
-    alert = get_event(alert_id)
-    if not alert:
-        raise HTTPException(status_code=404, detail="告警事件不存在")
+    try:
+        alert = get_alert_event_record(alert_id)
+    except AlertEventServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", data={"alert": alert})
 
 
 @router.patch("/alerts/{alert_id}", response_model=ResponseModel)
 async def update_alert_event(alert_id: str, req: AlertEventUpdateRequest):
     """更新告警状态、处理人或备注。"""
-    from core.alert_events import update_alert_event as update_event
-
     try:
-        alert = update_event(
+        alert = update_alert_event_record(
             alert_id,
             status=req.status,
             assignee=req.assignee,
             note=req.note,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    if not alert:
-        raise HTTPException(status_code=404, detail="告警事件不存在")
+    except AlertEventServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", data={"alert": alert})
 
 
