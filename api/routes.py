@@ -148,6 +148,11 @@ from core.approval_request_service import (
     get_approval_request_record,
     list_approval_request_records,
 )
+from core.session_interaction_service import (
+    SessionInteractionServiceError,
+    approve_session_tool_call,
+    submit_user_interaction_response,
+)
 
 import logging
 import asyncio
@@ -631,47 +636,28 @@ class ApprovalDecisionRequest(BaseModel):
 async def approve_tool_call(session_id: str, req: ToolApprovalRequest):
     """【新功能】用户确认是否允许 AI 执行敏感指令"""
     from core.dispatcher import dispatcher
-    from core.approval_queue import resolve_approval_request
     from connections.ssh_manager import ssh_manager
 
-    if req.auto_approve_all:
-        if session_id in ssh_manager.active_sessions:
-            ssh_manager.active_sessions[session_id]["info"]["auto_approve_all"] = True
-            logger.info(f"Session {session_id} set to auto-approve all tools.")
-
-    future = dispatcher.pending_approvals.get(req.tool_call_id)
-    if future and not future.done():
-        future.set_result(req.approved)
-        try:
-            resolve_approval_request(
-                req.tool_call_id,
-                approved=req.approved,
-                operator=req.operator or "user",
-                note=req.note or "",
-            )
-        except KeyError:
-            pass
-        return ResponseModel(status="success", message="Approval action submitted.")
-
     try:
-        approval = resolve_approval_request(
+        result = approve_session_tool_call(
+            ssh_manager.active_sessions,
+            dispatcher,
+            session_id,
             req.tool_call_id,
             approved=req.approved,
+            auto_approve_all=req.auto_approve_all,
             operator=req.operator or "user",
             note=req.note or "",
         )
+    except SessionInteractionServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    if result["include_approval"]:
         return ResponseModel(
             status="success",
-            message="Approval action recorded.",
-            data={"approval": approval},
+            message=result["message"],
+            data={"approval": result["approval"]},
         )
-    except KeyError:
-        pass
-
-    raise HTTPException(
-        status_code=404,
-        detail="Pending tool call not found or already processed.",
-    )
+    return ResponseModel(status="success", message=result["message"])
 
 
 @router.post("/session/{session_id}/interaction", response_model=ResponseModel)
@@ -679,22 +665,17 @@ async def respond_user_interaction(session_id: str, req: UserInteractionResponse
     """提交前台聊天中的文本、密码或选项交互响应。"""
     from core.dispatcher import dispatcher
 
-    entry = dispatcher.pending_interactions.get(req.request_id)
-    future = entry.get("future") if isinstance(entry, dict) else entry
-    expected_session_id = entry.get("session_id") if isinstance(entry, dict) else None
-    if expected_session_id and expected_session_id != session_id:
-        raise HTTPException(
-            status_code=404,
-            detail="交互请求不存在、已提交或已超时。",
+    try:
+        submit_user_interaction_response(
+            dispatcher,
+            session_id,
+            req.request_id,
+            value=req.value,
+            label=req.label,
         )
-    if future and not future.done():
-        future.set_result({"value": req.value or "", "label": req.label or ""})
-        return ResponseModel(status="success", message="交互输入已提交。")
-
-    raise HTTPException(
-        status_code=404,
-        detail="交互请求不存在、已提交或已超时。",
-    )
+    except SessionInteractionServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", message="交互输入已提交。")
 
 
 @router.get("/approvals", response_model=ResponseModel)
