@@ -7,6 +7,9 @@ import logging
 from contextlib import asynccontextmanager, closing
 import asyncio
 import sqlite3
+import uuid
+
+from core.request_context import current_request_id, request_id_context
 
 # 在所有模块加载之前加载 .env 文件，确保通知配置等环境变量持久生效
 try:
@@ -60,9 +63,19 @@ def get_log_level() -> int:
     return LOG_LEVELS.get(raw_level, logging.INFO)
 
 
-# 设置基本日志格式，方便本地控制台看
+_old_log_record_factory = logging.getLogRecordFactory()
+
+
+def _opscore_log_record_factory(*args, **kwargs):
+    record = _old_log_record_factory(*args, **kwargs)
+    record.request_id = current_request_id() or "-"
+    return record
+
+
+logging.setLogRecordFactory(_opscore_log_record_factory)
 logging.basicConfig(
-    level=get_log_level(), format="%(asctime)s [%(levelname)s] %(message)s"
+    level=get_log_level(),
+    format="%(asctime)s [%(levelname)s] [request_id=%(request_id)s] %(message)s",
 )
 
 # 资产重连状态跟踪，供前端查询
@@ -162,6 +175,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or f"req_{uuid.uuid4().hex}"
+    with request_id_context(request_id):
+        request.state.request_id = request_id
+        response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 
 @app.middleware("http")

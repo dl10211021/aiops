@@ -1,0 +1,160 @@
+import { toolLabel } from '@/utils/assetDisplay'
+import { MATURITY_LABELS } from './connectionModalHelpers'
+import type { AssetCategoryOption, AssetSubType } from './connectionModalHelpers'
+
+interface OptionGroup<T> {
+  group: string
+  items: T[]
+}
+
+interface ConnectionAssetTypeSelectorProps {
+  assetCategories: AssetCategoryOption[]
+  assetTypeSearch: string
+  category: string
+  categoryGroups: Array<OptionGroup<AssetCategoryOption>>
+  currentProtocol: string
+  filteredSubTypeOptions: AssetSubType[]
+  normalizedAssetTypeSearch: string
+  searchedSubTypeOptions: AssetSubType[]
+  selectedConnectionHint: string
+  selectedConnectorGroup: string
+  selectedConnectorLabel: string
+  selectedMaturity: string
+  selectedSubInfo?: AssetSubType
+  selectedTools: string[]
+  subType: string
+  subTypeGroups: Array<OptionGroup<AssetSubType>>
+  subTypeOptions: AssetSubType[]
+  onCategoryChange: (category: string) => void
+  onSearchChange: (value: string) => void
+  onSubTypeChange: (subType: string) => void
+}
+
+export default function ConnectionAssetTypeSelector({
+  assetCategories,
+  assetTypeSearch,
+  category,
+  categoryGroups,
+  currentProtocol,
+  filteredSubTypeOptions,
+  normalizedAssetTypeSearch,
+  searchedSubTypeOptions,
+  selectedConnectionHint,
+  selectedConnectorGroup,
+  selectedConnectorLabel,
+  selectedMaturity,
+  selectedSubInfo,
+  selectedTools,
+  subType,
+  subTypeGroups,
+  subTypeOptions,
+  onCategoryChange,
+  onSearchChange,
+  onSubTypeChange,
+}: ConnectionAssetTypeSelectorProps) {
+  return (
+    <section className="rounded-lg border border-ops-surface0 bg-ops-dark/20 p-3">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold text-ops-text">资产类型与接入方式</div>
+          <div className="mt-0.5 text-[11px] text-ops-overlay">
+            当前分类 {subTypeOptions.length} 类资产，按真实连接方式分组展示。
+          </div>
+        </div>
+        <span className="rounded bg-ops-surface0 px-2 py-0.5 text-[10px] text-ops-subtext">
+          {currentProtocol.toUpperCase()}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1 block text-xs text-ops-subtext">资产类别</label>
+          <select
+            value={category}
+            onChange={(event) => onCategoryChange(event.target.value)}
+            className="w-full appearance-none rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+          >
+            {categoryGroups.map((group) => (
+              <optgroup key={group.group} label={group.group}>
+                {group.items.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </optgroup>
+            ))}
+          </select>
+          <div className="mt-1 text-[11px] text-ops-overlay">
+            {assetCategories.length} 个分类 · {assetCategories.find((item) => item.id === category)?.group || '其它'}
+          </div>
+        </div>
+        <div>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <label className="text-xs text-ops-subtext">资产类型</label>
+            <span className="text-[10px] text-ops-overlay">
+              {normalizedAssetTypeSearch ? `${searchedSubTypeOptions.length}/${subTypeOptions.length}` : `${subTypeOptions.length}`} 类
+            </span>
+          </div>
+          <input
+            value={assetTypeSearch}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="搜索资产类型、协议或连接方式"
+            className="mb-2 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+          />
+          <select
+            value={subType}
+            onChange={(event) => onSubTypeChange(event.target.value)}
+            className="w-full appearance-none rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+          >
+            {subTypeGroups.map((group) => (
+              <optgroup key={group.group} label={group.group}>
+                {group.items.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </optgroup>
+            ))}
+            {filteredSubTypeOptions.length === 0 && <option value={subType}>没有匹配项</option>}
+          </select>
+        </div>
+        {selectedSubInfo && (
+          <div className="col-span-2 rounded-lg border border-ops-surface1 bg-ops-dark/30 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold text-ops-text">{selectedSubInfo.label}</span>
+                <span className="text-ops-overlay">/</span>
+                <span className="text-ops-subtext">{selectedConnectorLabel}</span>
+                <span className="text-ops-overlay">/</span>
+                <span className="text-ops-subtext">{selectedConnectorGroup}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded bg-ops-surface0 px-1.5 py-0.5 text-[10px] text-ops-subtext">
+                  默认端口 {selectedSubInfo.defaultPort}
+                </span>
+                <span className="rounded bg-ops-surface0 px-1.5 py-0.5 text-[10px] text-ops-subtext">
+                  {selectedSubInfo.capability?.credential_fields?.length || 2} 个凭据字段
+                </span>
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-ops-overlay">能力状态</span>
+              <span className={`rounded px-1.5 py-0.5 text-[10px] ${
+                selectedMaturity === 'native'
+                  ? 'bg-ops-success/15 text-ops-success'
+                  : selectedMaturity === 'needs_adapter'
+                    ? 'bg-ops-alert/15 text-ops-alert'
+                    : 'bg-ops-accent/15 text-ops-accent'
+              }`}>
+                {MATURITY_LABELS[selectedMaturity] || selectedMaturity}
+              </span>
+            </div>
+            {selectedConnectionHint && (
+              <p className="mt-2 rounded-lg bg-ops-surface0/55 px-2.5 py-2 text-[11px] leading-5 text-ops-subtext">
+                {selectedConnectionHint}
+              </p>
+            )}
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {(selectedTools.length > 0 ? selectedTools : ['待补工具']).map((tool) => (
+                <span key={tool} title={tool} className="rounded bg-ops-surface0 px-1.5 py-0.5 text-[10px] text-ops-subtext">
+                  {toolLabel(tool)}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}

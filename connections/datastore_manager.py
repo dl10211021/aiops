@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import shlex
+import socket
 
 logger = logging.getLogger(__name__)
 
@@ -104,5 +105,117 @@ class MongoExecutor:
             return {"success": False, "error": str(e)}
 
 
+class MemcachedExecutor:
+    READONLY_ROOTS = {"version", "stats", "get", "gets"}
+    BLOCKED_ROOTS = {
+        "add",
+        "append",
+        "cas",
+        "decr",
+        "delete",
+        "flush_all",
+        "gat",
+        "gats",
+        "incr",
+        "prepend",
+        "replace",
+        "set",
+        "touch",
+    }
+
+    def execute_command(
+        self,
+        *,
+        host: str,
+        port: int,
+        command: str,
+        extra_args: dict | None = None,
+    ) -> dict:
+        extra_args = extra_args or {}
+        try:
+            parts = shlex.split(str(command or "").strip())
+        except ValueError as e:
+            return {"success": False, "error": f"Memcached 命令解析失败: {e}"}
+        if not parts:
+            return {"success": False, "error": "Memcached 命令不能为空"}
+
+        root = parts[0].lower()
+        if root in self.BLOCKED_ROOTS or root not in self.READONLY_ROOTS:
+            return {
+                "success": False,
+                "error": "Memcached 当前仅支持只读命令: version、stats、get、gets。",
+            }
+        if root in {"get", "gets"} and len(parts) < 2:
+            return {"success": False, "error": "get/gets 需要至少一个 key。"}
+
+        timeout = int(extra_args.get("timeout") or extra_args.get("socket_timeout") or 8)
+        max_bytes = int(extra_args.get("max_response_bytes") or 1024 * 1024)
+        wire_command = " ".join(parts) + "\r\n"
+
+        try:
+            with socket.create_connection((host, int(port or 11211)), timeout=timeout) as sock:
+                sock.settimeout(timeout)
+                sock.sendall(wire_command.encode("utf-8"))
+                chunks: list[bytes] = []
+                total = 0
+                while total < max_bytes:
+                    chunk = sock.recv(min(65536, max_bytes - total))
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    total += len(chunk)
+                    joined = b"".join(chunks)
+                    if root == "version" and joined.endswith(b"\r\n"):
+                        break
+                    if root in {"stats", "get", "gets"} and b"\r\nEND\r\n" in joined:
+                        break
+
+            text = b"".join(chunks).decode("utf-8", errors="replace")
+            parsed = self._parse(root, text)
+            return {
+                "success": True,
+                "command": " ".join(parts),
+                "data": parsed,
+                "output": text.strip(),
+            }
+        except Exception as e:
+            logger.error("Memcached command failed: %s", e)
+            return {"success": False, "error": str(e)}
+
+    def _parse(self, root: str, text: str) -> object:
+        lines = [line for line in text.replace("\r\n", "\n").split("\n") if line]
+        if root == "version":
+            first = lines[0] if lines else ""
+            return {"version": first.replace("VERSION", "", 1).strip() if first.startswith("VERSION") else first}
+        if root == "stats":
+            stats: dict[str, str] = {}
+            for line in lines:
+                if line == "END":
+                    continue
+                parts = line.split(" ", 2)
+                if len(parts) == 3 and parts[0] == "STAT":
+                    stats[parts[1]] = parts[2]
+            return stats
+        values = []
+        current: dict[str, object] | None = None
+        for line in lines:
+            if line == "END":
+                break
+            if line.startswith("VALUE "):
+                parts = line.split()
+                current = {
+                    "key": parts[1] if len(parts) > 1 else "",
+                    "flags": parts[2] if len(parts) > 2 else "",
+                    "bytes": int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else None,
+                    "cas": parts[4] if len(parts) > 4 else None,
+                    "value": "",
+                }
+                values.append(current)
+            elif current is not None:
+                current["value"] = line
+        return values
+
+
 redis_executor = RedisExecutor()
 mongo_executor = MongoExecutor()
+memcached_executor = MemcachedExecutor()

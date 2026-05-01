@@ -6,6 +6,7 @@ import logging
 import datetime
 import asyncio
 import sys
+import time
 from contextlib import contextmanager
 import pyarrow as pa
 import lancedb
@@ -15,6 +16,24 @@ from core.asset_protocols import normalize_protocol, resolve_asset_identity
 from core.lancedb_utils import ensure_lancedb_table, lancedb_table_names
 
 logger = logging.getLogger(__name__)
+
+
+DEFAULT_SENSITIVE_EXTRA_ARG_KEYS = [
+    "access_key",
+    "api_key",
+    "api_token",
+    "bearer_token",
+    "client_secret",
+    "community_string",
+    "enable_pass",
+    "enable_password",
+    "kubeconfig",
+    "secret_key",
+    "v3_auth_pass",
+    "v3_priv_pass",
+    "vmware_session_id",
+    "zstack_session_uuid",
+]
 
 
 class MemoryDB:
@@ -56,16 +75,7 @@ class MemoryDB:
             logger.warning(f"Failed to init Fernet encryption: {e}")
             self._fernet = None
 
-        self.sensitive_keys = [
-            "bearer_token",
-            "kubeconfig",
-            "api_token",
-            "v3_auth_pass",
-            "v3_priv_pass",
-            "community_string",
-            "enable_pass",
-            "enable_password",
-        ]
+        self.sensitive_keys = list(DEFAULT_SENSITIVE_EXTRA_ARG_KEYS)
         self._encrypted_prefix = "fernet:"
 
         self.init_db()
@@ -177,6 +187,53 @@ class MemoryDB:
                         PRIMARY KEY (asset_id, tag_id),
                         FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
                         FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS asset_profiles (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id TEXT UNIQUE NOT NULL,
+                        asset_key TEXT,
+                        host TEXT,
+                        asset_type TEXT,
+                        protocol TEXT,
+                        profile_json TEXT NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS webhook_deliveries (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id TEXT NOT NULL,
+                        webhook_host TEXT,
+                        channel TEXT,
+                        payload_type TEXT,
+                        title TEXT,
+                        status TEXT,
+                        http_status INTEGER,
+                        response_preview TEXT,
+                        error TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS slash_commands (
+                        id TEXT PRIMARY KEY,
+                        label TEXT NOT NULL,
+                        description TEXT,
+                        prompt_template TEXT NOT NULL,
+                        category TEXT DEFAULT '自定义',
+                        scope_type TEXT DEFAULT 'global',
+                        asset_type TEXT,
+                        protocol TEXT,
+                        host TEXT,
+                        readonly INTEGER DEFAULT 1,
+                        pinned INTEGER DEFAULT 0,
+                        enabled INTEGER DEFAULT 1,
+                        sort_order INTEGER DEFAULT 1,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
             logger.info(f"SQLite 记忆库已就绪: {self.db_path}")
@@ -669,20 +726,22 @@ class MemoryDB:
                 cursor = conn.cursor()
                 if for_ui:
                     cursor.execute(
-                        "SELECT message_json FROM memory WHERE session_id = ? ORDER BY id ASC",
+                        "SELECT id, message_json FROM memory WHERE session_id = ? ORDER BY id ASC",
                         (session_id,),
                     )
                 else:
                     cursor.execute(
-                        "SELECT message_json FROM memory WHERE session_id = ? AND is_compressed = 0 ORDER BY id ASC",
+                        "SELECT id, message_json FROM memory WHERE session_id = ? AND is_compressed = 0 ORDER BY id ASC",
                         (session_id,),
                     )
                 rows = cursor.fetchall()
                 messages = []
                 for row in rows:
                     try:
-                        msg = json.loads(row[0])
+                        msg = json.loads(row[1])
                         if isinstance(msg, dict) and "role" in msg:
+                            if for_ui:
+                                msg["_memory_id"] = row[0]
                             if not for_ui and self._is_protocol_retry_noise(msg):
                                 continue
                             if (
@@ -812,6 +871,52 @@ class MemoryDB:
         except Exception as e:
             logger.error(f"保存记忆至 DB 失败: {e}")
 
+    def update_message_content(self, session_id: str, message_id: int, content: str) -> dict:
+        """修改单条用户可见消息内容。"""
+        with self._db_lock, self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT message_json FROM memory WHERE id = ? AND session_id = ?",
+                (message_id, session_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError("消息不存在或不属于当前会话")
+            message = json.loads(row[0])
+            if message.get("role") not in {"user", "assistant"}:
+                raise ValueError("只能修改用户消息或 AI 输出")
+            message["content"] = str(content or "")
+            message["edited_at"] = time.time()
+            if message.get("role") == "assistant":
+                message.pop("tool_calls", None)
+            cursor.execute(
+                "UPDATE memory SET message_json = ? WHERE id = ? AND session_id = ?",
+                (json.dumps(message, ensure_ascii=False), message_id, session_id),
+            )
+            conn.commit()
+            message["_memory_id"] = message_id
+            return message
+
+    def delete_message(self, session_id: str, message_id: int):
+        """删除单条用户可见消息。"""
+        with self._db_lock, self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT message_json FROM memory WHERE id = ? AND session_id = ?",
+                (message_id, session_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError("消息不存在或不属于当前会话")
+            message = json.loads(row[0])
+            if message.get("role") not in {"user", "assistant"}:
+                raise ValueError("只能删除用户消息或 AI 输出")
+            cursor.execute(
+                "DELETE FROM memory WHERE id = ? AND session_id = ?",
+                (message_id, session_id),
+            )
+            conn.commit()
+
     def clear_history(self, session_id: str):
         """清空指定会话的短期记忆"""
         try:
@@ -831,6 +936,217 @@ class MemoryDB:
                     logger.warning(f"LanceDB 碎片整理失败: {e}")
         except Exception as e:
             logger.error(f"清空记忆失败: {e}")
+
+    # -------- 快捷命令 --------
+    def list_slash_commands(self) -> list[dict]:
+        with self._db_lock, self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT id, label, description, prompt_template, category, scope_type,
+                       asset_type, protocol, host, readonly, pinned, enabled, sort_order,
+                       created_at, updated_at
+                FROM slash_commands
+                ORDER BY pinned DESC, sort_order ASC, label ASC
+                """
+            ).fetchall()
+            return [self._slash_command_row(row) for row in rows]
+
+    def save_slash_command(self, command: dict) -> dict:
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        command_id = str(command.get("id") or "").strip()
+        if not command_id:
+            command_id = f"custom-{int(time.time() * 1000)}"
+        payload = {
+            "id": command_id,
+            "label": str(command.get("label") or "").strip(),
+            "description": str(command.get("description") or "").strip(),
+            "prompt_template": str(command.get("prompt_template") or "").strip(),
+            "category": str(command.get("category") or "自定义").strip() or "自定义",
+            "scope_type": str(command.get("scope_type") or "global").strip() or "global",
+            "asset_type": str(command.get("asset_type") or "").strip().lower(),
+            "protocol": str(command.get("protocol") or "").strip().lower(),
+            "host": str(command.get("host") or "").strip().lower(),
+            "readonly": 1 if command.get("readonly", True) else 0,
+            "pinned": 1 if command.get("pinned", False) else 0,
+            "enabled": 1 if command.get("enabled", True) else 0,
+            "sort_order": max(1, min(100, int(command.get("sort_order") or 1))),
+        }
+        with self._db_lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO slash_commands
+                    (id, label, description, prompt_template, category, scope_type,
+                     asset_type, protocol, host, readonly, pinned, enabled, sort_order,
+                     created_at, updated_at)
+                VALUES
+                    (:id, :label, :description, :prompt_template, :category, :scope_type,
+                     :asset_type, :protocol, :host, :readonly, :pinned, :enabled, :sort_order,
+                     :now, :now)
+                ON CONFLICT(id) DO UPDATE SET
+                    label = excluded.label,
+                    description = excluded.description,
+                    prompt_template = excluded.prompt_template,
+                    category = excluded.category,
+                    scope_type = excluded.scope_type,
+                    asset_type = excluded.asset_type,
+                    protocol = excluded.protocol,
+                    host = excluded.host,
+                    readonly = excluded.readonly,
+                    pinned = excluded.pinned,
+                    enabled = excluded.enabled,
+                    sort_order = excluded.sort_order,
+                    updated_at = excluded.updated_at
+                """,
+                {**payload, "now": now},
+            )
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT id, label, description, prompt_template, category, scope_type,
+                       asset_type, protocol, host, readonly, pinned, enabled, sort_order,
+                       created_at, updated_at
+                FROM slash_commands WHERE id = ?
+                """,
+                (command_id,),
+            ).fetchone()
+            return self._slash_command_row(row)
+
+    def delete_slash_command(self, command_id: str) -> bool:
+        with self._db_lock, self._connect() as conn:
+            cursor = conn.execute("DELETE FROM slash_commands WHERE id = ?", (command_id,))
+            return cursor.rowcount > 0
+
+    @staticmethod
+    def _slash_command_row(row) -> dict:
+        return {
+            "id": row["id"],
+            "label": row["label"],
+            "description": row["description"] or "",
+            "prompt_template": row["prompt_template"],
+            "category": row["category"] or "自定义",
+            "scope_type": row["scope_type"] or "global",
+            "asset_type": row["asset_type"] or "",
+            "protocol": row["protocol"] or "",
+            "host": row["host"] or "",
+            "readonly": bool(row["readonly"]),
+            "pinned": bool(row["pinned"]),
+            "enabled": bool(row["enabled"]),
+            "sort_order": max(1, min(100, int(row["sort_order"] or 1))),
+            "source": "custom",
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    # -------- 资产画像记忆 --------
+    def save_asset_profile(
+        self,
+        session_id: str,
+        asset_key: str,
+        host: str,
+        asset_type: str,
+        protocol: str,
+        profile: dict,
+    ) -> dict:
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        payload = json.dumps(profile, ensure_ascii=False)
+        try:
+            with self._db_lock, self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO asset_profiles
+                        (session_id, asset_key, host, asset_type, protocol, profile_json, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(session_id) DO UPDATE SET
+                        asset_key=excluded.asset_key,
+                        host=excluded.host,
+                        asset_type=excluded.asset_type,
+                        protocol=excluded.protocol,
+                        profile_json=excluded.profile_json,
+                        updated_at=excluded.updated_at
+                    """,
+                    (session_id, asset_key, host, asset_type, protocol, payload, now, now),
+                )
+            return profile
+        except Exception as e:
+            logger.error(f"保存资产画像失败: {e}")
+            raise
+
+    def get_asset_profile(self, session_id: str) -> dict | None:
+        try:
+            with self._db_lock, self._connect() as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute(
+                    """
+                    SELECT session_id, asset_key, host, asset_type, protocol, profile_json, updated_at
+                    FROM asset_profiles
+                    WHERE session_id = ?
+                    """,
+                    (session_id,),
+                ).fetchone()
+            if not row:
+                return None
+            profile = json.loads(row["profile_json"])
+            if isinstance(profile, dict):
+                profile.setdefault("session_id", row["session_id"])
+                profile.setdefault("asset_key", row["asset_key"])
+                profile.setdefault("host", row["host"])
+                profile.setdefault("asset_type", row["asset_type"])
+                profile.setdefault("protocol", row["protocol"])
+                profile.setdefault("updated_at", row["updated_at"])
+                return profile
+        except Exception as e:
+            logger.error(f"读取资产画像失败: {e}")
+        return None
+
+    # -------- Webhook 发送审计 --------
+    def append_webhook_delivery(self, record: dict) -> dict:
+        try:
+            with self._db_lock, self._connect() as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO webhook_deliveries
+                        (session_id, webhook_host, channel, payload_type, title, status, http_status, response_preview, error)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        record.get("session_id") or "",
+                        record.get("webhook_host") or "",
+                        record.get("channel") or "",
+                        record.get("payload_type") or "",
+                        record.get("title") or "",
+                        record.get("status") or "",
+                        record.get("http_status"),
+                        record.get("response_preview") or "",
+                        record.get("error") or "",
+                    ),
+                )
+                record["id"] = cursor.lastrowid
+            return record
+        except Exception as e:
+            logger.error(f"记录 Webhook 发送历史失败: {e}")
+            return record
+
+    def list_webhook_deliveries(self, session_id: str, limit: int = 10) -> list[dict]:
+        try:
+            safe_limit = max(1, min(int(limit or 10), 50))
+            with self._db_lock, self._connect() as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    """
+                    SELECT id, session_id, webhook_host, channel, payload_type, title, status,
+                           http_status, response_preview, error, created_at
+                    FROM webhook_deliveries
+                    WHERE session_id = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (session_id, safe_limit),
+                ).fetchall()
+            return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"读取 Webhook 发送历史失败: {e}")
+            return []
 
     # -------- 长期记忆压缩与检索 (LanceDB) --------
     async def retrieve_ltm(

@@ -52,9 +52,9 @@ export default function DynamicSkillsModal() {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center" onClick={closeModal}>      
-      <div className="bg-ops-panel rounded-xl p-6 w-[480px]" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-ops-panel rounded-lg p-6 w-[480px]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-ops-text">🧩 动态技能配置</h2>
+          <h2 className="text-lg font-bold text-ops-text">动态技能配置</h2>
           <button onClick={closeModal} className="text-ops-subtext hover:text-ops-text text-lg">✕</button>     
         </div>
         <p className="text-xs text-ops-subtext mb-3">

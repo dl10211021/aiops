@@ -9,9 +9,10 @@ import time
 import shlex
 from typing import Dict, Any, List
 
-from core.asset_protocols import API_PROTOCOLS, NETWORK_CLI_ASSET_TYPES, SQL_PROTOCOLS, resolve_asset_identity
+from core.asset_protocols import API_PROTOCOLS, NETWORK_CLI_ASSET_TYPES, SQL_PROTOCOLS, STORAGE_ASSET_TYPES, resolve_asset_identity
 from core.safety_policy import (
     check_approval_needed as policy_check_approval_needed,
+    explain_policy_decision,
     check_hard_block,
     check_readonly_block,
 )
@@ -19,6 +20,22 @@ from core.skill_lifecycle import validate_skill_candidate, validate_skill_frontm
 from core.tool_registry import tool_registry
 
 logger = logging.getLogger(__name__)
+
+STORAGE_SSH_ASSET_TYPES = {item for item in STORAGE_ASSET_TYPES if item in {"ceph", "nfs", "hdfs", "glusterfs"}}
+
+
+def _blocked_tool_response(tool_call_name: str, args: dict, context: dict, reason: str) -> str:
+    metadata = explain_policy_decision(tool_call_name, args, context)
+    return json.dumps(
+        {
+            "status": "BLOCKED",
+            "reason": reason,
+            "actions": metadata.get("actions") or [],
+            "primary_action": metadata.get("primary_action"),
+            "policy_decision": metadata.get("decision"),
+        },
+        ensure_ascii=False,
+    )
 
 
 class SkillDispatcher:
@@ -348,6 +365,9 @@ class SkillDispatcher:
         if session_id and session_id in ssh_manager.active_sessions:
             if ssh_manager.active_sessions[session_id]["info"].get("auto_approve_all", False):
                 return False, ""
+        hard_blocked, _ = check_hard_block(tool_call_name, args, context)
+        if hard_blocked:
+            return False, ""
         readonly_blocked, _ = check_readonly_block(tool_call_name, args, context)
         if readonly_blocked:
             return False, ""
@@ -372,9 +392,7 @@ class SkillDispatcher:
                 context.get("session_id"),
                 hard_reason,
             )
-            return json.dumps(
-                {"status": "BLOCKED", "reason": hard_reason}, ensure_ascii=False
-            )
+            return _blocked_tool_response(tool_call_name, args, context, hard_reason)
 
         if tool_call_name in {
             "linux_execute_command",
@@ -405,6 +423,22 @@ class SkillDispatcher:
                     },
                     ensure_ascii=False,
                 )
+            if tool_call_name == "linux_execute_command" and identity["asset_type"] in STORAGE_SSH_ASSET_TYPES:
+                return json.dumps(
+                    {
+                        "status": "ERROR",
+                        "error": "当前资产是存储节点，不能使用通用 Linux 命令工具；请使用 storage_execute_command。",
+                    },
+                    ensure_ascii=False,
+                )
+            if tool_call_name == "storage_execute_command" and identity["asset_type"] not in STORAGE_SSH_ASSET_TYPES:
+                return json.dumps(
+                    {
+                        "status": "ERROR",
+                        "error": "storage_execute_command 仅用于 Ceph/NFS/HDFS/GlusterFS 等存储节点；当前资产请使用对应协议工具。",
+                    },
+                    ensure_ascii=False,
+                )
 
             session_id = context.get("session_id")
             if not session_id:
@@ -412,7 +446,7 @@ class SkillDispatcher:
 
             blocked, reason = check_readonly_block(tool_call_name, args, context)
             if blocked:
-                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
+                return _blocked_tool_response(tool_call_name, args, context, reason)
 
             result = await asyncio.to_thread(
                 ssh_manager.execute_command, session_id, args.get("command")
@@ -438,7 +472,7 @@ class SkillDispatcher:
 
             blocked, reason = check_readonly_block(tool_call_name, args, context)
             if blocked:
-                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
+                return _blocked_tool_response(tool_call_name, args, context, reason)
 
             result = await asyncio.to_thread(
                 winrm_executor.execute_command,
@@ -460,7 +494,7 @@ class SkillDispatcher:
 
             blocked, reason = check_readonly_block(tool_call_name, args, context)
             if blocked:
-                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
+                return _blocked_tool_response(tool_call_name, args, context, reason)
 
             result = await asyncio.to_thread(
                 ssh_manager.execute_network_cli_command,
@@ -480,7 +514,7 @@ class SkillDispatcher:
 
             blocked, reason = check_readonly_block(tool_call_name, args, context)
             if blocked:
-                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
+                return _blocked_tool_response(tool_call_name, args, context, reason)
 
             try:
 
@@ -545,7 +579,7 @@ class SkillDispatcher:
             return await asyncio.to_thread(do_notify)
 
         elif tool_call_name == "db_execute_query":
-            from connections.db_manager import db_executor
+            from connections.db_manager import db_executor, normalize_database_driver_key
 
             extra_args = context.get("extra_args") or {}
             db_type = (
@@ -556,7 +590,7 @@ class SkillDispatcher:
                 or context.get("asset_type")
                 or "mysql"
             )
-            db_type = str(db_type).lower()
+            db_type = normalize_database_driver_key(str(db_type).lower())
             if db_type not in SQL_PROTOCOLS:
                 return json.dumps(
                     {
@@ -595,7 +629,7 @@ class SkillDispatcher:
 
             blocked, reason = check_readonly_block(tool_call_name, args, context)
             if blocked:
-                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
+                return _blocked_tool_response(tool_call_name, args, context, reason)
 
             logger.info(
                 f"AI 调用原生数据库驱动 [{db_type.upper()}] 查询: {host}:{port}/{database} -> SQL: {sql}"
@@ -619,7 +653,7 @@ class SkillDispatcher:
             command = args.get("command", "")
             blocked, reason = check_readonly_block(tool_call_name, args, context)
             if blocked:
-                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
+                return _blocked_tool_response(tool_call_name, args, context, reason)
 
             result = await asyncio.to_thread(
                 redis_executor.execute_command,
@@ -627,6 +661,23 @@ class SkillDispatcher:
                 port=context.get("port"),
                 username=context.get("username") or "",
                 password=context.get("password"),
+                command=command,
+                extra_args=context.get("extra_args") or {},
+            )
+            return json.dumps(result, ensure_ascii=False, default=str)
+
+        elif tool_call_name == "memcached_execute_command":
+            from connections.datastore_manager import memcached_executor
+
+            command = args.get("command", "")
+            blocked, reason = check_readonly_block(tool_call_name, args, context)
+            if blocked:
+                return _blocked_tool_response(tool_call_name, args, context, reason)
+
+            result = await asyncio.to_thread(
+                memcached_executor.execute_command,
+                host=context.get("host"),
+                port=context.get("port") or 11211,
                 command=command,
                 extra_args=context.get("extra_args") or {},
             )
@@ -652,8 +703,40 @@ class SkillDispatcher:
             )
             return json.dumps(result, ensure_ascii=False, default=str)
 
+        elif tool_call_name == "service_probe_request":
+            from connections.service_probe_manager import service_probe_executor
+
+            blocked, reason = check_readonly_block(tool_call_name, args, context)
+            if blocked:
+                return _blocked_tool_response(tool_call_name, args, context, reason)
+
+            result = await asyncio.to_thread(
+                service_probe_executor.execute,
+                asset_type=context.get("asset_type") or "",
+                protocol=context.get("protocol") or context.get("asset_type") or "",
+                host=context.get("host") or "",
+                port=context.get("port"),
+                username=context.get("username") or "",
+                password=context.get("password"),
+                extra_args=context.get("extra_args") or {},
+                operation=args.get("operation") or "probe",
+                path=args.get("path"),
+                timeout=args.get("timeout"),
+            )
+            return json.dumps(result, ensure_ascii=False, default=str)
+
         elif tool_call_name in {
             "http_api_request",
+            "database_api_request",
+            "bigdata_api_request",
+            "middleware_api_request",
+            "discovery_api_request",
+            "container_api_request",
+            "network_api_request",
+            "security_api_request",
+            "cicd_api_request",
+            "ai_platform_api_request",
+            "oob_api_request",
             "k8s_api_request",
             "monitoring_api_query",
             "virtualization_api_request",
@@ -662,22 +745,100 @@ class SkillDispatcher:
             from connections.http_api_manager import http_api_executor
 
             if tool_call_name == "virtualization_api_request" and context.get("protocol") == "winrm":
-                return await self.route_and_execute(
-                    "winrm_execute_command",
-                    {"command": args.get("command") or args.get("path") or "Get-VM | Select-Object -First 20 | ConvertTo-Json -Compress"},
-                    context,
+                return json.dumps(
+                    {
+                        "status": "ERROR",
+                        "error": "当前资产通过 WinRM 管理，不是虚拟化 HTTP API；请使用 winrm_execute_command 执行明确的 Hyper-V PowerShell 命令。",
+                    },
+                    ensure_ascii=False,
                 )
+            if tool_call_name == "virtualization_api_request":
+                from connections.virtualization_manager import virtualization_api_executor
+
+                method = str(args.get("method") or "GET").upper()
+                blocked, reason = check_readonly_block(tool_call_name, args, context)
+                if blocked:
+                    return _blocked_tool_response(tool_call_name, args, context, reason)
+                result = await asyncio.to_thread(
+                    virtualization_api_executor.execute,
+                    asset_type=context.get("asset_type") or "",
+                    protocol=context.get("protocol") or "",
+                    host=context.get("host") or "",
+                    port=context.get("port"),
+                    username=context.get("username") or "",
+                    password=context.get("password"),
+                    extra_args=context.get("extra_args") or {},
+                    operation=args.get("operation"),
+                    method=method,
+                    path=args.get("path"),
+                    headers=args.get("headers") or {},
+                    body=args.get("body"),
+                    timeout=args.get("timeout"),
+                )
+                return json.dumps(result, ensure_ascii=False, default=str)
             if tool_call_name == "storage_api_request" and context.get("protocol") == "snmp":
                 return await self.route_and_execute(
                     "snmp_get",
                     {"oid": args.get("oid") or "1.3.6.1.2.1.1.1.0"},
                     context,
                 )
+            if tool_call_name == "storage_api_request":
+                asset_type = str(context.get("asset_type") or "").strip().lower()
+                sub_type = str((context.get("extra_args") or {}).get("sub_type") or "").strip().lower()
+                if asset_type in {"s3", "minio", "oss", "cos", "obs", "object_storage"} or sub_type in {
+                    "s3",
+                    "minio",
+                    "oss",
+                    "cos",
+                    "obs",
+                    "object_storage",
+                }:
+                    from connections.object_storage_manager import object_storage_executor
+
+                    blocked, reason = check_readonly_block(tool_call_name, args, context)
+                    if blocked:
+                        return _blocked_tool_response(tool_call_name, args, context, reason)
+                    result = await asyncio.to_thread(
+                        object_storage_executor.execute,
+                        asset_type=context.get("asset_type") or "",
+                        host=context.get("host"),
+                        port=context.get("port"),
+                        username=context.get("username") or "",
+                        password=context.get("password"),
+                        extra_args=context.get("extra_args") or {},
+                        operation=args.get("operation") or "list_buckets",
+                        bucket=args.get("bucket"),
+                        prefix=args.get("prefix"),
+                        key=args.get("key"),
+                        max_keys=args.get("max_keys"),
+                    )
+                    return json.dumps(result, ensure_ascii=False, default=str)
+                from connections.storage_platform_manager import storage_platform_executor
+
+                blocked, reason = check_readonly_block(tool_call_name, args, context)
+                if blocked:
+                    return _blocked_tool_response(tool_call_name, args, context, reason)
+                result = await asyncio.to_thread(
+                    storage_platform_executor.execute,
+                    asset_type=context.get("asset_type") or "",
+                    host=context.get("host"),
+                    port=context.get("port"),
+                    username=context.get("username") or "",
+                    password=context.get("password"),
+                    extra_args=context.get("extra_args") or {},
+                    operation=args.get("operation") or "health",
+                    method=args.get("method") or "GET",
+                    path=args.get("path"),
+                    headers=args.get("headers") or {},
+                    body=args.get("body"),
+                    timeout=args.get("timeout"),
+                )
+                return json.dumps(result, ensure_ascii=False, default=str)
 
             method = str(args.get("method") or "GET").upper()
             blocked, reason = check_readonly_block(tool_call_name, args, context)
             if blocked:
-                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
+                return _blocked_tool_response(tool_call_name, args, context, reason)
 
             result = await asyncio.to_thread(
                 http_api_executor.request,
@@ -752,7 +913,7 @@ class SkillDispatcher:
             command = args.get("command", "")
             blocked, reason = check_readonly_block(tool_call_name, args, context)
             if blocked:
-                return json.dumps({"status": "BLOCKED", "reason": reason}, ensure_ascii=False)
+                return _blocked_tool_response(tool_call_name, args, context, reason)
             if not str(command).strip():
                 return json.dumps({"status": "ERROR", "error": "范围执行命令不能为空。"}, ensure_ascii=False)
 
@@ -804,11 +965,12 @@ class SkillDispatcher:
 
             async def _run_single(t_sid, t_host, t_asset_type):
                 async with sem:
-                    actual_tool = (
-                        "network_cli_execute_command"
-                        if t_asset_type == "switch"
-                        else "linux_execute_command"
-                    )
+                    if t_asset_type in NETWORK_CLI_ASSET_TYPES:
+                        actual_tool = "network_cli_execute_command"
+                    elif t_asset_type in STORAGE_SSH_ASSET_TYPES:
+                        actual_tool = "storage_execute_command"
+                    else:
+                        actual_tool = "linux_execute_command"
                     session_info = ssh_manager.active_sessions.get(t_sid, {}).get("info", {})
                     hard_blocked, hard_reason = check_hard_block(actual_tool, args, {**context, **session_info})
                     if hard_blocked:

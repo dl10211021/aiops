@@ -89,7 +89,7 @@ class TestToolCatalogRoutes(unittest.TestCase):
             commands = asyncio.run(routes.get_session_commands("sid-k8s"))
 
         self.assertIn("k8s_api_request", tools.data["active_tools"])
-        self.assertIn("http_api_request", tools.data["active_tools"])
+        self.assertNotIn("http_api_request", tools.data["active_tools"])
         self.assertEqual(commands.status, "success")
         self.assertTrue(any(cmd["id"] == "inspect" for cmd in commands.data["commands"]))
         dumped = json.dumps({**tools.data, **commands.data}, ensure_ascii=False)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 from connections.ssh_manager import ssh_manager
@@ -15,6 +15,10 @@ from core.asset_protocols import (
     get_asset_catalog,
     resolve_asset_identity,
 )
+from core.asset_capabilities import category_metadata, connector_metadata
+from core.connection_errors import classify_connection_error, connection_error_http_status
+from core.session_groups import apply_primary_session_group, normalize_session_group_name
+from core.session_views import build_active_session_view
 from core.skill_lifecycle import validate_skill_candidate
 from core.tool_registry import tool_registry
 
@@ -24,6 +28,11 @@ import os
 import json
 import re
 import time
+import io
+import zipfile
+import base64
+import mimetypes
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 webhook_locks = {}
@@ -31,6 +40,59 @@ logger = logging.getLogger(__name__)
 CUSTOM_SKILLS_DIR = Path(__file__).resolve().parent.parent / "my_custom_skills"
 
 router = APIRouter()
+
+
+def connection_error_response(raw_error, protocol: str = "", context: str = "") -> "ResponseModel":
+    error = classify_connection_error(raw_error, protocol, context)
+    return ResponseModel(status="error", message=error["message"], data={"error": error})
+
+
+def raise_connection_error(result: dict, protocol: str = "") -> None:
+    if result.get("error_code") and result.get("error_category"):
+        error = {
+            "code": result.get("error_code"),
+            "category": result.get("error_category"),
+            "message": result.get("message") or "连接失败",
+            "raw_error": result.get("raw_error") or result.get("message") or "",
+            "protocol": protocol,
+        }
+    else:
+        error = classify_connection_error(result.get("message") or result.get("error"), protocol)
+    raise HTTPException(status_code=connection_error_http_status(error), detail=error)
+
+
+def update_env_file_values(values: dict[str, str]) -> None:
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    env_lines: list[str] = []
+    if env_path.exists():
+        env_lines = env_path.read_text(encoding="utf-8").splitlines(keepends=True)
+
+    keys = set(values)
+    filtered = [
+        line
+        for line in env_lines
+        if not any(line.startswith(f"{key}=") for key in keys)
+    ]
+    for key, value in values.items():
+        filtered.append(f"{key}={value}\n")
+    env_path.write_text("".join(filtered), encoding="utf-8")
+
+HTTP_API_TOOL_PRIORITY = (
+    "monitoring_api_query",
+    "virtualization_api_request",
+    "storage_api_request",
+    "database_api_request",
+    "bigdata_api_request",
+    "middleware_api_request",
+    "discovery_api_request",
+    "container_api_request",
+    "network_api_request",
+    "security_api_request",
+    "cicd_api_request",
+    "ai_platform_api_request",
+    "oob_api_request",
+    "http_api_request",
+)
 
 
 def resolve_custom_skill_dir(target_dir_name: str) -> Path:
@@ -103,13 +165,13 @@ class ConnectionRequest(BaseModel):
     password: str | None = None
     private_key_path: str | None = None
     allow_modifications: bool = False
-    active_skills: list[str] = []  # 增加用户动态勾选的技能包 ID 列表
+    active_skills: list[str] = Field(default_factory=list)  # 增加用户动态勾选的技能包 ID 列表
     agent_profile: str = "default"  # [OpenClaw] Agent 身份/工作区
     remark: str | None = ""  # [新功能] 连接备注/别名
     asset_type: str = "ssh"  # 资产子类型，如 linux/mysql/zabbix
     protocol: str | None = None  # 登录协议，如 ssh/winrm/mysql/http_api/snmp
-    extra_args: dict = {}  # [新功能] 扩展参数，比如 db_name, api_key 等
-    tags: list[str] = ["未分组"]  # [新功能] 资产组别
+    extra_args: dict = Field(default_factory=dict)  # [新功能] 扩展参数，比如 db_name, api_key 等
+    tags: list[str] = Field(default_factory=lambda: ["未分组"])  # [新功能] 资产组别
 
     @model_validator(mode="after")
     def validate_extra_args(self):
@@ -142,11 +204,12 @@ class ConnectionRequest(BaseModel):
             if not (
                 self.extra_args.get("SID")
                 or self.extra_args.get("service_name")
+                or self.extra_args.get("tns_alias")
                 or self.extra_args.get("database")
                 or self.extra_args.get("db_name")
             ):
                 raise ValueError(
-                    "oracle connection requires SID/service_name/database/db_name in extra_args"
+                    "oracle connection requires SID/service_name/tns_alias/database/db_name in extra_args"
                 )
         return self
 
@@ -195,17 +258,363 @@ class CommandRequest(BaseModel):
     command: str
 
 
+CHAT_ATTACHMENT_MAX_COUNT = 8
+CHAT_ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024
+CHAT_IMAGE_MAX_DATA_URL_CHARS = 8 * 1024 * 1024
+CHAT_IMAGE_DATA_URL_RE = re.compile(
+    r"^data:image/(png|jpeg|jpg|gif|webp|bmp);base64,([A-Za-z0-9+/=\r\n]+)$",
+    re.IGNORECASE,
+)
+
+
+def _optional_non_negative_int(value) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 else None
+
+
+def _normalize_sheet_names(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    names: list[str] = []
+    for item in value[:5]:
+        name = str(item or "").strip()
+        if name:
+            names.append(name[:80])
+    return names
+
+
+def _normalize_chat_attachments(attachments: list[dict]) -> list[dict]:
+    if len(attachments or []) > CHAT_ATTACHMENT_MAX_COUNT:
+        raise ValueError(f"单次消息最多携带 {CHAT_ATTACHMENT_MAX_COUNT} 个附件。")
+
+    normalized: list[dict] = []
+    for raw in attachments or []:
+        if not isinstance(raw, dict):
+            raise ValueError("附件元数据格式无效。")
+
+        filename = os.path.basename(str(raw.get("filename") or "attachment")).strip()
+        if not filename:
+            filename = "attachment"
+        filename = filename[:180]
+
+        ext = str(raw.get("ext") or os.path.splitext(filename)[1] or "").lower()[:24]
+        content_type = str(raw.get("content_type") or "").lower()[:100]
+        kind = str(raw.get("kind") or "document").lower()
+        if kind not in {"document", "image"}:
+            kind = "image" if content_type.startswith("image/") else "document"
+
+        try:
+            size = int(raw.get("size") or 0)
+        except (TypeError, ValueError):
+            raise ValueError(f"附件 {filename} 的大小无效。") from None
+        if size < 0 or size > CHAT_ATTACHMENT_MAX_SIZE:
+            raise ValueError(f"附件 {filename} 超过 10MB 限制。")
+
+        item = {
+            "filename": filename,
+            "ext": ext,
+            "size": size,
+            "content_type": content_type,
+            "kind": kind,
+            "rows": _optional_non_negative_int(raw.get("rows")),
+            "pages": _optional_non_negative_int(raw.get("pages")),
+            "sheets": _normalize_sheet_names(raw.get("sheets")),
+            "truncated": bool(raw.get("truncated")),
+        }
+
+        data_url = str(raw.get("data_url") or "")
+        if data_url:
+            if kind != "image":
+                raise ValueError(f"附件 {filename} 不是图片，不能携带图片数据。")
+            if len(data_url) > CHAT_IMAGE_MAX_DATA_URL_CHARS:
+                raise ValueError(f"图片附件 {filename} 过大，已超过模型输入限制。")
+            match = CHAT_IMAGE_DATA_URL_RE.match(data_url)
+            if not match:
+                raise ValueError(f"图片附件 {filename} 的数据格式无效。")
+            compact_base64 = re.sub(r"\s+", "", match.group(2))
+            try:
+                decoded = base64.b64decode(compact_base64, validate=True)
+            except Exception:
+                raise ValueError(f"图片附件 {filename} 的 base64 内容无效。") from None
+            if len(decoded) > CHAT_ATTACHMENT_MAX_SIZE:
+                raise ValueError(f"图片附件 {filename} 超过 10MB 限制。")
+            mime = f"image/{match.group(1).lower()}"
+            if mime == "image/jpg":
+                mime = "image/jpeg"
+            item["content_type"] = mime
+            item["data_url"] = f"data:{mime};base64,{compact_base64}"
+
+        normalized.append(item)
+    return normalized
+
+
 class ChatRequest(BaseModel):
     session_id: str
     message: str
+    display_message: Optional[str] = None
     model_name: Optional[str] = None
     thinking_mode: Optional[str] = "off"
+    attachments: list[dict] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_attachments(self):
+        self.attachments = _normalize_chat_attachments(self.attachments)
+        return self
+
+
+class SessionMessageUpdateRequest(BaseModel):
+    content: str = Field(..., min_length=0, max_length=200000)
 
 
 class ResponseModel(BaseModel):
     status: str
-    data: dict = {}
+    data: dict = Field(default_factory=dict)
     message: str = ""
+
+
+class SessionProfileGenerateRequest(BaseModel):
+    model_name: Optional[str] = None
+    include_inspection: bool = True
+
+
+class SessionWebhookSendRequest(BaseModel):
+    webhook_url: str = Field(..., min_length=8, max_length=2048)
+    payload_type: str = "profile"  # profile | summary | markdown
+    channel: str = "generic"  # generic | wechat | dingtalk
+    title: Optional[str] = None
+    model_name: Optional[str] = None
+    allow_private_targets: bool = False
+
+
+class SlashCommandPayload(BaseModel):
+    id: str | None = Field(default=None, max_length=80)
+    label: str = Field(..., min_length=2, max_length=80)
+    description: str = Field(default="", max_length=240)
+    prompt_template: str = Field(..., min_length=5, max_length=6000)
+    category: str = Field(default="自定义", max_length=40)
+    scope_type: str = Field(default="global", pattern="^(global|asset_type|protocol|asset)$")
+    asset_type: str = Field(default="", max_length=80)
+    protocol: str = Field(default="", max_length=80)
+    host: str = Field(default="", max_length=255)
+    readonly: bool = True
+    pinned: bool = False
+    enabled: bool = True
+    sort_order: int = Field(default=1, ge=1, le=100)
+
+    @model_validator(mode="after")
+    def validate_scope(self):
+        if self.id and not re.fullmatch(r"[A-Za-z0-9_.:-]+", self.id):
+            raise ValueError("快捷命令 ID 只能包含字母、数字、点、冒号、短横线和下划线。")
+        if self.scope_type == "asset_type" and not self.asset_type.strip():
+            raise ValueError("按系统生效时必须填写资产类型。")
+        if self.scope_type == "protocol" and not self.protocol.strip():
+            raise ValueError("按协议生效时必须填写协议。")
+        if self.scope_type == "asset" and not (self.asset_type.strip() and self.protocol.strip() and self.host.strip()):
+            raise ValueError("按单资产生效时必须填写资产类型、协议和主机。")
+        return self
+
+
+def _decode_text_bytes(content: bytes) -> str:
+    for encoding in ("utf-8-sig", "utf-8", "gb18030", "gbk", "latin-1"):
+        try:
+            return content.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return content.decode("utf-8", errors="replace")
+
+
+def _zip_xml_texts(zf: zipfile.ZipFile, name: str) -> list[str]:
+    try:
+        root = ET.fromstring(zf.read(name))
+    except Exception:
+        return []
+    return [
+        node.text or ""
+        for node in root.iter()
+        if node.tag.rsplit("}", 1)[-1] in {"t", "instrText"} and node.text
+    ]
+
+
+def _extract_docx_text(content: bytes) -> str:
+    with zipfile.ZipFile(io.BytesIO(content)) as zf:
+        lines = _zip_xml_texts(zf, "word/document.xml")
+        return "\n".join(line.strip() for line in lines if line.strip())
+
+
+def _extract_xlsx_text(content: bytes) -> tuple[str, int, list[str]]:
+    with zipfile.ZipFile(io.BytesIO(content)) as zf:
+        shared_strings = _zip_xml_texts(zf, "xl/sharedStrings.xml")
+        workbook_names = zf.namelist()
+        sheet_files = sorted(
+            name
+            for name in workbook_names
+            if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", name)
+        )
+        output: list[str] = []
+        row_count = 0
+        sheet_labels: list[str] = []
+        ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        for index, sheet_name in enumerate(sheet_files[:5], start=1):
+            sheet_labels.append(f"Sheet{index}")
+            try:
+                root = ET.fromstring(zf.read(sheet_name))
+            except Exception:
+                continue
+            output.append(f"# Sheet{index}")
+            for row in root.findall(".//x:sheetData/x:row", ns)[:80]:
+                values: list[str] = []
+                for cell in row.findall("x:c", ns)[:24]:
+                    value_node = cell.find("x:v", ns)
+                    inline_text = "".join(node.text or "" for node in cell.findall(".//x:t", ns))
+                    if inline_text:
+                        values.append(inline_text)
+                    elif value_node is not None and value_node.text is not None:
+                        if cell.get("t") == "s":
+                            try:
+                                values.append(shared_strings[int(value_node.text)])
+                            except Exception:
+                                values.append(value_node.text)
+                        else:
+                            values.append(value_node.text)
+                if any(value.strip() for value in values):
+                    row_count += 1
+                    output.append(" | ".join(value.strip() for value in values))
+        return "\n".join(output), row_count, sheet_labels
+
+
+def _extract_pdf_text(content: bytes) -> tuple[str, int]:
+    try:
+        from pypdf import PdfReader
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=415,
+            detail="PDF 解析依赖 pypdf 未安装，请执行 pip install -r requirements.txt 后重试。",
+        ) from exc
+
+    try:
+        reader = PdfReader(io.BytesIO(content))
+        pages: list[str] = []
+        for page in reader.pages[:20]:
+            pages.append(page.extract_text() or "")
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="PDF 文件无法解析或已加密。") from exc
+    return "\n\n".join(page.strip() for page in pages if page.strip()), len(reader.pages)
+
+
+def _extract_xls_text(content: bytes) -> tuple[str, int, list[str]]:
+    try:
+        import xlrd
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=415,
+            detail="旧版 Excel(.xls) 解析依赖 xlrd 未安装，请执行 pip install -r requirements.txt 后重试。",
+        ) from exc
+
+    try:
+        workbook = xlrd.open_workbook(file_contents=content)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="旧版 Excel(.xls) 文件无法解析。") from exc
+
+    output: list[str] = []
+    row_count = 0
+    sheet_labels = workbook.sheet_names()[:5]
+    for sheet_name in sheet_labels:
+        sheet = workbook.sheet_by_name(sheet_name)
+        output.append(f"# {sheet_name}")
+        for row_index in range(min(sheet.nrows, 80)):
+            values = [
+                str(sheet.cell_value(row_index, col_index)).strip()
+                for col_index in range(min(sheet.ncols, 24))
+            ]
+            if any(values):
+                row_count += 1
+                output.append(" | ".join(values))
+    return "\n".join(output), row_count, sheet_labels
+
+
+def _image_attachment_text(safe_name: str, content_type: str, content: bytes) -> str:
+    details = [
+        f"图片文件：{safe_name}",
+        f"MIME：{content_type or 'unknown'}",
+        f"大小：{len(content)} bytes",
+    ]
+    try:
+        from PIL import Image
+
+        with Image.open(io.BytesIO(content)) as image:
+            details.append(f"尺寸：{image.width}x{image.height}")
+            details.append(f"格式：{image.format or 'unknown'}")
+    except ImportError:
+        details.append("尺寸：未读取（Pillow 未安装）")
+    except Exception:
+        details.append("尺寸：未读取（图片结构无法识别）")
+    details.append("说明：如果当前模型支持视觉，图片会随本轮消息发送给模型；文本模型仅使用此图片摘要。")
+    return "\n".join(details)
+
+
+def _preview_attachment_content(filename: str, content_type: str, content: bytes) -> dict:
+    safe_name = os.path.basename(filename or "attachment")
+    _, ext = os.path.splitext(safe_name)
+    ext = ext.lower()
+    guessed_content_type = mimetypes.guess_type(safe_name)[0]
+    normalized_content_type = content_type or guessed_content_type or "application/octet-stream"
+    if normalized_content_type == "application/octet-stream" and guessed_content_type:
+        normalized_content_type = guessed_content_type
+    rows = None
+    sheets: list[str] = []
+    pages = None
+    kind = "document"
+    data_url = None
+    if ext in {".txt", ".md", ".log", ".csv", ".tsv", ".json", ".yaml", ".yml", ".ini", ".conf", ".sql", ".xml"}:
+        text = _decode_text_bytes(content)
+        if ext in {".csv", ".tsv"}:
+            rows = max(0, len([line for line in text.splitlines() if line.strip()]))
+    elif ext == ".docx":
+        text = _extract_docx_text(content)
+    elif ext == ".doc":
+        raise HTTPException(
+            status_code=415,
+            detail="旧版 Word(.doc) 是二进制格式，暂不在会话中直接解析；请另存为 .docx 后上传。",
+        )
+    elif ext == ".xlsx":
+        text, rows, sheets = _extract_xlsx_text(content)
+    elif ext == ".xls":
+        text, rows, sheets = _extract_xls_text(content)
+    elif ext == ".pdf":
+        text, pages = _extract_pdf_text(content)
+    elif ext in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"} or normalized_content_type.startswith("image/"):
+        kind = "image"
+        text = _image_attachment_text(safe_name, normalized_content_type, content)
+        encoded = base64.b64encode(content).decode("ascii")
+        candidate_data_url = f"data:{normalized_content_type};base64,{encoded}"
+        if len(candidate_data_url) <= CHAT_IMAGE_MAX_DATA_URL_CHARS:
+            data_url = candidate_data_url
+        else:
+            text += "\n注意：图片过大，已保留附件摘要，但不会直接作为视觉输入发送给模型。"
+    else:
+        raise HTTPException(status_code=415, detail=f"暂不支持解析 {ext or 'unknown'} 文件。")
+
+    text = re.sub(r"\r\n?", "\n", text).strip()
+    max_chars = 20000
+    truncated = len(text) > max_chars
+    return {
+        "filename": safe_name,
+        "ext": ext,
+        "size": len(content),
+        "content_type": normalized_content_type,
+        "text": text[:max_chars],
+        "truncated": truncated,
+        "rows": rows,
+        "sheets": sheets,
+        "pages": pages,
+        "kind": kind,
+        "data_url": data_url,
+    }
 
 
 class AssetPayload(BaseModel):
@@ -217,9 +626,9 @@ class AssetPayload(BaseModel):
     asset_type: str = "linux"
     protocol: str | None = None
     agent_profile: str = "default"
-    extra_args: dict = {}
-    skills: list[str] = []
-    tags: list[str] = ["未分组"]
+    extra_args: dict = Field(default_factory=dict)
+    skills: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=lambda: ["未分组"])
 
 
 class InspectionTemplateStepPayload(BaseModel):
@@ -232,7 +641,7 @@ class InspectionTemplateStepPayload(BaseModel):
     oid: str | None = ""
     method: str | None = "GET"
     timeout: int | None = 15
-    args: dict = {}
+    args: dict = Field(default_factory=dict)
 
 
 class InspectionTemplatePayload(BaseModel):
@@ -293,7 +702,19 @@ def _legacy_execute_tool_call(identity: dict, command: str) -> tuple[str, dict]:
         if parts and parts[0].upper() in {"GET", "HEAD", "POST"}:
             method = parts[0].upper()
             path = parts[1] if len(parts) > 1 else "/"
-        return "http_api_request", {"method": method, "path": path}
+        active_tools = {
+            tool.name
+            for tool in tool_registry.available(
+                {
+                    "target_scope": "asset",
+                    "asset_type": asset_type,
+                    "protocol": protocol,
+                    "extra_args": identity.get("extra_args") or {},
+                }
+            )
+        }
+        tool_name = next((candidate for candidate in HTTP_API_TOOL_PRIORITY if candidate in active_tools), "http_api_request")
+        return tool_name, {"method": method, "path": path}
     if protocol == "snmp":
         return "snmp_get", {"oid": command}
 
@@ -304,19 +725,7 @@ def _legacy_execute_tool_call(identity: dict, command: str) -> tuple[str, dict]:
 
 
 def _category_label(category: str) -> str:
-    labels = {
-        "os": "操作系统与主机",
-        "container": "容器与云原生",
-        "db": "数据库与缓存",
-        "middleware": "中间件",
-        "network": "网络与安全",
-        "virtualization": "虚拟化与私有云",
-        "storage": "存储与备份",
-        "monitor": "监控与告警",
-        "oob": "硬件带外",
-        "security": "安全与身份",
-    }
-    return labels.get(category, category.upper())
+    return category_metadata(category).get("label") or category.upper()
 
 
 # ----------------- 路由接口 -----------------
@@ -340,15 +749,41 @@ async def ai_chat_with_system(req: ChatRequest):
 
     ssh_manager.active_sessions[req.session_id]["info"]["last_active"] = time.time()
 
-    return StreamingResponse(
-        chat_stream_agent(
+    from core.chat_runs import start_chat_run
+
+    run = start_chat_run(
+        req.session_id,
+        lambda: chat_stream_agent(
             session_id=req.session_id,
             user_message=req.message,
+            user_display_message=req.display_message,
             model_name=req.model_name,
             thinking_mode=req.thinking_mode or "off",
+            user_attachments=req.attachments,
         ),
-        media_type="text/event-stream",
     )
+    return StreamingResponse(run.subscribe(), media_type="text/event-stream")
+
+
+@router.post("/chat/attachments/preview", response_model=ResponseModel)
+async def preview_chat_attachment(file: UploadFile = File(...)):
+    """Parse a small document for one-off chat context without ingesting it into the KB."""
+    original_name = os.path.basename(file.filename or "")
+    if not original_name:
+        raise HTTPException(status_code=422, detail="附件文件名不能为空。")
+    max_bytes = 10 * 1024 * 1024
+    content = await file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise HTTPException(status_code=413, detail="单个会话附件不能超过 10MB。")
+    try:
+        attachment = _preview_attachment_content(
+            original_name,
+            file.content_type or "application/octet-stream",
+            content,
+        )
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=422, detail="Office 文件结构无效，无法解析。") from exc
+    return ResponseModel(status="success", data={"attachment": attachment})
 
 
 class ToolApprovalRequest(BaseModel):
@@ -622,9 +1057,7 @@ async def test_connection(req: ConnectionRequest):
                 message="[OK] SSH Connection Successful! Credentials are valid.",
             )
         except Exception as e:
-            return ResponseModel(
-                status="error", message=f"[FAIL] SSH Test Failed: {str(e)}"
-            )
+            return connection_error_response(e, "ssh")
 
     if login_protocol == "winrm":
         from connections.winrm_manager import winrm_executor
@@ -643,14 +1076,16 @@ async def test_connection(req: ConnectionRequest):
                 status="success",
                 message="[OK] WinRM Connection Successful! Credentials are valid.",
             )
-        return ResponseModel(
-            status="error", message=f"[FAIL] WinRM Test Failed: {res.get('error') or res.get('output')}"
+        return connection_error_response(
+            res.get("error") or res.get("output"),
+            "winrm",
+            str(res.get("error_type") or ""),
         )
 
     # Database Test
     requested_db_type = req.extra_args.get("db_type") if req.extra_args else None
     if login_protocol in SQL_PROTOCOLS or requested_db_type in SQL_PROTOCOLS:
-        from connections.db_manager import db_executor
+        from connections.db_manager import db_executor, get_database_operation_profile
 
         db_type = req.extra_args.get("db_type") or login_protocol or "mysql"
         database = (
@@ -660,8 +1095,9 @@ async def test_connection(req: ConnectionRequest):
             or req.extra_args.get("db_name")
             or ""
         )
-        # Simple heartbeat SQL
-        sql = "SELECT 1 FROM DUAL" if db_type == "oracle" else "SELECT 1"
+        sql = get_database_operation_profile(db_type).get("test_statement") or (
+            "SELECT 1 FROM DUAL" if db_type == "oracle" else "SELECT 1"
+        )
 
         res_str = await asyncio.to_thread(
             db_executor.execute_query,
@@ -683,10 +1119,7 @@ async def test_connection(req: ConnectionRequest):
                 message=f"[OK] Database ({db_type.upper()}) Connection Successful!",
             )
         else:
-            return ResponseModel(
-                status="error",
-                message=f"[FAIL] Database Connection Failed: {res.get('error')}",
-            )
+            return connection_error_response(res.get("error"), db_type)
 
     if login_protocol == "redis" or requested_db_type == "redis":
         from connections.datastore_manager import redis_executor
@@ -702,7 +1135,21 @@ async def test_connection(req: ConnectionRequest):
         )
         if res.get("success"):
             return ResponseModel(status="success", message="[OK] Redis Connection Successful!")
-        return ResponseModel(status="error", message=f"[FAIL] Redis Test Failed: {res.get('error')}")
+        return connection_error_response(res.get("error"), "redis")
+
+    if login_protocol == "memcached" or requested_db_type == "memcached":
+        from connections.datastore_manager import memcached_executor
+
+        res = await asyncio.to_thread(
+            memcached_executor.execute_command,
+            host=req.host,
+            port=req.port,
+            command="version",
+            extra_args=req.extra_args,
+        )
+        if res.get("success"):
+            return ResponseModel(status="success", message="[OK] Memcached Connection Successful!")
+        return connection_error_response(res.get("error"), "memcached")
 
     if login_protocol == "mongodb" or requested_db_type == "mongodb":
         from connections.datastore_manager import mongo_executor
@@ -722,7 +1169,7 @@ async def test_connection(req: ConnectionRequest):
         )
         if res.get("success"):
             return ResponseModel(status="success", message="[OK] MongoDB Connection Successful!")
-        return ResponseModel(status="error", message=f"[FAIL] MongoDB Test Failed: {res.get('error')}")
+        return connection_error_response(res.get("error"), "mongodb")
 
     # API Test
     if login_protocol in API_PROTOCOLS or login_protocol == "snmp":
@@ -745,9 +1192,7 @@ async def test_connection(req: ConnectionRequest):
                 message=f"[OK] Port {port} is reachable. (Auth testing deferred to execution agent)",
             )
         except Exception as e:
-            return ResponseModel(
-                status="error", message=f"[FAIL] TCP Connect Failed: {str(e)}"
-            )
+            return connection_error_response(e, login_protocol, "tcp connect")
 
     # Virtual Test: Ping
     try:
@@ -833,7 +1278,16 @@ async def inspect_connection(req: ConnectionInspectionRequest):
     )
 
     if not result.get("success"):
-        return ResponseModel(status="error", message=result.get("message", "连接失败"))
+        if result.get("error_code") and result.get("error_category"):
+            error = {
+                "code": result.get("error_code"),
+                "category": result.get("error_category"),
+                "message": result.get("message", "连接失败"),
+                "raw_error": result.get("raw_error") or result.get("message", ""),
+                "protocol": login_protocol,
+            }
+            return ResponseModel(status="error", message=error["message"], data={"error": error})
+        return connection_error_response(result.get("message", "连接失败"), login_protocol)
 
     session_id = result["session_id"]
     try:
@@ -931,7 +1385,7 @@ async def create_ssh_connection(req: ConnectionRequest):
         )
 
     if not result["success"]:
-        raise HTTPException(status_code=401, detail=result["message"])
+        raise_connection_error(result, login_protocol)
 
     return ResponseModel(
         status="success",
@@ -1009,6 +1463,10 @@ class HeartbeatUpdateRequest(BaseModel):
 
 class SkillsUpdateRequest(BaseModel):
     active_skills: list[str]
+
+
+class SessionGroupUpdateRequest(BaseModel):
+    group_name: str = Field(..., min_length=1, max_length=80)
 
 
 @router.post("/skills/scan", response_model=ResponseModel)
@@ -1358,6 +1816,36 @@ class ProviderConfig(BaseModel):
 class EmbeddingConfigRequest(BaseModel):
     model: str
     dim: int
+
+
+class AgentRuntimeConfigRequest(BaseModel):
+    chat_max_steps: int = Field(80, ge=10, le=200)
+    headless_max_steps: int = Field(60, ge=10, le=200)
+
+
+@router.get("/config/agent-runtime", response_model=ResponseModel)
+async def get_agent_runtime_config_endpoint():
+    from core.agent import get_agent_runtime_config
+
+    return ResponseModel(status="success", data={"config": get_agent_runtime_config()})
+
+
+@router.post("/config/agent-runtime", response_model=ResponseModel)
+async def update_agent_runtime_config_endpoint(req: AgentRuntimeConfigRequest):
+    from core.agent import update_agent_runtime_config
+
+    try:
+        config = update_agent_runtime_config(req.chat_max_steps, req.headless_max_steps)
+        update_env_file_values(
+            {
+                "OPSCORE_AGENT_MAX_STEPS": str(config["chat_max_steps"]),
+                "OPSCORE_HEADLESS_AGENT_MAX_STEPS": str(config["headless_max_steps"]),
+            }
+        )
+    except Exception as e:
+        logger.error("保存 Agent 执行保护配置失败: %s", e)
+        raise HTTPException(status_code=500, detail=f"保存 Agent 执行保护配置失败: {e}")
+    return ResponseModel(status="success", data={"config": config}, message="Agent 执行保护配置已保存")
 
 
 @router.get("/config/embedding")
@@ -1712,6 +2200,38 @@ async def delete_session_history(session_id: str):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.patch("/session/{session_id}/history/{message_id}", response_model=ResponseModel)
+async def update_session_history_message(
+    session_id: str,
+    message_id: int,
+    req: SessionMessageUpdateRequest,
+):
+    """修改单条用户可见会话消息。"""
+    from core.memory import memory_db
+
+    try:
+        message = memory_db.update_message_content(session_id, message_id, req.content)
+        return ResponseModel(status="success", data={"message": message}, message="消息已更新")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.delete("/session/{session_id}/history/{message_id}", response_model=ResponseModel)
+async def delete_session_history_message(session_id: str, message_id: int):
+    """删除单条用户可见会话消息。"""
+    from core.memory import memory_db
+
+    try:
+        memory_db.delete_message(session_id, message_id)
+        return ResponseModel(status="success", message="消息已删除")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.put("/session/{session_id}/skills", response_model=ResponseModel)
 async def update_session_skills(session_id: str, req: SkillsUpdateRequest):
     """【新功能】动态修改挂载技能包：在不中断会话的情况下，挂载或卸载 AI 技能"""
@@ -1724,45 +2244,45 @@ async def update_session_skills(session_id: str, req: SkillsUpdateRequest):
     return ResponseModel(status="success", message="挂载技能已实时更新")
 
 
+@router.put("/session/{session_id}/group", response_model=ResponseModel)
+async def update_session_group(session_id: str, req: SessionGroupUpdateRequest):
+    """更新活跃会话的主分组；底层复用现有 tags[0]，保持旧会话结构兼容。"""
+    if session_id not in ssh_manager.active_sessions:
+        raise HTTPException(status_code=404, detail="会话不存在或已断开")
+
+    group_name = normalize_session_group_name(req.group_name)
+    if not group_name:
+        raise HTTPException(status_code=422, detail="会话组名称不能为空")
+
+    info = ssh_manager.active_sessions[session_id]["info"]
+    try:
+        info["tags"] = apply_primary_session_group(info.get("tags") or [], group_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    logger.info("Session %s group changed to: %s", session_id, group_name)
+
+    return ResponseModel(
+        status="success",
+        message="会话分组已更新",
+        data={"session_id": session_id, "tags": info["tags"], "group_name": group_name},
+    )
+
+
 @router.get("/sessions/active", response_model=ResponseModel)
 async def get_active_sessions():
     """【新功能】前端刷新页面时同步当前后端的活跃会话"""
+    from core.chat_runs import is_chat_running
+    from core.memory import memory_db
+
     sessions_data = {}
     for sid, sdata in list(ssh_manager.active_sessions.items()):
         info = sdata["info"]
-        identity = resolve_asset_identity(
-            info.get("asset_type"),
-            info.get("protocol"),
-            info.get("extra_args", {}),
-            info.get("host"),
-            info.get("port"),
-            info.get("remark"),
+        sessions_data[sid] = build_active_session_view(
+            sid,
+            info,
+            is_streaming=is_chat_running(sid),
+            sensitive_keys=memory_db.sensitive_keys,
         )
-        protocol = identity["protocol"]
-        sessions_data[sid] = {
-            "id": sid,
-            "host": info.get("host"),
-            "remark": info.get("remark"),
-            "isReadWriteMode": info.get("allow_modifications"),
-            "skills": info.get("active_skills", []),
-            "agentProfile": info.get("agent_profile"),
-            "user": info.get("username"),
-            "asset_type": identity["asset_type"],
-            "protocol": protocol,
-            "extra_args": identity["extra_args"],
-            "heartbeatEnabled": info.get("heartbeat_enabled", False),
-            "tags": info.get("tags", ["未分组"]),
-            "target_scope": info.get("target_scope", "asset"),
-            "scope_value": info.get("scope_value"),
-        }
-
-    from core.memory import memory_db
-
-    for sid, s_data in sessions_data.items():
-        if s_data.get("extra_args"):
-            for k in memory_db.sensitive_keys:
-                if k in s_data["extra_args"] and s_data["extra_args"][k]:
-                    s_data["extra_args"][k] = "********"
     return ResponseModel(status="success", data={"sessions": sessions_data})
 
 
@@ -1829,17 +2349,73 @@ async def get_session_tools(session_id: str):
 @router.get("/session/{session_id}/commands", response_model=ResponseModel)
 async def get_session_commands(session_id: str):
     """返回当前会话可用 Slash Commands；由后端根据资产协议生成 prompt。"""
-    from core.slash_commands import render_slash_commands
+    from core.slash_commands import render_builtin_templates, render_slash_commands
+    from core.memory import memory_db
 
     if session_id not in ssh_manager.active_sessions:
         raise HTTPException(status_code=404, detail="会话不存在或已断开")
 
     tools_response = await get_session_tools(session_id)
+    custom_commands = await asyncio.to_thread(memory_db.list_slash_commands)
     commands = render_slash_commands(
         tools_response.data["context"],
         tools_response.data.get("active_tools") or [],
+        custom_commands,
     )
+    builtin_commands = render_builtin_templates(
+        tools_response.data["context"],
+        tools_response.data.get("active_tools") or [],
+        custom_commands,
+    )
+    return ResponseModel(
+        status="success",
+        data={
+            "commands": commands,
+            "builtin_commands": builtin_commands,
+            "custom_commands": custom_commands,
+            "context": tools_response.data["context"],
+        },
+    )
+
+
+@router.get("/commands/custom", response_model=ResponseModel)
+async def list_custom_slash_commands():
+    """列出用户自定义快捷命令。"""
+    from core.memory import memory_db
+
+    commands = await asyncio.to_thread(memory_db.list_slash_commands)
     return ResponseModel(status="success", data={"commands": commands})
+
+
+@router.post("/commands/custom", response_model=ResponseModel)
+async def create_custom_slash_command(req: SlashCommandPayload):
+    """创建用户自定义快捷命令。"""
+    from core.memory import memory_db
+
+    command = await asyncio.to_thread(memory_db.save_slash_command, req.model_dump())
+    return ResponseModel(status="success", message="快捷命令已保存", data={"command": command})
+
+
+@router.put("/commands/custom/{command_id}", response_model=ResponseModel)
+async def update_custom_slash_command(command_id: str, req: SlashCommandPayload):
+    """更新用户自定义快捷命令。"""
+    from core.memory import memory_db
+
+    payload = req.model_dump()
+    payload["id"] = command_id
+    command = await asyncio.to_thread(memory_db.save_slash_command, payload)
+    return ResponseModel(status="success", message="快捷命令已更新", data={"command": command})
+
+
+@router.delete("/commands/custom/{command_id}", response_model=ResponseModel)
+async def delete_custom_slash_command(command_id: str):
+    """删除用户自定义快捷命令。"""
+    from core.memory import memory_db
+
+    deleted = await asyncio.to_thread(memory_db.delete_slash_command, command_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="快捷命令不存在")
+    return ResponseModel(status="success", message="快捷命令已删除")
 
 
 @router.get("/inspection-templates", response_model=ResponseModel)
@@ -1899,6 +2475,302 @@ async def inspect_active_session(session_id: str):
     )
 
 
+@router.get("/session/{session_id}/profile", response_model=ResponseModel)
+async def get_active_session_profile(session_id: str):
+    """读取当前会话沉淀的资产画像。"""
+    from core.session_profile import get_session_profile
+
+    profile = await asyncio.to_thread(get_session_profile, session_id)
+    return ResponseModel(status="success", data={"profile": profile})
+
+
+@router.post("/session/{session_id}/profile/generate", response_model=ResponseModel)
+async def generate_active_session_profile(session_id: str, req: SessionProfileGenerateRequest):
+    """基于会话历史和只读巡检生成资产画像，并写入独立画像记忆。"""
+    from core.session_profile import generate_session_profile
+
+    try:
+        profile = await generate_session_profile(
+            session_id,
+            model_name=req.model_name,
+            include_inspection=req.include_inspection,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return ResponseModel(status="success", message="资产画像已生成", data={"profile": profile})
+
+
+def _build_session_history_markdown(session_id: str) -> str:
+    from core.memory import memory_db
+
+    messages = memory_db.get_messages(session_id, for_ui=True)
+    chat_history = [
+        msg for msg in messages if msg.get("role") in ("user", "assistant")
+    ]
+    if not chat_history:
+        return ""
+
+    remark = ""
+    if session_id in ssh_manager.active_sessions:
+        remark = ssh_manager.active_sessions[session_id]["info"].get("remark", "")
+
+    md_lines = [f"# Chat History: {remark or session_id}\n"]
+    for msg in chat_history:
+        role = "User" if msg["role"] == "user" else "AI Assistant"
+        attachment_lines = []
+        for item in msg.get("attachments") or []:
+            if not isinstance(item, dict):
+                continue
+            details = [
+                str(item.get("ext") or item.get("kind") or "附件"),
+                f"{item.get('size')} bytes" if item.get("size") is not None else "",
+                f"{item.get('rows')} 行" if item.get("rows") is not None else "",
+                f"{item.get('pages')} 页" if item.get("pages") is not None else "",
+                "已截断" if item.get("truncated") else "",
+            ]
+            attachment_lines.append(
+                f"- {item.get('filename') or 'attachment'}"
+                + f" ({'；'.join(part for part in details if part)})"
+            )
+        attachment_block = (
+            "\n\n### Attachments\n" + "\n".join(attachment_lines)
+            if attachment_lines
+            else ""
+        )
+        md_lines.append(f"## {role}\n{msg['content']}{attachment_block}\n\n---\n")
+    return "\n".join(md_lines)
+
+
+async def _build_session_webhook_markdown(
+    session_id: str,
+    payload_type: str,
+    model_name: str | None,
+) -> tuple[str, dict | None]:
+    from core.session_profile import generate_session_profile, get_session_profile, profile_to_markdown
+
+    normalized = str(payload_type or "profile").lower()
+    if normalized == "markdown":
+        return await asyncio.to_thread(_build_session_history_markdown, session_id), None
+
+    profile = await asyncio.to_thread(get_session_profile, session_id)
+    if not profile:
+        profile = await generate_session_profile(session_id, model_name=model_name, include_inspection=False)
+    profile_md = profile_to_markdown(profile)
+    if normalized == "profile":
+        return profile_md, profile
+
+    history_md = await asyncio.to_thread(_build_session_history_markdown, session_id)
+    summary = history_md[:1800] if history_md else "当前会话暂无可发送的聊天摘要。"
+    return f"{profile_md}\n\n## 会话摘要\n\n{summary}", profile
+
+
+def _validate_webhook_url(url: str, allow_private_targets: bool = False) -> tuple[str, dict]:
+    import urllib.parse
+    import socket
+    import ipaddress
+
+    stripped = str(url or "").strip()
+    parsed = urllib.parse.urlparse(stripped)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise HTTPException(status_code=422, detail="Webhook 地址必须是 http 或 https URL。")
+    if parsed.username or parsed.password:
+        raise HTTPException(status_code=422, detail="Webhook 地址不能包含用户名或密码。")
+    if parsed.fragment:
+        raise HTTPException(status_code=422, detail="Webhook 地址不能包含 URL fragment。")
+
+    host = parsed.hostname or ""
+    if not host:
+        raise HTTPException(status_code=422, detail="Webhook 地址缺少目标主机。")
+
+    resolved_ips: list[str] = []
+    try:
+        for info in socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM):
+            ip = info[4][0]
+            if ip not in resolved_ips:
+                resolved_ips.append(ip)
+    except socket.gaierror as e:
+        raise HTTPException(status_code=422, detail=f"Webhook 主机无法解析: {host}") from e
+
+    private_ips: list[str] = []
+    for ip_text in resolved_ips:
+        try:
+            ip = ipaddress.ip_address(ip_text)
+        except ValueError:
+            continue
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            private_ips.append(ip_text)
+    if private_ips and not allow_private_targets:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Webhook 目标解析到内网或保留地址 {', '.join(private_ips[:3])}，请确认后勾选允许内网目标。",
+        )
+
+    return stripped, {
+        "scheme": parsed.scheme,
+        "host": host,
+        "port": parsed.port or (443 if parsed.scheme == "https" else 80),
+        "resolved_ips": resolved_ips[:5],
+        "private_target": bool(private_ips),
+    }
+
+
+def _build_session_webhook_payload(
+    session_id: str,
+    payload_type: str,
+    channel: str,
+    title: str,
+    markdown: str,
+    profile: dict | None,
+) -> dict:
+    if channel == "wechat":
+        return {"msgtype": "markdown", "markdown": {"content": f"## {title}\n{markdown[:3600]}"}}
+    if channel == "dingtalk":
+        return {"msgtype": "markdown", "markdown": {"title": title, "text": f"## {title}\n{markdown[:3600]}"}}
+    return {
+        "type": "opscore.session_report",
+        "session_id": session_id,
+        "payload_type": payload_type,
+        "title": title,
+        "markdown": markdown,
+        "profile": profile,
+        "sent_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+def _webhook_payload_preview(payload: dict) -> dict:
+    text = json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+    return {
+        "bytes": len(text.encode("utf-8")),
+        "preview": text[:2500],
+        "truncated": len(text) > 2500,
+    }
+
+
+def _post_webhook(url: str, payload: dict) -> tuple[int, str]:
+    import urllib.request
+    import urllib.error
+
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json; charset=utf-8"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as resp:
+            body = resp.read(2048).decode("utf-8", errors="replace")
+            return resp.getcode(), body
+    except urllib.error.HTTPError as e:
+        body = e.read(2048).decode("utf-8", errors="replace")
+        return e.code, body
+
+
+@router.post("/session/{session_id}/webhook/send", response_model=ResponseModel)
+async def send_session_webhook(session_id: str, req: SessionWebhookSendRequest):
+    """将会话画像、摘要或完整 Markdown 发送到指定 Webhook。"""
+    webhook_url, target = _validate_webhook_url(req.webhook_url, req.allow_private_targets)
+    payload_type = str(req.payload_type or "profile").lower()
+    if payload_type not in {"profile", "summary", "markdown"}:
+        raise HTTPException(status_code=422, detail="payload_type 仅支持 profile、summary、markdown。")
+    channel = str(req.channel or "generic").lower()
+    if channel not in {"generic", "wechat", "dingtalk"}:
+        raise HTTPException(status_code=422, detail="channel 仅支持 generic、wechat、dingtalk。")
+
+    markdown, profile = await _build_session_webhook_markdown(
+        session_id,
+        payload_type,
+        req.model_name,
+    )
+    if not markdown.strip():
+        raise HTTPException(status_code=404, detail="当前会话没有可发送内容。")
+
+    title = req.title or f"OpsCore 会话报告 {session_id}"
+    payload = _build_session_webhook_payload(session_id, payload_type, channel, title, markdown, profile)
+
+    from core.memory import memory_db
+
+    try:
+        status_code, response_body = await asyncio.to_thread(_post_webhook, webhook_url, payload)
+        record = {
+            "session_id": session_id,
+            "webhook_host": target["host"],
+            "channel": channel,
+            "payload_type": payload_type,
+            "title": title,
+            "status": "success" if status_code < 400 else "error",
+            "http_status": status_code,
+            "response_preview": response_body[:300],
+            "error": "" if status_code < 400 else f"HTTP {status_code}",
+        }
+        await asyncio.to_thread(memory_db.append_webhook_delivery, record)
+    except Exception as e:
+        record = {
+            "session_id": session_id,
+            "webhook_host": target["host"],
+            "channel": channel,
+            "payload_type": payload_type,
+            "title": title,
+            "status": "error",
+            "http_status": None,
+            "response_preview": "",
+            "error": str(e)[:500],
+        }
+        await asyncio.to_thread(memory_db.append_webhook_delivery, record)
+        raise
+
+    if status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"Webhook 返回 HTTP {status_code}: {response_body[:300]}")
+    return ResponseModel(
+        status="success",
+        message="Webhook 已发送",
+        data={"http_status": status_code, "response_preview": response_body[:300], "target": target},
+    )
+
+
+@router.post("/session/{session_id}/webhook/preview", response_model=ResponseModel)
+async def preview_session_webhook(session_id: str, req: SessionWebhookSendRequest):
+    """发送前预览会话 Webhook 目标和载荷，不实际发出请求。"""
+    _, target = _validate_webhook_url(req.webhook_url, req.allow_private_targets)
+    payload_type = str(req.payload_type or "profile").lower()
+    if payload_type not in {"profile", "summary", "markdown"}:
+        raise HTTPException(status_code=422, detail="payload_type 仅支持 profile、summary、markdown。")
+    channel = str(req.channel or "generic").lower()
+    if channel not in {"generic", "wechat", "dingtalk"}:
+        raise HTTPException(status_code=422, detail="channel 仅支持 generic、wechat、dingtalk。")
+    markdown, profile = await _build_session_webhook_markdown(session_id, payload_type, req.model_name)
+    if not markdown.strip():
+        raise HTTPException(status_code=404, detail="当前会话没有可发送内容。")
+    title = req.title or f"OpsCore 会话报告 {session_id}"
+    payload = _build_session_webhook_payload(session_id, payload_type, channel, title, markdown, profile)
+    return ResponseModel(
+        status="success",
+        data={
+            "target": target,
+            "payload_type": payload_type,
+            "channel": channel,
+            "title": title,
+            "payload": _webhook_payload_preview(payload),
+        },
+    )
+
+
+@router.get("/session/{session_id}/webhook/history", response_model=ResponseModel)
+async def list_session_webhook_history(session_id: str, limit: int = 10):
+    """查看当前会话最近 Webhook 发送历史。"""
+    from core.memory import memory_db
+
+    deliveries = await asyncio.to_thread(memory_db.list_webhook_deliveries, session_id, limit)
+    return ResponseModel(status="success", data={"deliveries": deliveries})
+
+
 @router.delete("/disconnect/{session_id}", response_model=ResponseModel)
 async def close_ssh_connection(session_id: str):
     """大模型或者前端关闭会话释放资源"""
@@ -1950,20 +2822,52 @@ async def create_asset(req: AssetPayload):
 def _asset_types_response() -> ResponseModel:
     types = get_asset_catalog()
     categories = []
+    connector_groups = []
     seen = set()
+    seen_connectors = set()
     for item in types:
         category = item.get("category") or "other"
         if category in seen:
-            continue
-        seen.add(category)
-        categories.append({"id": category, "label": _category_label(category)})
-    return ResponseModel(status="success", data={"types": types, "categories": categories})
+            pass
+        else:
+            seen.add(category)
+            categories.append(category_metadata(category))
+        connector = ((item.get("capability") or {}).get("connector")) or "unknown"
+        if connector not in seen_connectors:
+            seen_connectors.add(connector)
+            connector_groups.append(connector_metadata(connector))
+    categories.sort(key=lambda item: (item.get("order", 999), item.get("label", "")))
+    connector_groups.sort(key=lambda item: (item.get("order", 999), item.get("label", "")))
+    return ResponseModel(
+        status="success",
+        data={
+            "types": types,
+            "categories": categories,
+            "connector_groups": connector_groups,
+        },
+    )
 
 
 @router.get("/assets/types", response_model=ResponseModel)
 async def get_asset_types():
     """返回后端认可的资产类型与默认登录协议目录。"""
     return _asset_types_response()
+
+
+@router.get("/oracle/client-config", response_model=ResponseModel)
+async def get_oracle_client_config():
+    """返回本机 Oracle Instant Client 自动探测结果，供前端填充 Thick Mode 配置。"""
+    from connections.db_manager import discover_oracle_client_lib_dir
+
+    return ResponseModel(status="success", data=discover_oracle_client_lib_dir())
+
+
+@router.get("/database/driver-capabilities", response_model=ResponseModel)
+async def get_database_driver_capabilities_api():
+    """返回数据库连接器、Python 包和外部客户端安装状态。"""
+    from connections.db_manager import get_database_driver_capabilities
+
+    return ResponseModel(status="success", data=get_database_driver_capabilities())
 
 
 @router.get("/assets/{asset_id}", response_model=ResponseModel)
@@ -2616,9 +3520,9 @@ class BatchAssetImportItem(BaseModel):
     asset_type: str = "ssh"
     protocol: str | None = None
     agent_profile: str = "default"
-    extra_args: dict = {}
-    skills: list[str] = []
-    tags: list[str] = ["未分组"]
+    extra_args: dict = Field(default_factory=dict)
+    skills: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=lambda: ["未分组"])
 
 
 @router.post("/assets/batch_import", response_model=ResponseModel)
@@ -2658,7 +3562,27 @@ async def export_session_history(session_id: str):
         md_lines = [f"# Chat History: {remark or session_id}\n"]
         for msg in chat_history:
             role = "User" if msg["role"] == "user" else "AI Assistant"
-            md_lines.append(f"## {role}\n{msg['content']}\n\n---\n")
+            attachment_lines = []
+            for item in msg.get("attachments") or []:
+                if not isinstance(item, dict):
+                    continue
+                details = [
+                    str(item.get("ext") or item.get("kind") or "附件"),
+                    f"{item.get('size')} bytes" if item.get("size") is not None else "",
+                    f"{item.get('rows')} 行" if item.get("rows") is not None else "",
+                    f"{item.get('pages')} 页" if item.get("pages") is not None else "",
+                    "已截断" if item.get("truncated") else "",
+                ]
+                attachment_lines.append(
+                    f"- {item.get('filename') or 'attachment'}"
+                    + f" ({'；'.join(part for part in details if part)})"
+                )
+            attachment_block = (
+                "\n\n### Attachments\n" + "\n".join(attachment_lines)
+                if attachment_lines
+                else ""
+            )
+            md_lines.append(f"## {role}\n{msg['content']}{attachment_block}\n\n---\n")
 
         return ResponseModel(status="success", data={"markdown": "\n".join(md_lines)})
     except HTTPException:
@@ -2703,11 +3627,25 @@ SAFETY_POLICY_TEST_TOOLS = {
     "winrm_execute_command",
     "db_execute_query",
     "redis_execute_command",
+    "memcached_execute_command",
+    "mongodb_find",
     "http_api_request",
+    "database_api_request",
+    "bigdata_api_request",
+    "middleware_api_request",
+    "discovery_api_request",
+    "container_api_request",
+    "network_api_request",
+    "security_api_request",
+    "cicd_api_request",
+    "ai_platform_api_request",
+    "oob_api_request",
     "k8s_api_request",
     "monitoring_api_query",
     "virtualization_api_request",
     "storage_api_request",
+    "service_probe_request",
+    "snmp_get",
     "local_execute_script",
     "evolve_skill",
 }
@@ -2724,8 +3662,9 @@ class SafetyPolicyTestRequest(BaseModel):
     allow_modifications: bool = False
     asset_type: str | None = Field(default=None, max_length=80)
     protocol: str | None = Field(default=None, max_length=80)
+    host: str | None = Field(default=None, max_length=255)
     trigger_source: str | None = Field(default="chat", max_length=80)
-    tags: list[str] = []
+    tags: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_test_input(self):
@@ -2746,10 +3685,21 @@ class SafetyPolicyTestRequest(BaseModel):
             return {"sql": self.sql or self.command or ""}
         if self.tool_name in {
             "http_api_request",
+            "database_api_request",
+            "bigdata_api_request",
+            "middleware_api_request",
+            "discovery_api_request",
+            "container_api_request",
+            "network_api_request",
+            "security_api_request",
+            "cicd_api_request",
+            "ai_platform_api_request",
+            "oob_api_request",
             "k8s_api_request",
             "monitoring_api_query",
             "virtualization_api_request",
             "storage_api_request",
+            "service_probe_request",
         }:
             return {
                 "method": (self.method or "GET").upper(),
@@ -2759,6 +3709,8 @@ class SafetyPolicyTestRequest(BaseModel):
             }
         if self.tool_name == "evolve_skill":
             return {"skill_id": self.command or "", "file_name": self.path or ""}
+        if self.tool_name == "snmp_get":
+            return {"oid": self.oid or self.command or self.path or ""}
         return {"command": self.command or self.sql or self.path or ""}
 
     def context(self) -> dict:
@@ -2766,6 +3718,7 @@ class SafetyPolicyTestRequest(BaseModel):
             "allow_modifications": self.allow_modifications,
             "asset_type": self.asset_type or "",
             "protocol": self.protocol or "",
+            "host": self.host or "",
             "trigger_source": self.trigger_source or "chat",
             "tags": self.tags,
         }

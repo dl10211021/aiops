@@ -5,10 +5,54 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from core.llm_execution import execute_chat_stream
+from core.llm_execution import _convert_openai_messages_to_anthropic, execute_chat_stream
+from core.agent import _safe_user_message_for_memory
 
 
 class TestLLMExecution(unittest.IsolatedAsyncioTestCase):
+    def test_safe_user_message_keeps_attachment_metadata_without_payload(self):
+        message = _safe_user_message_for_memory(
+            "请分析附件",
+            [
+                {
+                    "filename": "screen.png",
+                    "ext": ".png",
+                    "size": 128,
+                    "kind": "image",
+                    "data_url": "data:image/png;base64,AAA",
+                }
+            ],
+        )
+
+        self.assertEqual(message["content"], "请分析附件")
+        self.assertEqual(message["attachments"][0]["filename"], "screen.png")
+        self.assertNotIn("data_url", message["attachments"][0])
+
+    def test_anthropic_conversion_preserves_image_blocks(self):
+        system_prompt, messages = _convert_openai_messages_to_anthropic(
+            [
+                {"role": "system", "content": "sys"},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "请看图"},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": "data:image/png;base64,aGVsbG8=",
+                            },
+                        },
+                    ],
+                },
+            ]
+        )
+
+        self.assertEqual(system_prompt, "sys")
+        self.assertEqual(messages[0]["content"][0], {"type": "text", "text": "请看图"})
+        self.assertEqual(messages[0]["content"][1]["type"], "image")
+        self.assertEqual(messages[0]["content"][1]["source"]["media_type"], "image/png")
+        self.assertEqual(messages[0]["content"][1]["source"]["data"], "aGVsbG8=")
+
     @patch("core.llm_execution.get_client_for_model")
     async def test_openai_standard(self, mock_get_client):
         mock_client = MagicMock()

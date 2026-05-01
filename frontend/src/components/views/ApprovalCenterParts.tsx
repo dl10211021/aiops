@@ -1,0 +1,143 @@
+import type { ApprovalRequest } from '@/types'
+import {
+  type ApprovalMetricTone,
+  type ApprovalStatusFilter,
+} from './approvalDisplay'
+import { ApprovalRow } from './ApprovalRow'
+
+const STATUS_OPTIONS: Array<{ id: ApprovalStatusFilter; label: string }> = [
+  { id: 'pending', label: '待审批' },
+  { id: 'approved', label: '已批准' },
+  { id: 'rejected', label: '已拒绝' },
+  { id: 'timeout', label: '已超时' },
+  { id: 'all', label: '全部' },
+]
+
+export function ApprovalStatusFilters({
+  status,
+  onChange,
+}: {
+  status: ApprovalStatusFilter
+  onChange: (status: ApprovalStatusFilter) => void
+}) {
+  return (
+    <div className="mb-5 flex flex-wrap gap-2">
+      {STATUS_OPTIONS.map((item) => (
+        <button
+          key={item.id}
+          onClick={() => onChange(item.id)}
+          className={`rounded-full border px-4 py-2 text-sm transition-colors ${
+            status === item.id
+              ? 'border-ops-accent bg-ops-accent text-ops-dark'
+              : 'border-ops-surface1 bg-ops-surface0 text-ops-subtext hover:text-ops-text'
+          }`}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export function ApprovalMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: number
+  tone: ApprovalMetricTone
+}) {
+  const toneClass = {
+    amber: 'text-ops-accent',
+    green: 'text-ops-success',
+    red: 'text-ops-alert',
+    slate: 'text-ops-subtext',
+  }[tone]
+  return (
+    <div className="ops-glass rounded-lg border p-4">
+      <div className="text-xs text-ops-subtext">{label}</div>
+      <div className={`mt-2 font-mono text-2xl font-bold ${toneClass}`}>{value}</div>
+    </div>
+  )
+}
+
+export function ApprovalList({
+  approvals,
+  loading,
+  busyId,
+  onApprove,
+  onReject,
+  onExecute,
+}: {
+  approvals: ApprovalRequest[]
+  loading: boolean
+  busyId: string | null
+  onApprove: (approval: ApprovalRequest) => void
+  onReject: (approval: ApprovalRequest) => void
+  onExecute: (approval: ApprovalRequest) => void
+}) {
+  return (
+    <section className="ops-glass overflow-hidden rounded-lg border">
+      <div className="border-b border-ops-surface0 px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold text-ops-text">工具调用审批记录</h2>
+            <p className="mt-1 text-xs text-ops-subtext">参数和上下文已由后端脱敏，审批动作会写入审计状态。</p>
+          </div>
+          <span className="rounded-lg bg-ops-surface0 px-3 py-1 text-xs text-ops-accent">
+            当前 {approvals.length} 条
+          </span>
+        </div>
+      </div>
+      <div className="divide-y divide-ops-surface0">
+        {loading && <div className="p-8 text-center text-sm text-ops-subtext">正在加载审批队列...</div>}
+        {!loading && approvals.map((approval) => (
+          <ApprovalRow
+            key={approval.id}
+            approval={approval}
+            busy={busyId === approval.id}
+            onApprove={() => onApprove(approval)}
+            onReject={() => onReject(approval)}
+            onExecute={() => onExecute(approval)}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+export function ApprovalEmptyState({
+  status,
+  onShowPending,
+  onRefresh,
+}: {
+  status: ApprovalStatusFilter
+  onShowPending: () => void
+  onRefresh: () => void
+}) {
+  return (
+    <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-6">
+      <div className="text-sm font-semibold text-ops-text">当前筛选条件下暂无审批记录</div>
+      <p className="mt-2 max-w-3xl text-sm leading-6 text-ops-subtext">
+        审批中心只展示命中高风险策略的工具调用。普通只读巡检不会进入审批队列，读写变更、实例管理、技能演进等动作会在这里等待人工处理。
+      </p>
+      <div className="mt-5 flex flex-wrap gap-2">
+        {status !== 'pending' && (
+          <button
+            onClick={onShowPending}
+            className="rounded-lg bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext hover:text-ops-text"
+          >
+            查看待审批
+          </button>
+        )}
+        <button
+          onClick={onRefresh}
+          className="rounded-lg bg-ops-accent px-3 py-1.5 text-sm font-semibold text-ops-dark hover:bg-ops-accent/80"
+        >
+          刷新队列
+        </button>
+      </div>
+    </section>
+  )
+}

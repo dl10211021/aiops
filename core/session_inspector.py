@@ -12,6 +12,8 @@ from typing import Any
 from connections.ssh_manager import ssh_manager
 from core.asset_protocols import (
     API_PROTOCOLS,
+    SERVICE_ASSET_TYPES,
+    SERVICE_PROBE_PROTOCOLS,
     SQL_PROTOCOLS,
     SNMP_PROTOCOLS,
     get_asset_definition,
@@ -171,6 +173,16 @@ async def _inspect_with_template(
                 command=step.get("command"),
                 extra_args=extra_args,
             )
+        elif tool == "memcached_execute_command":
+            from connections.datastore_manager import memcached_executor
+
+            result = await asyncio.to_thread(
+                memcached_executor.execute_command,
+                host=info.get("host"),
+                port=info.get("port") or 11211,
+                command=step.get("command"),
+                extra_args=extra_args,
+            )
         elif tool == "mongodb_find":
             from connections.datastore_manager import mongo_executor
 
@@ -190,26 +202,109 @@ async def _inspect_with_template(
             )
         elif tool in {
             "http_api_request",
+            "database_api_request",
+            "bigdata_api_request",
+            "middleware_api_request",
+            "discovery_api_request",
+            "container_api_request",
+            "network_api_request",
+            "security_api_request",
+            "cicd_api_request",
+            "ai_platform_api_request",
+            "oob_api_request",
             "k8s_api_request",
             "monitoring_api_query",
             "virtualization_api_request",
             "storage_api_request",
+            "service_probe_request",
         }:
-            from connections.http_api_manager import http_api_executor
+            step_args = step.get("args") or {}
+            if tool == "service_probe_request":
+                from connections.service_probe_manager import service_probe_executor
 
-            result = await asyncio.to_thread(
-                http_api_executor.request,
-                asset_type=asset_type,
-                host=info.get("host"),
-                port=info.get("port"),
-                username=info.get("username") or "",
-                password=info.get("password"),
-                extra_args=extra_args,
-                method=step.get("method") or "GET",
-                path=step.get("path") or "/",
-                headers=(step.get("args") or {}).get("headers") or {},
-                body=(step.get("args") or {}).get("body"),
-            )
+                result = await asyncio.to_thread(
+                    service_probe_executor.execute,
+                    asset_type=asset_type,
+                    protocol=protocol,
+                    host=info.get("host"),
+                    port=info.get("port"),
+                    username=info.get("username") or "",
+                    password=info.get("password"),
+                    extra_args=extra_args,
+                    operation=step.get("operation") or step_args.get("operation") or "probe",
+                    path=step.get("path") or step_args.get("path"),
+                    timeout=step.get("timeout") or step_args.get("timeout"),
+                )
+            elif tool == "virtualization_api_request":
+                from connections.virtualization_manager import virtualization_api_executor
+
+                result = await asyncio.to_thread(
+                    virtualization_api_executor.execute,
+                    asset_type=asset_type,
+                    protocol=protocol,
+                    host=info.get("host"),
+                    port=info.get("port"),
+                    username=info.get("username") or "",
+                    password=info.get("password"),
+                    extra_args=extra_args,
+                    operation=step.get("operation") or step_args.get("operation"),
+                    method=step.get("method") or "GET",
+                    path=step.get("path"),
+                    headers=step_args.get("headers") or {},
+                    body=step_args.get("body"),
+                    timeout=step.get("timeout") or step_args.get("timeout"),
+                )
+            elif tool == "storage_api_request" and asset_type in {"s3", "minio", "oss", "cos", "obs", "object_storage"}:
+                from connections.object_storage_manager import object_storage_executor
+
+                result = await asyncio.to_thread(
+                    object_storage_executor.execute,
+                    asset_type=asset_type,
+                    host=info.get("host"),
+                    port=info.get("port"),
+                    username=info.get("username") or "",
+                    password=info.get("password"),
+                    extra_args=extra_args,
+                    operation=step.get("operation") or step_args.get("operation") or "list_buckets",
+                    bucket=step.get("bucket") or step_args.get("bucket"),
+                    prefix=step.get("prefix") or step_args.get("prefix"),
+                    key=step.get("key") or step_args.get("key"),
+                    max_keys=step.get("max_keys") or step_args.get("max_keys"),
+                )
+            elif tool == "storage_api_request":
+                from connections.storage_platform_manager import storage_platform_executor
+
+                result = await asyncio.to_thread(
+                    storage_platform_executor.execute,
+                    asset_type=asset_type,
+                    host=info.get("host"),
+                    port=info.get("port"),
+                    username=info.get("username") or "",
+                    password=info.get("password"),
+                    extra_args=extra_args,
+                    operation=step.get("operation") or step_args.get("operation") or "health",
+                    method=step.get("method") or step_args.get("method") or "GET",
+                    path=step.get("path") or step_args.get("path"),
+                    headers=step_args.get("headers") or {},
+                    body=step_args.get("body"),
+                    timeout=step.get("timeout") or step_args.get("timeout"),
+                )
+            else:
+                from connections.http_api_manager import http_api_executor
+
+                result = await asyncio.to_thread(
+                    http_api_executor.request,
+                    asset_type=asset_type,
+                    host=info.get("host"),
+                    port=info.get("port"),
+                    username=info.get("username") or "",
+                    password=info.get("password"),
+                    extra_args=extra_args,
+                    method=step.get("method") or "GET",
+                    path=step.get("path") or "/",
+                    headers=step_args.get("headers") or {},
+                    body=step_args.get("body"),
+                )
         elif tool == "snmp_get":
             from connections.snmp_manager import snmp_executor
 
@@ -268,7 +363,17 @@ def _http_probe_url(info: dict[str, Any], asset_type: str) -> str:
         "f5": "/",
         "redfish": "/redfish/v1/",
         "manageengine": "/",
-        "elasticsearch": "/",
+        "clickhouse": "/?query=SELECT%201",
+        "elasticsearch": "/_cluster/health",
+        "nebula_graph": "/",
+        "nebula_graph_cluster": "/",
+        "vmware": "/",
+        "openstack": "/",
+        "proxmox": "/api2/json/version",
+        "zstack": "/",
+        "s3": "/",
+        "minio": "/",
+        "backup": "/",
     }.get(asset_type, "/")
     path = str(extra_args.get("health_path") or default_path)
     if not path.startswith("/"):
@@ -684,8 +789,76 @@ async def inspect_session(session_id: str) -> dict[str, Any]:
     if protocol == "redis":
         return await _inspect_redis(info, asset_type, protocol)
 
+    if protocol == "memcached":
+        from connections.datastore_manager import memcached_executor
+
+        checks = []
+        for command in ("version", "stats"):
+            result = await asyncio.to_thread(
+                memcached_executor.execute_command,
+                host=info.get("host"),
+                port=info.get("port") or 11211,
+                command=command,
+                extra_args=info.get("extra_args") or {},
+            )
+            success = bool(result.get("success"))
+            checks.append(
+                {
+                    "name": command,
+                    "title": command,
+                    "status": "success" if success else "error",
+                    "command": command,
+                    "output": result.get("output") or result.get("error") or "",
+                    "exit_status": 0 if success else None,
+                }
+            )
+        failed = [check for check in checks if check["status"] != "success"]
+        return {
+            "status": "success" if not failed else "warning",
+            "supported": True,
+            "asset_type": asset_type,
+            "protocol": protocol,
+            "profile": "memcached",
+            "summary": f"完成 {len(checks)} 项 Memcached 只读巡检，异常 {len(failed)} 项。",
+            "checks": checks,
+        }
+
     if protocol == "mongodb":
         return await _inspect_mongodb(info, asset_type, protocol)
+
+    if protocol in SERVICE_PROBE_PROTOCOLS or asset_type in SERVICE_ASSET_TYPES:
+        from connections.service_probe_manager import service_probe_executor
+
+        result = await asyncio.to_thread(
+            service_probe_executor.execute,
+            asset_type=asset_type,
+            protocol=protocol,
+            host=info.get("host") or "",
+            port=info.get("port"),
+            username=info.get("username") or "",
+            password=info.get("password"),
+            extra_args=info.get("extra_args") or {},
+            operation="probe",
+        )
+        success = bool(result.get("success"))
+        return {
+            "status": "success" if success else "warning",
+            "supported": True,
+            "asset_type": asset_type,
+            "protocol": protocol,
+            "profile": "service_probe",
+            "summary": "业务探测成功。" if success else "业务探测失败。",
+            "checks": [
+                {
+                    "name": "service_probe",
+                    "title": "业务协议探测",
+                    "status": "success" if success else "error",
+                    "output": result.get("message") or result.get("error") or "",
+                    "exit_status": 0 if success else None,
+                    "details": result,
+                }
+            ],
+        }
 
     if protocol in API_PROTOCOLS:
         return await _inspect_http_api(info, asset_type, protocol)
@@ -699,6 +872,6 @@ async def inspect_session(session_id: str) -> dict[str, Any]:
         "asset_type": asset_type,
         "protocol": protocol,
         "profile": profile,
-        "message": f"{asset_type or 'unknown'}/{protocol} 暂未接入深度巡检；当前已支持 Linux/KVM SSH、网络设备 SSH CLI、Windows WinRM、SQL、Redis、MongoDB、SNMP 与 HTTP/API 只读巡检。",
+        "message": f"{asset_type or 'unknown'}/{protocol} 暂未接入深度巡检；当前已支持 Linux/KVM SSH、存储节点 SSH、网络设备 SSH CLI、Windows WinRM、SQL、Redis、MongoDB、SNMP 与 HTTP/API 只读巡检。",
         "checks": [],
     }

@@ -4,7 +4,16 @@ import asyncio
 import logging
 import uuid
 from core.dispatcher import dispatcher
-from core.asset_protocols import API_PROTOCOLS, SQL_PROTOCOLS, normalize_protocol
+from core.asset_protocols import (
+    API_PROTOCOLS,
+    DATABASE_HTTP_PROTOCOLS,
+    SERVICE_ASSET_TYPES,
+    SERVICE_PROBE_PROTOCOLS,
+    SQL_PROTOCOLS,
+    STORAGE_API_PROTOCOLS,
+    VIRTUALIZATION_API_PROTOCOLS,
+    normalize_protocol,
+)
 from core.redaction import redact_json_text, redact_text
 from core.safety_policy import approval_timeout_seconds
 from core.tool_registry import tool_registry
@@ -13,6 +22,10 @@ cancel_flags = {}
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_AGENT_MAX_STEPS = 80
+DEFAULT_HEADLESS_AGENT_MAX_STEPS = 60
+MIN_AGENT_STEP_CAP = 10
+MAX_AGENT_STEP_CAP = 200
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "")
 EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "3072"))
 SENSITIVE_CONTEXT_KEYWORDS = {
@@ -28,6 +41,246 @@ SENSITIVE_CONTEXT_KEYWORDS = {
     "token",
     "api_key",
 }
+
+
+def clamp_agent_max_steps(value: int, default: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = default
+    return max(MIN_AGENT_STEP_CAP, min(number, MAX_AGENT_STEP_CAP))
+
+
+def _bounded_int_env(name: str, default: int, minimum: int = MIN_AGENT_STEP_CAP, maximum: int = MAX_AGENT_STEP_CAP) -> int:
+    raw_value = os.environ.get(name)
+    if raw_value is None or str(raw_value).strip() == "":
+        return default
+    try:
+        value = int(str(raw_value).strip())
+    except (TypeError, ValueError):
+        logger.warning("Invalid integer env %s=%r, using default %s", name, raw_value, default)
+        return default
+    return max(minimum, min(value, maximum))
+
+
+def agent_max_steps(execution_mode: str = "chat") -> int:
+    if execution_mode == "headless":
+        return _bounded_int_env(
+            "OPSCORE_HEADLESS_AGENT_MAX_STEPS",
+            _bounded_int_env("OPSCORE_AGENT_MAX_STEPS", DEFAULT_HEADLESS_AGENT_MAX_STEPS),
+        )
+    return _bounded_int_env("OPSCORE_AGENT_MAX_STEPS", DEFAULT_AGENT_MAX_STEPS)
+
+
+def get_agent_runtime_config() -> dict:
+    return {
+        "chat_max_steps": agent_max_steps("chat"),
+        "headless_max_steps": agent_max_steps("headless"),
+        "min_steps": MIN_AGENT_STEP_CAP,
+        "max_steps": MAX_AGENT_STEP_CAP,
+        "defaults": {
+            "chat_max_steps": DEFAULT_AGENT_MAX_STEPS,
+            "headless_max_steps": DEFAULT_HEADLESS_AGENT_MAX_STEPS,
+        },
+        "env_keys": {
+            "chat_max_steps": "OPSCORE_AGENT_MAX_STEPS",
+            "headless_max_steps": "OPSCORE_HEADLESS_AGENT_MAX_STEPS",
+        },
+    }
+
+
+def update_agent_runtime_config(chat_max_steps: int, headless_max_steps: int) -> dict:
+    chat_steps = clamp_agent_max_steps(chat_max_steps, DEFAULT_AGENT_MAX_STEPS)
+    headless_steps = clamp_agent_max_steps(headless_max_steps, DEFAULT_HEADLESS_AGENT_MAX_STEPS)
+    os.environ["OPSCORE_AGENT_MAX_STEPS"] = str(chat_steps)
+    os.environ["OPSCORE_HEADLESS_AGENT_MAX_STEPS"] = str(headless_steps)
+    return get_agent_runtime_config()
+
+
+def agent_step_limit_instruction(max_steps: int) -> str:
+    return (
+        f"OpsCore 已达到 {max_steps} 步执行保护上限。"
+        "现在必须停止继续调用任何工具，直接基于已有对话和工具返回输出阶段性运维报告。"
+        "报告需要包含：已完成检查、关键发现、风险等级、未完成项目、下一步建议。"
+        "如果信息不足，要明确说明缺口，不要假装已完成。"
+    )
+
+
+def _chat_image_attachments(attachments: list[dict]) -> list[dict]:
+    images: list[dict] = []
+    for item in attachments or []:
+        if not isinstance(item, dict):
+            continue
+        data_url = str(item.get("data_url") or "")
+        content_type = str(item.get("content_type") or "")
+        if data_url.startswith("data:image/") or content_type.startswith("image/"):
+            images.append(item)
+    return images[:5]
+
+
+def _attachment_metadata_for_memory(attachments: list[dict]) -> list[dict]:
+    safe_items: list[dict] = []
+    for item in attachments or []:
+        if not isinstance(item, dict):
+            continue
+        safe_items.append(
+            {
+                "filename": item.get("filename") or "attachment",
+                "ext": item.get("ext") or "",
+                "size": item.get("size") or 0,
+                "kind": item.get("kind") or "document",
+                "rows": item.get("rows"),
+                "pages": item.get("pages"),
+                "sheets": item.get("sheets") or [],
+                "truncated": bool(item.get("truncated")),
+            }
+        )
+    return safe_items[:8]
+
+
+def _safe_user_message_for_memory(user_message: str, attachments: list[dict]) -> dict:
+    safe_attachments = _attachment_metadata_for_memory(attachments)
+    message = {"role": "user", "content": user_message}
+    if safe_attachments:
+        message["attachments"] = safe_attachments
+    return message
+
+
+def _model_supports_image_input(model_name: str | None) -> bool:
+    name = str(model_name or "").lower()
+    return any(
+        marker in name
+        for marker in (
+            "gpt-4o",
+            "gpt-4.1",
+            "gpt-5",
+            "claude-3",
+            "claude-4",
+            "gemini",
+            "vision",
+            "vl",
+            "llava",
+            "qwen-vl",
+            "qwen2-vl",
+            "qwen2.5-vl",
+            "kimi-vl",
+        )
+    )
+
+
+def _build_current_user_content(user_message: str, attachments: list[dict], model_name: str | None = None):
+    image_attachments = _chat_image_attachments(attachments)
+    if not image_attachments or not _model_supports_image_input(model_name):
+        return user_message
+    content = [{"type": "text", "text": user_message}]
+    for item in image_attachments:
+        data_url = str(item.get("data_url") or "")
+        if data_url.startswith("data:image/"):
+            content.append({"type": "image_url", "image_url": {"url": data_url}})
+    return content if len(content) > 1 else user_message
+
+
+def summarize_tool_result_for_sse(tool_result, preview_limit: int = 300) -> dict:
+    """Return a redacted UI preview plus small structured metadata for tool traces."""
+    if isinstance(tool_result, (dict, list)):
+        raw_text = json.dumps(tool_result, ensure_ascii=False, default=str)
+    else:
+        raw_text = str(tool_result or "")
+    safe_text = redact_json_text(raw_text)
+    preview = safe_text[:preview_limit] + "..." if len(safe_text) > preview_limit else safe_text
+    status = "done"
+    metadata = {}
+
+    try:
+        parsed = json.loads(safe_text)
+    except Exception:
+        parsed = None
+
+    if isinstance(parsed, dict):
+        raw_status = str(parsed.get("status") or "").upper()
+        if raw_status in {"ERROR", "FAILED", "BLOCKED"}:
+            status = "error"
+            metadata["status"] = raw_status
+        if parsed.get("success") is False or parsed.get("has_error") is True:
+            status = "error"
+        if parsed.get("error") or parsed.get("reason"):
+            status = "error"
+        if parsed.get("reason"):
+            metadata["reason"] = parsed.get("reason")
+        if parsed.get("error"):
+            metadata["error"] = parsed.get("error")
+
+        for key in (
+            "statement_type",
+            "has_result_set",
+            "committed",
+            "affected_rows",
+            "count",
+            "message",
+            "error_type",
+            "hint",
+            "raw_error",
+            "exit_status",
+            "has_error",
+            "stderr",
+        ):
+            value = parsed.get(key)
+            if value is not None:
+                metadata[key] = value
+        if parsed.get("actions"):
+            metadata["actions"] = parsed.get("actions")
+        if parsed.get("primary_action"):
+            metadata["primary_action"] = parsed.get("primary_action")
+        if parsed.get("policy_decision"):
+            metadata["policy_decision"] = parsed.get("policy_decision")
+        if metadata:
+            metadata["type"] = "database_statement" if "statement_type" in metadata or "has_result_set" in metadata else "tool_result"
+    elif '"BLOCKED"' in safe_text or '"ERROR"' in safe_text or "错误：" in safe_text:
+        status = "error"
+
+    return {"safe_text": safe_text, "preview": preview, "status": status, "metadata": metadata}
+
+
+def build_tool_end_event(tool_call_id: str, tool_name: str, tool_result) -> tuple[str, str]:
+    result_summary = summarize_tool_result_for_sse(tool_result)
+    message = json.dumps(
+        {
+            "type": "tool_end",
+            "id": tool_call_id,
+            "tool": tool_name,
+            "result": result_summary["preview"],
+            "result_status": result_summary["status"],
+            "result_meta": result_summary["metadata"],
+        },
+        ensure_ascii=False,
+    )
+    return message, result_summary["safe_text"]
+
+
+def parse_tool_arguments(raw_arguments) -> dict:
+    """Parse model tool arguments, with a repair fallback for complex shell snippets."""
+    if isinstance(raw_arguments, dict):
+        return raw_arguments
+    if raw_arguments is None:
+        return {}
+
+    raw_text = str(raw_arguments or "").strip()
+    if not raw_text:
+        return {}
+
+    try:
+        parsed = json.loads(raw_text)
+    except Exception as strict_error:
+        try:
+            from json_repair import loads as repair_json_loads
+
+            parsed = repair_json_loads(raw_text)
+        except Exception:
+            raise strict_error
+
+    if isinstance(parsed, dict):
+        return parsed
+    return {}
 
 
 def record_tool_approval_request(
@@ -245,30 +498,112 @@ def protocol_tool_guidance(protocol: str, asset_type: str, host: str) -> str:
             "直接调用 `network_cli_execute_command` 执行 display/show/ping 等只读巡检命令；"
             "不要使用 Linux 命令，不要编写连接脚本或重新登录。"
         )
+    if protocol == "ssh" and asset_type in {"ceph", "nfs", "hdfs", "glusterfs"}:
+        return (
+            f"连接状态：后端已经建立到存储节点 {host} 的 SSH 会话。"
+            "直接调用 `storage_execute_command` 执行 Ceph/NFS/HDFS/GlusterFS 只读巡检命令；"
+            "不要把它当普通 Linux 主机泛化操作，扩容、删除、修复、重平衡等动作必须走审批。"
+        )
     if protocol == "ssh":
         return (
             f"连接状态：后端已经建立到目标 {host} 的 SSH 会话。你已经在该资产上下文内，"
             "直接调用 `linux_execute_command` 执行巡检命令；不要再编写连接脚本或尝试重新登录。"
         )
     if protocol == "winrm":
+        if asset_type == "hyperv":
+            return (
+                f"连接状态：后端已经建立到 Hyper-V 主机 {host} 的 WinRM 会话。"
+                "直接调用 `winrm_execute_command` 执行 Get-VM、Get-VMHost、Get-VMSwitch 等 PowerShell 巡检命令；"
+                "不要把它当作 VMware/OpenStack/ZStack API，也不要重新登录。"
+            )
         return (
             f"连接状态：后端已经建立到 Windows 目标 {host} 的 WinRM 会话。你已经在该系统上下文内，"
             "直接调用 `winrm_execute_command` 执行 PowerShell/CMD 巡检；不要再编写 WinRM/Python 连接脚本，"
-            "也不要向用户解释“无法通过本地脚本”。"
+            "也不要向用户解释“无法通过本地脚本”。读取 Security 安全日志失败时，先用 `whoami /groups` "
+            "确认当前账号是否属于 Administrators 或 Event Log Readers，并明确说明需要补足 Windows 事件日志读取权限；"
+            "不要笼统归因成 WinRM 限制。"
         )
     if protocol in SQL_PROTOCOLS:
+        try:
+            from connections.db_manager import get_database_operation_profile
+
+            profile = get_database_operation_profile(asset_type or protocol)
+        except Exception:
+            profile = {}
+        profile_label = profile.get("label") or asset_type.upper()
+        identity_label = profile.get("identity_label") or "Database / SID"
+        test_statement = profile.get("test_statement") or "SELECT 1"
+        examples = "；".join(profile.get("readonly_examples") or [])
         return (
-            f"连接状态：后端已经建立到 {asset_type.upper()} 数据库 {host} 的托管会话。"
-            "你当前连接的是数据库实例，不是操作系统 Shell；直接调用 `db_execute_query` 执行 SQL 巡检，"
+            f"连接状态：后端已经建立到 {profile_label} 数据库 {host} 的托管会话。"
+            f"当前连接标识字段是 {identity_label}，验证语句是 `{test_statement}`。"
+            "你当前连接的是数据库实例，不是操作系统 Shell；直接调用 `db_execute_query` 执行 SQL 读取或经审批的变更，"
             "不要在工具参数里填写 host/user/password，也不要尝试 SSH/WinRM 登录。"
+            "只读巡检优先使用 SELECT/SHOW/DESCRIBE/EXPLAIN/WITH 等查询；INSERT/UPDATE/DELETE/DDL/权限变更必须走审批。"
+            + (f"常用只读示例：{examples}。" if examples else "")
         )
     if protocol == "redis":
         return "当前 Redis 资产使用 `redis_execute_command`，凭据由资产中心托管注入。"
+    if protocol == "memcached":
+        return "当前 Memcached 资产使用 `memcached_execute_command`，支持 version、stats、get、gets 等只读命令。"
     if protocol == "mongodb":
         return "当前 MongoDB 资产使用 `mongodb_find` 做只读查询，凭据由资产中心托管注入。"
+    if protocol in DATABASE_HTTP_PROTOCOLS:
+        return (
+            f"当前 {asset_type or protocol} 是数据库管理接口资产，不是通用业务 API。"
+            "使用 `database_api_request` 通过数据库自身查询/管理接口执行巡检或经审批的配置操作，"
+            "凭据由资产中心托管注入；写入、删除索引、修改集群配置等操作必须走审批。"
+        )
+    if protocol in VIRTUALIZATION_API_PROTOCOLS:
+        return (
+            f"当前 {asset_type or protocol} 是虚拟化/私有云平台资产。"
+            "使用 `virtualization_api_request` 通过平台 API 做只读巡检或经审批的配置操作，"
+            "不要把它当作普通主机 Shell，也不要绕过资产中心凭据。"
+        )
+    if protocol in STORAGE_API_PROTOCOLS:
+        return (
+            f"当前 {asset_type or protocol} 是存储平台资产。"
+            "使用 `storage_api_request` 执行对象存储、备份或存储管理面的只读巡检；"
+            "删除对象、修改策略、清理备份等高风险动作必须走审批。"
+        )
+    if protocol in SERVICE_PROBE_PROTOCOLS or asset_type in SERVICE_ASSET_TYPES:
+        return (
+            f"当前 {asset_type or protocol} 是业务探测资产。"
+            "使用 `service_probe_request` 做只读连通性、证书、端口或协议握手探测；"
+            "它不是管理 API，不要用它修改目标系统配置。"
+        )
+    if protocol == "http_api":
+        active_names = {
+            tool.name
+            for tool in tool_registry.available(
+                {
+                    "target_scope": "asset",
+                    "asset_type": asset_type,
+                    "protocol": protocol,
+                    "extra_args": {},
+                }
+            )
+        }
+        for tool_name in (
+            "bigdata_api_request",
+            "middleware_api_request",
+            "discovery_api_request",
+            "container_api_request",
+            "network_api_request",
+            "security_api_request",
+            "cicd_api_request",
+            "ai_platform_api_request",
+            "oob_api_request",
+        ):
+            if tool_name in active_names:
+                return (
+                    f"当前 {asset_type or protocol} 是平台管理 API 资产。"
+                    f"使用 `{tool_name}` 调用目标只读接口，Token、Basic Auth 等凭据由资产中心托管注入；"
+                    "涉及配置变更、删除、重启、发布等操作必须走审批。"
+                )
     if protocol in API_PROTOCOLS:
         return (
-            "当前 API/监控/虚拟化资产使用 `http_api_request` 调用目标 API；"
+            "当前 API/监控平台资产使用 `http_api_request` 调用目标 API；"
             "Token、Basic Auth 等凭据由资产中心托管注入。"
         )
     if protocol == "snmp":
@@ -316,8 +651,10 @@ from core.memory import memory_db
 async def chat_stream_agent(
     session_id: str,
     user_message: str,
+    user_display_message: str | None = None,
     model_name: str | None = None,
     thinking_mode: str = "off",
+    user_attachments: list[dict] | None = None,
 ):
     cancel_flags[session_id] = False
     from connections.ssh_manager import ssh_manager
@@ -415,9 +752,13 @@ async def chat_stream_agent(
         if msg.get("role") != "system":
             messages.append(msg)
 
-    # µһûʴݿ
-    new_user_msg = {"role": "user", "content": user_message}
-    memory_db.append_message(session_id, new_user_msg)
+    current_user_content = _build_current_user_content(user_message, user_attachments or [], model_name)
+    safe_user_msg = _safe_user_message_for_memory(
+        user_display_message or user_message,
+        user_attachments or [],
+    )
+    new_user_msg = {"role": "user", "content": current_user_content}
+    memory_db.append_message(session_id, safe_user_msg)
     messages.append(new_user_msg)
 
     context = {
@@ -443,7 +784,8 @@ async def chat_stream_agent(
         yield f"data: {json.dumps({'type': 'status', 'content': '🤖 AI 正在分析并规划执行路径...'})}\n\n"
         await asyncio.sleep(0.05)
 
-        for iteration in range(50):  # չ 50
+        max_steps = agent_max_steps("chat")
+        for iteration in range(max_steps):
             logger.info(
                 f"Loop {iteration} for {session_id}, cancel_flags: {cancel_flags.get(session_id)}"
             )
@@ -525,7 +867,7 @@ async def chat_stream_agent(
                 func_name = tc.get("function", {}).get("name", "")
                 parse_error = None
                 try:
-                    func_args = json.loads(
+                    func_args = parse_tool_arguments(
                         tc.get("function", {}).get("arguments", "{}")
                     )
                 except Exception as e:
@@ -538,10 +880,18 @@ async def chat_stream_agent(
                 tc_id = tc.get("id", "")
 
                 if parse_error:
-                    tool_res = json.dumps({"status": "ERROR", "error": f"参数 JSON 格式无效，请检查是否包含未转义字符或格式错误: {parse_error}"})
-                    msg_end = json.dumps({"type": "tool_end", "id": tc_id, "result": "❌ JSON解析错误"})
+                    tool_res = json.dumps(
+                        {
+                            "status": "ERROR",
+                            "error_type": "tool_arguments_invalid",
+                            "error": f"参数 JSON 格式无效，请检查是否包含未转义字符或格式错误: {parse_error}",
+                            "hint": "请重新生成工具参数，复杂 PowerShell/SQL 片段需要正确转义。",
+                        },
+                        ensure_ascii=False,
+                    )
+                    msg_end, safe_tool_res = build_tool_end_event(tc_id, func_name, tool_res)
                     yield f"data: {msg_end}\n\n"
-                    tool_msg = {"tool_call_id": tc_id, "role": "tool", "name": func_name, "content": tool_res}
+                    tool_msg = {"tool_call_id": tc_id, "role": "tool", "name": func_name, "content": safe_tool_res}
                     messages.append(tool_msg)
                     memory_db.append_message(session_id, tool_msg)
                     continue
@@ -562,6 +912,22 @@ async def chat_stream_agent(
                         "content": tool_res,
                     }
                     messages.append(tool_msg)
+                    try:
+                        interaction_result = json.loads(safe_tool_res)
+                    except Exception:
+                        interaction_result = {}
+                    interaction_done = json.dumps(
+                        {
+                            "type": "user_interaction_done",
+                            "request_id": tc_id,
+                            "status": interaction_result.get("status") or "submitted",
+                            "input_type": payload["input_type"],
+                            "value": interaction_result.get("value") or "",
+                            "label": interaction_result.get("label") or "",
+                        },
+                        ensure_ascii=False,
+                    )
+                    yield f"data: {interaction_done}\n\n"
                     memory_db.append_message(
                         session_id,
                         {
@@ -579,7 +945,7 @@ async def chat_stream_agent(
                 
                 if needs_approval:
                     approval_required = True
-                    record_tool_approval_request(
+                    approval_record = record_tool_approval_request(
                         tool_call_id=tc_id,
                         session_id=session_id,
                         tool_name=func_name,
@@ -587,12 +953,15 @@ async def chat_stream_agent(
                         reason=reason,
                         context=context,
                     )
+                    policy_metadata = (approval_record.get("metadata") or {}).get("policy") or {}
                     msg_ask = json.dumps({
                         "type": "tool_ask_approval", 
                         "tool_call_id": tc_id, # for new React frontend
                         "tool_name": func_name, # for new React frontend
                         "args": display_cmd, # for new React frontend
                         "reason": reason,
+                        "actions": policy_metadata.get("actions") or [],
+                        "primary_action": policy_metadata.get("primary_action"),
                         "id": tc_id, 
                         "tool": func_name, 
                         "cmd": display_cmd
@@ -601,10 +970,12 @@ async def chat_stream_agent(
                     
                     future = asyncio.Future()
                     dispatcher.pending_approvals[tc_id] = future
+                    approval_timed_out = False
                     try:
                         approved = await asyncio.wait_for(future, timeout=float(approval_timeout_seconds()))
                     except asyncio.TimeoutError:
                         approved = False
+                        approval_timed_out = True
                         try:
                             from core.approval_queue import mark_approval_timeout
 
@@ -616,17 +987,23 @@ async def chat_stream_agent(
                         del dispatcher.pending_approvals[tc_id]
                         
                     if not approved:
-                        tool_res = '{"status": "BLOCKED", "error": "User rejected this execution."}'
-                        msg_end = json.dumps(
-                            {"type": "tool_end", "id": tc_id, "result": "❌ 已被用户拦截"}
+                        tool_res = json.dumps(
+                            {
+                                "status": "BLOCKED",
+                                "error_type": "approval_timeout" if approval_timed_out else "approval_rejected",
+                                "error": "审批超时，工具调用已取消。" if approval_timed_out else "用户拒绝执行该工具调用。",
+                                "hint": "如仍需执行，请重新发送任务并完成审批。" if approval_timed_out else "如需再次执行，请重新发送任务并选择批准。",
+                            },
+                            ensure_ascii=False,
                         )
+                        msg_end, safe_tool_res = build_tool_end_event(tc_id, func_name, tool_res)
                         yield f"data: {msg_end}\n\n"
                         
                         tool_msg = {
                             "tool_call_id": tc_id,
                             "role": "tool",
                             "name": func_name,
-                            "content": tool_res,
+                            "content": safe_tool_res,
                         }
                         messages.append(tool_msg)
                         memory_db.append_message(session_id, tool_msg)
@@ -654,12 +1031,7 @@ async def chat_stream_agent(
                         record_approval_execution(tc_id, tool_res)
                     except KeyError:
                         pass
-                safe_tool_res = redact_json_text(str(tool_res))
-
-                preview = safe_tool_res[:300] + "..." if len(safe_tool_res) > 300 else safe_tool_res
-                msg_end = json.dumps(
-                    {"type": "tool_end", "id": tc.get("id", ""), "result": preview}
-                )
+                msg_end, safe_tool_res = build_tool_end_event(tc.get("id", ""), func_name, tool_res)
                 yield f"data: {msg_end}\n\n"
                 await asyncio.sleep(0.05)
 
@@ -682,11 +1054,43 @@ async def chat_stream_agent(
             await asyncio.sleep(0.05)
 
         else:
-            max_steps_payload = {
-                "type": "error",
-                "content": "⚠️ 任务过于复杂，已达到 50 次最大思考上限，自动终止",
+            limit_status_payload = {
+                "type": "status",
+                "content": f"已达到 {max_steps} 步执行保护上限，正在整理阶段性报告...",
             }
-            yield f"data: {json.dumps(max_steps_payload)}\n\n"
+            yield f"data: {json.dumps(limit_status_payload, ensure_ascii=False)}\n\n"
+
+            summary_messages = messages + [
+                {"role": "system", "content": agent_step_limit_instruction(max_steps)}
+            ]
+            summary_content = ""
+            try:
+                from core.llm_execution import execute_chat_stream
+
+                async for chunk in execute_chat_stream(
+                    model_name, summary_messages, "off", tools=None
+                ):
+                    if chunk["type"] == "content":
+                        summary_content += chunk["content"]
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': chunk['content']}, ensure_ascii=False)}\n\n"
+                    elif chunk["type"] == "thinking":
+                        continue
+                if not summary_content.strip():
+                    summary_content = (
+                        f"已达到 {max_steps} 步执行保护上限，系统已停止继续调用工具。"
+                        "当前模型未能生成阶段性报告，请根据上方工具结果继续拆分任务。"
+                    )
+                    yield f"data: {json.dumps({'type': 'chunk', 'content': summary_content}, ensure_ascii=False)}\n\n"
+            except Exception as summary_error:
+                summary_content = (
+                    f"已达到 {max_steps} 步执行保护上限，且阶段性报告生成失败：{summary_error}。"
+                    "请将任务拆成更小范围后重试。"
+                )
+                yield f"data: {json.dumps({'type': 'chunk', 'content': summary_content}, ensure_ascii=False)}\n\n"
+
+            safe_summary_msg = {"role": "assistant", "content": summary_content}
+            messages.append(safe_summary_msg)
+            memory_db.append_message(session_id, safe_summary_msg)
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
         # ÿֶԻ׽󣬴ڼ첽ѹ (̨ǰ)
@@ -875,7 +1279,8 @@ async def headless_agent_chat(
         from core.llm_execution import execute_chat_stream
 
         assistant_content = ""
-        for iteration in range(50):
+        max_steps = agent_max_steps("headless")
+        for iteration in range(max_steps):
             assistant_content = ""
             thinking_content = ""
             tool_calls = []
@@ -903,7 +1308,7 @@ async def headless_agent_chat(
             for tc in tool_calls:
                 func_name = tc.get("function", {}).get("name", "")
                 try:
-                    func_args = json.loads(
+                    func_args = parse_tool_arguments(
                         tc.get("function", {}).get("arguments", "{}")
                     )
                 except Exception:
@@ -949,7 +1354,7 @@ async def headless_agent_chat(
                 messages.append(tool_msg)
         else:
             return (
-                "任务过于复杂，Agent 执行已达到 50 轮上限，已被强制终止。以下是最后一轮结果："
+                f"任务达到 {max_steps} 步执行保护上限，系统已停止继续调用工具。以下是最后一轮阶段性结果："
                 + assistant_content
             )
 

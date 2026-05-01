@@ -1,53 +1,27 @@
 // Zustand store — global state for OpsCore frontend
 import { create } from 'zustand'
-import type { Session, ChatMessage, ViewId, SkillInfo, Asset } from '@/types'
-
-interface AppState {
-  // --- View routing ---
-  currentView: ViewId
-  setView: (v: ViewId) => void
-
-  // --- Sessions ---
-  sessions: Record<string, Session>
-  currentSessionId: string | null
-  setCurrentSession: (id: string | null) => void
-  addSession: (s: Session) => void
-  removeSession: (id: string) => void
-  updateSession: (id: string, patch: Partial<Session>) => void
-
-  // --- Messages ---
-  appendMessage: (sessionId: string, msg: ChatMessage) => void
-  updateLastAssistantMessage: (sessionId: string, updater: (msg: ChatMessage) => ChatMessage) => void
-  clearMessages: (sessionId: string) => void
-
-  // --- Sidebar ---
-  collapsedGroups: Set<string>
-  toggleGroup: (name: string) => void
-  sidebarOpen: boolean
-  setSidebarOpen: (open: boolean) => void
-
-  // --- Modals ---
-  activeModal: string | null
-  openModal: (id: string) => void
-  closeModal: () => void
-
-  // --- Skills cache ---
-  skillRegistry: SkillInfo[]
-  setSkillRegistry: (skills: SkillInfo[]) => void
-
-  // --- Assets cache ---
-  assets: Asset[]
-  setAssets: (assets: Asset[]) => void
-
-  // --- Streaming ---
-  chatController: AbortController | null
-  setChatController: (c: AbortController | null) => void
-
-  // --- Toast ---
-  toasts: Array<{ id: number; message: string; type: 'success' | 'error' | 'info' }>
-  addToast: (message: string, type?: 'success' | 'error' | 'info') => void
-  removeToast: (id: number) => void
-}
+import {
+  appendMessageState,
+  clearMessagesState,
+  removeEmptyAssistantMessagesState,
+  removeMessageState,
+  setSessionMessagesState,
+  updateLastAssistantMessageState,
+  updateMessageState,
+} from './messageMutations'
+import { readStoredSessionGroups } from './sessionGroupPersistence'
+import {
+  createSessionGroupState,
+  deleteSessionGroupState,
+  renameSessionGroupState,
+} from './sessionGroupMutations'
+import {
+  addSessionState,
+  moveSessionToGroupState,
+  removeSessionState,
+  updateSessionState,
+} from './sessionMutations'
+import type { AppState } from './types'
 
 let toastId = 0
 
@@ -60,64 +34,25 @@ export const useStore = create<AppState>((set, get) => ({
   sessions: {},
   currentSessionId: null,
   setCurrentSession: (id) => set({ currentSessionId: id }),
-  addSession: (s) => set((st) => ({
-    sessions: { ...st.sessions, [s.id]: s },
-    currentSessionId: s.id,
-  })),
-  removeSession: (id) => set((st) => {
-    const copy = { ...st.sessions }
-    delete copy[id]
-    const nextId = st.currentSessionId === id
-      ? Object.keys(copy)[0] || null
-      : st.currentSessionId
-    return { sessions: copy, currentSessionId: nextId }
-  }),
-  updateSession: (id, patch) => set((st) => {
-    const s = st.sessions[id]
-    if (!s) return st
-    return { sessions: { ...st.sessions, [id]: { ...s, ...patch } } }
-  }),
+  addSession: (session, activate = true) => set((state) => addSessionState(state, session, activate)),
+  removeSession: (id) => set((state) => removeSessionState(state, id)),
+  updateSession: (id, patch) => set((state) => updateSessionState(state, id, patch)),
+  moveSessionToGroup: (id, groupName) => set((state) => moveSessionToGroupState(state, id, groupName)),
 
   // Messages
-  appendMessage: (sessionId, msg) => set((st) => {
-    const s = st.sessions[sessionId]
-    if (!s) return st
-    return {
-      sessions: {
-        ...st.sessions,
-        [sessionId]: { ...s, messages: [...s.messages, msg] },
-      },
-    }
-  }),
-  updateLastAssistantMessage: (sessionId, updater) => set((st) => {
-    const s = st.sessions[sessionId]
-    if (!s) return st
-    const msgs = [...s.messages]
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i].role === 'assistant') {
-        msgs[i] = updater(msgs[i])
-        break
-      }
-    }
-    return {
-      sessions: {
-        ...st.sessions,
-        [sessionId]: { ...s, messages: msgs },
-      },
-    }
-  }),
-  clearMessages: (sessionId) => set((st) => {
-    const s = st.sessions[sessionId]
-    if (!s) return st
-    return {
-      sessions: {
-        ...st.sessions,
-        [sessionId]: { ...s, messages: [] },
-      },
-    }
-  }),
+  appendMessage: (sessionId, message) => set((state) => appendMessageState(state, sessionId, message)),
+  setSessionMessages: (sessionId, messages) => set((state) => setSessionMessagesState(state, sessionId, messages)),
+  removeMessage: (sessionId, messageId) => set((state) => removeMessageState(state, sessionId, messageId)),
+  updateMessage: (sessionId, messageId, updater) => set((state) => updateMessageState(state, sessionId, messageId, updater)),
+  updateLastAssistantMessage: (sessionId, updater) => set((state) => updateLastAssistantMessageState(state, sessionId, updater)),
+  removeEmptyAssistantMessages: (sessionId) => set((state) => removeEmptyAssistantMessagesState(state, sessionId)),
+  clearMessages: (sessionId) => set((state) => clearMessagesState(state, sessionId)),
 
   // Sidebar
+  sessionGroups: readStoredSessionGroups(),
+  createSessionGroup: (name) => set((state) => createSessionGroupState(state, name)),
+  renameSessionGroup: (oldName, newName) => set((state) => renameSessionGroupState(state, oldName, newName)),
+  deleteSessionGroup: (name, fallbackGroup) => set((state) => deleteSessionGroupState(state, name, fallbackGroup)),
   collapsedGroups: new Set<string>(),
   toggleGroup: (name) => set((st) => {
     const next = new Set(st.collapsedGroups)

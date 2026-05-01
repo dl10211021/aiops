@@ -11,19 +11,45 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from core.asset_protocols import (
+    AI_PLATFORM_API_ASSET_TYPES,
     API_PROTOCOLS,
+    BIGDATA_API_ASSET_TYPES,
+    CICD_API_ASSET_TYPES,
+    CONTAINER_API_ASSET_TYPES,
     CONTAINER_ASSET_TYPES,
+    DATABASE_HTTP_ASSET_TYPES,
+    DATABASE_HTTP_PROTOCOLS,
+    DISCOVERY_API_ASSET_TYPES,
+    DOMAIN_HTTP_API_ASSET_TYPES,
+    MIDDLEWARE_API_ASSET_TYPES,
     MIDDLEWARE_ASSET_TYPES,
     MONITORING_ASSET_TYPES,
+    NETWORK_API_ASSET_TYPES,
     NETWORK_CLI_ASSET_TYPES,
+    OOB_API_ASSET_TYPES,
+    SECURITY_API_ASSET_TYPES,
+    SERVICE_ASSET_TYPES,
+    SERVICE_PROBE_PROTOCOLS,
     SQL_PROTOCOLS,
+    STORAGE_API_PROTOCOLS,
     STORAGE_ASSET_TYPES,
     VIRTUALIZATION_ASSET_TYPES,
+    VIRTUALIZATION_API_PROTOCOLS,
     resolve_asset_identity,
 )
 
 
 JsonSchema = dict[str, Any]
+STORAGE_SSH_ASSET_TYPES = {item for item in STORAGE_ASSET_TYPES if item in {"ceph", "nfs", "hdfs", "glusterfs"}}
+STORAGE_API_ASSET_TYPES = set(STORAGE_ASSET_TYPES) - STORAGE_SSH_ASSET_TYPES - {"nas"}
+SERVICE_PROBE_ASSET_TYPES = set(SERVICE_ASSET_TYPES) | {
+    "dns_sd",
+    "ipmi",
+    "jvm",
+    "kafka_client",
+    "ldap",
+    "zookeeper_sd",
+}
 
 
 @dataclass(frozen=True)
@@ -160,6 +186,37 @@ tool_registry = ToolRegistry()
 
 
 def _register_builtin_tools() -> None:
+    http_api_parameters = _obj(
+        {
+            "method": {"type": "string", "enum": ["GET", "HEAD", "POST"]},
+            "path": {"type": "string", "description": "API 路径，例如 /api/v1/query?query=up"},
+            "headers": {"type": "object"},
+            "body": {"type": "object"},
+        },
+        ["path"],
+    )
+
+    def _register_domain_http_tool(
+        *,
+        name: str,
+        toolset: str,
+        asset_types: set[str],
+        description: str,
+        protocols: set[str] | None = None,
+    ) -> None:
+        tool_registry.register(
+            ToolDefinition(
+                name=name,
+                toolset=toolset,
+                scope="asset",
+                protocols=protocols or {"http_api"},
+                asset_types=set(asset_types),
+                safety_category="http_api",
+                description=description,
+                parameters=http_api_parameters,
+            )
+        )
+
     tool_registry.register(
         ToolDefinition(
             name="local_execute_script",
@@ -283,7 +340,7 @@ def _register_builtin_tools() -> None:
             toolset="linux-ssh",
             scope="asset",
             protocols={"ssh"},
-            excluded_asset_types=set(NETWORK_CLI_ASSET_TYPES),
+            excluded_asset_types=set(NETWORK_CLI_ASSET_TYPES) | STORAGE_SSH_ASSET_TYPES,
             safety_category="linux",
             description="当前已连接 Linux/Unix/KVM SSH 会话；直接在目标资产执行 CLI/巡检命令，凭据由资产中心注入。",
             parameters=_obj({"command": {"type": "string"}}, ["command"]),
@@ -330,7 +387,7 @@ def _register_builtin_tools() -> None:
             toolset="storage-ssh",
             scope="asset",
             protocols={"ssh"},
-            asset_types={item for item in STORAGE_ASSET_TYPES if item in {"ceph", "nfs", "hdfs", "glusterfs"}},
+            asset_types=STORAGE_SSH_ASSET_TYPES,
             safety_category="linux",
             description="当前已连接存储节点；执行 Ceph/NFS/HDFS/GlusterFS 等只读巡检命令。",
             parameters=_obj({"command": {"type": "string"}}, ["command"]),
@@ -343,11 +400,11 @@ def _register_builtin_tools() -> None:
             scope="asset",
             protocols=set(SQL_PROTOCOLS),
             safety_category="sql",
-            description="当前已连接数据库资产；直接执行 SQL 巡检语句，不要传 host/user/password。",
+            description="当前已连接数据库资产；使用托管凭据执行 SQL 语句，不要传 host/user/password。只读查询可直接执行，变更类 SQL 会进入审批/硬拦截策略。",
             parameters=_obj(
                 {
                     "db_type": {"type": "string", "enum": sorted(SQL_PROTOCOLS)},
-                    "sql": {"type": "string", "description": "要执行的 SQL 查询语句"},
+                    "sql": {"type": "string", "description": "要执行的 SQL 语句"},
                 },
                 ["sql"],
             ),
@@ -361,6 +418,17 @@ def _register_builtin_tools() -> None:
             protocols={"redis"},
             safety_category="redis",
             description="当前已连接 Redis 资产；通过托管凭据执行 Redis 命令。",
+            parameters=_obj({"command": {"type": "string"}}, ["command"]),
+        )
+    )
+    tool_registry.register(
+        ToolDefinition(
+            name="memcached_execute_command",
+            toolset="memcached",
+            scope="asset",
+            protocols={"memcached"},
+            safety_category="memcached",
+            description="当前已连接 Memcached 资产；通过托管连接执行 version、stats、get、gets 等只读命令。",
             parameters=_obj({"command": {"type": "string"}}, ["command"]),
         )
     )
@@ -389,17 +457,97 @@ def _register_builtin_tools() -> None:
             name="http_api_request",
             toolset="http-api",
             scope="asset",
-            protocols=set(API_PROTOCOLS),
+            protocols=set(API_PROTOCOLS) - set(SERVICE_PROBE_PROTOCOLS),
+            excluded_asset_types=(
+                set(SERVICE_ASSET_TYPES)
+                | set(MONITORING_ASSET_TYPES)
+                | set(VIRTUALIZATION_ASSET_TYPES)
+                | set(STORAGE_ASSET_TYPES)
+                | set(DOMAIN_HTTP_API_ASSET_TYPES)
+                | set(DATABASE_HTTP_ASSET_TYPES)
+                | {"k8s", "kubernetes"}
+            ),
             safety_category="http_api",
-            description="当前已连接 API/监控/虚拟化/K8s/Redfish 资产；使用托管凭据访问目标 HTTP API。",
+            description="当前已连接通用 HTTP/API；使用托管凭据访问目标 API，涉及变更动作必须经过审批策略。",
+            parameters=http_api_parameters,
+        )
+    )
+    _register_domain_http_tool(
+        name="database_api_request",
+        toolset="database-api",
+        asset_types=DATABASE_HTTP_ASSET_TYPES,
+        description="当前已连接数据库管理接口；通过 ClickHouse、ElasticSearch、NebulaGraph 等数据库自身 API 做巡检或经审批的配置操作。",
+        protocols=set(DATABASE_HTTP_PROTOCOLS) | {"http_api"},
+    )
+    _register_domain_http_tool(
+        name="container_api_request",
+        toolset="container-api",
+        asset_types=CONTAINER_API_ASSET_TYPES,
+        description="当前已连接容器平台 API；查询 Harbor、容器控制面等只读接口，凭据由资产中心注入。",
+    )
+    _register_domain_http_tool(
+        name="middleware_api_request",
+        toolset="middleware-api",
+        asset_types=MIDDLEWARE_API_ASSET_TYPES,
+        description="当前已连接中间件管理 API；查询 RabbitMQ、Nacos、Consul、Spring Boot 等接口。",
+    )
+    _register_domain_http_tool(
+        name="bigdata_api_request",
+        toolset="bigdata-api",
+        asset_types=BIGDATA_API_ASSET_TYPES,
+        description="当前已连接大数据平台 API；查询 Hadoop、Flink、Spark、Doris、StarRocks、Airflow 等接口。",
+    )
+    _register_domain_http_tool(
+        name="network_api_request",
+        toolset="network-api",
+        asset_types=NETWORK_API_ASSET_TYPES,
+        description="当前已连接网络设备管理 API；查询 F5、A10、WAF 等管理接口。",
+    )
+    _register_domain_http_tool(
+        name="security_api_request",
+        toolset="security-api",
+        asset_types=SECURITY_API_ASSET_TYPES,
+        description="当前已连接安全与身份平台 API；查询堡垒机、LDAP/AD、审计平台等接口。",
+    )
+    _register_domain_http_tool(
+        name="oob_api_request",
+        toolset="oob-api",
+        asset_types=OOB_API_ASSET_TYPES,
+        description="当前已连接硬件带外或视频设备 API；查询 iDRAC/iLO、海康、大华、宇视等管理接口。",
+    )
+    _register_domain_http_tool(
+        name="discovery_api_request",
+        toolset="discovery-api",
+        asset_types=DISCOVERY_API_ASSET_TYPES,
+        description="当前已连接服务发现平台 API；查询 Consul、Nacos、Eureka、DNS/HTTP 服务发现接口。",
+    )
+    _register_domain_http_tool(
+        name="ai_platform_api_request",
+        toolset="ai-platform-api",
+        asset_types=AI_PLATFORM_API_ASSET_TYPES,
+        description="当前已连接 AI 平台 API；查询 OpenAI、Ollama、DeepSeek、LM Studio 等服务接口。",
+    )
+    _register_domain_http_tool(
+        name="cicd_api_request",
+        toolset="cicd-api",
+        asset_types=CICD_API_ASSET_TYPES,
+        description="当前已连接 CI/CD 平台 API；查询 Jenkins 等构建发布平台接口。",
+    )
+    tool_registry.register(
+        ToolDefinition(
+            name="service_probe_request",
+            toolset="service-probe",
+            scope="asset",
+            asset_types=SERVICE_PROBE_ASSET_TYPES,
+            safety_category="http_api",
+            description="当前已连接业务探测资产；执行只读连通性、HTTP/TLS、端口、邮件、MQTT、NTP 等协议探测。",
             parameters=_obj(
                 {
-                    "method": {"type": "string", "enum": ["GET", "HEAD", "POST"]},
-                    "path": {"type": "string", "description": "API 路径，例如 /api/v1/query?query=up"},
-                    "headers": {"type": "object"},
-                    "body": {"type": "object"},
+                    "operation": {"type": "string", "enum": ["probe", "connect", "health"]},
+                    "path": {"type": "string", "description": "HTTP/WebSocket/Registry 探测路径，默认 /"},
+                    "timeout": {"type": "number", "description": "探测超时时间，单位秒"},
                 },
-                ["path"],
+                [],
             ),
         )
     )
@@ -448,16 +596,45 @@ def _register_builtin_tools() -> None:
             name="virtualization_api_request",
             toolset="virtualization",
             scope="asset",
-            protocols={"http_api", "winrm"},
-            asset_types=set(VIRTUALIZATION_ASSET_TYPES) - {"kvm"},
+            protocols={"http_api"} | set(VIRTUALIZATION_API_PROTOCOLS),
+            asset_types=set(VIRTUALIZATION_ASSET_TYPES) - {"kvm", "hyperv"},
             safety_category="http_api",
-            description="当前已连接虚拟化/云平台；访问 VMware/ZStack/OpenStack/Proxmox/Hyper-V 等平台 API 或 WinRM。",
+            description="当前已连接虚拟化/云平台；访问 VMware/ZStack/OpenStack/Proxmox 等平台 API。Hyper-V 使用 winrm_execute_command。",
             parameters=_obj(
                 {
+                    "operation": {
+                        "type": "string",
+                        "enum": [
+                            "version",
+                            "nodes",
+                            "resources",
+                            "hosts",
+                            "vms",
+                            "storage",
+                            "datastores",
+                            "catalog",
+                            "projects",
+                            "servers",
+                            "hypervisors",
+                            "volumes",
+                            "networks",
+                            "routers",
+                            "images",
+                            "management_nodes",
+                            "zones",
+                            "clusters",
+                            "l3_networks",
+                            "primary_storage",
+                            "backup_storage",
+                            "request",
+                        ],
+                        "description": "虚拟化平台常用只读操作。Proxmox 支持 version/nodes/resources/vms/storage；VMware 支持 version/hosts/vms/datastores；OpenStack 支持 version/catalog/projects/servers/hypervisors/volumes/networks/routers/images；ZStack 支持 version/management_nodes/zones/clusters/hosts/vms/volumes/images/networks/l3_networks/primary_storage/backup_storage。",
+                    },
                     "path": {"type": "string"},
                     "method": {"type": "string", "enum": ["GET", "HEAD", "POST"]},
                     "headers": {"type": "object"},
                     "body": {"type": "object"},
+                    "timeout": {"type": "number"},
                     "command": {"type": "string", "description": "Hyper-V WinRM 命令，仅 WinRM 协议使用"},
                 },
                 [],
@@ -469,15 +646,39 @@ def _register_builtin_tools() -> None:
             name="storage_api_request",
             toolset="storage",
             scope="asset",
-            protocols={"http_api", "snmp"},
-            asset_types=set(STORAGE_ASSET_TYPES) - {"ceph", "nfs"},
+            protocols={"http_api", "snmp"} | set(STORAGE_API_PROTOCOLS),
+            asset_types=STORAGE_API_ASSET_TYPES,
             safety_category="http_api",
-            description="当前已连接 NAS/SAN/备份系统；使用 HTTP API 或 SNMP 做只读巡检。",
+            description="当前已连接备份系统、存储平台 API 或 S3/MinIO 对象存储；使用平台 API 或对象存储只读操作做巡检。",
             parameters=_obj(
                 {
+                    "operation": {
+                        "type": "string",
+                        "enum": [
+                            "list_buckets",
+                            "head_bucket",
+                            "get_bucket_location",
+                            "list_objects",
+                            "head_object",
+                            "health",
+                            "status",
+                            "version",
+                            "jobs",
+                            "repositories",
+                            "policies",
+                            "capacity",
+                            "alerts",
+                            "request",
+                        ],
+                        "description": "只读操作。S3/MinIO 使用对象存储操作；备份/存储平台使用 health/status/version/jobs/repositories/policies/capacity/alerts，必要时用 request + GET/HEAD path。",
+                    },
+                    "bucket": {"type": "string", "description": "Bucket 名称，未传时使用资产默认 Bucket。"},
+                    "prefix": {"type": "string", "description": "列对象时使用的前缀。"},
+                    "key": {"type": "string", "description": "对象 Key，用于 head_object。"},
+                    "max_keys": {"type": "integer", "description": "最多返回对象数，1-1000。"},
                     "path": {"type": "string"},
                     "oid": {"type": "string"},
-                    "method": {"type": "string", "enum": ["GET", "HEAD", "POST"]},
+                    "method": {"type": "string", "enum": ["GET", "HEAD"]},
                     "headers": {"type": "object"},
                     "body": {"type": "object"},
                 },

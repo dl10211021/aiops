@@ -49,7 +49,7 @@ class TestExecuteRouteProtocols(unittest.TestCase):
         self.assertEqual(execute.await_args.args[0], "db_execute_query")
         self.assertEqual(execute.await_args.args[1], {"sql": "SELECT 1"})
 
-    def test_execute_routes_http_command_to_http_api_tool(self):
+    def test_execute_routes_monitoring_http_command_to_monitoring_tool(self):
         fake_sessions = {"sid-api": {"info": session_info("prometheus", "http_api")}}
 
         with (
@@ -63,10 +63,34 @@ class TestExecuteRouteProtocols(unittest.TestCase):
                 )
             )
 
-        self.assertEqual(execute.await_args.args[0], "http_api_request")
+        self.assertEqual(execute.await_args.args[0], "monitoring_api_query")
         self.assertEqual(
             execute.await_args.args[1],
             {"method": "GET", "path": "/api/v1/status/buildinfo"},
+        )
+
+    def test_execute_routes_database_http_command_to_database_api_tool(self):
+        fake_sessions = {
+            "sid-clickhouse": {
+                "info": session_info("clickhouse", "clickhouse", {"category": "db", "db_type": "clickhouse"})
+            }
+        }
+
+        with (
+            patch.dict(routes.ssh_manager.active_sessions, fake_sessions, clear=True),
+            patch("core.dispatcher.dispatcher.route_and_execute", new_callable=AsyncMock) as execute,
+        ):
+            execute.return_value = json.dumps({"success": True, "output": "{}"})
+            asyncio.run(
+                routes.execute_remote_command(
+                    routes.CommandRequest(session_id="sid-clickhouse", command="GET /?query=SELECT%201")
+                )
+            )
+
+        self.assertEqual(execute.await_args.args[0], "database_api_request")
+        self.assertEqual(
+            execute.await_args.args[1],
+            {"method": "GET", "path": "/?query=SELECT%201"},
         )
 
     def test_execute_routes_snmp_command_to_snmp_get(self):

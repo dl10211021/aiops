@@ -6,6 +6,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from core.asset_protocols import resolve_asset_identity
+from core.connection_errors import classify_connection_error
+from core.redaction import redact_value
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +76,16 @@ class SSHConnectionManager:
 
         # 核心逻辑分离：只有登录协议为 SSH 时才建立 Paramiko 长连接。
         if login_protocol != "ssh":
+            safe_extra_args = redact_value(extra_args)
             logger.info(
-                f"Registered Virtual Asset [{asset_type}/{login_protocol}] -> {username}@{host}:{port} (Profile: {agent_profile}, Extra: {extra_args})"
+                "Registered Virtual Asset [%s/%s] -> %s@%s:%s (Profile: %s, Extra: %s)",
+                asset_type,
+                login_protocol,
+                username,
+                host,
+                port,
+                agent_profile,
+                safe_extra_args,
             )
             with self._sessions_lock:
                 self.active_sessions[session_id] = {
@@ -190,12 +200,26 @@ class SSHConnectionManager:
             logger.info(f"Connected successfully. Session ID: {session_id}")
             return {"success": True, "session_id": session_id, "message": "连接成功"}
 
-        except paramiko.AuthenticationException:
+        except paramiko.AuthenticationException as e:
             logger.error("Authentication failed.")
-            return {"success": False, "message": "认证失败：用户名或密码错误"}
+            error = classify_connection_error(e, "ssh", "authentication failed")
+            return {
+                "success": False,
+                "message": error["message"],
+                "error_code": error["code"],
+                "error_category": error["category"],
+                "raw_error": error["raw_error"],
+            }
         except Exception as e:
             logger.error(f"Connection error: {str(e)}")
-            return {"success": False, "message": f"连接异常: {str(e)}"}
+            error = classify_connection_error(e, "ssh")
+            return {
+                "success": False,
+                "message": error["message"],
+                "error_code": error["code"],
+                "error_category": error["category"],
+                "raw_error": error["raw_error"],
+            }
 
     def connect_local(
         self,

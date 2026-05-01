@@ -1,53 +1,74 @@
-import { useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { useStore } from '@/store'
 import LeftNav from '@/components/layout/LeftNav'
 import Sidebar from '@/components/layout/Sidebar'
 import TopBar from '@/components/layout/TopBar'
 import ToastContainer from '@/components/layout/ToastContainer'
-import ChatWindow from '@/components/chat/ChatWindow'
-import Dashboard from '@/components/views/Dashboard'
-import AssetVault from '@/components/views/AssetVault'
-import ApprovalCenter from '@/components/views/ApprovalCenter'
-import SkillMarket from '@/components/views/SkillMarket'
-import KnowledgeBase from '@/components/views/KnowledgeBase'
-import CronManager from '@/components/views/CronManager'
-import AlertCenter from '@/components/views/AlertCenter'
-import ConnectionModal from '@/components/modals/ConnectionModal'
-import LLMConfigModal from '@/components/modals/LLMConfigModal'
-import NotificationsModal from '@/components/modals/NotificationsModal'
-import DynamicSkillsModal from '@/components/modals/DynamicSkillsModal'
-import SessionActionsModal from '@/components/modals/SessionActionsModal'
-import SafetyPolicyModal from '@/components/modals/SafetyPolicyModal'
-import { getActiveSessions, pollAllSessions, getSessionHistory } from '@/api/client'
+import { getActiveSessions, pollAllSessions } from '@/api/client'
 import type { ChatMessage } from '@/types'
+
+const ChatWindow = lazy(() => import('@/components/chat/ChatWindow'))
+const Dashboard = lazy(() => import('@/components/views/Dashboard'))
+const AssetVault = lazy(() => import('@/components/views/AssetVault'))
+const ApprovalCenter = lazy(() => import('@/components/views/ApprovalCenter'))
+const SkillMarket = lazy(() => import('@/components/views/SkillMarket'))
+const KnowledgeBase = lazy(() => import('@/components/views/KnowledgeBase'))
+const CronManager = lazy(() => import('@/components/views/CronManager'))
+const AlertCenter = lazy(() => import('@/components/views/AlertCenter'))
+const ConnectionModal = lazy(() => import('@/components/modals/ConnectionModal'))
+const LLMConfigModal = lazy(() => import('@/components/modals/LLMConfigModal'))
+const NotificationsModal = lazy(() => import('@/components/modals/NotificationsModal'))
+const DynamicSkillsModal = lazy(() => import('@/components/modals/DynamicSkillsModal'))
+const SessionActionsModal = lazy(() => import('@/components/modals/SessionActionsModal'))
+const SafetyPolicyModal = lazy(() => import('@/components/modals/SafetyPolicyModal'))
+
+function ViewFallback() {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center bg-ops-dark text-sm text-ops-subtext">
+      加载视图...
+    </div>
+  )
+}
+
+function ModalFallback() {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 text-sm text-ops-subtext">
+      加载中...
+    </div>
+  )
+}
 
 function ViewRouter() {
   const currentView = useStore((s) => s.currentView)
-  switch (currentView) {
-    case 'dashboard': return <Dashboard />
-    case 'bigscreen': return <Dashboard />
-    case 'chat': return <ChatWindow />
-    case 'assets': return <AssetVault />
-    case 'skills': return <SkillMarket />
-    case 'knowledge': return <KnowledgeBase />
-    case 'cron': return <CronManager />
-    case 'alerts': return <AlertCenter />
-    case 'approvals': return <ApprovalCenter />
-    default: return <ChatWindow />
-  }
+  return (
+    <Suspense fallback={<ViewFallback />}>
+      {currentView === 'dashboard' && <Dashboard />}
+      {currentView === 'bigscreen' && <Dashboard />}
+      {currentView === 'chat' && <ChatWindow />}
+      {currentView === 'assets' && <AssetVault />}
+      {currentView === 'skills' && <SkillMarket />}
+      {currentView === 'knowledge' && <KnowledgeBase />}
+      {currentView === 'cron' && <CronManager />}
+      {currentView === 'alerts' && <AlertCenter />}
+      {currentView === 'approvals' && <ApprovalCenter />}
+      {!['dashboard', 'bigscreen', 'chat', 'assets', 'skills', 'knowledge', 'cron', 'alerts', 'approvals'].includes(currentView) && <ChatWindow />}
+    </Suspense>
+  )
 }
 
 function ModalRouter() {
   const activeModal = useStore((s) => s.activeModal)
-  switch (activeModal) {
-    case 'connect': return <ConnectionModal />
-    case 'llm-config': return <LLMConfigModal />
-    case 'notifications': return <NotificationsModal />
-    case 'safety-policy': return <SafetyPolicyModal />
-    case 'dynamic-skills': return <DynamicSkillsModal />
-    case 'session-actions': return <SessionActionsModal />
-    default: return null
-  }
+  if (!activeModal) return null
+  return (
+    <Suspense fallback={<ModalFallback />}>
+      {activeModal === 'connect' && <ConnectionModal />}
+      {activeModal === 'llm-config' && <LLMConfigModal />}
+      {activeModal === 'notifications' && <NotificationsModal />}
+      {activeModal === 'safety-policy' && <SafetyPolicyModal />}
+      {activeModal === 'dynamic-skills' && <DynamicSkillsModal />}
+      {activeModal === 'session-actions' && <SessionActionsModal />}
+    </Suspense>
+  )
 }
 
 export default function App() {
@@ -57,9 +78,13 @@ export default function App() {
   const sessions = useStore((s) => s.sessions)
   const currentView = useStore((s) => s.currentView)
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const restoreStartedRef = useRef(false)
 
   // Restore sessions from backend on mount
   useEffect(() => {
+    if (restoreStartedRef.current) return
+    restoreStartedRef.current = true
+
     const restore = async () => {
       try {
         const res = await getActiveSessions()
@@ -84,22 +109,10 @@ export default function App() {
             target_scope: sinfo.target_scope || 'asset',
             scope_value: sinfo.scope_value || null,
             messages: [],
-            isStreaming: false,
-          })
-
-          // Load chat history
-          try {
-            const hist = await getSessionHistory(sid)
-            const msgs = hist.data.messages || []
-            msgs.forEach((m, i) => {
-              appendMessage(sid, {
-                id: `hist-${sid}-${i}`,
-                role: m.role as 'user' | 'assistant',
-                content: m.content,
-                timestamp: Date.now() - (msgs.length - i) * 1000,
-              })
-            })
-          } catch { /* ignore */ }
+            isStreaming: Boolean(sinfo.isStreaming),
+            backendStreaming: Boolean(sinfo.isStreaming),
+            historyLoaded: false,
+          }, false)
         }
 
         if (firstId) setCurrentSession(firstId)
@@ -118,6 +131,7 @@ export default function App() {
         for (const [sid, msgs] of Object.entries(updates)) {
           if (!sessions[sid]) continue
           msgs.forEach((m) => {
+            if (!m.content || !m.content.trim()) return
             const msg: ChatMessage = {
               id: `hb-${Date.now()}-${Math.random()}`,
               role: m.role as 'user' | 'assistant',

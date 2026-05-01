@@ -1,4 +1,6 @@
 import os
+import asyncio
+import json
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -62,6 +64,50 @@ class TestDispatcherSecurity(unittest.TestCase):
 
         self.assertFalse(readonly_needs_approval)
         self.assertTrue(readwrite_needs_approval)
+
+    def test_hard_blocked_commands_do_not_request_approval(self):
+        policy_path = str(Path.cwd() / "dispatcher_security_policy_hard_block.json")
+        if os.path.exists(policy_path):
+            os.remove(policy_path)
+
+        dispatcher = SkillDispatcher.__new__(SkillDispatcher)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", policy_path):
+                needs_approval, reason = dispatcher.check_approval_needed(
+                    "db_execute_query",
+                    {"sql": "DROP USER app_user CASCADE"},
+                    {"allow_modifications": True, "asset_type": "oracle", "protocol": "oracle"},
+                )
+        finally:
+            if os.path.exists(policy_path):
+                os.remove(policy_path)
+
+        self.assertFalse(needs_approval)
+        self.assertEqual(reason, "")
+
+    def test_hard_blocked_execution_returns_policy_metadata(self):
+        policy_path = str(Path.cwd() / "dispatcher_security_policy_block_metadata.json")
+        if os.path.exists(policy_path):
+            os.remove(policy_path)
+
+        dispatcher = SkillDispatcher.__new__(SkillDispatcher)
+        try:
+            with patch("core.safety_policy.POLICY_PATH", policy_path):
+                result = asyncio.run(
+                    dispatcher.route_and_execute(
+                        "db_execute_query",
+                        {"sql": "DROP USER app_user CASCADE"},
+                        {"allow_modifications": True, "asset_type": "oracle", "protocol": "oracle"},
+                    )
+                )
+        finally:
+            if os.path.exists(policy_path):
+                os.remove(policy_path)
+
+        payload = json.loads(result)
+        self.assertEqual(payload["status"], "BLOCKED")
+        self.assertEqual(payload["policy_decision"], "deny")
+        self.assertEqual(payload["primary_action"]["id"], "sql.dangerous_drop")
 
 
 if __name__ == "__main__":

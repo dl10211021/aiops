@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
+from core.asset_capabilities import enrich_asset_capability
+from core.hertzbeat_asset_catalog import HERTZBEAT_ASSET_CATALOG
 
-ASSET_CATALOG = [
+BASE_ASSET_CATALOG = [
     {
         "id": "linux",
         "label": "Linux / Unix",
@@ -338,8 +340,8 @@ ASSET_CATALOG = [
         "id": "zstack",
         "label": "ZStack",
         "category": "virtualization",
-        "protocol": "http_api",
-        "default_port": 5000,
+        "protocol": "zstack",
+        "default_port": 8080,
         "inspection_profile": "http_api",
     },
     {
@@ -505,6 +507,227 @@ ASSET_CATALOG = [
 ]
 
 
+EXCLUDED_HERTZBEAT_ASSET_IDS = {
+    # HertzBeat ships a sample custom application. It is useful for their
+    # template examples, but in OpsCore it pollutes the production asset catalog.
+    "a_example",
+}
+
+
+def _merge_asset_catalog(*catalogs: list[dict]) -> list[dict]:
+    merged: list[dict] = []
+    index: dict[str, dict] = {}
+    for catalog in catalogs:
+        for item in catalog:
+            asset_id = str(item.get("id") or "").strip()
+            if not asset_id:
+                continue
+            if item.get("source") == "hertzbeat" and asset_id in EXCLUDED_HERTZBEAT_ASSET_IDS:
+                continue
+            if asset_id in index:
+                target = index[asset_id]
+                for key in ("params", "hertzbeat_category", "hertzbeat_protocols"):
+                    if key in item and key not in target:
+                        target[key] = item[key]
+                if item.get("source") == "hertzbeat":
+                    target["hertzbeat_supported"] = True
+                continue
+            entry = dict(item)
+            if entry.get("source") == "hertzbeat":
+                entry["hertzbeat_supported"] = True
+            merged.append(entry)
+            index[asset_id] = entry
+    return merged
+
+
+ASSET_PROTOCOL_OVERRIDES = {
+    # HertzBeat describes these through JDBC, but OpsCore can operate them
+    # through an existing compatible native SQL driver.
+    "mariadb": "mysql",
+    "sqlserver": "mssql",
+    "opengauss": "postgresql",
+    "greenplum": "postgresql",
+    "vastbase": "postgresql",
+    "doris_fe": "mysql",
+    "starrocks_fe": "mysql",
+    "greptime": "mysql",
+    "db2": "db2",
+    "dameng": "dameng",
+    "dm": "dameng",
+    "hive": "hive",
+    "iotdb": "iotdb",
+    "xugu": "xugu",
+    "memcached": "memcached",
+    # These databases expose query/control APIs over HTTP, but the asset
+    # protocol should still read as a database protocol in OpsCore.
+    "clickhouse": "clickhouse",
+    "elasticsearch": "elasticsearch",
+    "nebula_graph": "nebula_graph",
+    "nebula_graph_cluster": "nebula_graph",
+    # Platform APIs keep their domain protocol name for operators while still
+    # using the HTTP execution adapter underneath.
+    "kubernetes": "k8s",
+    "vmware": "vmware",
+    "openstack": "openstack",
+    "proxmox": "proxmox",
+    "zstack": "zstack",
+    "s3": "s3",
+    "minio": "minio",
+    "backup": "backup",
+    "ipmi": "ipmi",
+    "ldap": "ldap",
+    "dns_sd": "dns",
+    "jvm": "jmx",
+    "kafka_client": "kafka",
+    "zookeeper_sd": "tcp",
+    # Service probes are not management APIs. Keep the user-facing protocol
+    # close to the actual target so asset filters stay understandable.
+    "api": "http",
+    "website": "http",
+    "fullsite": "http",
+    "api_code": "http",
+    "dns": "dns",
+    "ssl_cert": "tls",
+    "websocket": "websocket",
+    "port": "tcp",
+    "udp_port": "udp",
+    "ping": "icmp",
+    "ftp": "ftp",
+    "smtp": "smtp",
+    "pop3": "pop3",
+    "netease_mailbox": "imap",
+    "qq_mailbox": "imap",
+    "mqtt": "mqtt",
+    "ntp": "ntp",
+    "modbus": "modbus",
+    "s7": "s7",
+    "registry": "registry",
+    # HertzBeat runs Windows Script through a collector. OpsCore operates
+    # Windows command sessions through WinRM/PowerShell.
+    "windows_script": "winrm",
+}
+
+ASSET_PORT_OVERRIDES = {
+    "deepseek": 443,
+    "openai": 443,
+    "dns": 53,
+    "udp_port": 53,
+    "ping": 0,
+    "ntp": 123,
+    "netease_mailbox": 993,
+    "qq_mailbox": 993,
+    "activemq": 8161,
+    "consul_sd": 8500,
+    "dns_sd": 53,
+    "eureka_sd": 8761,
+    "hadoop": 9870,
+    "hdfs_datanode": 9864,
+    "hdfs_namenode": 9870,
+    "doris_fe": 9030,
+    "starrocks_fe": 9030,
+    "greptime": 4002,
+    "hive": 10000,
+    "iceberg": 8181,
+    "iotdb": 6667,
+    "jetty": 8080,
+    "nacos_sd": 8848,
+    "prestodb": 8080,
+    "pulsar": 8080,
+    "shenyu": 9095,
+    "spark": 8080,
+    "spring_gateway": 8080,
+    "zookeeper_sd": 2181,
+    "nebula_graph": 9669,
+    "nebula_graph_cluster": 9669,
+    "ipmi": 623,
+    "ldap": 389,
+    "zstack": 8080,
+}
+
+
+ASSET_CATEGORY_OVERRIDES = {
+    # Synology is a NAS/SAN storage appliance. HertzBeat classifies it as a
+    # server-style SNMP target, but in OpsCore operators expect it under
+    # storage and backup.
+    "synology_nas": "storage",
+    "dns": "service",
+    "hertzbeat": "monitor",
+    "hertzbeat_token": "monitor",
+    "influxdb_promql": "monitor",
+    "kafka_promql": "monitor",
+    "tdengine_promql": "monitor",
+    "doris_be": "db",
+    "doris_fe": "db",
+    "greptime": "db",
+    "hbase_master": "db",
+    "hbase_regionserver": "db",
+    "hive": "db",
+    "hugegraph": "db",
+    "influxdb": "db",
+    "iotdb": "db",
+    "starrocks_be": "db",
+    "starrocks_fe": "db",
+}
+
+
+def _apply_protocol_overrides(catalog: list[dict]) -> list[dict]:
+    result = []
+    for item in catalog:
+        entry = dict(item)
+        category_override = ASSET_CATEGORY_OVERRIDES.get(entry.get("id"))
+        if category_override:
+            entry["category"] = category_override
+        override = ASSET_PROTOCOL_OVERRIDES.get(entry.get("id"))
+        if override:
+            entry["protocol"] = override
+            if override == "winrm":
+                entry["inspection_profile"] = "winrm"
+            elif override in {"mysql", "oracle", "postgresql", "mssql", "db2", "dameng", "xugu", "hive", "iotdb"}:
+                entry["inspection_profile"] = "sql"
+            elif override in {
+                "clickhouse",
+                "elasticsearch",
+                "nebula_graph",
+                "vmware",
+                "openstack",
+                "proxmox",
+                "zstack",
+                "s3",
+                "minio",
+                "backup",
+                "http",
+                "tls",
+                "websocket",
+                "tcp",
+                "udp",
+                "icmp",
+                "ftp",
+                "smtp",
+                "pop3",
+                "imap",
+                "mqtt",
+                "ntp",
+                "modbus",
+                "s7",
+                "registry",
+            }:
+                entry["inspection_profile"] = "http_api"
+            elif override == "k8s":
+                entry["inspection_profile"] = "k8s"
+            else:
+                entry["inspection_profile"] = override
+            if override == "winrm" and entry.get("default_port") == 22:
+                entry["default_port"] = 5985
+        port_override = ASSET_PORT_OVERRIDES.get(entry.get("id"))
+        if port_override is not None:
+            entry["default_port"] = port_override
+        result.append(entry)
+    return result
+
+
+ASSET_CATALOG = _apply_protocol_overrides(_merge_asset_catalog(BASE_ASSET_CATALOG, HERTZBEAT_ASSET_CATALOG))
+
+
 ASSET_PROTOCOL_MAP = {
     "ssh": "ssh",
     "linux": "ssh",
@@ -518,25 +741,41 @@ ASSET_PROTOCOL_MAP = {
     "router": "ssh",
     "firewall": "ssh",
     "vpn": "ssh",
-    "dns": "ssh",
+    "dns": "dns",
     "network": "ssh",
     "window": "winrm",
     "winrm": "winrm",
     "windows": "winrm",
+    "windows_script": "winrm",
     "mysql": "mysql",
     "oracle": "oracle",
     "postgresql": "postgresql",
     "pg": "postgresql",
     "mssql": "mssql",
     "redis": "redis",
+    "memcached": "memcached",
     "mongodb": "mongodb",
-    "clickhouse": "http_api",
+    "clickhouse": "clickhouse",
     "tidb": "mysql",
     "oceanbase": "mysql",
-    "dameng": "http_api",
-    "dm": "http_api",
+    "dameng": "dameng",
+    "dm": "dameng",
     "kingbase": "postgresql",
-    "elasticsearch": "http_api",
+    "elasticsearch": "elasticsearch",
+    "nebula_graph": "nebula_graph",
+    "nebula_graph_cluster": "nebula_graph",
+    "doris_fe": "mysql",
+    "starrocks_fe": "mysql",
+    "greptime": "mysql",
+    "mariadb": "mysql",
+    "sqlserver": "mssql",
+    "opengauss": "postgresql",
+    "greenplum": "postgresql",
+    "vastbase": "postgresql",
+    "db2": "db2",
+    "hive": "hive",
+    "iotdb": "iotdb",
+    "xugu": "xugu",
     "harbor": "http_api",
     "nginx": "ssh",
     "tomcat": "ssh",
@@ -546,28 +785,46 @@ ASSET_PROTOCOL_MAP = {
     "zookeeper": "ssh",
     "nacos": "http_api",
     "consul": "http_api",
-    "minio": "http_api",
-    "s3": "http_api",
-    "object_storage": "http_api",
-    "object-storage": "http_api",
-    "oss": "http_api",
-    "cos": "http_api",
-    "obs": "http_api",
+    "minio": "minio",
+    "s3": "s3",
+    "object_storage": "s3",
+    "object-storage": "s3",
+    "oss": "s3",
+    "cos": "s3",
+    "obs": "s3",
     "hdfs": "ssh",
     "glusterfs": "ssh",
-    "api": "http_api",
+    "api": "http",
+    "api_code": "http",
+    "website": "http",
+    "fullsite": "http",
+    "ssl_cert": "tls",
+    "websocket": "websocket",
+    "port": "tcp",
+    "udp_port": "udp",
+    "ping": "icmp",
+    "ftp": "ftp",
+    "smtp": "smtp",
+    "pop3": "pop3",
+    "netease_mailbox": "imap",
+    "qq_mailbox": "imap",
+    "mqtt": "mqtt",
+    "ntp": "ntp",
+    "modbus": "modbus",
+    "s7": "s7",
+    "registry": "registry",
     "http_api": "http_api",
-    "http": "http_api",
-    "https": "http_api",
-    "vmware": "http_api",
-    "vcenter": "http_api",
-    "esxi": "http_api",
-    "openstack": "http_api",
-    "proxmox": "http_api",
+    "http": "http",
+    "https": "http",
+    "vmware": "vmware",
+    "vcenter": "vmware",
+    "esxi": "vmware",
+    "openstack": "openstack",
+    "proxmox": "proxmox",
     "hyperv": "winrm",
     "k8s": "k8s",
     "kubernetes": "k8s",
-    "zstack": "http_api",
+    "zstack": "zstack",
     "f5": "http_api",
     "a10": "http_api",
     "waf": "http_api",
@@ -584,12 +841,14 @@ ASSET_PROTOCOL_MAP = {
     "nfs": "ssh",
     "nas": "snmp",
     "san": "snmp",
-    "backup": "http_api",
+    "backup": "backup",
+    "ipmi": "ipmi",
     "redfish": "redfish",
-    "ipmi": "snmp",
     "snmp": "snmp",
     "bastion": "http_api",
-    "ldap": "http_api",
+    "ldap": "ldap",
+    "jmx": "jmx",
+    "kafka": "kafka",
     "ad": "http_api",
     "audit": "http_api",
     "virtual": "virtual",
@@ -627,11 +886,47 @@ ASSET_TYPE_ALIASES = {
 GENERIC_ASSET_TYPES = {"", "api", "http", "https", "http_api", "virtual"}
 LEGACY_GENERIC_TYPES = GENERIC_ASSET_TYPES | {"linux", "ssh"}
 
-SQL_PROTOCOLS = {"mysql", "oracle", "postgresql", "mssql"}
-DATASTORE_PROTOCOLS = {"redis", "mongodb"}
-DB_PROTOCOLS = SQL_PROTOCOLS | DATASTORE_PROTOCOLS
+SQL_PROTOCOLS = {"mysql", "oracle", "postgresql", "mssql", "db2", "dameng", "xugu", "hive", "iotdb"}
+DATASTORE_PROTOCOLS = {"redis", "mongodb", "memcached"}
+DATABASE_HTTP_PROTOCOLS = {"clickhouse", "elasticsearch", "nebula_graph"}
+DATABASE_HTTP_ASSET_TYPES = {
+    item["id"]
+    for item in ASSET_CATALOG
+    if item.get("category") == "db" and item.get("protocol") in (DATABASE_HTTP_PROTOCOLS | {"http_api"})
+}
+VIRTUALIZATION_API_PROTOCOLS = {"vmware", "openstack", "proxmox", "zstack"}
+STORAGE_API_PROTOCOLS = {"s3", "minio", "backup"}
+SERVICE_PROBE_PROTOCOLS = {
+    "http",
+    "tls",
+    "websocket",
+    "tcp",
+    "udp",
+    "icmp",
+    "dns",
+    "ftp",
+    "smtp",
+    "pop3",
+    "imap",
+    "mqtt",
+    "ntp",
+    "modbus",
+    "s7",
+    "registry",
+    "ipmi",
+    "ldap",
+    "jmx",
+    "kafka",
+}
+DB_PROTOCOLS = SQL_PROTOCOLS | DATASTORE_PROTOCOLS | DATABASE_HTTP_PROTOCOLS
 SSH_PROTOCOLS = {"ssh"}
-API_PROTOCOLS = {"http_api", "k8s", "redfish"}
+API_PROTOCOLS = (
+    {"http_api", "k8s", "redfish"}
+    | DATABASE_HTTP_PROTOCOLS
+    | VIRTUALIZATION_API_PROTOCOLS
+    | STORAGE_API_PROTOCOLS
+    | SERVICE_PROBE_PROTOCOLS
+)
 SNMP_PROTOCOLS = {"snmp"}
 NETWORK_CLI_ASSET_TYPES = {"switch", "firewall", "vpn"}
 CONTAINER_ASSET_TYPES = {"docker", "containerd", "podman"}
@@ -653,9 +948,45 @@ MONITORING_ASSET_TYPES = {
     "victoriametrics",
     "zabbix",
     "manageengine",
+    "hertzbeat",
+    "hertzbeat_token",
+    "influxdb_promql",
+    "kafka_promql",
+    "tdengine_promql",
 }
 VIRTUALIZATION_ASSET_TYPES = {"vmware", "kvm", "openstack", "proxmox", "hyperv", "zstack"}
 STORAGE_ASSET_TYPES = {"ceph", "nfs", "nas", "minio", "s3", "hdfs", "glusterfs", "backup"}
+SERVICE_ASSET_TYPES = {item["id"] for item in ASSET_CATALOG if item.get("category") == "service"}
+
+
+def _category_asset_types(category: str, protocol: str | None = None) -> set[str]:
+    return {
+        item["id"]
+        for item in ASSET_CATALOG
+        if item.get("category") == category and (protocol is None or item.get("protocol") == protocol)
+    }
+
+
+BIGDATA_API_ASSET_TYPES = _category_asset_types("bigdata", "http_api")
+CONTAINER_API_ASSET_TYPES = _category_asset_types("container", "http_api")
+MIDDLEWARE_API_ASSET_TYPES = _category_asset_types("middleware", "http_api")
+NETWORK_API_ASSET_TYPES = _category_asset_types("network", "http_api")
+SECURITY_API_ASSET_TYPES = _category_asset_types("security", "http_api")
+OOB_API_ASSET_TYPES = _category_asset_types("oob", "http_api")
+DISCOVERY_API_ASSET_TYPES = _category_asset_types("discovery", "http_api")
+AI_PLATFORM_API_ASSET_TYPES = _category_asset_types("ai", "http_api")
+CICD_API_ASSET_TYPES = _category_asset_types("cicd", "http_api")
+DOMAIN_HTTP_API_ASSET_TYPES = (
+    BIGDATA_API_ASSET_TYPES
+    | CONTAINER_API_ASSET_TYPES
+    | MIDDLEWARE_API_ASSET_TYPES
+    | NETWORK_API_ASSET_TYPES
+    | SECURITY_API_ASSET_TYPES
+    | OOB_API_ASSET_TYPES
+    | DISCOVERY_API_ASSET_TYPES
+    | AI_PLATFORM_API_ASSET_TYPES
+    | CICD_API_ASSET_TYPES
+)
 
 PORT_ASSET_HINTS = {
     22: "linux",
@@ -669,6 +1000,7 @@ PORT_ASSET_HINTS = {
     5985: "windows",
     5986: "windows",
     6379: "redis",
+    11211: "memcached",
     8123: "clickhouse",
     2881: "oceanbase",
     4000: "tidb",
@@ -790,14 +1122,14 @@ KEYWORD_ASSET_HINTS = [
 
 
 def get_asset_catalog() -> list[dict]:
-    return [dict(item) for item in ASSET_CATALOG]
+    return [enrich_asset_capability(item) for item in ASSET_CATALOG]
 
 
 def get_asset_definition(asset_type: str | None) -> dict | None:
     subtype = canonical_asset_type(asset_type)
     for item in ASSET_CATALOG:
         if item["id"] == subtype:
-            return dict(item)
+            return enrich_asset_capability(item)
     return None
 
 
@@ -990,7 +1322,7 @@ def normalize_protocol(
 
     if value in {"api", "http_api"}:
         subtype_protocol = ASSET_PROTOCOL_MAP.get(subtype)
-        if subtype_protocol in {"k8s", "snmp", "redfish"}:
+        if subtype_protocol in API_PROTOCOLS or subtype_protocol in SNMP_PROTOCOLS:
             return subtype_protocol
         return "http_api"
 
@@ -1028,6 +1360,8 @@ def normalize_extra_args(asset_type: str, protocol: str, extra_args: dict | None
     if protocol in SQL_PROTOCOLS:
         args["db_type"] = protocol
     elif protocol in DATASTORE_PROTOCOLS:
+        args.setdefault("db_type", protocol)
+    elif protocol in DATABASE_HTTP_PROTOCOLS:
         args.setdefault("db_type", protocol)
     return args
 

@@ -25,6 +25,23 @@ class TestRedaction(unittest.TestCase):
         self.assertEqual(redacted["password"], "***")
         self.assertEqual(redacted["nested"]["api_key"], "***")
 
+    def test_redacts_asset_credential_field_names(self):
+        payload = {
+            "api_token": "plain-api-token-value",
+            "secret_key": "plain-secret-key-value",
+            "aws_access_key_id": "AKIA1234567890123456",
+            "aws_secret_access_key": "plain-aws-secret-value",
+            "safe": "kept",
+        }
+
+        redacted = redact_value(payload)
+
+        self.assertEqual(redacted["api_token"], "***")
+        self.assertEqual(redacted["secret_key"], "***")
+        self.assertEqual(redacted["aws_access_key_id"], "***")
+        self.assertEqual(redacted["aws_secret_access_key"], "***")
+        self.assertEqual(redacted["safe"], "kept")
+
     def test_redacts_db_connection_url(self):
         text = "mysql://root:ExampleP%40ssw0rd!@172.17.10.2:3306/ops"
 

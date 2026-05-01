@@ -10,7 +10,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from core.asset_protocols import API_PROTOCOLS, SQL_PROTOCOLS, SNMP_PROTOCOLS, resolve_asset_identity
+from core.asset_protocols import (
+    API_PROTOCOLS,
+    SERVICE_ASSET_TYPES,
+    SERVICE_PROBE_PROTOCOLS,
+    SQL_PROTOCOLS,
+    SNMP_PROTOCOLS,
+    STORAGE_ASSET_TYPES,
+    VIRTUALIZATION_ASSET_TYPES,
+    resolve_asset_identity,
+)
 from core.tool_registry import tool_registry
 
 SECRET_KEYS = {
@@ -275,9 +284,11 @@ async def run_protocol_probe(asset: dict[str, Any]) -> dict[str, Any]:
         }
 
     if protocol in SQL_PROTOCOLS:
-        from connections.db_manager import db_executor
+        from connections.db_manager import db_executor, get_database_operation_profile
 
-        sql = "SELECT 1 FROM DUAL" if protocol == "oracle" else "SELECT 1"
+        sql = get_database_operation_profile(protocol).get("test_statement") or (
+            "SELECT 1 FROM DUAL" if protocol == "oracle" else "SELECT 1"
+        )
         result_text = await asyncio.to_thread(
             db_executor.execute_query,
             protocol,
@@ -317,6 +328,22 @@ async def run_protocol_probe(asset: dict[str, Any]) -> dict[str, Any]:
             "details": {"tool": "redis_execute_command", "command": "PING", "result": result},
         }
 
+    if protocol == "memcached":
+        from connections.datastore_manager import memcached_executor
+
+        result = await asyncio.to_thread(
+            memcached_executor.execute_command,
+            host=asset.get("host") or "",
+            port=int(asset.get("port") or 11211),
+            command="version",
+            extra_args=extra_args,
+        )
+        return {
+            "status": "success" if _probe_success(result) else "error",
+            "message": "Memcached 原生 version 探测成功。" if _probe_success(result) else result.get("error") or "Memcached 原生探测失败。",
+            "details": {"tool": "memcached_execute_command", "command": "version", "result": result},
+        }
+
     if protocol == "mongodb":
         from connections.datastore_manager import mongo_executor
 
@@ -341,29 +368,104 @@ async def run_protocol_probe(asset: dict[str, Any]) -> dict[str, Any]:
             "details": {"tool": "mongodb_find", "command": f"{database}.{collection}.find({{}}).limit(1)", "result": result},
         }
 
+    if protocol in SERVICE_PROBE_PROTOCOLS or asset_type in SERVICE_ASSET_TYPES:
+        from connections.service_probe_manager import service_probe_executor
+
+        result = await asyncio.to_thread(
+            service_probe_executor.execute,
+            asset_type=asset_type,
+            protocol=protocol,
+            host=asset.get("host") or "",
+            port=int(asset.get("port") or 0) or None,
+            username=asset.get("username") or "",
+            password=asset.get("password"),
+            extra_args=extra_args,
+            operation="probe",
+            path=extra_args.get("health_path"),
+        )
+        return {
+            "status": "success" if _probe_success(result) else "error",
+            "message": f"{asset_type}/{protocol} 业务探测成功。" if _probe_success(result) else result.get("error") or f"{asset_type}/{protocol} 业务探测失败。",
+            "details": {"tool": "service_probe_request", "operation": "probe", "result": result},
+        }
+
     if protocol in API_PROTOCOLS:
         from connections.http_api_manager import http_api_executor
+        from connections.virtualization_manager import virtualization_api_executor
 
         default_path = {
             "k8s": "/version",
+            "clickhouse": "/?query=SELECT%201",
+            "elasticsearch": "/_cluster/health",
+            "nebula_graph": "/",
+            "nebula_graph_cluster": "/",
+            "vmware": "/",
+            "openstack": "/",
+            "proxmox": "/api2/json/version",
+            "zstack": "/",
+            "s3": "/",
+            "minio": "/",
+            "backup": "/",
             "prometheus": "/api/v1/status/buildinfo",
             "alertmanager": "/api/v2/status",
             "grafana": "/api/health",
             "redfish": "/redfish/v1/",
         }.get(asset_type, "/")
         path = str(extra_args.get("health_path") or default_path)
-        tool = "k8s_api_request" if protocol == "k8s" else ("monitoring_api_query" if asset_type in {"prometheus", "alertmanager", "grafana", "loki", "victoriametrics", "zabbix", "manageengine"} else "http_api_request")
-        result = await asyncio.to_thread(
-            http_api_executor.request,
-            asset_type=asset_type,
-            host=asset.get("host") or "",
-            port=int(asset.get("port") or 443),
-            username=asset.get("username") or "",
-            password=asset.get("password"),
-            extra_args=extra_args,
-            method="GET",
-            path=path,
+        context = {
+            "target_scope": "asset",
+            "asset_type": asset_type,
+            "protocol": protocol,
+            "extra_args": extra_args,
+        }
+        active_tools = {tool.name for tool in tool_registry.available(context)}
+        preferred_tools = [
+            "monitoring_api_query",
+            "virtualization_api_request",
+            "storage_api_request",
+            "database_api_request",
+            "bigdata_api_request",
+            "middleware_api_request",
+            "discovery_api_request",
+            "container_api_request",
+            "network_api_request",
+            "security_api_request",
+            "cicd_api_request",
+            "ai_platform_api_request",
+            "oob_api_request",
+            "http_api_request",
+        ]
+        tool = (
+            "k8s_api_request"
+            if protocol == "k8s"
+            else next((candidate for candidate in preferred_tools if candidate in active_tools), "http_api_request")
         )
+        if asset_type in VIRTUALIZATION_ASSET_TYPES:
+            result = await asyncio.to_thread(
+                virtualization_api_executor.execute,
+                asset_type=asset_type,
+                protocol=protocol,
+                host=asset.get("host") or "",
+                port=int(asset.get("port") or 443),
+                username=asset.get("username") or "",
+                password=asset.get("password"),
+                extra_args=extra_args,
+                operation="version" if asset_type in {"proxmox", "vmware", "openstack", "zstack"} else "request",
+                method="GET",
+                path=path,
+            )
+        else:
+            result = await asyncio.to_thread(
+                http_api_executor.request,
+                asset_type=asset_type,
+                host=asset.get("host") or "",
+                port=int(asset.get("port") or 443),
+                username=asset.get("username") or "",
+                password=asset.get("password"),
+                extra_args=extra_args,
+                method="GET",
+                path=path,
+            )
         return {
             "status": "success" if _probe_success(result) else "error",
             "message": f"{asset_type}/{protocol} HTTP/API 原生探测成功。" if _probe_success(result) else result.get("error") or f"{asset_type}/{protocol} HTTP/API 原生探测失败。",

@@ -139,22 +139,40 @@ class TestInspectionTemplates(unittest.TestCase):
             postgresql = inspection_templates.find_matching_template("kingbase", "postgresql")
             oracle = inspection_templates.find_matching_template("oracle", "oracle")
             mssql = inspection_templates.find_matching_template("mssql", "mssql")
+            memcached = inspection_templates.find_matching_template("memcached", "memcached")
+            dameng = inspection_templates.find_matching_template("dameng", "dameng")
+            db2 = inspection_templates.find_matching_template("db2", "db2")
+            clickhouse = inspection_templates.find_matching_template("clickhouse", "clickhouse")
+            elasticsearch = inspection_templates.find_matching_template("elasticsearch", "elasticsearch")
 
         self.assertEqual(windows["id"], "builtin-windows-core-readonly")
         self.assertEqual({step["tool"] for step in windows["steps"]}, {"winrm_execute_command"})
         self.assertTrue(
-            {"os", "disk", "services", "events", "hotfixes"}.issubset(
+            {"os", "disk", "services", "events", "security_events", "hotfixes"}.issubset(
                 {step["name"] for step in windows["steps"]}
             )
         )
+        security_step = next(step for step in windows["steps"] if step["name"] == "security_events")
+        self.assertIn("LogName='Security'", security_step["command"])
+        self.assertIn("permission_denied", security_step["command"])
 
         self.assertEqual(mysql["id"], "builtin-mysql-core-readonly")
         self.assertEqual(postgresql["id"], "builtin-postgresql-core-readonly")
         self.assertEqual(oracle["id"], "builtin-oracle-core-readonly")
         self.assertEqual(mssql["id"], "builtin-mssql-core-readonly")
+        self.assertEqual(memcached["id"], "builtin-memcached-core-readonly")
+        self.assertEqual(dameng["id"], "builtin-jdbc-database-core-readonly")
+        self.assertEqual(db2["id"], "builtin-db2-core-readonly")
+        self.assertEqual(db2["steps"][0]["sql"], "SELECT 1 FROM SYSIBM.SYSDUMMY1")
+        self.assertEqual(clickhouse["id"], "builtin-clickhouse-core-readonly")
+        self.assertEqual(elasticsearch["id"], "builtin-elasticsearch-core-readonly")
+        self.assertEqual({step["tool"] for step in clickhouse["steps"]}, {"database_api_request"})
+        self.assertEqual({step["tool"] for step in elasticsearch["steps"]}, {"database_api_request"})
         for template in (mysql, postgresql, oracle, mssql):
             self.assertEqual({step["tool"] for step in template["steps"]}, {"db_execute_query"})
             self.assertTrue({"version", "connections"}.issubset({step["name"] for step in template["steps"]}))
+        self.assertEqual({step["tool"] for step in memcached["steps"]}, {"memcached_execute_command"})
+        self.assertEqual({step["command"] for step in memcached["steps"]}, {"version", "stats"})
 
     def test_builtin_network_snmp_virtualization_and_redfish_templates_match(self):
         from core import inspection_templates
@@ -163,10 +181,12 @@ class TestInspectionTemplates(unittest.TestCase):
         with patch.object(inspection_templates, "TEMPLATE_STORE_PATH", store_path):
             network = inspection_templates.find_matching_template("firewall", "ssh")
             snmp = inspection_templates.find_matching_template("nas", "snmp")
-            vmware = inspection_templates.find_matching_template("vmware", "http_api")
-            proxmox = inspection_templates.find_matching_template("proxmox", "http_api")
+            vmware = inspection_templates.find_matching_template("vmware", "vmware")
+            proxmox = inspection_templates.find_matching_template("proxmox", "proxmox")
             kvm = inspection_templates.find_matching_template("kvm", "ssh")
             redfish = inspection_templates.find_matching_template("redfish", "redfish")
+            s3 = inspection_templates.find_matching_template("s3", "s3")
+            backup = inspection_templates.find_matching_template("backup", "backup")
 
         self.assertEqual(network["id"], "builtin-network-cli-core-readonly")
         self.assertEqual({step["tool"] for step in network["steps"]}, {"network_cli_execute_command"})
@@ -184,10 +204,16 @@ class TestInspectionTemplates(unittest.TestCase):
         self.assertEqual(proxmox["id"], "builtin-proxmox-core-readonly")
         self.assertEqual(kvm["id"], "builtin-kvm-core-readonly")
         self.assertEqual(redfish["id"], "builtin-redfish-core-readonly")
+        self.assertEqual(s3["id"], "builtin-object-storage-core-readonly")
+        self.assertEqual(backup["id"], "builtin-backup-storage-core-readonly")
         self.assertEqual({step["tool"] for step in vmware["steps"]}, {"virtualization_api_request"})
         self.assertEqual({step["tool"] for step in proxmox["steps"]}, {"virtualization_api_request"})
         self.assertEqual({step["tool"] for step in kvm["steps"]}, {"linux_execute_command"})
         self.assertEqual({step["tool"] for step in redfish["steps"]}, {"http_api_request"})
+        self.assertEqual({step["tool"] for step in s3["steps"]}, {"storage_api_request"})
+        self.assertEqual({step["tool"] for step in backup["steps"]}, {"storage_api_request"})
+        self.assertIn("list_buckets", {step["operation"] for step in s3["steps"]})
+        self.assertIn("jobs", {step["operation"] for step in backup["steps"]})
 
     def test_template_validation_rejects_unsafe_step(self):
         from core import inspection_templates

@@ -18,6 +18,41 @@ def _convert_openai_tools_to_anthropic(openai_tools):
     return anthropic_tools
 
 
+def _convert_openai_content_to_anthropic_blocks(content):
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return str(content or "")
+
+    blocks = []
+    for block in content:
+        if not isinstance(block, dict):
+            blocks.append({"type": "text", "text": str(block)})
+            continue
+        block_type = block.get("type")
+        if block_type == "text":
+            blocks.append({"type": "text", "text": str(block.get("text") or "")})
+        elif block_type == "image_url":
+            image_url = block.get("image_url") or {}
+            url = image_url.get("url") if isinstance(image_url, dict) else ""
+            if isinstance(url, str) and url.startswith("data:image/") and ";base64," in url:
+                header, data = url.split(";base64,", 1)
+                media_type = header.removeprefix("data:")
+                blocks.append(
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": data,
+                        },
+                    }
+                )
+            else:
+                blocks.append({"type": "text", "text": "[图片附件无法转换为 Anthropic 图片块]"})
+    return blocks or [{"type": "text", "text": ""}]
+
+
 def _convert_openai_messages_to_anthropic(messages):
     anthropic_messages = []
     system_prompt = None
@@ -78,7 +113,9 @@ def _convert_openai_messages_to_anthropic(messages):
                 anthropic_messages.append({"role": "user", "content": [block]})
 
         elif role == "user":
-            anthropic_messages.append({"role": "user", "content": content})
+            anthropic_messages.append(
+                {"role": "user", "content": _convert_openai_content_to_anthropic_blocks(content)}
+            )
 
     return system_prompt, anthropic_messages
 

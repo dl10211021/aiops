@@ -2,6 +2,7 @@ import asyncio
 import io
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -243,11 +244,134 @@ class TestApiErrorSemantics(unittest.TestCase):
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data["result"]["decision"], "deny")
 
+    def test_safety_policy_test_endpoint_returns_business_actions(self):
+        response = asyncio.run(
+            routes.test_safety_policy_endpoint(
+                routes.SafetyPolicyTestRequest(
+                    tool_name="db_execute_query",
+                    sql="ALTER SYSTEM SWITCH LOGFILE",
+                    allow_modifications=True,
+                    asset_type="oracle",
+                    protocol="oracle",
+                )
+            )
+        )
+
+        result = response.data["result"]
+        self.assertEqual(response.status, "success")
+        self.assertEqual(result["decision"], "approval")
+        self.assertEqual(result["primary_action"]["id"], "sql.instance_admin")
+        self.assertEqual(result["actions"][0]["label"], "数据库实例管理")
+
     def test_safety_policy_test_request_rejects_unknown_tool(self):
         with self.assertRaises(ValidationError):
             routes.SafetyPolicyTestRequest(
                 tool_name="unknown_execute",
                 command="echo ok",
+            )
+
+    def test_safety_policy_test_request_accepts_registered_auxiliary_tools(self):
+        memcached = routes.SafetyPolicyTestRequest(
+            tool_name="memcached_execute_command",
+            command="flush_all",
+        )
+        service_probe = routes.SafetyPolicyTestRequest(
+            tool_name="service_probe_request",
+            method="GET",
+            path="/health",
+        )
+        snmp = routes.SafetyPolicyTestRequest(
+            tool_name="snmp_get",
+            oid="1.3.6.1.2.1.1.1.0",
+        )
+
+        self.assertEqual(memcached.tool_args(), {"command": "flush_all"})
+        self.assertEqual(service_probe.tool_args()["path"], "/health")
+        self.assertEqual(snmp.tool_args(), {"oid": "1.3.6.1.2.1.1.1.0"})
+
+    def test_chat_attachment_preview_parses_text_and_xlsx_content(self):
+        text_preview = routes._preview_attachment_content(
+            "runbook.txt",
+            "text/plain",
+            "巡检步骤\n1. 查看服务状态".encode("utf-8"),
+        )
+
+        xlsx_bytes = io.BytesIO()
+        with zipfile.ZipFile(xlsx_bytes, "w") as zf:
+            zf.writestr(
+                "xl/sharedStrings.xml",
+                """<?xml version="1.0" encoding="UTF-8"?>
+                <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <si><t>资产</t></si><si><t>状态</t></si><si><t>oracle-01</t></si><si><t>异常</t></si>
+                </sst>""",
+            )
+            zf.writestr(
+                "xl/worksheets/sheet1.xml",
+                """<?xml version="1.0" encoding="UTF-8"?>
+                <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <sheetData>
+                    <row><c t="s"><v>0</v></c><c t="s"><v>1</v></c></row>
+                    <row><c t="s"><v>2</v></c><c t="s"><v>3</v></c></row>
+                  </sheetData>
+                </worksheet>""",
+            )
+
+        xlsx_preview = routes._preview_attachment_content(
+            "assets.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            xlsx_bytes.getvalue(),
+        )
+        image_preview = routes._preview_attachment_content(
+            "screen.png",
+            "image/png",
+            b"\x89PNG\r\n\x1a\n",
+        )
+
+        self.assertIn("查看服务状态", text_preview["text"])
+        self.assertIn("oracle-01", xlsx_preview["text"])
+        self.assertEqual(xlsx_preview["rows"], 2)
+        self.assertEqual(image_preview["kind"], "image")
+        self.assertIn("图片文件：screen.png", image_preview["text"])
+
+    def test_chat_request_normalizes_attachment_metadata_and_rejects_bad_data_url(self):
+        req = routes.ChatRequest(
+            session_id="sid",
+            message="hello",
+            attachments=[
+                {
+                    "filename": "../screen.png",
+                    "ext": ".png",
+                    "size": 5,
+                    "kind": "image",
+                    "pages": 2,
+                    "rows": 3,
+                    "sheets": ["Sheet1", "x" * 120],
+                    "truncated": True,
+                    "data_url": "data:image/png;base64,aGVsbG8=",
+                }
+            ],
+        )
+
+        self.assertEqual(req.attachments[0]["filename"], "screen.png")
+        self.assertEqual(req.attachments[0]["content_type"], "image/png")
+        self.assertEqual(req.attachments[0]["pages"], 2)
+        self.assertEqual(req.attachments[0]["rows"], 3)
+        self.assertEqual(req.attachments[0]["sheets"], ["Sheet1", "x" * 80])
+        self.assertTrue(req.attachments[0]["truncated"])
+        self.assertNotIn("..", req.attachments[0]["filename"])
+
+        with self.assertRaises(ValidationError):
+            routes.ChatRequest(
+                session_id="sid",
+                message="hello",
+                attachments=[
+                    {
+                        "filename": "bad.txt",
+                        "size": 5,
+                        "kind": "document",
+                        "data_url": "data:image/png;base64,aGVsbG8=",
+                    }
+                ],
             )
 
     def test_safety_policy_update_rejects_invalid_regex_with_422(self):

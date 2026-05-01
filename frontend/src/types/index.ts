@@ -15,16 +15,78 @@ export interface Session {
   tags: string[]
   target_scope?: string
   scope_value?: string | null
+  backendStreaming?: boolean
   // Frontend-only state
   messages: ChatMessage[]
   isStreaming: boolean
+  historyLoaded?: boolean
+}
+
+export interface AssetProfileEvidence {
+  label: string
+  value: string
+  source?: string
+}
+
+export interface AssetProfileFocusArea {
+  title: string
+  reason: string
+  priority: string
+}
+
+export interface AssetProfile {
+  version: number
+  session_id: string
+  asset_key?: string
+  host?: string
+  port?: number
+  remark?: string
+  asset_type?: string
+  protocol?: string
+  role_label: string
+  role_category: string
+  purpose: string
+  confidence: number
+  risk_level: 'normal' | 'watch' | 'high' | string
+  evidence: AssetProfileEvidence[]
+  focus_areas: AssetProfileFocusArea[]
+  services: string[]
+  tags: string[]
+  source?: string
+  source_summary?: string
+  updated_at?: string
+}
+
+export interface SlashCommand {
+  id: string
+  label: string
+  description: string
+  prompt: string
+  prompt_template?: string
+  category: string
+  scope_type?: 'global' | 'asset_type' | 'protocol' | 'asset' | string
+  asset_type?: string
+  protocol?: string
+  host?: string
+  readonly?: boolean
+  pinned?: boolean
+  enabled?: boolean
+  sort_order?: number
+  source?: 'builtin' | 'custom' | string
+  is_override?: boolean
+  builtin_id?: string
+  asset_types?: string[]
+  protocols?: string[]
 }
 
 export interface ChatMessage {
   id: string
+  memoryId?: number
+  _memory_id?: number
   role: 'user' | 'assistant' | 'system'
   content: string
   timestamp: number
+  attachments?: ChatMessageAttachment[]
   // For tool execution traces
   execTrace?: ExecTraceItem[]
   // For tool approval requests
@@ -33,14 +95,33 @@ export interface ChatMessage {
   userInteraction?: UserInteractionRequest
 }
 
+export interface ChatMessageAttachment {
+  filename: string
+  ext?: string
+  size: number
+  kind?: string
+  rows?: number
+  pages?: number
+  sheets?: string[]
+  truncated?: boolean
+}
+
 export interface ExecTraceItem {
   type: 'tool_start' | 'tool_end'
   tool: string
   args?: string
   result?: string
+  resultMeta?: Record<string, unknown>
   status?: 'running' | 'done' | 'error'
   startedAt?: number
   completedAt?: number
+}
+
+export interface SafetyPolicyAction {
+  id: string
+  label: string
+  description?: string
+  severity?: 'low' | 'medium' | 'high' | 'critical' | string
 }
 
 export interface ToolApproval {
@@ -48,8 +129,15 @@ export interface ToolApproval {
   toolName: string
   args: string
   reason?: string
+  actions?: SafetyPolicyAction[]
+  primaryAction?: SafetyPolicyAction | null
   uniqueId: string
   resolved: boolean
+  decision?: 'approved' | 'rejected' | 'timeout'
+  operator?: string
+  note?: string
+  autoAll?: boolean
+  decidedAt?: number
 }
 
 export interface UserInteractionOption {
@@ -67,6 +155,7 @@ export interface UserInteractionRequest {
   required?: boolean
   timeoutSeconds?: number
   resolved: boolean
+  status?: 'submitted' | 'timeout' | string
   value?: string
   label?: string
 }
@@ -136,6 +225,62 @@ export interface Asset {
   extra_args: Record<string, unknown>
   skills: string[]
   tags: string[]
+}
+
+export interface AssetParamDefinition {
+  field: string
+  label: string
+  type: string
+  required?: boolean
+  defaultValue?: string | number | boolean
+  placeholder?: string
+  range?: string
+  limit?: number
+  group?: string
+  options?: Array<{ label: string; value: string | number | boolean }>
+  depend?: Record<string, Array<string | number | boolean>>
+  hide?: boolean
+}
+
+export interface AssetTypeDefinition {
+  id: string
+  label: string
+  category: string
+  protocol: string
+  default_port: number
+  inspection_profile?: string
+  source?: string
+  hertzbeat_category?: string
+  hertzbeat_protocols?: string[]
+  params?: AssetParamDefinition[]
+  category_meta?: AssetCategoryDefinition
+  capability?: {
+    family: string
+    connector: string
+    operation_model: string
+    tools: string[]
+    credential_fields: string[]
+    connector_group?: AssetCategoryDefinition & { tools?: string[] }
+    driver_key?: string
+    maturity: 'native' | 'generic' | 'needs_adapter' | string
+    setup?: Record<string, unknown>
+    parameter_template?: AssetParamDefinition[]
+    risk_model: {
+      read_only_default: boolean
+      approval_required_for_write: boolean
+      hard_block_supported: boolean
+      safety_category: string
+    }
+    standard_version: string
+  }
+}
+
+export interface AssetCategoryDefinition {
+  id: string
+  label: string
+  group?: string
+  order?: number
+  description?: string
 }
 
 export interface CronJob {
@@ -386,6 +531,10 @@ export interface ApprovalRequest {
   tool_name: string
   args: Record<string, unknown>
   metadata?: {
+    policy?: {
+      actions?: SafetyPolicyAction[]
+      primary_action?: SafetyPolicyAction | null
+    }
     skill_change?: {
       type: string
       skill_id: string
@@ -416,6 +565,15 @@ export interface ApprovalRequest {
       backup_path?: string | null
       version_id?: string
       restored_version_path?: string
+    }
+    metadata?: {
+      type?: string
+      statement_type?: string
+      has_result_set?: boolean
+      committed?: boolean
+      affected_rows?: number
+      count?: number
+      message?: string
     }
     completed_at?: string
     completed_at_ts?: number
@@ -484,11 +642,25 @@ export interface SafetyPolicyRule {
   }>
 }
 
+export type SafetyPolicyDecision = 'allow' | 'approval' | 'deny'
+
+export interface SafetyPolicyNetworkBoundary {
+  enabled: boolean
+  active_cidrs: string[]
+  readonly_cidrs: string[]
+  blocked_cidrs: string[]
+  allowed_hosts: string[]
+  blocked_hosts: string[]
+  block_unknown_targets: boolean
+}
+
 export interface SafetyPolicy {
   version: number
   approval_timeout_seconds: number
   readwrite_chat_warning_enabled: boolean
   rules?: SafetyPolicyRule[]
+  action_rules?: Record<string, Record<string, SafetyPolicyDecision>>
+  network_boundary?: SafetyPolicyNetworkBoundary
   categories: Record<string, SafetyPolicyCategory>
 }
 
@@ -504,6 +676,7 @@ export interface SafetyPolicyTestInput {
   asset_type?: string
   protocol?: string
   trigger_source?: string
+  host?: string
   tags?: string[]
 }
 
@@ -512,6 +685,16 @@ export interface SafetyPolicyTestResult {
   label: string
   mode: 'readonly' | 'readwrite' | string
   reason: string
+  actions?: SafetyPolicyAction[]
+  primary_action?: SafetyPolicyAction | null
+  resolution_layer?: string
+  policy_layers?: Array<{
+    id: string
+    label: string
+    matched: boolean
+    reason?: string
+    priority?: number
+  }>
   checks: Array<{
     name: string
     matched: boolean

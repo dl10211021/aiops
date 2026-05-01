@@ -36,6 +36,8 @@ class TestApprovalQueue(unittest.TestCase):
         self.assertEqual(request["status"], "pending")
         self.assertEqual(pending[0]["id"], "call-1")
         self.assertEqual(pending[0]["args"]["password"], "***")
+        self.assertEqual(pending[0]["metadata"]["policy"]["primary_action"]["id"], "sql.data_write")
+        self.assertEqual(pending[0]["metadata"]["policy"]["primary_action"]["label"], "数据库数据写入")
         self.assertNotIn("asset-secret", str(pending[0]))
 
     def test_evolve_skill_approval_records_summary_instead_of_full_content(self):
@@ -145,6 +147,31 @@ class TestApprovalQueue(unittest.TestCase):
         self.assertEqual(executed["execution"]["artifacts"]["skill_id"], "safe-skill")
         self.assertEqual(executed["execution"]["artifacts"]["backup_path"], "D:/tmp/safe-skill/.versions/SKILL.md.1.bak")
         self.assertNotIn("sk-testsecret1234567890", str(executed["execution"]))
+
+    def test_record_approval_execution_summarizes_database_statement(self):
+        from core import approval_queue
+
+        store_path = self._store_path("database_execution")
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path):
+            approval_queue.record_approval_request(
+                tool_call_id="call-db",
+                session_id="sid-1",
+                tool_name="db_execute_query",
+                args={"sql": "ALTER SYSTEM SWITCH LOGFILE", "password": "secret"},
+                reason="数据库实例管理需要审批",
+                context={"host": "db.local", "asset_type": "oracle", "protocol": "oracle"},
+            )
+            approval_queue.resolve_approval_request("call-db", approved=True, operator="dba")
+            executed = approval_queue.record_approval_execution(
+                "call-db",
+                '{"success":true,"has_result_set":false,"statement_type":"alter","committed":true,"affected_rows":-1,"message":"ALTER 已执行并提交","data":[]}',
+            )
+
+        metadata = executed["execution"]["metadata"]
+        self.assertEqual(metadata["type"], "database_statement")
+        self.assertEqual(metadata["statement_type"], "alter")
+        self.assertTrue(metadata["committed"])
+        self.assertEqual(metadata["affected_rows"], -1)
 
     def test_record_approval_execution_rejects_duplicate_result_without_overwriting(self):
         from core import approval_queue

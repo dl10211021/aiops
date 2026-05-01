@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pyarrow as pa
 from cryptography.fernet import Fernet
 
-from core.memory import MemoryDB
+from core.memory import DEFAULT_SENSITIVE_EXTRA_ARG_KEYS, MemoryDB
 
 
 def make_memory_db() -> MemoryDB:
@@ -25,15 +25,7 @@ def make_memory_db() -> MemoryDB:
     db._key = Fernet.generate_key()
     db._fernet = Fernet(db._key)
     db._encrypted_prefix = "fernet:"
-    db.sensitive_keys = [
-        "bearer_token",
-        "kubeconfig",
-        "api_token",
-        "v3_auth_pass",
-        "v3_priv_pass",
-        "community_string",
-        "enable_pass",
-    ]
+    db.sensitive_keys = list(DEFAULT_SENSITIVE_EXTRA_ARG_KEYS)
     db.ltm_schema = pa.schema(
         [
             pa.field("session_id", pa.string()),
@@ -140,6 +132,94 @@ class TestMemorySecurity(unittest.TestCase):
         self.assertEqual(assets[0]["password"], "new-secret")
         self.assertEqual(assets[0]["skills"], ["linux"])
         self.assertEqual(assets[0]["tags"], ["new"])
+
+    def test_asset_extra_args_are_encrypted_at_rest_and_decrypted_for_runtime(self):
+        db = make_memory_db()
+
+        db.save_asset(
+            remark="prod-s3",
+            host="s3.internal",
+            port=443,
+            username="",
+            password="",
+            asset_type="s3",
+            protocol="s3",
+            agent_profile="default",
+            extra_args={
+                "category": "storage",
+                "sub_type": "s3",
+                "endpoint_url": "https://s3.internal",
+                "access_key": "ak-prod",
+                "secret_key": "sk-prod",
+                "bucket": "ops-logs",
+            },
+            skills=["storage"],
+            tags=["storage"],
+        )
+
+        with closing(sqlite3.connect(db.db_path)) as conn:
+            raw_extra_args = conn.execute(
+                "SELECT extra_args_json FROM assets WHERE host = ?", ("s3.internal",)
+            ).fetchone()[0]
+
+        self.assertNotIn("ak-prod", raw_extra_args)
+        self.assertNotIn("sk-prod", raw_extra_args)
+        asset = db.get_all_assets()[0]
+        self.assertEqual(asset["extra_args"]["access_key"], "ak-prod")
+        self.assertEqual(asset["extra_args"]["secret_key"], "sk-prod")
+        self.assertEqual(asset["extra_args"]["bucket"], "ops-logs")
+
+    def test_masked_extra_args_preserve_existing_encrypted_values_on_update(self):
+        db = make_memory_db()
+
+        db.save_asset(
+            remark="prod-k8s",
+            host="k8s.internal",
+            port=6443,
+            username="",
+            password="",
+            asset_type="k8s",
+            protocol="k8s",
+            agent_profile="default",
+            extra_args={
+                "category": "container",
+                "sub_type": "k8s",
+                "bearer_token": "token-v1",
+                "kubeconfig": "kubeconfig-v1",
+                "namespace": "default",
+            },
+            skills=["k8s"],
+            tags=["prod"],
+        )
+        asset_id = db.get_all_assets()[0]["id"]
+
+        updated = db.update_asset(
+            asset_id,
+            {
+                "remark": "prod-k8s-renamed",
+                "host": "k8s.internal",
+                "port": 6443,
+                "username": "",
+                "password": "",
+                "asset_type": "k8s",
+                "protocol": "k8s",
+                "agent_profile": "default",
+                "extra_args": {
+                    "category": "container",
+                    "sub_type": "k8s",
+                    "bearer_token": "********",
+                    "kubeconfig": "********",
+                    "namespace": "ops",
+                },
+                "skills": ["k8s"],
+                "tags": ["prod"],
+            },
+        )
+
+        self.assertEqual(updated["remark"], "prod-k8s-renamed")
+        self.assertEqual(updated["extra_args"]["bearer_token"], "token-v1")
+        self.assertEqual(updated["extra_args"]["kubeconfig"], "kubeconfig-v1")
+        self.assertEqual(updated["extra_args"]["namespace"], "ops")
 
     def test_protocol_retry_noise_is_filtered_from_model_context_only(self):
         db = MemoryDB.__new__(MemoryDB)

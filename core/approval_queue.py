@@ -110,12 +110,33 @@ def _skill_rollback_metadata(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _approval_metadata(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+def _policy_metadata(tool_name: str, args: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    try:
+        from core.safety_policy import explain_policy_decision
+
+        result = explain_policy_decision(tool_name, args or {}, context or {})
+    except Exception:
+        return {}
+    actions = result.get("actions") if isinstance(result, dict) else None
+    primary_action = result.get("primary_action") if isinstance(result, dict) else None
+    metadata: dict[str, Any] = {}
+    if isinstance(actions, list) and actions:
+        metadata["actions"] = redact_value(actions)
+    if isinstance(primary_action, dict):
+        metadata["primary_action"] = redact_value(primary_action)
+    return metadata
+
+
+def _approval_metadata(tool_name: str, args: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    policy = _policy_metadata(tool_name, args, context)
+    if policy:
+        metadata["policy"] = policy
     if tool_name == "evolve_skill":
-        return {"skill_change": _skill_change_metadata(args)}
-    if tool_name == "rollback_skill":
-        return {"skill_rollback": _skill_rollback_metadata(args)}
-    return {}
+        metadata["skill_change"] = _skill_change_metadata(args)
+    elif tool_name == "rollback_skill":
+        metadata["skill_rollback"] = _skill_rollback_metadata(args)
+    return metadata
 
 
 def _tool_result_success(result: str) -> bool:
@@ -150,6 +171,24 @@ def _execution_artifacts(result: str) -> dict[str, Any]:
     return artifacts
 
 
+def _execution_metadata(result: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(result)
+    except Exception:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+
+    metadata: dict[str, Any] = {}
+    for key in ("statement_type", "has_result_set", "committed", "affected_rows", "count", "message"):
+        value = parsed.get(key)
+        if value is not None:
+            metadata[key] = redact_value(value)
+    if metadata:
+        metadata["type"] = "database_statement"
+    return metadata
+
+
 def _safe_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
     safe_args = redact_value(args or {})
     if tool_name == "evolve_skill" and isinstance(safe_args, dict) and "content" in safe_args:
@@ -175,6 +214,9 @@ def _execution_summary(tool_result: Any) -> dict[str, Any]:
     artifacts = _execution_artifacts(text)
     if artifacts:
         summary["artifacts"] = artifacts
+    metadata = _execution_metadata(text)
+    if metadata:
+        summary["metadata"] = metadata
     return summary
 
 
@@ -225,7 +267,7 @@ def record_approval_request(
             "tool_name": str(tool_name or ""),
             "args": _safe_args(str(tool_name or ""), args or {}),
             "reason": str(reason or ""),
-            "metadata": _approval_metadata(str(tool_name or ""), args or {}),
+            "metadata": _approval_metadata(str(tool_name or ""), args or {}, context or {}),
             "context": _safe_context({**(context or {}), "session_id": session_id or context.get("session_id")}),
             "status": "pending",
             "decision": None,

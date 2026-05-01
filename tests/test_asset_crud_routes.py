@@ -13,10 +13,12 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from api import routes
+from core.asset_protocols import get_asset_catalog
+from core.memory import DEFAULT_SENSITIVE_EXTRA_ARG_KEYS
 
 
 class FakeMemoryDB:
-    sensitive_keys = ["api_token", "kubeconfig"]
+    sensitive_keys = list(DEFAULT_SENSITIVE_EXTRA_ARG_KEYS)
 
     def __init__(self):
         self.saved = None
@@ -32,7 +34,16 @@ class FakeMemoryDB:
                 "asset_type": "prometheus",
                 "protocol": "http_api",
                 "agent_profile": "default",
-                "extra_args": {"api_token": "real-token", "category": "monitor"},
+                "extra_args": {
+                    "api_key": "real-api-key",
+                    "api_token": "real-token",
+                    "category": "monitor",
+                    "secret_key": "real-secret",
+                    "bearer_token": "real-bearer",
+                    "kubeconfig": "real-kubeconfig",
+                    "vmware_session_id": "real-session",
+                    "zstack_session_uuid": "real-zstack-session",
+                },
                 "skills": ["prometheus"],
                 "tags": ["monitor"],
             }
@@ -52,14 +63,62 @@ class FakeMemoryDB:
         updated = dict(self.assets[asset_id])
         updated.update(item)
         updated["password"] = "real-password"
-        updated["extra_args"] = {"api_token": "real-token", "category": "monitor"}
+        updated["extra_args"] = {
+            "api_key": "real-api-key",
+            "api_token": "real-token",
+            "category": "monitor",
+            "secret_key": "real-secret",
+            "bearer_token": "real-bearer",
+            "kubeconfig": "real-kubeconfig",
+            "vmware_session_id": "real-session",
+            "zstack_session_uuid": "real-zstack-session",
+        }
         return updated
+
+    def get_all_assets(self):
+        return [dict(asset) for asset in self.assets.values()]
 
     def delete_asset(self, asset_id):
         self.assets.pop(asset_id, None)
 
 
 class TestAssetCrudRoutes(unittest.TestCase):
+    def test_asset_request_defaults_are_not_shared_between_instances(self):
+        first = routes.BatchAssetImportItem(host="a.local")
+        second = routes.BatchAssetImportItem(host="b.local")
+
+        first.extra_args["api_token"] = "token-a"
+        first.skills.append("skill-a")
+        first.tags.append("prod")
+
+        self.assertEqual(second.extra_args, {})
+        self.assertEqual(second.skills, [])
+        self.assertEqual(second.tags, ["未分组"])
+
+        first_step = routes.InspectionTemplateStepPayload(
+            name="basic_status",
+            tool="linux_execute_command",
+        )
+        second_step = routes.InspectionTemplateStepPayload(
+            name="network_status",
+            tool="linux_execute_command",
+        )
+        first_step.args["timeout"] = 30
+
+        self.assertEqual(second_step.args, {})
+
+        first_policy_test = routes.SafetyPolicyTestRequest(
+            tool_name="linux_execute_command",
+            command="whoami",
+        )
+        second_policy_test = routes.SafetyPolicyTestRequest(
+            tool_name="linux_execute_command",
+            command="hostname",
+        )
+        first_policy_test.tags.append("prod")
+
+        self.assertEqual(second_policy_test.tags, [])
+
     def test_create_asset_calls_persistence_layer(self):
         fake = FakeMemoryDB()
         payload = routes.AssetPayload(
@@ -92,7 +151,30 @@ class TestAssetCrudRoutes(unittest.TestCase):
 
         asset = response.data["asset"]
         self.assertEqual(asset["password"], "********")
+        self.assertEqual(asset["extra_args"]["api_key"], "********")
         self.assertEqual(asset["extra_args"]["api_token"], "********")
+        self.assertEqual(asset["extra_args"]["secret_key"], "********")
+        self.assertEqual(asset["extra_args"]["bearer_token"], "********")
+        self.assertEqual(asset["extra_args"]["kubeconfig"], "********")
+        self.assertEqual(asset["extra_args"]["vmware_session_id"], "********")
+        self.assertEqual(asset["extra_args"]["zstack_session_uuid"], "********")
+        self.assertEqual(asset["extra_args"]["category"], "monitor")
+
+    def test_saved_assets_list_masks_sensitive_extra_args(self):
+        fake = FakeMemoryDB()
+
+        with patch("core.memory.memory_db", fake):
+            response = asyncio.run(routes.get_saved_assets())
+
+        asset = response.data["assets"][0]
+        self.assertEqual(asset["password"], "********")
+        self.assertEqual(asset["extra_args"]["api_key"], "********")
+        self.assertEqual(asset["extra_args"]["api_token"], "********")
+        self.assertEqual(asset["extra_args"]["secret_key"], "********")
+        self.assertEqual(asset["extra_args"]["bearer_token"], "********")
+        self.assertEqual(asset["extra_args"]["kubeconfig"], "********")
+        self.assertEqual(asset["extra_args"]["vmware_session_id"], "********")
+        self.assertEqual(asset["extra_args"]["zstack_session_uuid"], "********")
         self.assertEqual(asset["extra_args"]["category"], "monitor")
 
     def test_update_asset_preserves_mask_contract_and_masks_response(self):
@@ -117,7 +199,18 @@ class TestAssetCrudRoutes(unittest.TestCase):
         self.assertEqual(fake.updated[1]["password"], "********")
         asset = response.data["asset"]
         self.assertEqual(asset["password"], "********")
+        self.assertEqual(asset["extra_args"]["api_key"], "********")
         self.assertEqual(asset["extra_args"]["api_token"], "********")
+
+    def test_catalog_password_params_are_masked_by_memory_policy(self):
+        password_fields = {
+            param["field"]
+            for item in get_asset_catalog()
+            for param in item.get("params", [])
+            if param.get("type") == "password"
+        }
+
+        self.assertEqual(password_fields - set(DEFAULT_SENSITIVE_EXTRA_ARG_KEYS), set())
 
     def test_get_missing_asset_raises_404(self):
         fake = FakeMemoryDB()
@@ -138,7 +231,7 @@ class TestAssetCrudRoutes(unittest.TestCase):
 
         by_id = {item["id"]: item for item in response.data["types"]}
         self.assertEqual(by_id["s3"]["category"], "storage")
-        self.assertEqual(by_id["s3"]["protocol"], "http_api")
+        self.assertEqual(by_id["s3"]["protocol"], "s3")
         self.assertEqual(by_id["hdfs"]["protocol"], "ssh")
         self.assertEqual(by_id["glusterfs"]["category"], "storage")
 
@@ -158,6 +251,24 @@ class TestAssetCrudRoutes(unittest.TestCase):
                     "v3_auth_protocol": "SHA",
                 },
             )
+
+    def test_oracle_connection_validation_accepts_tns_alias(self):
+        request = routes.ConnectionRequest(
+            host="oracle.local",
+            port=1521,
+            username="system",
+            password="manager",
+            asset_type="oracle",
+            protocol="oracle",
+            extra_args={
+                "category": "db",
+                "sub_type": "oracle",
+                "oracle_connect_type": "tns_alias",
+                "tns_alias": "TESTDB",
+            },
+        )
+
+        self.assertEqual(request.extra_args["tns_alias"], "TESTDB")
 
 
 if __name__ == "__main__":

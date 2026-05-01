@@ -288,6 +288,116 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
         self.assertEqual(result["details"]["tool"], "monitoring_api_query")
         request.assert_called_once()
 
+    def test_service_probe_verify_uses_service_probe_executor(self):
+        from core import protocol_verification
+
+        asset = {
+            "id": 6,
+            "remark": "tcp-port",
+            "host": "10.0.0.60",
+            "port": 8080,
+            "username": "",
+            "password": "",
+            "asset_type": "port",
+            "protocol": "tcp",
+            "extra_args": {"category": "service"},
+        }
+        with patch("connections.service_probe_manager.service_probe_executor.execute") as execute:
+            execute.return_value = {"success": True, "protocol": "tcp", "message": "ok"}
+            result = asyncio.run(protocol_verification.run_protocol_probe(asset))
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["details"]["tool"], "service_probe_request")
+        execute.assert_called_once()
+
+    def test_proxmox_verify_uses_virtualization_executor(self):
+        from core import protocol_verification
+
+        asset = {
+            "id": 7,
+            "remark": "pve",
+            "host": "10.0.0.70",
+            "port": 8006,
+            "username": "",
+            "password": "",
+            "asset_type": "proxmox",
+            "protocol": "proxmox",
+            "extra_args": {"category": "virtualization", "api_token": "secret"},
+        }
+        with patch("connections.virtualization_manager.virtualization_api_executor.execute") as execute:
+            execute.return_value = {"success": True, "asset_type": "proxmox", "operation": "version"}
+            result = asyncio.run(protocol_verification.run_protocol_probe(asset))
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["details"]["tool"], "virtualization_api_request")
+        self.assertEqual(execute.call_args.kwargs["operation"], "version")
+
+    def test_vmware_verify_uses_virtualization_executor_version_operation(self):
+        from core import protocol_verification
+
+        asset = {
+            "id": 8,
+            "remark": "vcenter",
+            "host": "10.0.0.80",
+            "port": 443,
+            "username": "",
+            "password": "",
+            "asset_type": "vmware",
+            "protocol": "vmware",
+            "extra_args": {"category": "virtualization", "vmware_session_id": "secret"},
+        }
+        with patch("connections.virtualization_manager.virtualization_api_executor.execute") as execute:
+            execute.return_value = {"success": True, "asset_type": "vmware", "operation": "version"}
+            result = asyncio.run(protocol_verification.run_protocol_probe(asset))
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["details"]["tool"], "virtualization_api_request")
+        self.assertEqual(execute.call_args.kwargs["operation"], "version")
+
+    def test_openstack_verify_uses_virtualization_executor_version_operation(self):
+        from core import protocol_verification
+
+        asset = {
+            "id": 9,
+            "remark": "openstack",
+            "host": "10.0.0.90",
+            "port": 5000,
+            "username": "",
+            "password": "",
+            "asset_type": "openstack",
+            "protocol": "openstack",
+            "extra_args": {"category": "virtualization", "openstack_token": "secret"},
+        }
+        with patch("connections.virtualization_manager.virtualization_api_executor.execute") as execute:
+            execute.return_value = {"success": True, "asset_type": "openstack", "operation": "version"}
+            result = asyncio.run(protocol_verification.run_protocol_probe(asset))
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["details"]["tool"], "virtualization_api_request")
+        self.assertEqual(execute.call_args.kwargs["operation"], "version")
+
+    def test_zstack_verify_uses_virtualization_executor_version_operation(self):
+        from core import protocol_verification
+
+        asset = {
+            "id": 10,
+            "remark": "zstack",
+            "host": "10.0.0.100",
+            "port": 8080,
+            "username": "",
+            "password": "",
+            "asset_type": "zstack",
+            "protocol": "zstack",
+            "extra_args": {"category": "virtualization", "zstack_session_uuid": "secret"},
+        }
+        with patch("connections.virtualization_manager.virtualization_api_executor.execute") as execute:
+            execute.return_value = {"success": True, "asset_type": "zstack", "operation": "version"}
+            result = asyncio.run(protocol_verification.run_protocol_probe(asset))
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["details"]["tool"], "virtualization_api_request")
+        self.assertEqual(execute.call_args.kwargs["operation"], "version")
+
 
 if __name__ == "__main__":
     unittest.main()
