@@ -62,6 +62,7 @@ from core.session_history import (
     get_user_visible_session_history,
     update_session_message_content,
 )
+from core.session_tool_context import build_session_tools_response
 
 import logging
 import asyncio
@@ -1875,28 +1876,6 @@ async def get_active_sessions():
     return ResponseModel(status="success", data={"sessions": sessions_data})
 
 
-def build_session_tool_context(info: dict) -> dict:
-    identity = resolve_asset_identity(
-        info.get("asset_type"),
-        info.get("protocol"),
-        info.get("extra_args", {}),
-        info.get("host"),
-        info.get("port"),
-        info.get("remark"),
-    )
-    return {
-        "session_id": info.get("session_id"),
-        "target_scope": info.get("target_scope", "asset"),
-        "scope_value": info.get("scope_value"),
-        "asset_type": identity["asset_type"],
-        "protocol": identity["protocol"],
-        "host": info.get("host"),
-        "port": info.get("port"),
-        "remark": info.get("remark"),
-        "extra_args": identity["extra_args"],
-    }
-
-
 @router.get("/tools/catalog", response_model=ResponseModel)
 async def get_tool_catalog():
     """返回平台内置工具目录。仅包含工具元数据，不包含任何资产凭据。"""
@@ -1911,27 +1890,9 @@ async def get_session_tools(session_id: str):
 
     info = dict(ssh_manager.active_sessions[session_id]["info"])
     info["session_id"] = session_id
-    context = build_session_tool_context(info)
-    catalog = tool_registry.catalog(context)
-    active_tools = [
-        tool["name"]
-        for toolset in catalog["toolsets"]
-        for tool in toolset["tools"]
-        if tool.get("enabled")
-    ]
     return ResponseModel(
         status="success",
-        data={
-            **catalog,
-            "active_tools": active_tools,
-            "context": {
-                "target_scope": context["target_scope"],
-                "asset_type": context["asset_type"],
-                "protocol": context["protocol"],
-                "host": context["host"],
-                "port": context["port"],
-            },
-        },
+        data=build_session_tools_response(tool_registry, info),
     )
 
 
