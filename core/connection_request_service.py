@@ -78,6 +78,17 @@ def restore_masked_password(req: Any, memory_db: Any) -> str | None:
     return None
 
 
+def restore_connection_request_secrets(req: Any, memory_db: Any) -> tuple[Any, str | None]:
+    """Return a request rebuilt with restored extra_args plus the effective password."""
+    restored_args = restore_masked_extra_args(req, memory_db)
+    if hasattr(req, "model_dump"):
+        request_data = req.model_dump()
+    else:
+        request_data = vars(req).copy()
+    restored_req = req.__class__(**{**request_data, "extra_args": restored_args})
+    return restored_req, restore_masked_password(restored_req, memory_db)
+
+
 def normalize_private_key_path(private_key_path: str | None) -> str | None:
     if private_key_path and private_key_path.strip().lower() not in ("string", ""):
         return private_key_path

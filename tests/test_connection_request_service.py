@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from core.connection_request_service import (
     asset_matches_connection_request,
     normalize_private_key_path,
+    restore_connection_request_secrets,
     restore_masked_extra_args,
     restore_masked_password,
 )
@@ -98,6 +99,30 @@ class TestConnectionRequestService(unittest.TestCase):
 
         self.assertEqual(restore_masked_password(req, memory_db), "typed")
         self.assertEqual(restore_masked_extra_args(req, memory_db), {"database": "typed-db"})
+
+    def test_restores_request_extra_args_and_effective_password_together(self):
+        req = request()
+        memory_db = FakeMemoryDB(
+            [
+                {
+                    "host": "db.local",
+                    "port": 3306,
+                    "username": "ops",
+                    "asset_type": "mysql",
+                    "protocol": "mysql",
+                    "extra_args": {"db_type": "mysql", "database": "ops_db"},
+                    "password": "stored-password",
+                    "remark": "",
+                }
+            ]
+        )
+
+        restored_req, restored_password = restore_connection_request_secrets(req, memory_db)
+
+        self.assertIsInstance(restored_req, SimpleNamespace)
+        self.assertIsNot(restored_req, req)
+        self.assertEqual(restored_req.extra_args["database"], "ops_db")
+        self.assertEqual(restored_password, "stored-password")
 
     def test_normalize_private_key_path_treats_frontend_placeholder_as_empty(self):
         self.assertIsNone(normalize_private_key_path(None))

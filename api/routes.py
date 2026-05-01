@@ -11,8 +11,7 @@ from core.connection_inspection_service import inspect_connection_session
 from core.connection_request_service import (
     asset_matches_connection_request,
     get_login_protocol_from_request,
-    restore_masked_extra_args,
-    restore_masked_password,
+    restore_connection_request_secrets,
 )
 from core.connection_session_service import (
     ConnectionSessionServiceError,
@@ -427,25 +426,16 @@ async def stop_chat_session(session_id: str):
     return ResponseModel(status="success", message="已发送中止信号。")
 
 
-def get_restored_args(req: ConnectionRequest) -> dict:
-    """如果 req 中包含被掩码的 extra_args，则从持久化存储中找回真实值，返回一个新的字典"""
+def get_restored_connection_request(req: ConnectionRequest) -> tuple[ConnectionRequest, str | None]:
+    """Restore masked asset secrets from persisted records before connection flows."""
     from core.memory import memory_db
 
-    return restore_masked_extra_args(req, memory_db)
-
-
-def get_restored_password(req: ConnectionRequest) -> str | None:
-    """如果前端传回密码掩码，则从持久化资产中恢复真实密码。"""
-    from core.memory import memory_db
-
-    return restore_masked_password(req, memory_db)
+    return restore_connection_request_secrets(req, memory_db)
 
 
 @router.post("/connect/test", response_model=ResponseModel)
 async def test_connection(req: ConnectionRequest):
-    restored_args = get_restored_args(req)
-    req = ConnectionRequest(**{**req.model_dump(), "extra_args": restored_args})
-    restored_password = get_restored_password(req)
+    req, restored_password = get_restored_connection_request(req)
     result = await run_connection_test(req, restored_password)
     return ResponseModel(**result)
 
@@ -455,9 +445,7 @@ async def inspect_connection(req: ConnectionInspectionRequest):
     """临时建立会话并执行只读巡检，默认巡检后自动断开。"""
     from core.session_inspector import inspect_session
 
-    restored_args = get_restored_args(req)
-    req = ConnectionInspectionRequest(**{**req.model_dump(), "extra_args": restored_args})
-    restored_password = get_restored_password(req)
+    req, restored_password = get_restored_connection_request(req)
     result = await inspect_connection_session(
         req,
         ssh_manager,
@@ -470,9 +458,7 @@ async def inspect_connection(req: ConnectionInspectionRequest):
 @router.post("/connect", response_model=ResponseModel)
 async def create_ssh_connection(req: ConnectionRequest):
     """建立与远程系统的会话 (支持 SSH长连接 或 虚拟凭据会话)"""
-    restored_args = get_restored_args(req)
-    req = ConnectionRequest(**{**req.model_dump(), "extra_args": restored_args})
-    restored_password = get_restored_password(req)
+    req, restored_password = get_restored_connection_request(req)
 
     from core.memory import memory_db
 
