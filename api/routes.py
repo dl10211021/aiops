@@ -34,6 +34,11 @@ from core.session_webhook import (
     webhook_payload_preview,
 )
 from core.session_export import format_session_history_markdown
+from core.dashboard_metrics import (
+    build_alert_trend,
+    build_dashboard_overview,
+    build_risk_ranking,
+)
 
 import logging
 import asyncio
@@ -2554,57 +2559,15 @@ async def get_dashboard_overview():
 
     assets = await asyncio.to_thread(memory_db.get_all_assets)
     active = list(ssh_manager.active_sessions.values())
-    by_category: dict[str, int] = {}
-    by_protocol: dict[str, int] = {}
-    by_type: dict[str, int] = {}
-    for asset in assets:
-        identity = resolve_asset_identity(
-            asset.get("asset_type"),
-            asset.get("protocol"),
-            asset.get("extra_args", {}),
-            asset.get("host"),
-            asset.get("port"),
-            asset.get("remark"),
-        )
-        category = identity.get("category") or "other"
-        by_category[category] = by_category.get(category, 0) + 1
-        by_protocol[identity["protocol"]] = by_protocol.get(identity["protocol"], 0) + 1
-        by_type[identity["asset_type"]] = by_type.get(identity["asset_type"], 0) + 1
-
-    active_by_protocol: dict[str, int] = {}
-    for item in active:
-        info = item.get("info", {})
-        protocol = resolve_asset_identity(
-            info.get("asset_type"),
-            info.get("protocol"),
-            info.get("extra_args", {}),
-            info.get("host"),
-            info.get("port"),
-            info.get("remark"),
-        )["protocol"]
-        active_by_protocol[protocol] = active_by_protocol.get(protocol, 0) + 1
-
     return ResponseModel(
         status="success",
-        data={
-            "summary": {
-                "asset_total": len(assets),
-                "active_sessions": len(active),
-                "asset_categories": len(by_category),
-                "protocols": len(by_protocol),
-            },
-            "by_category": by_category,
-            "by_protocol": by_protocol,
-            "by_type": by_type,
-            "active_by_protocol": active_by_protocol,
-            "alerts": alert_summary(),
-            "jobs": {
-                "total": len(CronManager.get_all_jobs()),
-                "scheduled": sum(1 for job in CronManager.get_all_jobs() if job.get("status") == "scheduled"),
-                "paused": sum(1 for job in CronManager.get_all_jobs() if job.get("status") == "paused"),
-            },
-            "inspection_runs": run_summary(),
-        },
+        data=build_dashboard_overview(
+            assets,
+            active,
+            CronManager.get_all_jobs(),
+            alert_summary(),
+            run_summary(),
+        ),
     )
 
 
@@ -2620,15 +2583,7 @@ async def get_dashboard_alert_trend():
     """大屏告警趋势接口，按日期聚合告警数量和严重级别。"""
     from core.alert_events import list_alert_events
 
-    buckets: dict[str, dict[str, int]] = {}
-    for alert in list_alert_events(limit=5000):
-        day = str(alert.get("created_at") or "")[:10] or "unknown"
-        severity = str(alert.get("severity") or "unknown").lower()
-        bucket = buckets.setdefault(day, {"date": day, "total": 0})
-        bucket["total"] += 1
-        bucket[severity] = bucket.get(severity, 0) + 1
-    points = [buckets[key] for key in sorted(buckets)]
-    return ResponseModel(status="success", data={"points": points})
+    return ResponseModel(status="success", data={"points": build_alert_trend(list_alert_events(limit=5000))})
 
 
 @router.get("/dashboard/risk-ranking", response_model=ResponseModel)
@@ -2636,16 +2591,7 @@ async def get_dashboard_risk_ranking():
     """大屏风险排行接口，当前按告警数量和严重度聚合主机风险。"""
     from core.alert_events import list_alert_events
 
-    weights = {"critical": 5, "fatal": 5, "error": 4, "warning": 2, "warn": 2, "info": 1}
-    by_host: dict[str, dict[str, int | str]] = {}
-    for alert in list_alert_events(limit=5000):
-        host = str(alert.get("host") or "unknown")
-        severity = str(alert.get("severity") or "info").lower()
-        item = by_host.setdefault(host, {"host": host, "count": 0, "score": 0})
-        item["count"] = int(item["count"]) + 1
-        item["score"] = int(item["score"]) + weights.get(severity, 1)
-    ranking = sorted(by_host.values(), key=lambda item: (int(item["score"]), int(item["count"])), reverse=True)[:20]
-    return ResponseModel(status="success", data={"ranking": ranking})
+    return ResponseModel(status="success", data={"ranking": build_risk_ranking(list_alert_events(limit=5000))})
 
 
 @router.get("/dashboard/inspection-runs/trend", response_model=ResponseModel)
