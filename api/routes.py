@@ -39,6 +39,7 @@ from core.dashboard_metrics import (
     build_dashboard_overview,
     build_risk_ranking,
 )
+from core.asset_responses import mask_asset_response, mask_asset_responses
 
 import logging
 import asyncio
@@ -2405,14 +2406,7 @@ async def get_saved_assets():
     from core.memory import memory_db
 
     assets = await asyncio.to_thread(memory_db.get_all_assets)
-    for a in assets:
-        if a.get("password"):
-            a["password"] = "********"
-        if "extra_args" in a and a["extra_args"]:
-            for k in memory_db.sensitive_keys:
-                if k in a["extra_args"] and a["extra_args"][k]:
-                    a["extra_args"][k] = "********"
-    return ResponseModel(status="success", data={"assets": assets})
+    return ResponseModel(status="success", data={"assets": mask_asset_responses(assets, memory_db.sensitive_keys)})
 
 
 @router.post("/assets", response_model=ResponseModel)
@@ -2496,13 +2490,7 @@ async def get_asset(asset_id: int):
     asset = await asyncio.to_thread(memory_db.get_asset, asset_id)
     if not asset:
         raise HTTPException(status_code=404, detail="资产不存在")
-    if asset.get("password"):
-        asset["password"] = "********"
-    if "extra_args" in asset and asset["extra_args"]:
-        for k in memory_db.sensitive_keys:
-            if k in asset["extra_args"] and asset["extra_args"][k]:
-                asset["extra_args"][k] = "********"
-    return ResponseModel(status="success", data={"asset": asset})
+    return ResponseModel(status="success", data={"asset": mask_asset_response(asset, memory_db.sensitive_keys)})
 
 
 @router.put("/assets/{asset_id}", response_model=ResponseModel)
@@ -2513,13 +2501,11 @@ async def update_asset(asset_id: int, req: AssetPayload):
     asset = await asyncio.to_thread(memory_db.update_asset, asset_id, req.model_dump())
     if not asset:
         raise HTTPException(status_code=404, detail="资产不存在")
-    if asset.get("password"):
-        asset["password"] = "********"
-    if "extra_args" in asset and asset["extra_args"]:
-        for k in memory_db.sensitive_keys:
-            if k in asset["extra_args"] and asset["extra_args"][k]:
-                asset["extra_args"][k] = "********"
-    return ResponseModel(status="success", message="资产已更新", data={"asset": asset})
+    return ResponseModel(
+        status="success",
+        message="资产已更新",
+        data={"asset": mask_asset_response(asset, memory_db.sensitive_keys)},
+    )
 
 
 @router.get("/assets/normalize/preview", response_model=ResponseModel)
