@@ -50,6 +50,8 @@ from core.notification_test import (
 )
 from core.session_runtime import (
     SessionRuntimeError,
+    drain_all_pending_messages,
+    drain_session_pending_messages,
     set_session_heartbeat,
     set_session_permission,
     set_session_skills,
@@ -1732,13 +1734,8 @@ async def update_session_heartbeat(session_id: str, req: HeartbeatUpdateRequest)
 @router.get("/sessions/poll_all", response_model=ResponseModel)
 async def poll_all_sessions_messages():
     """【新功能】全局长轮询获取所有后台会话的待推送消息，极大地降低大规模纳管时的请求数量"""
-    updates = {}
     with ssh_manager._sessions_lock:
-        for session_id, sdata in ssh_manager.active_sessions.items():
-            pending = sdata["info"].get("pending_messages", [])
-            if pending:
-                updates[session_id] = pending.copy()
-                sdata["info"]["pending_messages"] = []
+        updates = drain_all_pending_messages(ssh_manager.active_sessions)
 
     return ResponseModel(status="success", data={"updates": updates})
 
@@ -1746,16 +1743,21 @@ async def poll_all_sessions_messages():
 @router.get("/session/{session_id}/poll", response_model=ResponseModel)
 async def poll_session_messages(session_id: str):
     """【新功能】前端长轮询获取后台心跳主动推送的消息"""
-    if session_id not in ssh_manager.active_sessions:
-        raise HTTPException(status_code=404, detail="Session disconnected")
+    try:
+        with ssh_manager._sessions_lock:
+            pending = drain_session_pending_messages(
+                ssh_manager.active_sessions,
+                session_id,
+                missing_detail="Session disconnected",
+            )
+    except SessionRuntimeError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
-    with ssh_manager._sessions_lock:
-        pending = ssh_manager.active_sessions[session_id]["info"].get(
-            "pending_messages", []
+    if pending:
+        return ResponseModel(
+            status="success",
+            data={"messages": pending},
         )
-        if pending:
-            ssh_manager.active_sessions[session_id]["info"]["pending_messages"] = []
-            return ResponseModel(status="success", data={"messages": pending})
 
     return ResponseModel(status="success", data={"messages": []})
 

@@ -55,3 +55,27 @@ def set_session_skills(
     info = require_session_info(active_sessions, session_id)
     info["active_skills"] = active_skills
     return info
+
+
+def drain_session_pending_messages(
+    active_sessions: MutableMapping[str, dict],
+    session_id: str,
+    missing_detail: str = "会话不存在或已断开",
+) -> list:
+    if session_id not in active_sessions:
+        raise SessionRuntimeError(404, missing_detail)
+    info = active_sessions[session_id]["info"]
+    pending = info.get("pending_messages", [])
+    if pending:
+        info["pending_messages"] = []
+    return pending
+
+
+def drain_all_pending_messages(active_sessions: MutableMapping[str, dict]) -> dict:
+    updates = {}
+    for session_id, session_data in active_sessions.items():
+        pending = session_data["info"].get("pending_messages", [])
+        if pending:
+            updates[session_id] = pending.copy()
+            session_data["info"]["pending_messages"] = []
+    return updates

@@ -2,6 +2,8 @@ import unittest
 
 from core.session_runtime import (
     SessionRuntimeError,
+    drain_all_pending_messages,
+    drain_session_pending_messages,
     set_session_heartbeat,
     set_session_permission,
     set_session_skills,
@@ -50,3 +52,26 @@ class TestSessionRuntime(unittest.TestCase):
 
         self.assertIs(info, sessions["sid-1"]["info"])
         self.assertEqual(info["active_skills"], selected_skills)
+
+    def test_drain_session_pending_messages_returns_and_clears_messages(self):
+        messages = [{"role": "assistant", "content": "ok"}]
+        sessions = {"sid-1": {"info": {"pending_messages": messages}}}
+
+        drained = drain_session_pending_messages(sessions, "sid-1")
+
+        self.assertIs(drained, messages)
+        self.assertEqual(sessions["sid-1"]["info"]["pending_messages"], [])
+
+    def test_drain_all_pending_messages_copies_and_clears_only_pending_sessions(self):
+        messages = [{"role": "assistant", "content": "ok"}]
+        sessions = {
+            "sid-1": {"info": {"pending_messages": messages}},
+            "sid-2": {"info": {"pending_messages": []}},
+        }
+
+        updates = drain_all_pending_messages(sessions)
+
+        self.assertEqual(updates, {"sid-1": messages})
+        self.assertIsNot(updates["sid-1"], messages)
+        self.assertEqual(sessions["sid-1"]["info"]["pending_messages"], [])
+        self.assertEqual(sessions["sid-2"]["info"]["pending_messages"], [])
