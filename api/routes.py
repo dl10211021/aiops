@@ -40,6 +40,10 @@ from core.dashboard_metrics import (
 )
 from core.asset_responses import mask_asset_response, mask_asset_responses
 from core.asset_catalog_response import build_asset_types_response
+from core.notification_config import (
+    build_notification_config,
+    build_notification_env_values,
+)
 
 import logging
 import asyncio
@@ -1636,90 +1640,21 @@ class NotificationConfigRequest(BaseModel):
     smtp_pass: str = ""
 
 
-def _env_or_existing(value: str, env_key: str) -> str:
-    if value == "********":
-        return os.environ.get(env_key, "")
-    return value
-
-
 @router.get("/config/notifications", response_model=ResponseModel)
 async def get_notification_config():
     """【新功能】获取当前的告警通道配置"""
-    import os
-
-    return ResponseModel(
-        status="success",
-        data={
-            "wechat_enabled": os.environ.get("WECHAT_ENABLED", "1") == "1",
-            "wechat_webhook": "********" if os.environ.get("WECHAT_WEBHOOK_URL") else "",
-            "dingtalk_enabled": os.environ.get("DINGTALK_ENABLED", "1") == "1",
-            "dingtalk_webhook": "********" if os.environ.get("DINGTALK_WEBHOOK_URL") else "",
-            "email_enabled": os.environ.get("EMAIL_ENABLED", "1") == "1",
-            "email_address": os.environ.get("ALERT_EMAIL_ADDRESS", ""),
-            "smtp_server": os.environ.get("SMTP_SERVER", ""),
-            "smtp_port": int(os.environ.get("SMTP_PORT", "465")),
-            "smtp_user": os.environ.get("SMTP_USER", ""),
-            "smtp_pass": "********" if os.environ.get("SMTP_PASS") else "",
-        },
-    )
+    return ResponseModel(status="success", data=build_notification_config())
 
 
 @router.post("/config/notifications", response_model=ResponseModel)
 async def update_notification_config(req: NotificationConfigRequest):
     """【新功能】前端动态配置企业微信/钉钉告警机器人 Webhook 及邮件"""
-    import os
-
-    os.environ["WECHAT_ENABLED"] = "1" if req.wechat_enabled else "0"
-    os.environ["WECHAT_WEBHOOK_URL"] = _env_or_existing(req.wechat_webhook, "WECHAT_WEBHOOK_URL")
-    os.environ["DINGTALK_ENABLED"] = "1" if req.dingtalk_enabled else "0"
-    os.environ["DINGTALK_WEBHOOK_URL"] = _env_or_existing(req.dingtalk_webhook, "DINGTALK_WEBHOOK_URL")
-    os.environ["EMAIL_ENABLED"] = "1" if req.email_enabled else "0"
-    os.environ["ALERT_EMAIL_ADDRESS"] = req.email_address
-    os.environ["SMTP_SERVER"] = req.smtp_server
-    os.environ["SMTP_PORT"] = str(req.smtp_port)
-    os.environ["SMTP_USER"] = req.smtp_user
-    os.environ["SMTP_PASS"] = _env_or_existing(req.smtp_pass, "SMTP_PASS")
+    env_values = build_notification_env_values(req.model_dump())
+    os.environ.update(env_values)
 
     # Optional: Write to .env file for persistence
-    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
     try:
-        env_lines = []
-        if os.path.exists(env_path):
-            with open(env_path, "r", encoding="utf-8") as f:
-                env_lines = f.readlines()
-
-        # Filter out old keys
-        keys_to_filter = [
-            "WECHAT_ENABLED=",
-            "WECHAT_WEBHOOK_URL=",
-            "DINGTALK_ENABLED=",
-            "DINGTALK_WEBHOOK_URL=",
-            "EMAIL_ENABLED=",
-            "ALERT_EMAIL_ADDRESS=",
-            "SMTP_SERVER=",
-            "SMTP_PORT=",
-            "SMTP_USER=",
-            "SMTP_PASS=",
-        ]
-        env_lines = [
-            line
-            for line in env_lines
-            if not any(line.startswith(k) for k in keys_to_filter)
-        ]
-
-        env_lines.append(f"WECHAT_ENABLED={'1' if req.wechat_enabled else '0'}\n")
-        env_lines.append(f"WECHAT_WEBHOOK_URL={os.environ['WECHAT_WEBHOOK_URL']}\n")
-        env_lines.append(f"DINGTALK_ENABLED={'1' if req.dingtalk_enabled else '0'}\n")
-        env_lines.append(f"DINGTALK_WEBHOOK_URL={os.environ['DINGTALK_WEBHOOK_URL']}\n")
-        env_lines.append(f"EMAIL_ENABLED={'1' if req.email_enabled else '0'}\n")
-        env_lines.append(f"ALERT_EMAIL_ADDRESS={req.email_address}\n")
-        env_lines.append(f"SMTP_SERVER={req.smtp_server}\n")
-        env_lines.append(f"SMTP_PORT={req.smtp_port}\n")
-        env_lines.append(f"SMTP_USER={req.smtp_user}\n")
-        env_lines.append(f"SMTP_PASS={os.environ['SMTP_PASS']}\n")
-
-        with open(env_path, "w", encoding="utf-8") as f:
-            f.writelines(env_lines)
+        update_env_file_values(env_values)
     except Exception as e:
         logger.error(f"Failed to save .env file: {e}")
 
