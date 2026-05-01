@@ -69,10 +69,13 @@ from core.session_runtime import (
 )
 from core.session_history import (
     build_session_history_markdown as build_session_history_markdown_content,
-    clear_session_history as clear_session_history_messages,
-    delete_session_message,
-    get_user_visible_session_history,
-    update_session_message_content,
+)
+from core.session_history_service import (
+    SessionHistoryServiceError,
+    clear_session_history_messages,
+    delete_session_history_message_record,
+    list_session_history_messages,
+    update_session_history_message_record,
 )
 from core.session_commands import (
     SessionCommandError,
@@ -1748,10 +1751,10 @@ async def get_session_history(session_id: str):
     from core.memory import memory_db
 
     try:
-        chat_history = get_user_visible_session_history(memory_db, session_id)
-        return ResponseModel(status="success", data={"messages": chat_history})
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        messages = list_session_history_messages(memory_db, session_id)
+    except SessionHistoryServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", data={"messages": messages})
 
 
 @router.delete("/session/{session_id}/history", response_model=ResponseModel)
@@ -1761,9 +1764,9 @@ async def delete_session_history(session_id: str):
 
     try:
         clear_session_history_messages(memory_db, session_id)
-        return ResponseModel(status="success", message="会话记录已清空")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except SessionHistoryServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", message="会话记录已清空")
 
 
 @router.patch("/session/{session_id}/history/{message_id}", response_model=ResponseModel)
@@ -1776,17 +1779,15 @@ async def update_session_history_message(
     from core.memory import memory_db
 
     try:
-        message = update_session_message_content(
+        message = update_session_history_message_record(
             memory_db,
             session_id,
             message_id,
             req.content,
         )
-        return ResponseModel(status="success", data={"message": message}, message="消息已更新")
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except SessionHistoryServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", data={"message": message}, message="消息已更新")
 
 
 @router.delete("/session/{session_id}/history/{message_id}", response_model=ResponseModel)
@@ -1795,12 +1796,10 @@ async def delete_session_history_message(session_id: str, message_id: int):
     from core.memory import memory_db
 
     try:
-        delete_session_message(memory_db, session_id, message_id)
-        return ResponseModel(status="success", message="消息已删除")
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        delete_session_history_message_record(memory_db, session_id, message_id)
+    except SessionHistoryServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", message="消息已删除")
 
 
 @router.put("/session/{session_id}/skills", response_model=ResponseModel)
