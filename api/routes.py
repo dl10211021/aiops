@@ -10,11 +10,10 @@ from core.asset_protocols import (
     get_asset_catalog,
     resolve_asset_identity,
 )
-from core.connection_errors import classify_connection_error
+from core.connection_inspection_service import inspect_connection_session
 from core.connection_request_service import (
     asset_matches_connection_request,
     get_login_protocol_from_request,
-    normalize_private_key_path,
     restore_masked_extra_args,
     restore_masked_password,
 )
@@ -211,11 +210,6 @@ logger = logging.getLogger(__name__)
 CUSTOM_SKILLS_DIR = Path(__file__).resolve().parent.parent / "my_custom_skills"
 
 router = APIRouter()
-
-
-def connection_error_response(raw_error, protocol: str = "", context: str = "") -> "ResponseModel":
-    error = classify_connection_error(raw_error, protocol, context)
-    return ResponseModel(status="error", message=error["message"], data={"error": error})
 
 
 # ----------------- 数据模型 -----------------
@@ -635,84 +629,16 @@ async def inspect_connection(req: ConnectionInspectionRequest):
     """临时建立会话并执行只读巡检，默认巡检后自动断开。"""
     from core.session_inspector import inspect_session
 
-    if req.target_scope == "global":
-        return ResponseModel(
-            status="success",
-            message="全局总控会话检查完成。",
-            data={
-                "session_id": None,
-                "kept_session": False,
-                "inspection": {
-                    "status": "success",
-                    "supported": True,
-                    "asset_type": "virtual",
-                    "protocol": "virtual",
-                    "profile": "global",
-                    "summary": "全局总控会话无需单资产连通性巡检；创建后可使用 list_active_sessions、dispatch_sub_agents、search_assets_by_tag 等编排工具。",
-                    "checks": [],
-                },
-            },
-        )
-
     restored_args = get_restored_args(req)
     req = ConnectionInspectionRequest(**{**req.model_dump(), "extra_args": restored_args})
     restored_password = get_restored_password(req)
-    identity = resolve_asset_identity(
-        req.asset_type, req.protocol, req.extra_args, req.host, req.port, req.remark
+    result = await inspect_connection_session(
+        req,
+        ssh_manager,
+        inspect_session,
+        restored_password=restored_password,
     )
-    login_protocol = identity["protocol"]
-    asset_type = identity["asset_type"]
-    extra_args = identity["extra_args"]
-
-    key_path = normalize_private_key_path(req.private_key_path)
-
-    result = await asyncio.to_thread(
-        ssh_manager.connect,
-        host=req.host,
-        port=req.port,
-        username=req.username,
-        password=restored_password,
-        key_filename=key_path,
-        allow_modifications=False,
-        active_skills=req.active_skills,
-        agent_profile=req.agent_profile,
-        remark=req.remark or "巡检测试会话",
-        asset_type=asset_type,
-        protocol=login_protocol,
-        extra_args=extra_args,
-        tags=req.tags,
-        target_scope=req.target_scope,
-        scope_value=req.scope_value,
-    )
-
-    if not result.get("success"):
-        if result.get("error_code") and result.get("error_category"):
-            error = {
-                "code": result.get("error_code"),
-                "category": result.get("error_category"),
-                "message": result.get("message", "连接失败"),
-                "raw_error": result.get("raw_error") or result.get("message", ""),
-                "protocol": login_protocol,
-            }
-            return ResponseModel(status="error", message=error["message"], data={"error": error})
-        return connection_error_response(result.get("message", "连接失败"), login_protocol)
-
-    session_id = result["session_id"]
-    try:
-        report = await inspect_session(session_id)
-    finally:
-        if not req.keep_session:
-            await asyncio.to_thread(ssh_manager.disconnect, session_id)
-
-    return ResponseModel(
-        status="success" if report.get("status") in {"success", "warning"} else report.get("status", "error"),
-        message=report.get("summary") or report.get("message", ""),
-        data={
-            "session_id": session_id if req.keep_session else None,
-            "kept_session": req.keep_session,
-            "inspection": report,
-        },
-    )
+    return ResponseModel(**result)
 
 
 @router.post("/connect", response_model=ResponseModel)
