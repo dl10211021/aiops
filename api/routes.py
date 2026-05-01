@@ -16,7 +16,6 @@ from core.asset_protocols import (
     resolve_asset_identity,
 )
 from core.connection_errors import classify_connection_error, connection_error_http_status
-from core.session_groups import apply_primary_session_group, normalize_session_group_name
 from core.session_views import build_active_session_view
 from core.skill_lifecycle import validate_skill_candidate
 from core.tool_registry import tool_registry
@@ -52,6 +51,7 @@ from core.session_runtime import (
     SessionRuntimeError,
     drain_all_pending_messages,
     drain_session_pending_messages,
+    set_session_group,
     set_session_heartbeat,
     set_session_permission,
     set_session_skills,
@@ -1837,18 +1837,14 @@ async def update_session_skills(session_id: str, req: SkillsUpdateRequest):
 @router.put("/session/{session_id}/group", response_model=ResponseModel)
 async def update_session_group(session_id: str, req: SessionGroupUpdateRequest):
     """更新活跃会话的主分组；底层复用现有 tags[0]，保持旧会话结构兼容。"""
-    if session_id not in ssh_manager.active_sessions:
-        raise HTTPException(status_code=404, detail="会话不存在或已断开")
-
-    group_name = normalize_session_group_name(req.group_name)
-    if not group_name:
-        raise HTTPException(status_code=422, detail="会话组名称不能为空")
-
-    info = ssh_manager.active_sessions[session_id]["info"]
     try:
-        info["tags"] = apply_primary_session_group(info.get("tags") or [], group_name)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        info, group_name = set_session_group(
+            ssh_manager.active_sessions,
+            session_id,
+            req.group_name,
+        )
+    except SessionRuntimeError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     logger.info("Session %s group changed to: %s", session_id, group_name)
 
     return ResponseModel(

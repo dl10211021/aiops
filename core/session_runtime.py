@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import MutableMapping
 
+from core.session_groups import apply_primary_session_group, normalize_session_group_name
+
 
 class SessionRuntimeError(Exception):
     def __init__(self, status_code: int, detail: str):
@@ -79,3 +81,22 @@ def drain_all_pending_messages(active_sessions: MutableMapping[str, dict]) -> di
             updates[session_id] = pending.copy()
             session_data["info"]["pending_messages"] = []
     return updates
+
+
+def set_session_group(
+    active_sessions: MutableMapping[str, dict],
+    session_id: str,
+    group_name: str,
+) -> tuple[MutableMapping, str]:
+    info = require_session_info(active_sessions, session_id)
+    normalized_group = normalize_session_group_name(group_name)
+    if not normalized_group:
+        raise SessionRuntimeError(422, "会话组名称不能为空")
+    try:
+        info["tags"] = apply_primary_session_group(
+            info.get("tags") or [],
+            normalized_group,
+        )
+    except ValueError as exc:
+        raise SessionRuntimeError(422, str(exc)) from exc
+    return info, normalized_group

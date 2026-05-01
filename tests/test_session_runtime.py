@@ -4,6 +4,7 @@ from core.session_runtime import (
     SessionRuntimeError,
     drain_all_pending_messages,
     drain_session_pending_messages,
+    set_session_group,
     set_session_heartbeat,
     set_session_permission,
     set_session_skills,
@@ -75,3 +76,20 @@ class TestSessionRuntime(unittest.TestCase):
         self.assertIsNot(updates["sid-1"], messages)
         self.assertEqual(sessions["sid-1"]["info"]["pending_messages"], [])
         self.assertEqual(sessions["sid-2"]["info"]["pending_messages"], [])
+
+    def test_set_session_group_updates_primary_tag_and_keeps_secondary_tags(self):
+        sessions = {"sid-1": {"info": {"tags": ["旧组", "P0", "数据库核心组"]}}}
+
+        info, group_name = set_session_group(sessions, "sid-1", " 数据库核心组 ")
+
+        self.assertEqual(group_name, "数据库核心组")
+        self.assertEqual(info["tags"], ["数据库核心组", "P0"])
+
+    def test_set_session_group_rejects_blank_name_after_session_lookup(self):
+        sessions = {"sid-1": {"info": {"tags": ["旧组"]}}}
+
+        with self.assertRaises(SessionRuntimeError) as ctx:
+            set_session_group(sessions, "sid-1", "   ")
+
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(ctx.exception.detail, "会话组名称不能为空")
