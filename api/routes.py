@@ -151,7 +151,10 @@ from core.protocol_verification_service import (
 )
 from core.safety_policy_service import (
     SafetyPolicyServiceError,
-    explain_safety_policy_decision,
+    SAFETY_POLICY_TEST_TOOLS,
+    build_safety_policy_test_context,
+    build_safety_policy_test_tool_args,
+    explain_safety_policy_test,
     get_safety_policy_record,
     save_safety_policy_record,
 )
@@ -1851,40 +1854,6 @@ class SafetyPolicyUpdateRequest(BaseModel):
     policy: dict
 
 
-SAFETY_POLICY_TEST_TOOLS = {
-    "linux_execute_command",
-    "container_execute_command",
-    "middleware_execute_command",
-    "storage_execute_command",
-    "network_cli_execute_command",
-    "execute_on_scope",
-    "winrm_execute_command",
-    "db_execute_query",
-    "redis_execute_command",
-    "memcached_execute_command",
-    "mongodb_find",
-    "http_api_request",
-    "database_api_request",
-    "bigdata_api_request",
-    "middleware_api_request",
-    "discovery_api_request",
-    "container_api_request",
-    "network_api_request",
-    "security_api_request",
-    "cicd_api_request",
-    "ai_platform_api_request",
-    "oob_api_request",
-    "k8s_api_request",
-    "monitoring_api_query",
-    "virtualization_api_request",
-    "storage_api_request",
-    "service_probe_request",
-    "snmp_get",
-    "local_execute_script",
-    "evolve_skill",
-}
-
-
 class SafetyPolicyTestRequest(BaseModel):
     tool_name: str = Field(default="linux_execute_command", max_length=80)
     command: str | None = Field(default=None, max_length=2000)
@@ -1915,47 +1884,10 @@ class SafetyPolicyTestRequest(BaseModel):
         return self
 
     def tool_args(self) -> dict:
-        if self.tool_name == "db_execute_query":
-            return {"sql": self.sql or self.command or ""}
-        if self.tool_name in {
-            "http_api_request",
-            "database_api_request",
-            "bigdata_api_request",
-            "middleware_api_request",
-            "discovery_api_request",
-            "container_api_request",
-            "network_api_request",
-            "security_api_request",
-            "cicd_api_request",
-            "ai_platform_api_request",
-            "oob_api_request",
-            "k8s_api_request",
-            "monitoring_api_query",
-            "virtualization_api_request",
-            "storage_api_request",
-            "service_probe_request",
-        }:
-            return {
-                "method": (self.method or "GET").upper(),
-                "path": self.path or self.command or "/",
-                "oid": self.oid or "",
-                "body": self.body or {},
-            }
-        if self.tool_name == "evolve_skill":
-            return {"skill_id": self.command or "", "file_name": self.path or ""}
-        if self.tool_name == "snmp_get":
-            return {"oid": self.oid or self.command or self.path or ""}
-        return {"command": self.command or self.sql or self.path or ""}
+        return build_safety_policy_test_tool_args(self)
 
     def context(self) -> dict:
-        return {
-            "allow_modifications": self.allow_modifications,
-            "asset_type": self.asset_type or "",
-            "protocol": self.protocol or "",
-            "host": self.host or "",
-            "trigger_source": self.trigger_source or "chat",
-            "tags": self.tags,
-        }
+        return build_safety_policy_test_context(self)
 
 
 @router.get("/config/safety-policy", response_model=ResponseModel)
@@ -1974,6 +1906,6 @@ async def update_safety_policy_endpoint(req: SafetyPolicyUpdateRequest):
 
 @router.post("/config/safety-policy/test", response_model=ResponseModel)
 async def test_safety_policy_endpoint(req: SafetyPolicyTestRequest):
-    result = explain_safety_policy_decision(req.tool_name, req.tool_args(), req.context())
+    result = explain_safety_policy_test(req)
     return ResponseModel(status="success", data={"result": result})
 
