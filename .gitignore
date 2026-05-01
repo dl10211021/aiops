@@ -60,6 +60,7 @@ test_vllm.py
 .worktrees/
 .pytest_cache/
 .ruff_cache/
+tests/.tmp_preflight*/
 frontend/tsconfig.tsbuildinfo
 
 # OS files
