@@ -142,6 +142,12 @@ from core.alert_event_service import (
     list_alert_event_records,
     update_alert_event_record,
 )
+from core.approval_request_service import (
+    ApprovalRequestServiceError,
+    decide_approval_request_record,
+    get_approval_request_record,
+    list_approval_request_records,
+)
 
 import logging
 import asyncio
@@ -694,43 +700,37 @@ async def respond_user_interaction(session_id: str, req: UserInteractionResponse
 @router.get("/approvals", response_model=ResponseModel)
 async def list_approval_requests(status: str | None = None, limit: int = 100):
     """查询高危工具调用审批队列。"""
-    from core.approval_queue import list_approval_requests
-
     return ResponseModel(
         status="success",
-        data={"approvals": list_approval_requests(status=status, limit=limit)},
+        data={"approvals": list_approval_request_records(status=status, limit=limit)},
     )
 
 
 @router.get("/approvals/{approval_id}", response_model=ResponseModel)
 async def get_approval_request(approval_id: str):
     """查询单个审批请求。"""
-    from core.approval_queue import get_approval_request
-
-    approval = get_approval_request(approval_id)
-    if not approval:
-        raise HTTPException(status_code=404, detail="审批请求不存在")
+    try:
+        approval = get_approval_request_record(approval_id)
+    except ApprovalRequestServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", data={"approval": approval})
 
 
 @router.post("/approvals/{approval_id}/decision", response_model=ResponseModel)
 async def decide_approval_request(approval_id: str, req: ApprovalDecisionRequest):
     """审批或拒绝高危工具调用，并写入审计状态。"""
-    from core.approval_queue import resolve_approval_request
     from core.dispatcher import dispatcher
 
-    future = dispatcher.pending_approvals.get(approval_id)
-    if future and not future.done():
-        future.set_result(req.approved)
     try:
-        approval = resolve_approval_request(
+        approval = decide_approval_request_record(
+            dispatcher,
             approval_id,
             approved=req.approved,
             operator=req.operator or "user",
             note=req.note or "",
         )
-    except KeyError:
-        raise HTTPException(status_code=404, detail="审批请求不存在")
+    except ApprovalRequestServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", message="审批已处理", data={"approval": approval})
 
 
