@@ -22,7 +22,6 @@ from core.tool_registry import tool_registry
 from core.custom_skill_storage import (
     CustomSkillStorageError,
     atomic_replace_bytes,
-    resolve_custom_skill_dir as resolve_custom_skill_dir_path,
     resolve_custom_skill_file as resolve_custom_skill_file_path,
     resolve_custom_skill_version_file as resolve_custom_skill_version_file_path,
 )
@@ -33,6 +32,10 @@ from core.custom_skill_version_service import (
 from core.custom_skill_create_service import (
     CustomSkillCreateServiceError,
     create_custom_skill_record,
+)
+from core.custom_skill_migration_service import (
+    CustomSkillMigrationServiceError,
+    migrate_custom_skill_record,
 )
 from core.chat_attachments import (
     ChatAttachmentError,
@@ -232,13 +235,6 @@ HTTP_API_TOOL_PRIORITY = (
     "oob_api_request",
     "http_api_request",
 )
-
-
-def resolve_custom_skill_dir(target_dir_name: str) -> Path:
-    try:
-        return resolve_custom_skill_dir_path(CUSTOM_SKILLS_DIR, target_dir_name)
-    except CustomSkillStorageError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 def resolve_custom_skill_file(skill_id: str, file_name: str) -> Path:
@@ -1439,34 +1435,18 @@ async def rollback_skill_version(skill_id: str, req: SkillRollbackRequest):
 @router.post("/skills/migrate", response_model=ResponseModel)
 async def migrate_skill(req: MigrateRequest):
     """将外部卡带拷贝到专属的 my_custom_skills 目录"""
-    import shutil
-
-    CUSTOM_SKILLS_DIR.mkdir(parents=True, exist_ok=True)
-    dest_path = resolve_custom_skill_dir(req.target_dir_name)
-    source_path = Path(req.source_path).expanduser().resolve()
-    if not source_path.is_dir():
-        raise HTTPException(status_code=422, detail="source_path 必须是技能目录。")
-    if not (source_path / "SKILL.md").is_file():
-        raise HTTPException(status_code=422, detail="source_path 必须包含 SKILL.md。")
-
     try:
-        if dest_path.exists():
-            shutil.rmtree(dest_path)
-
-        shutil.copytree(source_path, dest_path)
-
-        # 拷贝完成后通知 Dispatcher 重新加载
         from core.dispatcher import dispatcher
 
-        dispatcher.refresh_skills(force=True)
-
-        return ResponseModel(
-            status="success", message=f"卡带 {req.target_dir_name} 已成功导入专属库！"
+        result = migrate_custom_skill_record(
+            CUSTOM_SKILLS_DIR,
+            dispatcher,
+            source_path=req.source_path,
+            target_dir_name=req.target_dir_name,
         )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except CustomSkillMigrationServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", message=result["message"])
 
 
 @router.get("/models", response_model=ResponseModel)
