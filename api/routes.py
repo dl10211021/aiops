@@ -48,8 +48,9 @@ from core.custom_skill_rollback_service import (
     rollback_custom_skill_version as rollback_custom_skill_version_record,
 )
 from core.chat_attachments import (
+    CHAT_ATTACHMENT_MAX_SIZE,
     ChatAttachmentError,
-    preview_attachment_content,
+    build_chat_attachment_preview,
 )
 from core.chat_session_service import (
     ChatSessionServiceError,
@@ -229,8 +230,6 @@ from api.schemas import (
 
 import logging
 import asyncio
-import os
-import zipfile
 from pathlib import Path
 
 webhook_locks = {}
@@ -250,7 +249,7 @@ def asset_matches_request(asset: dict, req: ConnectionRequest) -> bool:
 
 def _preview_attachment_content(filename: str, content_type: str, content: bytes) -> dict:
     try:
-        return preview_attachment_content(filename, content_type, content)
+        return build_chat_attachment_preview(filename, content_type, content)
     except ChatAttachmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
@@ -289,21 +288,12 @@ async def ai_chat_with_system(req: ChatRequest):
 @router.post("/chat/attachments/preview", response_model=ResponseModel)
 async def preview_chat_attachment(file: UploadFile = File(...)):
     """Parse a small document for one-off chat context without ingesting it into the KB."""
-    original_name = os.path.basename(file.filename or "")
-    if not original_name:
-        raise HTTPException(status_code=422, detail="附件文件名不能为空。")
-    max_bytes = 10 * 1024 * 1024
-    content = await file.read(max_bytes + 1)
-    if len(content) > max_bytes:
-        raise HTTPException(status_code=413, detail="单个会话附件不能超过 10MB。")
-    try:
-        attachment = _preview_attachment_content(
-            original_name,
-            file.content_type or "application/octet-stream",
-            content,
-        )
-    except zipfile.BadZipFile as exc:
-        raise HTTPException(status_code=422, detail="Office 文件结构无效，无法解析。") from exc
+    content = await file.read(CHAT_ATTACHMENT_MAX_SIZE + 1)
+    attachment = _preview_attachment_content(
+        file.filename or "",
+        file.content_type or "application/octet-stream",
+        content,
+    )
     return ResponseModel(status="success", data={"attachment": attachment})
 
 

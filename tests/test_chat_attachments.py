@@ -2,7 +2,13 @@ import io
 import unittest
 import zipfile
 
-from core.chat_attachments import normalize_chat_attachments, preview_attachment_content
+from core.chat_attachments import (
+    CHAT_ATTACHMENT_MAX_SIZE,
+    ChatAttachmentError,
+    build_chat_attachment_preview,
+    normalize_chat_attachments,
+    preview_attachment_content,
+)
 
 
 class TestChatAttachments(unittest.TestCase):
@@ -57,3 +63,19 @@ class TestChatAttachments(unittest.TestCase):
 
         self.assertIn("oracle-01", preview["text"])
         self.assertEqual(preview["rows"], 2)
+
+    def test_build_chat_attachment_preview_rejects_empty_filename(self):
+        with self.assertRaises(ChatAttachmentError) as ctx:
+            build_chat_attachment_preview("", "text/plain", b"hello")
+
+        self.assertEqual(ctx.exception.status_code, 422)
+
+    def test_build_chat_attachment_preview_rejects_oversized_content(self):
+        with self.assertRaises(ChatAttachmentError) as ctx:
+            build_chat_attachment_preview(
+                "large.txt",
+                "text/plain",
+                b"x" * (CHAT_ATTACHMENT_MAX_SIZE + 1),
+            )
+
+        self.assertEqual(ctx.exception.status_code, 413)

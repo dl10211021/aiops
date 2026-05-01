@@ -307,3 +307,19 @@ def preview_attachment_content(filename: str, content_type: str, content: bytes)
         "kind": kind,
         "data_url": data_url,
     }
+
+
+def build_chat_attachment_preview(filename: str, content_type: str, content: bytes) -> dict:
+    safe_name = os.path.basename(filename or "")
+    if not safe_name:
+        raise ChatAttachmentError(422, "附件文件名不能为空。")
+    if len(content) > CHAT_ATTACHMENT_MAX_SIZE:
+        raise ChatAttachmentError(413, "单个会话附件不能超过 10MB。")
+    try:
+        return preview_attachment_content(
+            safe_name,
+            content_type or "application/octet-stream",
+            content,
+        )
+    except zipfile.BadZipFile as exc:
+        raise ChatAttachmentError(422, "Office 文件结构无效，无法解析。") from exc
