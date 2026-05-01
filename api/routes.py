@@ -6,16 +6,15 @@ from fastapi.responses import StreamingResponse
 from core.agent import chat_stream_agent
 from core.asset_protocols import (
     API_PROTOCOLS,
-    CONTAINER_ASSET_TYPES,
-    DB_PROTOCOLS,
-    MIDDLEWARE_ASSET_TYPES,
-    NETWORK_CLI_ASSET_TYPES,
     SQL_PROTOCOLS,
-    STORAGE_ASSET_TYPES,
     get_asset_catalog,
     resolve_asset_identity,
 )
 from core.connection_errors import classify_connection_error, connection_error_http_status
+from core.legacy_command_service import (
+    LegacyCommandServiceError,
+    execute_legacy_command_record,
+)
 from core.session_views import build_active_sessions_response
 from core.skill_lifecycle import validate_skill_candidate
 from core.tool_registry import tool_registry
@@ -191,7 +190,6 @@ from core.session_interaction_service import (
 import logging
 import asyncio
 import os
-import json
 import re
 import zipfile
 from pathlib import Path
@@ -220,24 +218,6 @@ def raise_connection_error(result: dict, protocol: str = "") -> None:
     else:
         error = classify_connection_error(result.get("message") or result.get("error"), protocol)
     raise HTTPException(status_code=connection_error_http_status(error), detail=error)
-
-
-HTTP_API_TOOL_PRIORITY = (
-    "monitoring_api_query",
-    "virtualization_api_request",
-    "storage_api_request",
-    "database_api_request",
-    "bigdata_api_request",
-    "middleware_api_request",
-    "discovery_api_request",
-    "container_api_request",
-    "network_api_request",
-    "security_api_request",
-    "cicd_api_request",
-    "ai_platform_api_request",
-    "oob_api_request",
-    "http_api_request",
-)
 
 
 # ----------------- 数据模型 -----------------
@@ -458,71 +438,6 @@ class AlertEventUpdateRequest(BaseModel):
     status: str | None = None
     assignee: str | None = None
     note: str | None = None
-
-
-def _legacy_execute_tool_call(identity: dict, command: str) -> tuple[str, dict]:
-    """Map legacy /execute command text to the protocol-native tool call."""
-    protocol = identity["protocol"]
-    asset_type = identity["asset_type"]
-    command = str(command or "").strip()
-
-    if protocol == "ssh" and asset_type in NETWORK_CLI_ASSET_TYPES:
-        return "network_cli_execute_command", {"command": command}
-    if protocol == "ssh" and asset_type in CONTAINER_ASSET_TYPES:
-        return "container_execute_command", {"command": command}
-    if protocol == "ssh" and asset_type in MIDDLEWARE_ASSET_TYPES:
-        return "middleware_execute_command", {"command": command}
-    if protocol == "ssh" and asset_type in STORAGE_ASSET_TYPES:
-        return "storage_execute_command", {"command": command}
-    if protocol == "ssh":
-        return "linux_execute_command", {"command": command}
-    if protocol == "winrm":
-        return "winrm_execute_command", {"command": command}
-    if protocol in SQL_PROTOCOLS:
-        return "db_execute_query", {"sql": command}
-    if protocol == "redis":
-        return "redis_execute_command", {"command": command}
-    if protocol == "mongodb":
-        try:
-            parsed = json.loads(command)
-        except Exception:
-            parsed = {"collection": command}
-        if not isinstance(parsed, dict):
-            parsed = {"collection": command}
-        return "mongodb_find", {
-            "database": parsed.get("database"),
-            "collection": parsed.get("collection") or parsed.get("coll") or command,
-            "filter": parsed.get("filter") or {},
-            "projection": parsed.get("projection"),
-            "limit": parsed.get("limit") or 100,
-        }
-    if protocol in API_PROTOCOLS:
-        method = "GET"
-        path = command or "/"
-        parts = command.split(maxsplit=1)
-        if parts and parts[0].upper() in {"GET", "HEAD", "POST"}:
-            method = parts[0].upper()
-            path = parts[1] if len(parts) > 1 else "/"
-        active_tools = {
-            tool.name
-            for tool in tool_registry.available(
-                {
-                    "target_scope": "asset",
-                    "asset_type": asset_type,
-                    "protocol": protocol,
-                    "extra_args": identity.get("extra_args") or {},
-                }
-            )
-        }
-        tool_name = next((candidate for candidate in HTTP_API_TOOL_PRIORITY if candidate in active_tools), "http_api_request")
-        return tool_name, {"method": method, "path": path}
-    if protocol == "snmp":
-        return "snmp_get", {"oid": command}
-
-    raise HTTPException(
-        status_code=400,
-        detail=f"/execute 不支持 {asset_type}/{protocol}；请使用聊天会话原生工具或巡检接口。",
-    )
 
 
 # ----------------- 路由接口 -----------------
@@ -1149,53 +1064,22 @@ async def execute_remote_command(req: CommandRequest):
     """
     logger.info(f"API called: Executing legacy command on session {req.session_id}")
 
-    if req.session_id not in ssh_manager.active_sessions:
-        raise HTTPException(status_code=404, detail="会话不存在或已断开")
-
     from core.dispatcher import dispatcher
 
-    info = ssh_manager.active_sessions[req.session_id]["info"]
-    identity = resolve_asset_identity(
-        info.get("asset_type"),
-        info.get("protocol"),
-        info.get("extra_args", {}),
-        info.get("host"),
-        info.get("port"),
-        info.get("remark"),
-    )
-    context = {
-        **info,
-        "session_id": req.session_id,
-        "asset_type": identity["asset_type"],
-        "protocol": identity["protocol"],
-        "extra_args": identity["extra_args"],
-    }
-    tool_name, tool_args = _legacy_execute_tool_call(identity, req.command)
-    needs_approval, approval_reason = dispatcher.check_approval_needed(tool_name, tool_args, context)
-    if needs_approval:
-        raise HTTPException(
-            status_code=409,
-            detail=f"该操作需要后端审批：{approval_reason}。请在聊天会话中执行，以便弹出审批确认。",
-        )
-
-    result_str = await dispatcher.route_and_execute(
-        tool_name, tool_args, context
-    )
     try:
-        result = json.loads(result_str)
-    except Exception:
-        result = {"success": False, "error": result_str}
-
-    if not result.get("success"):
-        raise HTTPException(status_code=400, detail=result.get("error") or result.get("reason") or "执行失败")
+        data = await execute_legacy_command_record(
+            ssh_manager.active_sessions,
+            dispatcher,
+            tool_registry,
+            session_id=req.session_id,
+            command=req.command,
+        )
+    except LegacyCommandServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     return ResponseModel(
         status="success",
-        data={
-            "output": result.get("output") or result.get("data") or "",
-            "has_error": result.get("has_error", False),
-            "exit_status": result.get("exit_status", 0),
-        },
+        data=data,
     )
 
 
