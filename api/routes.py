@@ -1,6 +1,4 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
-from pydantic import BaseModel, Field, model_validator
-from typing import Optional
 from connections.ssh_manager import ssh_manager
 from fastapi.responses import StreamingResponse
 from core.agent import chat_stream_agent
@@ -8,7 +6,6 @@ from core.asset_protocols import (
     API_PROTOCOLS,
     SQL_PROTOCOLS,
     get_asset_catalog,
-    resolve_asset_identity,
 )
 from core.connection_inspection_service import inspect_connection_session
 from core.connection_request_service import (
@@ -53,7 +50,6 @@ from core.custom_skill_rollback_service import (
 )
 from core.chat_attachments import (
     ChatAttachmentError,
-    normalize_chat_attachments,
     preview_attachment_content,
 )
 from core.chat_session_service import (
@@ -198,28 +194,43 @@ from core.session_interaction_service import (
 )
 from api.request_models import (
     AgentRuntimeConfigRequest,
+    AlertEventUpdateRequest,
+    ApprovalDecisionRequest,
+    AssetPayload,
     BatchAssetImportItem,
+    ChatRequest,
+    CommandRequest,
+    ConnectionInspectionRequest,
+    ConnectionRequest,
     CreateSkillRequest,
     CronAddRequest,
     EmbeddingConfigRequest,
     HeartbeatUpdateRequest,
+    InspectionTemplatePayload,
+    InspectionTemplateStepPayload,
     MigrateRequest,
     NotificationConfigRequest,
     PermissionUpdateRequest,
     ProviderConfig,
+    ResponseModel,
     SafetyPolicyTestRequest,
     SafetyPolicyUpdateRequest,
     SessionGroupUpdateRequest,
+    SessionMessageUpdateRequest,
+    SessionProfileGenerateRequest,
+    SessionWebhookSendRequest,
     SkillRollbackRequest,
     SkillsUpdateRequest,
     SkillValidationRequest,
+    SlashCommandPayload,
     TestNotificationRequest,
+    ToolApprovalRequest,
+    UserInteractionResponseRequest,
 )
 
 import logging
 import asyncio
 import os
-import re
 import zipfile
 from pathlib import Path
 
@@ -230,72 +241,6 @@ CUSTOM_SKILLS_DIR = Path(__file__).resolve().parent.parent / "my_custom_skills"
 router = APIRouter()
 
 
-# ----------------- 数据模型 -----------------
-class ConnectionRequest(BaseModel):
-    host: str
-    port: int = 22
-    username: str
-    password: str | None = None
-    private_key_path: str | None = None
-    allow_modifications: bool = False
-    active_skills: list[str] = Field(default_factory=list)  # 增加用户动态勾选的技能包 ID 列表
-    agent_profile: str = "default"  # [OpenClaw] Agent 身份/工作区
-    remark: str | None = ""  # [新功能] 连接备注/别名
-    asset_type: str = "ssh"  # 资产子类型，如 linux/mysql/zabbix
-    protocol: str | None = None  # 登录协议，如 ssh/winrm/mysql/http_api/snmp
-    extra_args: dict = Field(default_factory=dict)  # [新功能] 扩展参数，比如 db_name, api_key 等
-    tags: list[str] = Field(default_factory=lambda: ["未分组"])  # [新功能] 资产组别
-
-    @model_validator(mode="after")
-    def validate_extra_args(self):
-        identity = resolve_asset_identity(
-            self.asset_type,
-            self.protocol,
-            self.extra_args,
-            self.host,
-            self.port,
-            self.remark,
-        )
-        asset_type = identity["asset_type"]
-        protocol = identity["protocol"]
-        if protocol == "snmp":
-            if self.extra_args.get("snmp_version") == "v3":
-                auth_protocol = str(self.extra_args.get("v3_auth_protocol") or "none").lower()
-                priv_protocol = str(self.extra_args.get("v3_priv_protocol") or "none").lower()
-                if auth_protocol not in {"none", "noauth"} and not self.extra_args.get("v3_auth_pass"):
-                    raise ValueError("SNMPv3 auth mode requires v3_auth_pass")
-                if priv_protocol not in {"none", "nopriv"} and not self.extra_args.get("v3_priv_pass"):
-                    raise ValueError(
-                        "SNMPv3 privacy mode requires v3_priv_pass"
-                    )
-        elif asset_type == "k8s":
-            if not self.extra_args.get("kubeconfig") and not self.extra_args.get("bearer_token"):
-                # Allow API reachability testing without credentials, but execution will
-                # still fail clearly if a protected endpoint needs a token.
-                pass
-        elif protocol == "oracle":
-            if not (
-                self.extra_args.get("SID")
-                or self.extra_args.get("service_name")
-                or self.extra_args.get("tns_alias")
-                or self.extra_args.get("database")
-                or self.extra_args.get("db_name")
-            ):
-                raise ValueError(
-                    "oracle connection requires SID/service_name/tns_alias/database/db_name in extra_args"
-                )
-        return self
-
-    target_scope: str = "asset"  # 作用域：global, group, asset
-    scope_value: str | None = (
-        None  # 如果 scope 为 group，则为 tag 名称；如果为 asset，为 host/id；global 为空
-    )
-
-
-class ConnectionInspectionRequest(ConnectionRequest):
-    keep_session: bool = False
-
-
 def get_login_protocol(req: ConnectionRequest) -> str:
     return get_login_protocol_from_request(req)
 
@@ -304,128 +249,11 @@ def asset_matches_request(asset: dict, req: ConnectionRequest) -> bool:
     return asset_matches_connection_request(asset, req)
 
 
-class CommandRequest(BaseModel):
-    session_id: str
-    command: str
-
-
-def _normalize_chat_attachments(attachments: list[dict]) -> list[dict]:
-    return normalize_chat_attachments(attachments)
-
-
-class ChatRequest(BaseModel):
-    session_id: str
-    message: str
-    display_message: Optional[str] = None
-    model_name: Optional[str] = None
-    thinking_mode: Optional[str] = "off"
-    attachments: list[dict] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def validate_attachments(self):
-        self.attachments = _normalize_chat_attachments(self.attachments)
-        return self
-
-
-class SessionMessageUpdateRequest(BaseModel):
-    content: str = Field(..., min_length=0, max_length=200000)
-
-
-class ResponseModel(BaseModel):
-    status: str
-    data: dict = Field(default_factory=dict)
-    message: str = ""
-
-
-class SessionProfileGenerateRequest(BaseModel):
-    model_name: Optional[str] = None
-    include_inspection: bool = True
-
-
-class SessionWebhookSendRequest(BaseModel):
-    webhook_url: str = Field(..., min_length=8, max_length=2048)
-    payload_type: str = "profile"  # profile | summary | markdown
-    channel: str = "generic"  # generic | wechat | dingtalk
-    title: Optional[str] = None
-    model_name: Optional[str] = None
-    allow_private_targets: bool = False
-
-
-class SlashCommandPayload(BaseModel):
-    id: str | None = Field(default=None, max_length=80)
-    label: str = Field(..., min_length=2, max_length=80)
-    description: str = Field(default="", max_length=240)
-    prompt_template: str = Field(..., min_length=5, max_length=6000)
-    category: str = Field(default="自定义", max_length=40)
-    scope_type: str = Field(default="global", pattern="^(global|asset_type|protocol|asset)$")
-    asset_type: str = Field(default="", max_length=80)
-    protocol: str = Field(default="", max_length=80)
-    host: str = Field(default="", max_length=255)
-    readonly: bool = True
-    pinned: bool = False
-    enabled: bool = True
-    sort_order: int = Field(default=1, ge=1, le=100)
-
-    @model_validator(mode="after")
-    def validate_scope(self):
-        if self.id and not re.fullmatch(r"[A-Za-z0-9_.:-]+", self.id):
-            raise ValueError("快捷命令 ID 只能包含字母、数字、点、冒号、短横线和下划线。")
-        if self.scope_type == "asset_type" and not self.asset_type.strip():
-            raise ValueError("按系统生效时必须填写资产类型。")
-        if self.scope_type == "protocol" and not self.protocol.strip():
-            raise ValueError("按协议生效时必须填写协议。")
-        if self.scope_type == "asset" and not (self.asset_type.strip() and self.protocol.strip() and self.host.strip()):
-            raise ValueError("按单资产生效时必须填写资产类型、协议和主机。")
-        return self
-
-
 def _preview_attachment_content(filename: str, content_type: str, content: bytes) -> dict:
     try:
         return preview_attachment_content(filename, content_type, content)
     except ChatAttachmentError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-
-
-class AssetPayload(BaseModel):
-    remark: str | None = ""
-    host: str
-    port: int = 22
-    username: str = ""
-    password: str | None = ""
-    asset_type: str = "linux"
-    protocol: str | None = None
-    agent_profile: str = "default"
-    extra_args: dict = Field(default_factory=dict)
-    skills: list[str] = Field(default_factory=list)
-    tags: list[str] = Field(default_factory=lambda: ["未分组"])
-
-
-class InspectionTemplateStepPayload(BaseModel):
-    name: str
-    title: str | None = None
-    tool: str
-    command: str | None = ""
-    sql: str | None = ""
-    path: str | None = ""
-    oid: str | None = ""
-    method: str | None = "GET"
-    timeout: int | None = 15
-    args: dict = Field(default_factory=dict)
-
-
-class InspectionTemplatePayload(BaseModel):
-    id: str
-    name: str
-    asset_type: str = "*"
-    protocol: str = "*"
-    enabled: bool = True
-    steps: list[InspectionTemplateStepPayload]
-
-
-class AlertEventUpdateRequest(BaseModel):
-    status: str | None = None
-    assignee: str | None = None
-    note: str | None = None
 
 
 # ----------------- 路由接口 -----------------
@@ -478,26 +306,6 @@ async def preview_chat_attachment(file: UploadFile = File(...)):
     except zipfile.BadZipFile as exc:
         raise HTTPException(status_code=422, detail="Office 文件结构无效，无法解析。") from exc
     return ResponseModel(status="success", data={"attachment": attachment})
-
-
-class ToolApprovalRequest(BaseModel):
-    tool_call_id: str
-    approved: bool
-    auto_approve_all: bool = False
-    operator: str | None = "user"
-    note: str | None = ""
-
-
-class UserInteractionResponseRequest(BaseModel):
-    request_id: str = Field(..., min_length=1, max_length=200)
-    value: str | None = Field(default="", max_length=4000)
-    label: str | None = Field(default="", max_length=200)
-
-
-class ApprovalDecisionRequest(BaseModel):
-    approved: bool
-    operator: str | None = "user"
-    note: str | None = ""
 
 
 @router.post("/session/{session_id}/approve", response_model=ResponseModel)
