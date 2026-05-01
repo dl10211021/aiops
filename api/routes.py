@@ -24,6 +24,11 @@ from core.chat_attachments import (
     normalize_chat_attachments,
     preview_attachment_content,
 )
+from core.chat_session_service import (
+    ChatSessionServiceError,
+    request_session_stop,
+    start_session_chat_run,
+)
 from core.session_webhook_service import (
     SessionWebhookServiceError,
     preview_session_webhook_delivery,
@@ -571,27 +576,21 @@ async def ai_chat_with_system(req: ChatRequest):
         f"AI Stream Chat received: '{req.message}' for session {req.session_id} using model [{req.model_name}]"
     )
 
-    # 验证 session 有效性
-    if req.session_id not in ssh_manager.active_sessions:
-        raise HTTPException(status_code=401, detail="会话已过期或不存在，请重新连接")
-
-    import time
-
-    ssh_manager.active_sessions[req.session_id]["info"]["last_active"] = time.time()
-
-    from core.chat_runs import start_chat_run
-
-    run = start_chat_run(
-        req.session_id,
-        lambda: chat_stream_agent(
-            session_id=req.session_id,
-            user_message=req.message,
-            user_display_message=req.display_message,
-            model_name=req.model_name,
-            thinking_mode=req.thinking_mode or "off",
-            user_attachments=req.attachments,
-        ),
-    )
+    try:
+        run = start_session_chat_run(
+            ssh_manager.active_sessions,
+            req.session_id,
+            lambda: chat_stream_agent(
+                session_id=req.session_id,
+                user_message=req.message,
+                user_display_message=req.display_message,
+                model_name=req.model_name,
+                thinking_mode=req.thinking_mode or "off",
+                user_attachments=req.attachments,
+            ),
+        )
+    except ChatSessionServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return StreamingResponse(run.subscribe(), media_type="text/event-stream")
 
 
@@ -751,7 +750,7 @@ async def stop_chat_session(session_id: str):
     """【新功能】终止当前会话中正在生成的长流响应/执行任务"""
     from core.agent import cancel_flags
 
-    cancel_flags[session_id] = True
+    request_session_stop(cancel_flags, session_id)
     return ResponseModel(status="success", message="已发送中止信号。")
 
 

@@ -1,0 +1,48 @@
+import unittest
+
+from core.chat_session_service import (
+    ChatSessionServiceError,
+    request_session_stop,
+    start_session_chat_run,
+)
+
+
+async def fake_stream():
+    yield "data: {}\n\n"
+
+
+class TestChatSessionService(unittest.TestCase):
+    def test_start_session_chat_run_updates_last_active_and_starts_run(self):
+        active_sessions = {"sid-1": {"info": {"last_active": 0}}}
+        calls = []
+        fake_run = object()
+
+        def fake_start_run(session_id, stream_factory):
+            calls.append((session_id, stream_factory))
+            return fake_run
+
+        run = start_session_chat_run(
+            active_sessions,
+            "sid-1",
+            fake_stream,
+            start_run=fake_start_run,
+            now=lambda: 123.45,
+        )
+
+        self.assertIs(run, fake_run)
+        self.assertEqual(active_sessions["sid-1"]["info"]["last_active"], 123.45)
+        self.assertEqual(calls, [("sid-1", fake_stream)])
+
+    def test_start_session_chat_run_rejects_missing_session(self):
+        with self.assertRaises(ChatSessionServiceError) as ctx:
+            start_session_chat_run({}, "missing", fake_stream)
+
+        self.assertEqual(ctx.exception.status_code, 401)
+        self.assertEqual(ctx.exception.detail, "会话已过期或不存在，请重新连接")
+
+    def test_request_session_stop_sets_cancel_flag(self):
+        cancel_flags = {}
+
+        request_session_stop(cancel_flags, "sid-1")
+
+        self.assertTrue(cancel_flags["sid-1"])
