@@ -191,7 +191,7 @@ from core.session_interaction_service import (
     approve_session_tool_call,
     submit_user_interaction_response,
 )
-from api.request_models import (
+from api.schemas import (
     AgentRuntimeConfigRequest,
     AlertEventUpdateRequest,
     ApprovalDecisionRequest,
