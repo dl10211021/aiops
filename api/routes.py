@@ -59,6 +59,7 @@ from core.chat_session_service import (
 )
 from core.session_webhook_service import (
     SessionWebhookServiceError,
+    list_session_webhook_delivery_records,
     preview_session_webhook_delivery,
     send_session_webhook_delivery,
 )
@@ -1065,7 +1066,10 @@ async def list_session_webhook_history(session_id: str, limit: int = 10):
     """查看当前会话最近 Webhook 发送历史。"""
     from core.memory import memory_db
 
-    deliveries = await asyncio.to_thread(memory_db.list_webhook_deliveries, session_id, limit)
+    try:
+        deliveries = await list_session_webhook_delivery_records(memory_db, session_id, limit)
+    except SessionWebhookServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(status="success", data={"deliveries": deliveries})
 
 

@@ -3,6 +3,7 @@ import unittest
 
 from core.session_webhook_service import (
     SessionWebhookServiceError,
+    list_session_webhook_delivery_records,
     preview_session_webhook_delivery,
     resolve_session_webhook_target,
     send_session_webhook_delivery,
@@ -21,6 +22,10 @@ class FakeWebhookMemory:
 
     def append_webhook_delivery(self, record: dict):
         self.deliveries.append(record)
+
+    def list_webhook_deliveries(self, session_id: str, limit: int):
+        self.list_args = (session_id, limit)
+        return self.deliveries[:limit]
 
 
 class TestSessionWebhookService(unittest.TestCase):
@@ -110,3 +115,21 @@ class TestSessionWebhookService(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 502)
         self.assertEqual(self.memory.deliveries[0]["status"], "error")
         self.assertEqual(self.memory.deliveries[0]["http_status"], 500)
+
+    def test_list_delivery_records_delegates_to_memory_db(self):
+        self.memory.deliveries = [{"id": 1}, {"id": 2}]
+
+        deliveries = asyncio.run(list_session_webhook_delivery_records(self.memory, "sid-1", 1))
+
+        self.assertEqual(deliveries, [{"id": 1}])
+        self.assertEqual(self.memory.list_args, ("sid-1", 1))
+
+    def test_list_delivery_records_maps_storage_errors(self):
+        class FailingMemory(FakeWebhookMemory):
+            def list_webhook_deliveries(self, *_args):
+                raise RuntimeError("db unavailable")
+
+        with self.assertRaises(SessionWebhookServiceError) as ctx:
+            asyncio.run(list_session_webhook_delivery_records(FailingMemory(), "sid-1", 10))
+
+        self.assertEqual(ctx.exception.status_code, 500)

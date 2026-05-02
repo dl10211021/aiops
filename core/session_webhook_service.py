@@ -225,3 +225,10 @@ async def send_session_webhook_delivery(
         "response_preview": response_body[:300],
         "target": target,
     }
+
+
+async def list_session_webhook_delivery_records(memory_db, session_id: str, limit: int = 10) -> list[dict]:
+    try:
+        return await asyncio.to_thread(memory_db.list_webhook_deliveries, session_id, limit)
+    except Exception as exc:
+        raise SessionWebhookServiceError(500, str(exc)) from exc
