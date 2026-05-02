@@ -6,6 +6,8 @@ from api.errors import raise_http_error
 from api.mappers import (
     agent_runtime_config_response_kwargs,
     agent_runtime_config_saved_response_kwargs,
+    active_sessions_response_kwargs,
+    all_sessions_poll_response_kwargs,
     alert_event_list_query_kwargs,
     alert_event_response_kwargs,
     alert_event_update_kwargs,
@@ -62,13 +64,21 @@ from api.mappers import (
     session_group_response_kwargs,
     session_group_update_kwargs,
     session_heartbeat_update_kwargs,
+    session_heartbeat_updated_response_kwargs,
+    session_history_cleared_response_kwargs,
+    session_history_message_deleted_response_kwargs,
+    session_history_message_updated_response_kwargs,
+    session_history_response_kwargs,
     session_poll_response_kwargs,
     session_permission_update_kwargs,
+    session_permission_updated_response_kwargs,
     session_profile_generate_kwargs,
     session_profile_generated_response_kwargs,
     session_profile_response_kwargs,
+    session_skills_updated_response_kwargs,
     session_webhook_delivery_kwargs,
     system_info_response_kwargs,
+    tool_catalog_response_kwargs,
     tool_approval_response_kwargs,
 )
 from core.asset_protocols import (
@@ -745,7 +755,7 @@ async def update_session_permission(session_id: str, req: PermissionUpdateReques
         f"Session {session_id} permissions changed to: {update['allow_modifications']}"
     )
 
-    return ResponseModel(status="success", message="权限已实时更新")
+    return ResponseModel(**session_permission_updated_response_kwargs())
 
 
 @router.put("/session/{session_id}/heartbeat", response_model=ResponseModel)
@@ -768,7 +778,7 @@ async def update_session_heartbeat(session_id: str, req: HeartbeatUpdateRequest)
 
     logger.info(f"Session {session_id} heartbeat changed to: {update['heartbeat_enabled']}")
 
-    return ResponseModel(status="success", message="心跳巡检状态已更新")
+    return ResponseModel(**session_heartbeat_updated_response_kwargs())
 
 
 @router.get("/sessions/poll_all", response_model=ResponseModel)
@@ -777,7 +787,7 @@ async def poll_all_sessions_messages():
     with ssh_manager._sessions_lock:
         updates = drain_all_pending_messages(ssh_manager.active_sessions)
 
-    return ResponseModel(status="success", data={"updates": updates})
+    return ResponseModel(**all_sessions_poll_response_kwargs(updates))
 
 
 @router.get("/session/{session_id}/poll", response_model=ResponseModel)
@@ -805,7 +815,7 @@ async def get_session_history(session_id: str):
         messages = list_session_history_messages(memory_db, session_id)
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"messages": messages})
+    return ResponseModel(**session_history_response_kwargs(messages))
 
 
 @router.delete("/session/{session_id}/history", response_model=ResponseModel)
@@ -817,7 +827,7 @@ async def delete_session_history(session_id: str):
         clear_session_history_messages(memory_db, session_id)
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="会话记录已清空")
+    return ResponseModel(**session_history_cleared_response_kwargs())
 
 
 @router.patch("/session/{session_id}/history/{message_id}", response_model=ResponseModel)
@@ -838,7 +848,7 @@ async def update_session_history_message(
         )
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"message": message}, message="消息已更新")
+    return ResponseModel(**session_history_message_updated_response_kwargs(message))
 
 
 @router.delete("/session/{session_id}/history/{message_id}", response_model=ResponseModel)
@@ -850,7 +860,7 @@ async def delete_session_history_message(session_id: str, message_id: int):
         delete_session_history_message_record(memory_db, session_id, message_id)
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="消息已删除")
+    return ResponseModel(**session_history_message_deleted_response_kwargs())
 
 
 @router.put("/session/{session_id}/skills", response_model=ResponseModel)
@@ -862,7 +872,7 @@ async def update_session_skills(session_id: str, req: SkillsUpdateRequest):
         raise_http_error(exc)
     logger.info(f"Session {session_id} active skills changed to: {req.active_skills}")
 
-    return ResponseModel(status="success", message="挂载技能已实时更新")
+    return ResponseModel(**session_skills_updated_response_kwargs())
 
 
 @router.put("/session/{session_id}/group", response_model=ResponseModel)
@@ -893,13 +903,13 @@ async def get_active_sessions():
         is_session_streaming=is_chat_running,
         sensitive_keys=memory_db.sensitive_keys,
     )
-    return ResponseModel(status="success", data={"sessions": sessions_data})
+    return ResponseModel(**active_sessions_response_kwargs(sessions_data))
 
 
 @router.get("/tools/catalog", response_model=ResponseModel)
 async def get_tool_catalog():
     """返回平台内置工具目录。仅包含工具元数据，不包含任何资产凭据。"""
-    return ResponseModel(status="success", data=tool_registry.catalog())
+    return ResponseModel(**tool_catalog_response_kwargs(tool_registry.catalog()))
 
 
 @router.get("/session/{session_id}/tools", response_model=ResponseModel)

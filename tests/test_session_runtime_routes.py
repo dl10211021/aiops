@@ -59,6 +59,40 @@ class TestSessionRuntimeRoutes(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
 
+    def test_poll_all_sessions_messages_preserves_response_shape(self):
+        routes.ssh_manager.active_sessions["sid-1"] = {
+            "info": {"pending_messages": [{"role": "assistant", "content": "ok"}]}
+        }
+
+        response = asyncio.run(routes.poll_all_sessions_messages())
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(
+            response.data,
+            {"updates": {"sid-1": [{"role": "assistant", "content": "ok"}]}},
+        )
+        self.assertEqual(
+            routes.ssh_manager.active_sessions["sid-1"]["info"]["pending_messages"],
+            [],
+        )
+
+    def test_update_session_skills_preserves_response_shape(self):
+        routes.ssh_manager.active_sessions["sid-1"] = {"info": {"active_skills": []}}
+
+        response = asyncio.run(
+            routes.update_session_skills(
+                "sid-1",
+                routes.SkillsUpdateRequest(active_skills=["oracle"]),
+            )
+        )
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.message, "挂载技能已实时更新")
+        self.assertEqual(
+            routes.ssh_manager.active_sessions["sid-1"]["info"]["active_skills"],
+            ["oracle"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

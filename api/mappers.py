@@ -484,6 +484,77 @@ def session_poll_response_kwargs(pending: list[Any] | None) -> dict[str, Any]:
     }
 
 
+def all_sessions_poll_response_kwargs(updates: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"updates": updates},
+    }
+
+
+def session_permission_updated_response_kwargs() -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "权限已实时更新",
+    }
+
+
+def session_heartbeat_updated_response_kwargs() -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "心跳巡检状态已更新",
+    }
+
+
+def session_history_response_kwargs(messages: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"messages": messages},
+    }
+
+
+def session_history_cleared_response_kwargs() -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "会话记录已清空",
+    }
+
+
+def session_history_message_updated_response_kwargs(message: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"message": message},
+        "message": "消息已更新",
+    }
+
+
+def session_history_message_deleted_response_kwargs() -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "消息已删除",
+    }
+
+
+def session_skills_updated_response_kwargs() -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "挂载技能已实时更新",
+    }
+
+
+def active_sessions_response_kwargs(sessions: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"sessions": sessions},
+    }
+
+
+def tool_catalog_response_kwargs(catalog: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": catalog,
+    }
+
+
 def session_group_response_kwargs(
     session_id: str,
     info: dict[str, Any],

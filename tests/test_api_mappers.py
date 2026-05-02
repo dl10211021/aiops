@@ -3,6 +3,8 @@ import unittest
 from api.mappers import (
     agent_runtime_config_response_kwargs,
     agent_runtime_config_saved_response_kwargs,
+    active_sessions_response_kwargs,
+    all_sessions_poll_response_kwargs,
     alert_event_list_query_kwargs,
     alert_event_response_kwargs,
     alert_event_update_kwargs,
@@ -59,13 +61,21 @@ from api.mappers import (
     session_group_response_kwargs,
     session_group_update_kwargs,
     session_heartbeat_update_kwargs,
+    session_heartbeat_updated_response_kwargs,
+    session_history_cleared_response_kwargs,
+    session_history_message_deleted_response_kwargs,
+    session_history_message_updated_response_kwargs,
+    session_history_response_kwargs,
     session_poll_response_kwargs,
     session_permission_update_kwargs,
+    session_permission_updated_response_kwargs,
     session_profile_generate_kwargs,
     session_profile_generated_response_kwargs,
     session_profile_response_kwargs,
+    session_skills_updated_response_kwargs,
     session_webhook_delivery_kwargs,
     system_info_response_kwargs,
+    tool_catalog_response_kwargs,
     tool_approval_response_kwargs,
 )
 from api.schemas import (
@@ -723,6 +733,58 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             session_poll_response_kwargs(messages),
             {"status": "success", "data": {"messages": messages}},
+        )
+
+    def test_session_runtime_response_kwargs_preserve_route_shapes(self):
+        updates = {"sid-1": [{"role": "assistant", "content": "ok"}]}
+        messages = [{"id": 1, "role": "user", "content": "hello"}]
+        message = {"id": 1, "role": "user", "content": "updated"}
+        sessions = {"sid-1": {"host": "10.0.0.10"}}
+        catalog = {"toolsets": []}
+
+        self.assertEqual(
+            session_permission_updated_response_kwargs(),
+            {"status": "success", "message": "权限已实时更新"},
+        )
+        self.assertEqual(
+            session_heartbeat_updated_response_kwargs(),
+            {"status": "success", "message": "心跳巡检状态已更新"},
+        )
+        self.assertEqual(
+            all_sessions_poll_response_kwargs(updates),
+            {"status": "success", "data": {"updates": updates}},
+        )
+        self.assertEqual(
+            session_history_response_kwargs(messages),
+            {"status": "success", "data": {"messages": messages}},
+        )
+        self.assertEqual(
+            session_history_cleared_response_kwargs(),
+            {"status": "success", "message": "会话记录已清空"},
+        )
+        self.assertEqual(
+            session_history_message_updated_response_kwargs(message),
+            {
+                "status": "success",
+                "data": {"message": message},
+                "message": "消息已更新",
+            },
+        )
+        self.assertEqual(
+            session_history_message_deleted_response_kwargs(),
+            {"status": "success", "message": "消息已删除"},
+        )
+        self.assertEqual(
+            session_skills_updated_response_kwargs(),
+            {"status": "success", "message": "挂载技能已实时更新"},
+        )
+        self.assertEqual(
+            active_sessions_response_kwargs(sessions),
+            {"status": "success", "data": {"sessions": sessions}},
+        )
+        self.assertEqual(
+            tool_catalog_response_kwargs(catalog),
+            {"status": "success", "data": catalog},
         )
 
     def test_session_group_response_kwargs_preserves_route_payload_shape(self):
