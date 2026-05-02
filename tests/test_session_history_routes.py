@@ -64,6 +64,16 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         self.assertEqual(memory_db.updated, [("sid-1", 1, "updated")])
         self.assertEqual(memory_db.deleted, [("sid-1", 1)])
 
+    def test_session_history_export_preserves_response_shape(self):
+        with patch(
+            "api.routes.export_session_history_markdown_record",
+            return_value="# 生产数据库",
+        ):
+            response = asyncio.run(routes.export_session_history("sid-1"))
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data, {"markdown": "# 生产数据库"})
+
 
 if __name__ == "__main__":
     unittest.main()

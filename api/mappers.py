@@ -555,6 +555,79 @@ def tool_catalog_response_kwargs(catalog: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def session_commands_response_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": payload,
+    }
+
+
+def custom_slash_commands_response_kwargs(commands: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"commands": commands},
+    }
+
+
+def custom_slash_command_saved_response_kwargs(command: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "快捷命令已保存",
+        "data": {"command": command},
+    }
+
+
+def custom_slash_command_updated_response_kwargs(command: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "快捷命令已更新",
+        "data": {"command": command},
+    }
+
+
+def custom_slash_command_deleted_response_kwargs() -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "快捷命令已删除",
+    }
+
+
+def session_webhook_sent_response_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "Webhook 已发送",
+        "data": payload,
+    }
+
+
+def session_webhook_preview_response_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": payload,
+    }
+
+
+def session_webhook_history_response_kwargs(deliveries: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"deliveries": deliveries},
+    }
+
+
+def session_closed_response_kwargs() -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "Connection closed safely",
+    }
+
+
+def session_history_export_response_kwargs(markdown: str) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"markdown": markdown},
+    }
+
+
 def session_group_response_kwargs(
     session_id: str,
     info: dict[str, Any],

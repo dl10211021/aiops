@@ -30,6 +30,10 @@ from api.mappers import (
     cron_job_response_kwargs,
     cron_job_run_trigger_response_kwargs,
     cron_jobs_response_kwargs,
+    custom_slash_command_deleted_response_kwargs,
+    custom_slash_command_saved_response_kwargs,
+    custom_slash_command_updated_response_kwargs,
+    custom_slash_commands_response_kwargs,
     custom_skill_create_kwargs,
     custom_skill_migration_kwargs,
     custom_skill_rollback_kwargs,
@@ -60,9 +64,12 @@ from api.mappers import (
     saved_assets_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
+    session_closed_response_kwargs,
+    session_commands_response_kwargs,
     session_heartbeat_update_kwargs,
     session_heartbeat_updated_response_kwargs,
     session_history_cleared_response_kwargs,
+    session_history_export_response_kwargs,
     session_history_message_deleted_response_kwargs,
     session_history_message_updated_response_kwargs,
     session_history_response_kwargs,
@@ -73,7 +80,10 @@ from api.mappers import (
     session_profile_generated_response_kwargs,
     session_profile_response_kwargs,
     session_skills_updated_response_kwargs,
+    session_webhook_history_response_kwargs,
+    session_webhook_preview_response_kwargs,
     session_webhook_delivery_kwargs,
+    session_webhook_sent_response_kwargs,
     system_info_response_kwargs,
     tool_catalog_response_kwargs,
     tool_approval_response_kwargs,
@@ -785,6 +795,61 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             tool_catalog_response_kwargs(catalog),
             {"status": "success", "data": catalog},
+        )
+
+    def test_session_command_webhook_and_export_response_kwargs_preserve_route_shapes(self):
+        command = {"id": "inspect", "label": "巡检"}
+        commands = [command]
+        payload = {"payload_type": "markdown"}
+        deliveries = [{"id": 1, "status": "success"}]
+
+        self.assertEqual(
+            session_commands_response_kwargs({"commands": commands}),
+            {"status": "success", "data": {"commands": commands}},
+        )
+        self.assertEqual(
+            custom_slash_commands_response_kwargs(commands),
+            {"status": "success", "data": {"commands": commands}},
+        )
+        self.assertEqual(
+            custom_slash_command_saved_response_kwargs(command),
+            {
+                "status": "success",
+                "message": "快捷命令已保存",
+                "data": {"command": command},
+            },
+        )
+        self.assertEqual(
+            custom_slash_command_updated_response_kwargs(command),
+            {
+                "status": "success",
+                "message": "快捷命令已更新",
+                "data": {"command": command},
+            },
+        )
+        self.assertEqual(
+            custom_slash_command_deleted_response_kwargs(),
+            {"status": "success", "message": "快捷命令已删除"},
+        )
+        self.assertEqual(
+            session_webhook_sent_response_kwargs(payload),
+            {"status": "success", "message": "Webhook 已发送", "data": payload},
+        )
+        self.assertEqual(
+            session_webhook_preview_response_kwargs(payload),
+            {"status": "success", "data": payload},
+        )
+        self.assertEqual(
+            session_webhook_history_response_kwargs(deliveries),
+            {"status": "success", "data": {"deliveries": deliveries}},
+        )
+        self.assertEqual(
+            session_closed_response_kwargs(),
+            {"status": "success", "message": "Connection closed safely"},
+        )
+        self.assertEqual(
+            session_history_export_response_kwargs("# 会话"),
+            {"status": "success", "data": {"markdown": "# 会话"}},
         )
 
     def test_session_group_response_kwargs_preserves_route_payload_shape(self):

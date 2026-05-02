@@ -33,6 +33,10 @@ from api.mappers import (
     cron_job_response_kwargs,
     cron_job_run_trigger_response_kwargs,
     cron_jobs_response_kwargs,
+    custom_slash_command_deleted_response_kwargs,
+    custom_slash_command_saved_response_kwargs,
+    custom_slash_command_updated_response_kwargs,
+    custom_slash_commands_response_kwargs,
     custom_skill_create_kwargs,
     custom_skill_migration_kwargs,
     custom_skill_rollback_kwargs,
@@ -63,9 +67,12 @@ from api.mappers import (
     saved_assets_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
+    session_closed_response_kwargs,
+    session_commands_response_kwargs,
     session_heartbeat_update_kwargs,
     session_heartbeat_updated_response_kwargs,
     session_history_cleared_response_kwargs,
+    session_history_export_response_kwargs,
     session_history_message_deleted_response_kwargs,
     session_history_message_updated_response_kwargs,
     session_history_response_kwargs,
@@ -76,7 +83,10 @@ from api.mappers import (
     session_profile_generated_response_kwargs,
     session_profile_response_kwargs,
     session_skills_updated_response_kwargs,
+    session_webhook_history_response_kwargs,
+    session_webhook_preview_response_kwargs,
     session_webhook_delivery_kwargs,
+    session_webhook_sent_response_kwargs,
     system_info_response_kwargs,
     tool_catalog_response_kwargs,
     tool_approval_response_kwargs,
@@ -923,10 +933,7 @@ async def get_session_tools(session_id: str):
         )
     except SessionToolContextError as exc:
         raise_http_error(exc)
-    return ResponseModel(
-        status="success",
-        data=payload,
-    )
+    return ResponseModel(**session_commands_response_kwargs(payload))
 
 
 @router.get("/session/{session_id}/commands", response_model=ResponseModel)
@@ -955,7 +962,7 @@ async def list_custom_slash_commands():
     from core.memory import memory_db
 
     commands = await list_custom_slash_command_records(memory_db)
-    return ResponseModel(status="success", data={"commands": commands})
+    return ResponseModel(**custom_slash_commands_response_kwargs(commands))
 
 
 @router.post("/commands/custom", response_model=ResponseModel)
@@ -967,7 +974,7 @@ async def create_custom_slash_command(req: SlashCommandPayload):
         memory_db,
         req.model_dump(),
     )
-    return ResponseModel(status="success", message="快捷命令已保存", data={"command": command})
+    return ResponseModel(**custom_slash_command_saved_response_kwargs(command))
 
 
 @router.put("/commands/custom/{command_id}", response_model=ResponseModel)
@@ -980,7 +987,7 @@ async def update_custom_slash_command(command_id: str, req: SlashCommandPayload)
         req.model_dump(),
         command_id,
     )
-    return ResponseModel(status="success", message="快捷命令已更新", data={"command": command})
+    return ResponseModel(**custom_slash_command_updated_response_kwargs(command))
 
 
 @router.delete("/commands/custom/{command_id}", response_model=ResponseModel)
@@ -992,7 +999,7 @@ async def delete_custom_slash_command(command_id: str):
         await remove_custom_slash_command_record(memory_db, command_id)
     except SessionCommandError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="快捷命令已删除")
+    return ResponseModel(**custom_slash_command_deleted_response_kwargs())
 
 
 @router.get("/inspection-templates", response_model=ResponseModel)
@@ -1087,11 +1094,7 @@ async def send_session_webhook(session_id: str, req: SessionWebhookSendRequest):
         )
     except SessionWebhookServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(
-        status="success",
-        message="Webhook 已发送",
-        data=payload,
-    )
+    return ResponseModel(**session_webhook_sent_response_kwargs(payload))
 
 
 @router.post("/session/{session_id}/webhook/preview", response_model=ResponseModel)
@@ -1108,7 +1111,7 @@ async def preview_session_webhook(session_id: str, req: SessionWebhookSendReques
         )
     except SessionWebhookServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data=payload)
+    return ResponseModel(**session_webhook_preview_response_kwargs(payload))
 
 
 @router.get("/session/{session_id}/webhook/history", response_model=ResponseModel)
@@ -1120,7 +1123,7 @@ async def list_session_webhook_history(session_id: str, limit: int = 10):
         deliveries = await list_session_webhook_delivery_records(memory_db, session_id, limit)
     except SessionWebhookServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"deliveries": deliveries})
+    return ResponseModel(**session_webhook_history_response_kwargs(deliveries))
 
 
 @router.delete("/disconnect/{session_id}", response_model=ResponseModel)
@@ -1130,7 +1133,7 @@ async def close_ssh_connection(session_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    return ResponseModel(status="success", message="Connection closed safely")
+    return ResponseModel(**session_closed_response_kwargs())
 
 
 @router.get("/assets/saved", response_model=ResponseModel)
@@ -1568,7 +1571,7 @@ async def export_session_history(session_id: str):
         markdown = export_session_history_markdown_record(memory_db, ssh_manager.active_sessions, session_id)
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"markdown": markdown})
+    return ResponseModel(**session_history_export_response_kwargs(markdown))
 
 
 @router.get("/config/providers", response_model=ResponseModel)
