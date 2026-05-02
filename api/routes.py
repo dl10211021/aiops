@@ -103,11 +103,11 @@ from api.mappers import (
     skill_scan_response_kwargs,
     skill_validation_response_kwargs,
     skill_versions_response_kwargs,
-    system_info_response_kwargs,
     tool_catalog_response_kwargs,
     tool_approval_response_kwargs,
     user_interaction_submitted_response_kwargs,
 )
+from api.system_info_routes import router as system_info_router
 from core.asset_protocols import (
     API_PROTOCOLS,
     SQL_PROTOCOLS,
@@ -269,11 +269,6 @@ from core.provider_config_service import (
     list_provider_config_records,
     save_provider_config_records,
 )
-from core.database_capabilities_service import (
-    get_database_driver_capabilities_record,
-    get_oracle_client_config_record,
-)
-from core.hydration_status_service import get_hydrate_status_record
 from core.app_config_service import (
     AppConfigServiceError,
     build_llm_config_payload,
@@ -361,6 +356,7 @@ logger = logging.getLogger(__name__)
 CUSTOM_SKILLS_DIR = Path(__file__).resolve().parent.parent / "my_custom_skills"
 
 router = APIRouter()
+router.include_router(system_info_router)
 
 
 def get_login_protocol(req: ConnectionRequest) -> str:
@@ -1088,20 +1084,6 @@ async def get_asset_types():
     return _asset_types_response()
 
 
-@router.get("/oracle/client-config", response_model=ResponseModel)
-async def get_oracle_client_config():
-    """返回本机 Oracle Instant Client 自动探测结果，供前端填充 Thick Mode 配置。"""
-    data = get_oracle_client_config_record()
-    return ResponseModel(**system_info_response_kwargs(data))
-
-
-@router.get("/database/driver-capabilities", response_model=ResponseModel)
-async def get_database_driver_capabilities_api():
-    """返回数据库连接器、Python 包和外部客户端安装状态。"""
-    data = get_database_driver_capabilities_record()
-    return ResponseModel(**system_info_response_kwargs(data))
-
-
 @router.get("/assets/{asset_id}", response_model=ResponseModel)
 async def get_asset(asset_id: int):
     """查询单个资产详情；响应会脱敏密码和敏感 extra_args。"""
@@ -1418,15 +1400,6 @@ async def export_inspection_run_report(run_id: str, format: str = "markdown"):
     except InspectionRunServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**inspection_run_export_response_kwargs(payload))
-
-
-# ----------------- 系统状态与高级功能 -----------------
-
-
-@router.get("/hydrate/status", response_model=ResponseModel)
-async def get_hydrate_status():
-    """【新功能】获取启动时资产重连的进度，前端可轮询此接口展示启动状态"""
-    return ResponseModel(**system_info_response_kwargs(get_hydrate_status_record()))
 
 
 @router.post("/assets/batch_import", response_model=ResponseModel)

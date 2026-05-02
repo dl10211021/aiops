@@ -9,10 +9,17 @@ warnings.filterwarnings(
     category=PendingDeprecationWarning,
 )
 
-from api import routes
+from api import routes, system_info_routes
 
 
 class TestSystemInfoRoutes(unittest.TestCase):
+    def test_system_info_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/oracle/client-config", paths)
+        self.assertIn("/database/driver-capabilities", paths)
+        self.assertIn("/hydrate/status", paths)
+
     def test_oracle_client_config_preserves_response_shape(self):
         config = {
             "detected": True,
@@ -21,10 +28,10 @@ class TestSystemInfoRoutes(unittest.TestCase):
         }
 
         with patch(
-            "api.routes.get_oracle_client_config_record",
+            "api.system_info_routes.get_oracle_client_config_record",
             return_value=config,
         ):
-            response = asyncio.run(routes.get_oracle_client_config())
+            response = asyncio.run(system_info_routes.get_oracle_client_config())
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, config)
@@ -33,10 +40,10 @@ class TestSystemInfoRoutes(unittest.TestCase):
         capabilities = {"drivers": {"oracle": {"id": "oracle", "ready": True}}}
 
         with patch(
-            "api.routes.get_database_driver_capabilities_record",
+            "api.system_info_routes.get_database_driver_capabilities_record",
             return_value=capabilities,
         ):
-            response = asyncio.run(routes.get_database_driver_capabilities_api())
+            response = asyncio.run(system_info_routes.get_database_driver_capabilities_api())
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, capabilities)
@@ -44,8 +51,8 @@ class TestSystemInfoRoutes(unittest.TestCase):
     def test_hydrate_status_preserves_response_shape_without_importing_main_app(self):
         status = {"total": 3, "done": 2, "success": 1, "running": True}
 
-        with patch("api.routes.get_hydrate_status_record", return_value=status):
-            response = asyncio.run(routes.get_hydrate_status())
+        with patch("api.system_info_routes.get_hydrate_status_record", return_value=status):
+            response = asyncio.run(system_info_routes.get_hydrate_status())
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, status)
