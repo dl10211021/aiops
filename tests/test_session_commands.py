@@ -1,12 +1,15 @@
+import asyncio
 import unittest
 
 from core.session_commands import (
     SessionCommandError,
+    build_session_commands_payload_for_session,
     build_session_commands_response,
     list_custom_slash_commands,
     remove_custom_slash_command,
     save_custom_slash_command,
 )
+from core.tool_registry import tool_registry
 
 
 class FakeCommandStore:
@@ -75,6 +78,33 @@ class TestSessionCommands(unittest.TestCase):
         self.assertEqual(inspect["label"], "/inspect 自定义")
         self.assertEqual(inspect["prompt"], "检查 10.0.0.10")
         self.assertTrue(inspect["is_override"])
+
+    def test_build_session_commands_payload_for_session_loads_tools_and_custom_commands(self):
+        sessions = {
+            "sid-1": {
+                "info": {
+                    "host": "10.0.0.10",
+                    "port": 22,
+                    "asset_type": "linux",
+                    "protocol": "ssh",
+                }
+            }
+        }
+        store = FakeCommandStore()
+
+        payload = asyncio.run(
+            build_session_commands_payload_for_session(
+                sessions,
+                tool_registry,
+                store,
+                "sid-1",
+            )
+        )
+
+        command_ids = {item["id"] for item in payload["commands"]}
+        self.assertIn("inspect", command_ids)
+        self.assertEqual(payload["custom_commands"], store.commands)
+        self.assertEqual(payload["context"]["protocol"], "ssh")
 
     def test_custom_slash_command_store_helpers_delegate_to_memory_db(self):
         store = FakeCommandStore()

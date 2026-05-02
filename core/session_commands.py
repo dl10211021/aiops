@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
+from core.session_tool_context import build_session_tools_payload_for_session
 from core.slash_commands import render_builtin_templates, render_slash_commands
 
 
@@ -26,6 +28,21 @@ def build_session_commands_response(
         "custom_commands": custom_commands,
         "context": context,
     }
+
+
+async def build_session_commands_payload_for_session(
+    active_sessions: dict[str, dict],
+    tool_registry,
+    memory_db,
+    session_id: str,
+) -> dict[str, Any]:
+    tools_payload = build_session_tools_payload_for_session(
+        active_sessions,
+        tool_registry,
+        session_id,
+    )
+    custom_commands = await asyncio.to_thread(list_custom_slash_commands, memory_db)
+    return build_session_commands_response(tools_payload, custom_commands)
 
 
 def list_custom_slash_commands(memory_db) -> list[dict[str, Any]]:

@@ -112,7 +112,7 @@ from core.session_history_service import (
 )
 from core.session_commands import (
     SessionCommandError,
-    build_session_commands_response,
+    build_session_commands_payload_for_session,
     list_custom_slash_commands as list_custom_slash_commands_data,
     remove_custom_slash_command,
     save_custom_slash_command,
@@ -875,17 +875,17 @@ async def get_session_commands(session_id: str):
     from core.memory import memory_db
 
     try:
-        tools_payload = build_session_tools_payload_for_session(
+        payload = await build_session_commands_payload_for_session(
             ssh_manager.active_sessions,
             tool_registry,
+            memory_db,
             session_id,
         )
     except SessionToolContextError as exc:
         raise_http_error(exc)
-    custom_commands = await asyncio.to_thread(list_custom_slash_commands_data, memory_db)
     return ResponseModel(
         status="success",
-        data=build_session_commands_response(tools_payload, custom_commands),
+        data=payload,
     )
 
 
