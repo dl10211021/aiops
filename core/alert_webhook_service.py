@@ -40,6 +40,13 @@ def build_alert_injection_message(alert_event: dict[str, Any]) -> str:
     )
 
 
+async def read_alert_webhook_payload(json_reader: Callable[[], Awaitable[Any]]) -> Any:
+    try:
+        return await json_reader()
+    except (ValueError, TypeError):
+        return {}
+
+
 async def handle_alert_webhook(
     payload: dict[str, Any],
     active_sessions: MutableMapping[str, dict],

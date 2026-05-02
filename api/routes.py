@@ -172,7 +172,7 @@ from core.knowledge_base_service import (
     list_knowledge_document_records,
     remove_knowledge_document_record,
 )
-from core.alert_webhook_service import handle_alert_webhook
+from core.alert_webhook_service import handle_alert_webhook, read_alert_webhook_payload
 from core.alert_event_service import (
     AlertEventServiceError,
     get_alert_event_record,
@@ -1341,10 +1341,7 @@ async def delete_knowledge_document(filename: str):
 @router.post("/webhook/alert", response_model=ResponseModel)
 async def receive_webhook_alert(request: Request):
     """【AIOps 高级特性】接收外部告警 (Prometheus / ManageEngine) 并推入相关 AI 会话"""
-    try:
-        payload = await request.json()
-    except (ValueError, TypeError):
-        payload = {}
+    payload = await read_alert_webhook_payload(request.json)
 
     from core.memory import memory_db
     from core.dispatcher import dispatcher

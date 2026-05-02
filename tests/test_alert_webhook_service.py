@@ -9,6 +9,7 @@ from core.alert_webhook_service import (
     NO_ACTIVE_ALERT_MESSAGE,
     affected_alert_sessions,
     handle_alert_webhook,
+    read_alert_webhook_payload,
 )
 
 
@@ -58,6 +59,20 @@ class TestAlertWebhookService(unittest.TestCase):
         self.assertEqual(result["message"], NO_ACTIVE_ALERT_MESSAGE)
         self.assertEqual(result["data"]["injected_count"], 0)
         self.assertEqual(result["data"]["alert"]["host"], "db.local")
+
+    def test_read_alert_webhook_payload_returns_json_reader_result(self):
+        async def json_reader():
+            return {"host": "db.local", "alert_name": "DiskFull"}
+
+        payload = asyncio.run(read_alert_webhook_payload(json_reader))
+
+        self.assertEqual(payload["host"], "db.local")
+
+    def test_read_alert_webhook_payload_falls_back_to_empty_payload_on_bad_json(self):
+        async def json_reader():
+            raise ValueError("invalid json")
+
+        self.assertEqual(asyncio.run(read_alert_webhook_payload(json_reader)), {})
 
     def test_busy_session_appends_alert_to_context_without_scheduling_task(self):
         from core import alert_events
