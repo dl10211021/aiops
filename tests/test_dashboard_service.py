@@ -27,7 +27,6 @@ class TestDashboardService(unittest.TestCase):
             patch.object(dashboard_service, "run_summary", return_value={"success_rate": 100.0}),
         ):
             payload = dashboard_service.build_dashboard_overview_payload(
-                FakeDashboardMemory(),
                 {
                     "sid-1": {
                         "info": {
@@ -38,6 +37,7 @@ class TestDashboardService(unittest.TestCase):
                         }
                     }
                 },
+                memory_db=FakeDashboardMemory(),
             )
 
         self.assertEqual(payload["summary"]["asset_total"], 1)

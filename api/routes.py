@@ -1197,11 +1197,8 @@ async def delete_saved_asset(asset_id: int):
 @router.get("/dashboard/overview", response_model=ResponseModel)
 async def get_dashboard_overview():
     """大屏总览接口：资产、在线会话、协议、分类和基础风险计数。"""
-    from core.memory import memory_db
-
     data = await asyncio.to_thread(
         build_dashboard_overview_payload,
-        memory_db,
         ssh_manager.active_sessions,
     )
     return ResponseModel(**dashboard_response_kwargs(data))
