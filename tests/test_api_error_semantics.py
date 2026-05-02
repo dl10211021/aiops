@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from api import (
     approval_routes,
+    asset_routes,
     config_routes,
     connection_routes,
     knowledge_routes,
@@ -19,6 +20,7 @@ from api import (
 )
 from api.schemas import (
     ToolApprovalRequest,
+    BatchAssetImportItem,
     SafetyPolicyTestRequest,
     SafetyPolicyUpdateRequest,
     TestNotificationRequest,
@@ -422,15 +424,15 @@ class TestApiErrorSemantics(unittest.TestCase):
                 raise RuntimeError("sqlite unavailable")
 
         with self.assertRaises(HTTPException) as empty_ctx:
-            asyncio.run(routes.batch_import_assets([]))
+            asyncio.run(asset_routes.batch_import_assets([]))
 
-        item = routes.BatchAssetImportItem(
+        item = BatchAssetImportItem(
             host="10.0.0.10",
             username="root",
         )
         with patch("core.memory.memory_db", FailingMemoryDB()):
             with self.assertRaises(HTTPException) as failing_ctx:
-                asyncio.run(routes.batch_import_assets([item]))
+                asyncio.run(asset_routes.batch_import_assets([item]))
 
         self.assertEqual(empty_ctx.exception.status_code, 422)
         self.assertEqual(failing_ctx.exception.status_code, 500)

@@ -12,8 +12,13 @@ warnings.filterwarnings(
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from api import routes
-from api.schemas import ConnectionRequest, SafetyPolicyTestRequest
+from api import asset_routes, routes
+from api.schemas import (
+    AssetPayload,
+    BatchAssetImportItem,
+    ConnectionRequest,
+    SafetyPolicyTestRequest,
+)
 from core.asset_protocols import get_asset_catalog
 from core.memory import DEFAULT_SENSITIVE_EXTRA_ARG_KEYS
 
@@ -84,9 +89,20 @@ class FakeMemoryDB:
 
 
 class TestAssetCrudRoutes(unittest.TestCase):
+    def test_asset_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/assets/saved", paths)
+        self.assertIn("/assets", paths)
+        self.assertIn("/assets/types", paths)
+        self.assertIn("/assets/{asset_id}", paths)
+        self.assertIn("/assets/normalize/preview", paths)
+        self.assertIn("/assets/normalize/apply", paths)
+        self.assertIn("/assets/batch_import", paths)
+
     def test_asset_request_defaults_are_not_shared_between_instances(self):
-        first = routes.BatchAssetImportItem(host="a.local")
-        second = routes.BatchAssetImportItem(host="b.local")
+        first = BatchAssetImportItem(host="a.local")
+        second = BatchAssetImportItem(host="b.local")
 
         first.extra_args["api_token"] = "token-a"
         first.skills.append("skill-a")
@@ -122,7 +138,7 @@ class TestAssetCrudRoutes(unittest.TestCase):
 
     def test_create_asset_calls_persistence_layer(self):
         fake = FakeMemoryDB()
-        payload = routes.AssetPayload(
+        payload = AssetPayload(
             remark="K8s",
             host="k8s.local",
             port=6443,
@@ -136,7 +152,7 @@ class TestAssetCrudRoutes(unittest.TestCase):
         )
 
         with patch("core.memory.memory_db", fake):
-            response = asyncio.run(routes.create_asset(payload))
+            response = asyncio.run(asset_routes.create_asset(payload))
 
         self.assertEqual(response.status, "success")
         self.assertIsNotNone(fake.saved)
@@ -148,7 +164,7 @@ class TestAssetCrudRoutes(unittest.TestCase):
         fake = FakeMemoryDB()
 
         with patch("core.memory.memory_db", fake):
-            response = asyncio.run(routes.get_asset(1))
+            response = asyncio.run(asset_routes.get_asset(1))
 
         asset = response.data["asset"]
         self.assertEqual(asset["password"], "********")
@@ -165,7 +181,7 @@ class TestAssetCrudRoutes(unittest.TestCase):
         fake = FakeMemoryDB()
 
         with patch("core.memory.memory_db", fake):
-            response = asyncio.run(routes.get_saved_assets())
+            response = asyncio.run(asset_routes.get_saved_assets())
 
         asset = response.data["assets"][0]
         self.assertEqual(asset["password"], "********")
@@ -180,7 +196,7 @@ class TestAssetCrudRoutes(unittest.TestCase):
 
     def test_update_asset_preserves_mask_contract_and_masks_response(self):
         fake = FakeMemoryDB()
-        payload = routes.AssetPayload(
+        payload = AssetPayload(
             remark="Prometheus prod",
             host="prom.local",
             port=9090,
@@ -194,7 +210,7 @@ class TestAssetCrudRoutes(unittest.TestCase):
         )
 
         with patch("core.memory.memory_db", fake):
-            response = asyncio.run(routes.update_asset(1, payload))
+            response = asyncio.run(asset_routes.update_asset(1, payload))
 
         self.assertEqual(fake.updated[0], 1)
         self.assertEqual(fake.updated[1]["password"], "********")
@@ -218,12 +234,12 @@ class TestAssetCrudRoutes(unittest.TestCase):
 
         with patch("core.memory.memory_db", fake):
             with self.assertRaises(HTTPException) as ctx:
-                asyncio.run(routes.get_asset(404))
+                asyncio.run(asset_routes.get_asset(404))
 
         self.assertEqual(ctx.exception.status_code, 404)
 
     def test_asset_types_response_exposes_datacenter_catalog_filters(self):
-        response = routes._asset_types_response()
+        response = asset_routes._asset_types_response()
 
         category_labels = {item["id"]: item["label"] for item in response.data["categories"]}
         self.assertEqual(category_labels["virtualization"], "虚拟化与私有云")
@@ -245,11 +261,11 @@ class TestAssetCrudRoutes(unittest.TestCase):
         }
 
         with (
-            patch("api.routes.build_asset_cleanup_plan_record", return_value=plan),
-            patch("api.routes.apply_asset_cleanup_record", return_value=report),
+            patch("api.asset_routes.build_asset_cleanup_plan_record", return_value=plan),
+            patch("api.asset_routes.apply_asset_cleanup_record", return_value=report),
         ):
-            preview = asyncio.run(routes.preview_asset_normalization())
-            applied = asyncio.run(routes.apply_asset_normalization())
+            preview = asyncio.run(asset_routes.preview_asset_normalization())
+            applied = asyncio.run(asset_routes.apply_asset_normalization())
 
         self.assertEqual(preview.status, "success")
         self.assertEqual(preview.data, plan)
