@@ -1,6 +1,9 @@
 import unittest
 
 from api.mappers import (
+    asset_verification_matrix_response_kwargs,
+    asset_verification_run_response_kwargs,
+    asset_verification_runs_response_kwargs,
     chat_stream_agent_kwargs,
     custom_skill_create_kwargs,
     custom_skill_migration_kwargs,
@@ -19,6 +22,7 @@ from api.mappers import (
     session_profile_response_kwargs,
     session_webhook_delivery_kwargs,
     tool_approval_response_kwargs,
+    protocol_verification_overview_response_kwargs,
 )
 from api.schemas import (
     ChatRequest,
@@ -258,6 +262,29 @@ class TestApiMappers(unittest.TestCase):
                 "message": "资产画像已生成",
                 "data": {"profile": profile},
             },
+        )
+
+    def test_asset_verification_response_kwargs_preserve_route_shapes(self):
+        overview = {"summary": {"asset_total": 2}, "matrix": []}
+        matrix = {"asset": {"id": 2}, "steps": []}
+        run = {"id": "run-1", "status": "success"}
+        runs = [run]
+
+        self.assertEqual(
+            protocol_verification_overview_response_kwargs(overview),
+            {"status": "success", "data": overview},
+        )
+        self.assertEqual(
+            asset_verification_matrix_response_kwargs(matrix),
+            {"status": "success", "data": {"matrix": matrix}},
+        )
+        self.assertEqual(
+            asset_verification_run_response_kwargs(run),
+            {"status": "success", "data": {"run": run}},
+        )
+        self.assertEqual(
+            asset_verification_runs_response_kwargs(runs),
+            {"status": "success", "data": {"runs": runs}},
         )
 
     def test_session_poll_response_kwargs_normalizes_empty_messages(self):

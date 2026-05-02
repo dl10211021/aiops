@@ -4,6 +4,9 @@ from fastapi.responses import StreamingResponse
 from core.agent import chat_stream_agent
 from api.errors import raise_http_error
 from api.mappers import (
+    asset_verification_matrix_response_kwargs,
+    asset_verification_run_response_kwargs,
+    asset_verification_runs_response_kwargs,
     chat_stream_agent_kwargs,
     custom_skill_create_kwargs,
     custom_skill_migration_kwargs,
@@ -22,6 +25,7 @@ from api.mappers import (
     session_profile_response_kwargs,
     session_webhook_delivery_kwargs,
     tool_approval_response_kwargs,
+    protocol_verification_overview_response_kwargs,
 )
 from core.asset_protocols import (
     API_PROTOCOLS,
@@ -1213,7 +1217,7 @@ async def get_protocol_verification_overview():
     from core.memory import memory_db
 
     data = await asyncio.to_thread(build_protocol_verification_overview, memory_db)
-    return ResponseModel(status="success", data=data)
+    return ResponseModel(**protocol_verification_overview_response_kwargs(data))
 
 
 @router.get("/assets/{asset_id}/verification", response_model=ResponseModel)
@@ -1225,7 +1229,7 @@ async def get_asset_verification_matrix(asset_id: int):
         matrix = await asyncio.to_thread(build_protocol_verification_matrix, memory_db, asset_id)
     except ProtocolVerificationServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"matrix": matrix})
+    return ResponseModel(**asset_verification_matrix_response_kwargs(matrix))
 
 
 @router.post("/assets/{asset_id}/verify", response_model=ResponseModel)
@@ -1237,14 +1241,14 @@ async def verify_asset(asset_id: int):
         run = await run_protocol_verification_for_asset(memory_db, asset_id)
     except ProtocolVerificationServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"run": run})
+    return ResponseModel(**asset_verification_run_response_kwargs(run))
 
 
 @router.get("/assets/{asset_id}/verification/runs", response_model=ResponseModel)
 async def list_asset_verification_runs(asset_id: int, limit: int = 20):
     """查询单资产验证历史。"""
     runs = await asyncio.to_thread(list_protocol_verification_run_records, asset_id, limit)
-    return ResponseModel(status="success", data={"runs": runs})
+    return ResponseModel(**asset_verification_runs_response_kwargs(runs))
 
 
 @router.get("/alerts", response_model=ResponseModel)
