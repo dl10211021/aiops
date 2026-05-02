@@ -7,6 +7,8 @@ from api.mappers import (
     alert_events_response_kwargs,
     alert_webhook_response_kwargs,
     asset_deleted_response_kwargs,
+    asset_normalization_applied_response_kwargs,
+    asset_normalization_preview_response_kwargs,
     asset_payload,
     asset_response_kwargs,
     asset_saved_response_kwargs,
@@ -480,6 +482,31 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             batch_asset_import_response_kwargs({"imported": 2, "total": 3}),
             {"status": "success", "message": "成功导入 2/3 条资产。"},
+        )
+
+    def test_asset_normalization_response_kwargs_preserve_route_shapes(self):
+        plan = {
+            "changes": [],
+            "duplicates": [],
+            "summary": {"assets_scanned": 2},
+        }
+        report = {
+            "backup_path": "asset_cleanup_backup.json",
+            "removed_ids": [1],
+            "summary": {"duplicates_removed": 1},
+        }
+
+        self.assertEqual(
+            asset_normalization_preview_response_kwargs(plan),
+            {"status": "success", "data": plan},
+        )
+        self.assertEqual(
+            asset_normalization_applied_response_kwargs(report),
+            {
+                "status": "success",
+                "message": "资产规范化清理完成",
+                "data": report,
+            },
         )
 
     def test_session_profile_kwargs_preserve_route_shapes(self):

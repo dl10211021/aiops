@@ -235,6 +235,27 @@ class TestAssetCrudRoutes(unittest.TestCase):
         self.assertEqual(by_id["hdfs"]["protocol"], "ssh")
         self.assertEqual(by_id["glusterfs"]["category"], "storage")
 
+    def test_asset_normalization_routes_preserve_response_shapes(self):
+        plan = {"changes": [], "duplicates": [], "summary": {"assets_scanned": 2}}
+        report = {
+            "backup_path": "asset_cleanup_backup.json",
+            "removed_ids": [1],
+            "summary": {"duplicates_removed": 1},
+        }
+
+        with (
+            patch("core.asset_cleanup.build_asset_cleanup_plan", return_value=plan),
+            patch("core.asset_cleanup.apply_asset_cleanup", return_value=report),
+        ):
+            preview = asyncio.run(routes.preview_asset_normalization())
+            applied = asyncio.run(routes.apply_asset_normalization())
+
+        self.assertEqual(preview.status, "success")
+        self.assertEqual(preview.data, plan)
+        self.assertEqual(applied.status, "success")
+        self.assertEqual(applied.message, "资产规范化清理完成")
+        self.assertEqual(applied.data, report)
+
     def test_snmp_protocol_validation_applies_to_nas_and_ipmi(self):
         with self.assertRaises(ValidationError):
             routes.ConnectionRequest(

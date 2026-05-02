@@ -254,6 +254,21 @@ def batch_asset_import_response_kwargs(result: dict[str, int]) -> dict[str, Any]
     }
 
 
+def asset_normalization_preview_response_kwargs(plan: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": plan,
+    }
+
+
+def asset_normalization_applied_response_kwargs(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "资产规范化清理完成",
+        "data": report,
+    }
+
+
 def session_profile_generate_kwargs(req: SessionProfileGenerateRequest) -> dict[str, Any]:
     return {
         "model_name": req.model_name,

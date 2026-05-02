@@ -10,6 +10,8 @@ from api.mappers import (
     alert_events_response_kwargs,
     alert_webhook_response_kwargs,
     asset_deleted_response_kwargs,
+    asset_normalization_applied_response_kwargs,
+    asset_normalization_preview_response_kwargs,
     asset_payload,
     asset_response_kwargs,
     asset_saved_response_kwargs,
@@ -1185,7 +1187,7 @@ async def preview_asset_normalization():
     from core.asset_cleanup import build_asset_cleanup_plan
 
     plan = await asyncio.to_thread(build_asset_cleanup_plan)
-    return ResponseModel(status="success", data=plan)
+    return ResponseModel(**asset_normalization_preview_response_kwargs(plan))
 
 
 @router.post("/assets/normalize/apply", response_model=ResponseModel)
@@ -1194,7 +1196,7 @@ async def apply_asset_normalization():
     from core.asset_cleanup import apply_asset_cleanup
 
     report = await asyncio.to_thread(apply_asset_cleanup)
-    return ResponseModel(status="success", message="资产规范化清理完成", data=report)
+    return ResponseModel(**asset_normalization_applied_response_kwargs(report))
 
 
 @router.delete("/assets/{asset_id}", response_model=ResponseModel)
