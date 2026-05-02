@@ -4,8 +4,6 @@ from fastapi.responses import StreamingResponse
 from core.agent import chat_stream_agent
 from api.errors import raise_http_error
 from api.mappers import (
-    agent_runtime_config_response_kwargs,
-    agent_runtime_config_saved_response_kwargs,
     active_sessions_response_kwargs,
     all_sessions_poll_response_kwargs,
     approval_decision_response_kwargs,
@@ -38,7 +36,6 @@ from api.mappers import (
     custom_skill_rollback_kwargs,
     chat_attachment_preview_response_kwargs,
     chat_stop_response_kwargs,
-    embedding_config_saved_response_kwargs,
     inspection_run_export_response_kwargs,
     inspection_run_report_response_kwargs,
     inspection_run_response_kwargs,
@@ -49,13 +46,6 @@ from api.mappers import (
     inspection_template_save_payload,
     inspection_template_saved_response_kwargs,
     legacy_command_response_kwargs,
-    llm_config_response_kwargs,
-    models_response_kwargs,
-    providers_response_kwargs,
-    providers_saved_response_kwargs,
-    safety_policy_response_kwargs,
-    safety_policy_saved_response_kwargs,
-    safety_policy_test_response_kwargs,
     saved_assets_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
@@ -97,6 +87,7 @@ from api.alert_routes import router as alert_router
 from api.dashboard_routes import router as dashboard_router
 from api.protocol_verification_routes import router as protocol_verification_router
 from api.notification_routes import router as notification_router
+from api.config_routes import router as config_router
 from core.asset_protocols import (
     API_PROTOCOLS,
     SQL_PROTOCOLS,
@@ -172,7 +163,6 @@ from core.asset_cleanup_service import (
     apply_asset_cleanup_record,
     build_asset_cleanup_plan_record,
 )
-from core.model_catalog_service import fetch_model_catalog
 from core.session_runtime import (
     SessionRuntimeError,
     drain_all_pending_messages,
@@ -226,25 +216,6 @@ from core.inspection_job_service import (
     run_inspection_job_record_now,
     update_inspection_job_record,
 )
-from core.safety_policy_service import (
-    SafetyPolicyServiceError,
-    explain_safety_policy_test,
-    get_safety_policy_record,
-    save_safety_policy_record,
-)
-from core.provider_config_service import (
-    ProviderConfigServiceError,
-    list_provider_config_records,
-    save_provider_config_records,
-)
-from core.app_config_service import (
-    AppConfigServiceError,
-    build_llm_config_payload,
-    get_agent_runtime_config_record,
-    get_embedding_config_record,
-    save_agent_runtime_config_record,
-    save_embedding_config_record,
-)
 from core.approval_request_service import (
     ApprovalRequestServiceError,
     decide_approval_request_record,
@@ -267,7 +238,6 @@ from core.session_profile_service import (
 )
 from core.session_inspection_service import inspect_active_session_record
 from api.schemas import (
-    AgentRuntimeConfigRequest,
     ApprovalDecisionRequest,
     AssetPayload,
     BatchAssetImportItem,
@@ -277,16 +247,12 @@ from api.schemas import (
     ConnectionRequest,
     CreateSkillRequest,
     CronAddRequest,
-    EmbeddingConfigRequest,
     HeartbeatUpdateRequest,
     InspectionTemplatePayload,
     InspectionTemplateStepPayload,
     MigrateRequest,
     PermissionUpdateRequest,
-    ProviderConfig,
     ResponseModel,
-    SafetyPolicyTestRequest,
-    SafetyPolicyUpdateRequest,
     SessionGroupUpdateRequest,
     SessionMessageUpdateRequest,
     SessionProfileGenerateRequest,
@@ -313,6 +279,7 @@ router.include_router(alert_router)
 router.include_router(dashboard_router)
 router.include_router(protocol_verification_router)
 router.include_router(notification_router)
+router.include_router(config_router)
 
 
 def get_login_protocol(req: ConnectionRequest) -> str:
@@ -595,52 +562,6 @@ async def migrate_skill(req: MigrateRequest):
     except CustomSkillMigrationServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**skill_migration_response_kwargs(result))
-
-
-@router.get("/models", response_model=ResponseModel)
-async def get_models(provider_id: str | None = None, refresh: bool = False):
-    # Dynamic fetch of models
-    models = await fetch_model_catalog(provider_id=provider_id, refresh=refresh)
-    if models:
-        return ResponseModel(**models_response_kwargs(models))
-    raise HTTPException(status_code=502, detail="Cannot fetch models.")
-
-
-@router.get("/config/llm", response_model=ResponseModel)
-async def get_llm_config():
-    """【新功能】获取当前大模型配置"""
-    return ResponseModel(**llm_config_response_kwargs(build_llm_config_payload()))
-
-
-
-@router.get("/config/agent-runtime", response_model=ResponseModel)
-async def get_agent_runtime_config_endpoint():
-    return ResponseModel(
-        **agent_runtime_config_response_kwargs(get_agent_runtime_config_record())
-    )
-
-
-@router.post("/config/agent-runtime", response_model=ResponseModel)
-async def update_agent_runtime_config_endpoint(req: AgentRuntimeConfigRequest):
-    try:
-        config = save_agent_runtime_config_record(req.chat_max_steps, req.headless_max_steps)
-    except AppConfigServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**agent_runtime_config_saved_response_kwargs(config))
-
-
-@router.get("/config/embedding")
-async def get_embedding_config_endpoint():
-    return {"status": "success", "data": get_embedding_config_record()}
-
-
-@router.post("/config/embedding", response_model=ResponseModel)
-async def update_embedding_config_endpoint(req: EmbeddingConfigRequest):
-    try:
-        save_embedding_config_record(req.model, req.dim)
-        return ResponseModel(**embedding_config_saved_response_kwargs(req.model, req.dim))
-    except AppConfigServiceError as exc:
-        raise_http_error(exc)
 
 
 @router.put("/session/{session_id}/permission", response_model=ResponseModel)
@@ -1188,38 +1109,4 @@ async def export_session_history(session_id: str):
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_history_export_response_kwargs(markdown))
-
-
-@router.get("/config/providers", response_model=ResponseModel)
-async def get_providers_endpoint():
-    providers = await asyncio.to_thread(list_provider_config_records)
-    return ResponseModel(**providers_response_kwargs(providers))
-
-@router.post("/config/providers", response_model=ResponseModel)
-async def update_providers_endpoint(req: list[ProviderConfig]):
-    try:
-        await asyncio.to_thread(save_provider_config_records, [p.model_dump() for p in req])
-    except ProviderConfigServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**providers_saved_response_kwargs())
-
-
-@router.get("/config/safety-policy", response_model=ResponseModel)
-async def get_safety_policy_endpoint():
-    return ResponseModel(**safety_policy_response_kwargs(get_safety_policy_record()))
-
-
-@router.post("/config/safety-policy", response_model=ResponseModel)
-async def update_safety_policy_endpoint(req: SafetyPolicyUpdateRequest):
-    try:
-        policy = save_safety_policy_record(req.policy)
-    except SafetyPolicyServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**safety_policy_saved_response_kwargs(policy))
-
-
-@router.post("/config/safety-policy/test", response_model=ResponseModel)
-async def test_safety_policy_endpoint(req: SafetyPolicyTestRequest):
-    result = explain_safety_policy_test(req)
-    return ResponseModel(**safety_policy_test_response_kwargs(result))
 

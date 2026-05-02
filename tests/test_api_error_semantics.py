@@ -9,8 +9,12 @@ from unittest.mock import patch
 from fastapi import HTTPException, UploadFile
 from pydantic import ValidationError
 
-from api import knowledge_routes, notification_routes, routes
-from api.schemas import TestNotificationRequest
+from api import config_routes, knowledge_routes, notification_routes, routes
+from api.schemas import (
+    SafetyPolicyTestRequest,
+    SafetyPolicyUpdateRequest,
+    TestNotificationRequest,
+)
 
 
 class TestApiErrorSemantics(unittest.TestCase):
@@ -233,8 +237,8 @@ class TestApiErrorSemantics(unittest.TestCase):
 
     def test_safety_policy_test_endpoint_previews_without_execution(self):
         response = asyncio.run(
-            routes.test_safety_policy_endpoint(
-                routes.SafetyPolicyTestRequest(
+            config_routes.test_safety_policy_endpoint(
+                SafetyPolicyTestRequest(
                     tool_name="linux_execute_command",
                     command="rm -rf /",
                     allow_modifications=True,
@@ -247,8 +251,8 @@ class TestApiErrorSemantics(unittest.TestCase):
 
     def test_safety_policy_test_endpoint_returns_business_actions(self):
         response = asyncio.run(
-            routes.test_safety_policy_endpoint(
-                routes.SafetyPolicyTestRequest(
+            config_routes.test_safety_policy_endpoint(
+                SafetyPolicyTestRequest(
                     tool_name="db_execute_query",
                     sql="ALTER SYSTEM SWITCH LOGFILE",
                     allow_modifications=True,
@@ -266,22 +270,22 @@ class TestApiErrorSemantics(unittest.TestCase):
 
     def test_safety_policy_test_request_rejects_unknown_tool(self):
         with self.assertRaises(ValidationError):
-            routes.SafetyPolicyTestRequest(
+            SafetyPolicyTestRequest(
                 tool_name="unknown_execute",
                 command="echo ok",
             )
 
     def test_safety_policy_test_request_accepts_registered_auxiliary_tools(self):
-        memcached = routes.SafetyPolicyTestRequest(
+        memcached = SafetyPolicyTestRequest(
             tool_name="memcached_execute_command",
             command="flush_all",
         )
-        service_probe = routes.SafetyPolicyTestRequest(
+        service_probe = SafetyPolicyTestRequest(
             tool_name="service_probe_request",
             method="GET",
             path="/health",
         )
-        snmp = routes.SafetyPolicyTestRequest(
+        snmp = SafetyPolicyTestRequest(
             tool_name="snmp_get",
             oid="1.3.6.1.2.1.1.1.0",
         )
@@ -378,8 +382,8 @@ class TestApiErrorSemantics(unittest.TestCase):
     def test_safety_policy_update_rejects_invalid_regex_with_422(self):
         with self.assertRaises(HTTPException) as ctx:
             asyncio.run(
-                routes.update_safety_policy_endpoint(
-                    routes.SafetyPolicyUpdateRequest(
+                config_routes.update_safety_policy_endpoint(
+                    SafetyPolicyUpdateRequest(
                         policy={
                             "rules": [
                                 {
@@ -397,9 +401,9 @@ class TestApiErrorSemantics(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 422)
 
     def test_models_empty_result_returns_bad_gateway(self):
-        with patch("api.routes.fetch_model_catalog", return_value=[]):
+        with patch("api.config_routes.fetch_model_catalog", return_value=[]):
             with self.assertRaises(HTTPException) as ctx:
-                asyncio.run(routes.get_models())
+                asyncio.run(config_routes.get_models())
 
         self.assertEqual(ctx.exception.status_code, 502)
 

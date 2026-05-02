@@ -13,6 +13,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from api import routes
+from api.schemas import SafetyPolicyTestRequest
 from core.asset_protocols import get_asset_catalog
 from core.memory import DEFAULT_SENSITIVE_EXTRA_ARG_KEYS
 
@@ -107,11 +108,11 @@ class TestAssetCrudRoutes(unittest.TestCase):
 
         self.assertEqual(second_step.args, {})
 
-        first_policy_test = routes.SafetyPolicyTestRequest(
+        first_policy_test = SafetyPolicyTestRequest(
             tool_name="linux_execute_command",
             command="whoami",
         )
-        second_policy_test = routes.SafetyPolicyTestRequest(
+        second_policy_test = SafetyPolicyTestRequest(
             tool_name="linux_execute_command",
             command="hostname",
         )

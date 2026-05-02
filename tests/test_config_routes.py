@@ -2,15 +2,33 @@ import asyncio
 import unittest
 from unittest.mock import patch
 
-from api import routes
+from api import config_routes, routes
+from api.schemas import (
+    AgentRuntimeConfigRequest,
+    EmbeddingConfigRequest,
+    ProviderConfig,
+    SafetyPolicyTestRequest,
+    SafetyPolicyUpdateRequest,
+)
 
 
 class TestConfigRoutes(unittest.TestCase):
+    def test_config_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/models", paths)
+        self.assertIn("/config/llm", paths)
+        self.assertIn("/config/agent-runtime", paths)
+        self.assertIn("/config/embedding", paths)
+        self.assertIn("/config/providers", paths)
+        self.assertIn("/config/safety-policy", paths)
+        self.assertIn("/config/safety-policy/test", paths)
+
     def test_get_models_preserves_response_shape(self):
         models = [{"id": "openai|gpt-4o", "name": "gpt-4o"}]
 
-        with patch("api.routes.fetch_model_catalog", return_value=models):
-            response = asyncio.run(routes.get_models(provider_id="openai", refresh=True))
+        with patch("api.config_routes.fetch_model_catalog", return_value=models):
+            response = asyncio.run(config_routes.get_models(provider_id="openai", refresh=True))
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, {"models": models})
@@ -18,8 +36,8 @@ class TestConfigRoutes(unittest.TestCase):
     def test_get_llm_config_preserves_response_shape(self):
         config = {"base_url": "https://api.example/v1", "api_key": "********"}
 
-        with patch("api.routes.build_llm_config_payload", return_value=config):
-            response = asyncio.run(routes.get_llm_config())
+        with patch("api.config_routes.build_llm_config_payload", return_value=config):
+            response = asyncio.run(config_routes.get_llm_config())
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, config)
@@ -27,13 +45,13 @@ class TestConfigRoutes(unittest.TestCase):
     def test_agent_runtime_config_routes_preserve_response_shape(self):
         config = {"chat_max_steps": 80, "headless_max_steps": 60}
 
-        with patch("api.routes.get_agent_runtime_config_record", return_value=config):
-            get_response = asyncio.run(routes.get_agent_runtime_config_endpoint())
+        with patch("api.config_routes.get_agent_runtime_config_record", return_value=config):
+            get_response = asyncio.run(config_routes.get_agent_runtime_config_endpoint())
 
-        with patch("api.routes.save_agent_runtime_config_record", return_value=config):
+        with patch("api.config_routes.save_agent_runtime_config_record", return_value=config):
             post_response = asyncio.run(
-                routes.update_agent_runtime_config_endpoint(
-                    routes.AgentRuntimeConfigRequest(
+                config_routes.update_agent_runtime_config_endpoint(
+                    AgentRuntimeConfigRequest(
                         chat_max_steps=80,
                         headless_max_steps=60,
                     )
@@ -47,10 +65,10 @@ class TestConfigRoutes(unittest.TestCase):
         self.assertEqual(post_response.data, {"config": config})
 
     def test_update_embedding_config_preserves_response_shape(self):
-        with patch("api.routes.save_embedding_config_record") as save_embedding:
+        with patch("api.config_routes.save_embedding_config_record") as save_embedding:
             response = asyncio.run(
-                routes.update_embedding_config_endpoint(
-                    routes.EmbeddingConfigRequest(model="text-embedding", dim=1024)
+                config_routes.update_embedding_config_endpoint(
+                    EmbeddingConfigRequest(model="text-embedding", dim=1024)
                 )
             )
 
@@ -64,7 +82,7 @@ class TestConfigRoutes(unittest.TestCase):
     def test_provider_config_routes_preserve_response_shape(self):
         providers = [{"id": "openai", "api_key": "********"}]
         request = [
-            routes.ProviderConfig(
+            ProviderConfig(
                 id="openai",
                 name="OpenAI",
                 protocol="openai",
@@ -74,11 +92,11 @@ class TestConfigRoutes(unittest.TestCase):
             )
         ]
 
-        with patch("api.routes.list_provider_config_records", return_value=providers):
-            get_response = asyncio.run(routes.get_providers_endpoint())
+        with patch("api.config_routes.list_provider_config_records", return_value=providers):
+            get_response = asyncio.run(config_routes.get_providers_endpoint())
 
-        with patch("api.routes.save_provider_config_records") as save_providers:
-            post_response = asyncio.run(routes.update_providers_endpoint(request))
+        with patch("api.config_routes.save_provider_config_records") as save_providers:
+            post_response = asyncio.run(config_routes.update_providers_endpoint(request))
 
         save_providers.assert_called_once_with([request[0].model_dump()])
         self.assertEqual(get_response.status, "success")
@@ -90,20 +108,20 @@ class TestConfigRoutes(unittest.TestCase):
         policy = {"rules": []}
         result = {"action": "deny", "reason": "blocked"}
 
-        with patch("api.routes.get_safety_policy_record", return_value=policy):
-            get_response = asyncio.run(routes.get_safety_policy_endpoint())
+        with patch("api.config_routes.get_safety_policy_record", return_value=policy):
+            get_response = asyncio.run(config_routes.get_safety_policy_endpoint())
 
-        with patch("api.routes.save_safety_policy_record", return_value=policy):
+        with patch("api.config_routes.save_safety_policy_record", return_value=policy):
             post_response = asyncio.run(
-                routes.update_safety_policy_endpoint(
-                    routes.SafetyPolicyUpdateRequest(policy=policy)
+                config_routes.update_safety_policy_endpoint(
+                    SafetyPolicyUpdateRequest(policy=policy)
                 )
             )
 
-        with patch("api.routes.explain_safety_policy_test", return_value=result):
+        with patch("api.config_routes.explain_safety_policy_test", return_value=result):
             test_response = asyncio.run(
-                routes.test_safety_policy_endpoint(
-                    routes.SafetyPolicyTestRequest(
+                config_routes.test_safety_policy_endpoint(
+                    SafetyPolicyTestRequest(
                         tool_name="linux_execute_command",
                         command="rm -rf /",
                     )
