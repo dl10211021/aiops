@@ -8,6 +8,10 @@ from api.mappers import (
     agent_runtime_config_saved_response_kwargs,
     active_sessions_response_kwargs,
     all_sessions_poll_response_kwargs,
+    approval_decision_response_kwargs,
+    approval_execution_response_kwargs,
+    approval_request_response_kwargs,
+    approval_requests_response_kwargs,
     alert_event_list_query_kwargs,
     alert_event_response_kwargs,
     alert_event_update_kwargs,
@@ -40,7 +44,10 @@ from api.mappers import (
     custom_skill_create_kwargs,
     custom_skill_migration_kwargs,
     custom_skill_rollback_kwargs,
+    chat_attachment_preview_response_kwargs,
+    chat_stop_response_kwargs,
     dashboard_response_kwargs,
+    embedding_config_saved_response_kwargs,
     inspection_run_export_response_kwargs,
     inspection_run_report_response_kwargs,
     inspection_run_response_kwargs,
@@ -53,6 +60,7 @@ from api.mappers import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    legacy_command_response_kwargs,
     llm_config_response_kwargs,
     models_response_kwargs,
     notification_channel_test_response_kwargs,
@@ -87,9 +95,18 @@ from api.mappers import (
     session_webhook_preview_response_kwargs,
     session_webhook_delivery_kwargs,
     session_webhook_sent_response_kwargs,
+    skill_created_response_kwargs,
+    skill_detail_response_kwargs,
+    skill_migration_response_kwargs,
+    skill_registry_response_kwargs,
+    skill_rollback_response_kwargs,
+    skill_scan_response_kwargs,
+    skill_validation_response_kwargs,
+    skill_versions_response_kwargs,
     system_info_response_kwargs,
     tool_catalog_response_kwargs,
     tool_approval_response_kwargs,
+    user_interaction_submitted_response_kwargs,
 )
 from core.asset_protocols import (
     API_PROTOCOLS,
@@ -378,7 +395,7 @@ async def preview_chat_attachment(file: UploadFile = File(...)):
         file.content_type or "application/octet-stream",
         content,
     )
-    return ResponseModel(status="success", data={"attachment": attachment})
+    return ResponseModel(**chat_attachment_preview_response_kwargs(attachment))
 
 
 @router.post("/session/{session_id}/approve", response_model=ResponseModel)
@@ -418,15 +435,16 @@ async def respond_user_interaction(session_id: str, req: UserInteractionResponse
         )
     except SessionInteractionServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="交互输入已提交。")
+    return ResponseModel(**user_interaction_submitted_response_kwargs())
 
 
 @router.get("/approvals", response_model=ResponseModel)
 async def list_approval_requests(status: str | None = None, limit: int = 100):
     """查询高危工具调用审批队列。"""
     return ResponseModel(
-        status="success",
-        data={"approvals": list_approval_request_records(status=status, limit=limit)},
+        **approval_requests_response_kwargs(
+            list_approval_request_records(status=status, limit=limit)
+        )
     )
 
 
@@ -437,7 +455,7 @@ async def get_approval_request(approval_id: str):
         approval = get_approval_request_record(approval_id)
     except ApprovalRequestServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"approval": approval})
+    return ResponseModel(**approval_request_response_kwargs(approval))
 
 
 @router.post("/approvals/{approval_id}/decision", response_model=ResponseModel)
@@ -455,7 +473,7 @@ async def decide_approval_request(approval_id: str, req: ApprovalDecisionRequest
         )
     except ApprovalRequestServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="审批已处理", data={"approval": approval})
+    return ResponseModel(**approval_decision_response_kwargs(approval))
 
 
 @router.post("/approvals/{approval_id}/execute", response_model=ResponseModel)
@@ -471,14 +489,7 @@ async def execute_approval_request(approval_id: str):
         )
     except ApprovalExecutionServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(
-        status=result.status,
-        message=result.message,
-        data={
-            "approval": result.approval,
-            "result": result.result,
-        },
-    )
+    return ResponseModel(**approval_execution_response_kwargs(result))
 
 
 @router.post("/session/{session_id}/stop", response_model=ResponseModel)
@@ -487,7 +498,7 @@ async def stop_chat_session(session_id: str):
     from core.agent import cancel_flags
 
     request_session_stop(cancel_flags, session_id)
-    return ResponseModel(status="success", message="已发送中止信号。")
+    return ResponseModel(**chat_stop_response_kwargs())
 
 
 def get_restored_connection_request(req: ConnectionRequest) -> tuple[ConnectionRequest, str | None]:
@@ -560,10 +571,7 @@ async def execute_remote_command(req: CommandRequest):
     except LegacyCommandServiceError as exc:
         raise_http_error(exc)
 
-    return ResponseModel(
-        status="success",
-        data=data,
-    )
+    return ResponseModel(**legacy_command_response_kwargs(data))
 
 
 @router.post("/skills/scan", response_model=ResponseModel)
@@ -572,7 +580,7 @@ async def scan_skills():
     from core.dispatcher import dispatcher
 
     result = scan_custom_skill_catalog(dispatcher)
-    return ResponseModel(status="success", message=result["message"])
+    return ResponseModel(**skill_scan_response_kwargs(result))
 
 
 @router.get("/skills/registry", response_model=ResponseModel)
@@ -580,7 +588,9 @@ async def get_skill_registry():
     """【新功能】前端调用，获取所有已安装的技能卡带摘要以及外部市场待下载的卡带"""
     from core.dispatcher import dispatcher
 
-    return ResponseModel(status="success", data=list_custom_skill_catalog(dispatcher))
+    return ResponseModel(
+        **skill_registry_response_kwargs(list_custom_skill_catalog(dispatcher))
+    )
 
 
 @router.get("/skills/registry/{skill_id}", response_model=ResponseModel)
@@ -592,7 +602,7 @@ async def get_skill_detail(skill_id: str):
         detail = get_custom_skill_detail_record(dispatcher, skill_id)
     except CustomSkillCatalogServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data=detail)
+    return ResponseModel(**skill_detail_response_kwargs(detail))
 
 
 @router.post("/skills/create", response_model=ResponseModel)
@@ -608,14 +618,14 @@ async def create_skill(req: CreateSkillRequest):
         )
     except CustomSkillCreateServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message=result["message"], data=result["data"])
+    return ResponseModel(**skill_created_response_kwargs(result))
 
 
 @router.post("/skills/validate", response_model=ResponseModel)
 async def validate_skill(req: SkillValidationRequest):
     """静态校验技能文件内容，不写文件、不执行脚本。"""
     result = validate_skill_candidate(req.skill_id, req.file_name, req.content)
-    return ResponseModel(status="success", data=result)
+    return ResponseModel(**skill_validation_response_kwargs(result))
 
 
 @router.get("/skills/{skill_id}/versions", response_model=ResponseModel)
@@ -625,7 +635,7 @@ async def list_skill_versions(skill_id: str, file_name: str = "SKILL.md"):
         versions = list_custom_skill_version_records(CUSTOM_SKILLS_DIR, skill_id, file_name)
     except CustomSkillVersionServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"versions": versions})
+    return ResponseModel(**skill_versions_response_kwargs(versions))
 
 
 @router.post("/skills/{skill_id}/rollback", response_model=ResponseModel)
@@ -642,11 +652,7 @@ async def rollback_skill_version(skill_id: str, req: SkillRollbackRequest):
         )
     except CustomSkillRollbackServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(
-        status=result["status"],
-        message=result["message"],
-        data=result["data"],
-    )
+    return ResponseModel(**skill_rollback_response_kwargs(result))
 
 
 @router.post("/skills/migrate", response_model=ResponseModel)
@@ -662,7 +668,7 @@ async def migrate_skill(req: MigrateRequest):
         )
     except CustomSkillMigrationServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message=result["message"])
+    return ResponseModel(**skill_migration_response_kwargs(result))
 
 
 @router.get("/models", response_model=ResponseModel)
@@ -708,10 +714,7 @@ async def get_embedding_config_endpoint():
 async def update_embedding_config_endpoint(req: EmbeddingConfigRequest):
     try:
         save_embedding_config_record(req.model, req.dim)
-        return ResponseModel(
-            status="success",
-            message=f"Embedding 配置已更新: model={req.model}, dim={req.dim}",
-        )
+        return ResponseModel(**embedding_config_saved_response_kwargs(req.model, req.dim))
     except AppConfigServiceError as exc:
         raise_http_error(exc)
 
@@ -950,10 +953,7 @@ async def get_session_commands(session_id: str):
         )
     except SessionToolContextError as exc:
         raise_http_error(exc)
-    return ResponseModel(
-        status="success",
-        data=payload,
-    )
+    return ResponseModel(**session_commands_response_kwargs(payload))
 
 
 @router.get("/commands/custom", response_model=ResponseModel)

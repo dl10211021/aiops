@@ -1,10 +1,15 @@
 import unittest
+from types import SimpleNamespace
 
 from api.mappers import (
     agent_runtime_config_response_kwargs,
     agent_runtime_config_saved_response_kwargs,
     active_sessions_response_kwargs,
     all_sessions_poll_response_kwargs,
+    approval_decision_response_kwargs,
+    approval_execution_response_kwargs,
+    approval_request_response_kwargs,
+    approval_requests_response_kwargs,
     alert_event_list_query_kwargs,
     alert_event_response_kwargs,
     alert_event_update_kwargs,
@@ -37,7 +42,10 @@ from api.mappers import (
     custom_skill_create_kwargs,
     custom_skill_migration_kwargs,
     custom_skill_rollback_kwargs,
+    chat_attachment_preview_response_kwargs,
+    chat_stop_response_kwargs,
     dashboard_response_kwargs,
+    embedding_config_saved_response_kwargs,
     inspection_run_export_response_kwargs,
     inspection_run_report_response_kwargs,
     inspection_run_response_kwargs,
@@ -50,6 +58,7 @@ from api.mappers import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    legacy_command_response_kwargs,
     llm_config_response_kwargs,
     models_response_kwargs,
     notification_channel_test_response_kwargs,
@@ -84,9 +93,18 @@ from api.mappers import (
     session_webhook_preview_response_kwargs,
     session_webhook_delivery_kwargs,
     session_webhook_sent_response_kwargs,
+    skill_created_response_kwargs,
+    skill_detail_response_kwargs,
+    skill_migration_response_kwargs,
+    skill_registry_response_kwargs,
+    skill_rollback_response_kwargs,
+    skill_scan_response_kwargs,
+    skill_validation_response_kwargs,
+    skill_versions_response_kwargs,
     system_info_response_kwargs,
     tool_catalog_response_kwargs,
     tool_approval_response_kwargs,
+    user_interaction_submitted_response_kwargs,
 )
 from api.schemas import (
     AlertEventUpdateRequest,
@@ -595,6 +613,13 @@ class TestApiMappers(unittest.TestCase):
             },
         )
         self.assertEqual(
+            embedding_config_saved_response_kwargs("text-embedding", 1024),
+            {
+                "status": "success",
+                "message": "Embedding 配置已更新: model=text-embedding, dim=1024",
+            },
+        )
+        self.assertEqual(
             providers_response_kwargs(providers),
             {"status": "success", "data": {"providers": providers}},
         )
@@ -850,6 +875,94 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             session_history_export_response_kwargs("# 会话"),
             {"status": "success", "data": {"markdown": "# 会话"}},
+        )
+
+    def test_interaction_approval_and_skill_response_kwargs_preserve_route_shapes(self):
+        attachment = {"filename": "runbook.txt", "text": "hello"}
+        approval = {"id": "approval-1", "status": "pending"}
+        approvals = [approval]
+        execution = SimpleNamespace(
+            status="success",
+            message="rollback complete",
+            approval=approval,
+            result={"version_id": "v1"},
+        )
+        command_result = {"stdout": "ok"}
+        registry = {"registry": []}
+        detail = {"skill_id": "safe-skill", "content": "---"}
+        created = {"message": "技能已创建", "data": {"skill_id": "safe-skill"}}
+        validation = {"valid": True, "issues": []}
+        versions = [{"id": "v1"}]
+        rollback = {"status": "success", "message": "已回滚", "data": {"id": "v1"}}
+        migrated = {"message": "技能已导入"}
+
+        self.assertEqual(
+            chat_attachment_preview_response_kwargs(attachment),
+            {"status": "success", "data": {"attachment": attachment}},
+        )
+        self.assertEqual(
+            user_interaction_submitted_response_kwargs(),
+            {"status": "success", "message": "交互输入已提交。"},
+        )
+        self.assertEqual(
+            approval_requests_response_kwargs(approvals),
+            {"status": "success", "data": {"approvals": approvals}},
+        )
+        self.assertEqual(
+            approval_request_response_kwargs(approval),
+            {"status": "success", "data": {"approval": approval}},
+        )
+        self.assertEqual(
+            approval_decision_response_kwargs(approval),
+            {"status": "success", "message": "审批已处理", "data": {"approval": approval}},
+        )
+        self.assertEqual(
+            approval_execution_response_kwargs(execution),
+            {
+                "status": "success",
+                "message": "rollback complete",
+                "data": {"approval": approval, "result": {"version_id": "v1"}},
+            },
+        )
+        self.assertEqual(
+            chat_stop_response_kwargs(),
+            {"status": "success", "message": "已发送中止信号。"},
+        )
+        self.assertEqual(
+            legacy_command_response_kwargs(command_result),
+            {"status": "success", "data": command_result},
+        )
+        self.assertEqual(
+            skill_scan_response_kwargs({"message": "扫描完成"}),
+            {"status": "success", "message": "扫描完成"},
+        )
+        self.assertEqual(
+            skill_registry_response_kwargs(registry),
+            {"status": "success", "data": registry},
+        )
+        self.assertEqual(
+            skill_detail_response_kwargs(detail),
+            {"status": "success", "data": detail},
+        )
+        self.assertEqual(
+            skill_created_response_kwargs(created),
+            {"status": "success", "message": "技能已创建", "data": created["data"]},
+        )
+        self.assertEqual(
+            skill_validation_response_kwargs(validation),
+            {"status": "success", "data": validation},
+        )
+        self.assertEqual(
+            skill_versions_response_kwargs(versions),
+            {"status": "success", "data": {"versions": versions}},
+        )
+        self.assertEqual(
+            skill_rollback_response_kwargs(rollback),
+            {"status": "success", "message": "已回滚", "data": {"id": "v1"}},
+        )
+        self.assertEqual(
+            skill_migration_response_kwargs(migrated),
+            {"status": "success", "message": "技能已导入"},
         )
 
     def test_session_group_response_kwargs_preserves_route_payload_shape(self):

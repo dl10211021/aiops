@@ -46,6 +46,21 @@ class TestConfigRoutes(unittest.TestCase):
         self.assertEqual(post_response.message, "Agent 执行保护配置已保存")
         self.assertEqual(post_response.data, {"config": config})
 
+    def test_update_embedding_config_preserves_response_shape(self):
+        with patch("api.routes.save_embedding_config_record") as save_embedding:
+            response = asyncio.run(
+                routes.update_embedding_config_endpoint(
+                    routes.EmbeddingConfigRequest(model="text-embedding", dim=1024)
+                )
+            )
+
+        save_embedding.assert_called_once_with("text-embedding", 1024)
+        self.assertEqual(response.status, "success")
+        self.assertEqual(
+            response.message,
+            "Embedding 配置已更新: model=text-embedding, dim=1024",
+        )
+
     def test_provider_config_routes_preserve_response_shape(self):
         providers = [{"id": "openai", "api_key": "********"}]
         request = [

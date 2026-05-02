@@ -326,6 +326,13 @@ def agent_runtime_config_saved_response_kwargs(config: dict[str, Any]) -> dict[s
     }
 
 
+def embedding_config_saved_response_kwargs(model: str, dim: int) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": f"Embedding 配置已更新: model={model}, dim={dim}",
+    }
+
+
 def providers_response_kwargs(providers: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "status": "success",
@@ -625,6 +632,125 @@ def session_history_export_response_kwargs(markdown: str) -> dict[str, Any]:
     return {
         "status": "success",
         "data": {"markdown": markdown},
+    }
+
+
+def chat_attachment_preview_response_kwargs(attachment: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"attachment": attachment},
+    }
+
+
+def user_interaction_submitted_response_kwargs() -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "交互输入已提交。",
+    }
+
+
+def approval_requests_response_kwargs(approvals: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"approvals": approvals},
+    }
+
+
+def approval_request_response_kwargs(approval: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"approval": approval},
+    }
+
+
+def approval_decision_response_kwargs(approval: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "审批已处理",
+        "data": {"approval": approval},
+    }
+
+
+def approval_execution_response_kwargs(result: Any) -> dict[str, Any]:
+    return {
+        "status": result.status,
+        "message": result.message,
+        "data": {
+            "approval": result.approval,
+            "result": result.result,
+        },
+    }
+
+
+def chat_stop_response_kwargs() -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "已发送中止信号。",
+    }
+
+
+def legacy_command_response_kwargs(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": data,
+    }
+
+
+def skill_scan_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": result["message"],
+    }
+
+
+def skill_registry_response_kwargs(registry: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": registry,
+    }
+
+
+def skill_detail_response_kwargs(detail: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": detail,
+    }
+
+
+def skill_created_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": result["message"],
+        "data": result["data"],
+    }
+
+
+def skill_validation_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": result,
+    }
+
+
+def skill_versions_response_kwargs(versions: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"versions": versions},
+    }
+
+
+def skill_rollback_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": result["status"],
+        "message": result["message"],
+        "data": result["data"],
+    }
+
+
+def skill_migration_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": result["message"],
     }
 
 
