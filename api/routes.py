@@ -51,9 +51,6 @@ from api.mappers import (
     legacy_command_response_kwargs,
     llm_config_response_kwargs,
     models_response_kwargs,
-    notification_channel_test_response_kwargs,
-    notification_config_response_kwargs,
-    notification_config_saved_response_kwargs,
     providers_response_kwargs,
     providers_saved_response_kwargs,
     safety_policy_response_kwargs,
@@ -99,6 +96,7 @@ from api.knowledge_routes import router as knowledge_router
 from api.alert_routes import router as alert_router
 from api.dashboard_routes import router as dashboard_router
 from api.protocol_verification_routes import router as protocol_verification_router
+from api.notification_routes import router as notification_router
 from core.asset_protocols import (
     API_PROTOCOLS,
     SQL_PROTOCOLS,
@@ -174,15 +172,7 @@ from core.asset_cleanup_service import (
     apply_asset_cleanup_record,
     build_asset_cleanup_plan_record,
 )
-from core.notification_config import (
-    build_notification_config,
-)
-from core.notification_config_service import save_notification_config_record
 from core.model_catalog_service import fetch_model_catalog
-from core.notification_test import (
-    NotificationTestError,
-    send_notification_channel_test,
-)
 from core.session_runtime import (
     SessionRuntimeError,
     drain_all_pending_messages,
@@ -292,7 +282,6 @@ from api.schemas import (
     InspectionTemplatePayload,
     InspectionTemplateStepPayload,
     MigrateRequest,
-    NotificationConfigRequest,
     PermissionUpdateRequest,
     ProviderConfig,
     ResponseModel,
@@ -306,7 +295,6 @@ from api.schemas import (
     SkillsUpdateRequest,
     SkillValidationRequest,
     SlashCommandPayload,
-    TestNotificationRequest,
     ToolApprovalRequest,
     UserInteractionResponseRequest,
 )
@@ -324,6 +312,7 @@ router.include_router(knowledge_router)
 router.include_router(alert_router)
 router.include_router(dashboard_router)
 router.include_router(protocol_verification_router)
+router.include_router(notification_router)
 
 
 def get_login_protocol(req: ConnectionRequest) -> str:
@@ -652,37 +641,6 @@ async def update_embedding_config_endpoint(req: EmbeddingConfigRequest):
         return ResponseModel(**embedding_config_saved_response_kwargs(req.model, req.dim))
     except AppConfigServiceError as exc:
         raise_http_error(exc)
-
-
-@router.get("/config/notifications", response_model=ResponseModel)
-async def get_notification_config():
-    """【新功能】获取当前的告警通道配置"""
-    config = build_notification_config()
-    return ResponseModel(**notification_config_response_kwargs(config))
-
-
-@router.post("/config/notifications", response_model=ResponseModel)
-async def update_notification_config(req: NotificationConfigRequest):
-    """【新功能】前端动态配置企业微信/钉钉告警机器人 Webhook 及邮件"""
-    try:
-        save_notification_config_record(req.model_dump())
-    except Exception as e:
-        logger.error(f"Failed to save .env file: {e}")
-
-    logger.info("Notification Webhooks updated.")
-    return ResponseModel(**notification_config_saved_response_kwargs())
-
-
-@router.post("/config/notifications/test", response_model=ResponseModel)
-async def test_notification_channel(req: TestNotificationRequest):
-    """【新功能】测试通知渠道"""
-    try:
-        message = send_notification_channel_test(req.channel)
-        return ResponseModel(**notification_channel_test_response_kwargs(message))
-    except NotificationTestError as exc:
-        raise_http_error(exc)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"测试发送失败: {str(e)}") from e
 
 
 @router.put("/session/{session_id}/permission", response_model=ResponseModel)

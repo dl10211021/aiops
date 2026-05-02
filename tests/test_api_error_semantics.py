@@ -9,7 +9,8 @@ from unittest.mock import patch
 from fastapi import HTTPException, UploadFile
 from pydantic import ValidationError
 
-from api import knowledge_routes, routes
+from api import knowledge_routes, notification_routes, routes
+from api.schemas import TestNotificationRequest
 
 
 class TestApiErrorSemantics(unittest.TestCase):
@@ -92,26 +93,26 @@ class TestApiErrorSemantics(unittest.TestCase):
         with patch.dict("os.environ", {}, clear=True):
             with self.assertRaises(HTTPException) as wechat_ctx:
                 asyncio.run(
-                    routes.test_notification_channel(
-                        routes.TestNotificationRequest(channel="wechat")
+                    notification_routes.test_notification_channel(
+                        TestNotificationRequest(channel="wechat")
                     )
                 )
             with self.assertRaises(HTTPException) as dingtalk_ctx:
                 asyncio.run(
-                    routes.test_notification_channel(
-                        routes.TestNotificationRequest(channel="dingtalk")
+                    notification_routes.test_notification_channel(
+                        TestNotificationRequest(channel="dingtalk")
                     )
                 )
             with self.assertRaises(HTTPException) as email_ctx:
                 asyncio.run(
-                    routes.test_notification_channel(
-                        routes.TestNotificationRequest(channel="email")
+                    notification_routes.test_notification_channel(
+                        TestNotificationRequest(channel="email")
                     )
                 )
             with self.assertRaises(HTTPException) as unknown_ctx:
                 asyncio.run(
-                    routes.test_notification_channel(
-                        routes.TestNotificationRequest(channel="sms")
+                    notification_routes.test_notification_channel(
+                        TestNotificationRequest(channel="sms")
                     )
                 )
 
@@ -127,8 +128,8 @@ class TestApiErrorSemantics(unittest.TestCase):
         ):
             with self.assertRaises(HTTPException) as ctx:
                 asyncio.run(
-                    routes.test_notification_channel(
-                        routes.TestNotificationRequest(channel="wechat")
+                    notification_routes.test_notification_channel(
+                        TestNotificationRequest(channel="wechat")
                     )
                 )
 

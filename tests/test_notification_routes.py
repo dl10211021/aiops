@@ -2,21 +2,28 @@ import asyncio
 import unittest
 from unittest.mock import patch
 
-from api import routes
+from api import notification_routes, routes
+from api.schemas import NotificationConfigRequest, TestNotificationRequest
 
 
 class TestNotificationRoutes(unittest.TestCase):
+    def test_notification_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/config/notifications", paths)
+        self.assertIn("/config/notifications/test", paths)
+
     def test_get_notification_config_preserves_response_shape(self):
         config = {"wechat_enabled": True, "smtp_port": 465}
 
-        with patch("api.routes.build_notification_config", return_value=config):
-            response = asyncio.run(routes.get_notification_config())
+        with patch("api.notification_routes.build_notification_config", return_value=config):
+            response = asyncio.run(notification_routes.get_notification_config())
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, config)
 
     def test_update_notification_config_preserves_response_shape(self):
-        request = routes.NotificationConfigRequest(
+        request = NotificationConfigRequest(
             wechat_enabled=True,
             wechat_webhook="https://wechat.example/hook",
             dingtalk_enabled=False,
@@ -29,8 +36,8 @@ class TestNotificationRoutes(unittest.TestCase):
             smtp_pass="secret",
         )
 
-        with patch("api.routes.save_notification_config_record") as save_config:
-            response = asyncio.run(routes.update_notification_config(request))
+        with patch("api.notification_routes.save_notification_config_record") as save_config:
+            response = asyncio.run(notification_routes.update_notification_config(request))
 
         save_config.assert_called_once_with(request.model_dump())
         self.assertEqual(response.status, "success")
@@ -38,12 +45,12 @@ class TestNotificationRoutes(unittest.TestCase):
 
     def test_test_notification_channel_preserves_response_shape(self):
         with patch(
-            "api.routes.send_notification_channel_test",
+            "api.notification_routes.send_notification_channel_test",
             return_value="企业微信测试消息发送成功！请查看您的群组。",
         ):
             response = asyncio.run(
-                routes.test_notification_channel(
-                    routes.TestNotificationRequest(channel="wechat")
+                notification_routes.test_notification_channel(
+                    TestNotificationRequest(channel="wechat")
                 )
             )
 
