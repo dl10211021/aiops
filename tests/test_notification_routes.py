@@ -29,13 +29,10 @@ class TestNotificationRoutes(unittest.TestCase):
             smtp_pass="secret",
         )
 
-        with (
-            patch("core.app_config_service.update_env_file_values") as persist,
-            patch("api.routes.save_notification_config_record") as save_config,
-        ):
+        with patch("api.routes.save_notification_config_record") as save_config:
             response = asyncio.run(routes.update_notification_config(request))
 
-        save_config.assert_called_once_with(request.model_dump(), persist=persist)
+        save_config.assert_called_once_with(request.model_dump())
         self.assertEqual(response.status, "success")
         self.assertEqual(response.message, "告警通道配置已保存并生效")
 

@@ -187,8 +187,8 @@ from core.asset_service import (
 )
 from core.notification_config import (
     build_notification_config,
-    save_notification_config as save_notification_config_record,
 )
+from core.notification_config_service import save_notification_config_record
 from core.model_catalog_service import fetch_model_catalog
 from core.notification_test import (
     NotificationTestError,
@@ -693,9 +693,7 @@ async def get_notification_config():
 async def update_notification_config(req: NotificationConfigRequest):
     """【新功能】前端动态配置企业微信/钉钉告警机器人 Webhook 及邮件"""
     try:
-        from core.app_config_service import update_env_file_values
-
-        save_notification_config_record(req.model_dump(), persist=update_env_file_values)
+        save_notification_config_record(req.model_dump())
     except Exception as e:
         logger.error(f"Failed to save .env file: {e}")
 
