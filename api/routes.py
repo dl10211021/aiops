@@ -128,7 +128,7 @@ from core.legacy_command_service import (
     LegacyCommandServiceError,
     execute_legacy_command_record,
 )
-from core.session_views import build_active_sessions_response
+from core.active_sessions_service import build_active_sessions_payload
 from core.skill_lifecycle import validate_skill_candidate
 from core.tool_registry import tool_registry
 from core.custom_skill_catalog_service import (
@@ -902,12 +902,10 @@ async def update_session_group(session_id: str, req: SessionGroupUpdateRequest):
 async def get_active_sessions():
     """【新功能】前端刷新页面时同步当前后端的活跃会话"""
     from core.chat_runs import is_chat_running
-    from core.memory import memory_db
 
-    sessions_data = build_active_sessions_response(
+    sessions_data = build_active_sessions_payload(
         ssh_manager.active_sessions,
         is_session_streaming=is_chat_running,
-        sensitive_keys=memory_db.sensitive_keys,
     )
     return ResponseModel(**active_sessions_response_kwargs(sessions_data))
 
