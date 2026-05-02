@@ -824,10 +824,8 @@ async def poll_session_messages(session_id: str):
 @router.get("/session/{session_id}/history", response_model=ResponseModel)
 async def get_session_history(session_id: str):
     """【新功能】获取会话的历史消息记录，用于前端恢复"""
-    from core.memory import memory_db
-
     try:
-        messages = list_session_history_messages(memory_db, session_id)
+        messages = list_session_history_messages(session_id)
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_history_response_kwargs(messages))
@@ -836,10 +834,8 @@ async def get_session_history(session_id: str):
 @router.delete("/session/{session_id}/history", response_model=ResponseModel)
 async def delete_session_history(session_id: str):
     """【新功能】清空会话的聊天记录"""
-    from core.memory import memory_db
-
     try:
-        clear_session_history_messages(memory_db, session_id)
+        clear_session_history_messages(session_id)
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_history_cleared_response_kwargs())
@@ -852,11 +848,8 @@ async def update_session_history_message(
     req: SessionMessageUpdateRequest,
 ):
     """修改单条用户可见会话消息。"""
-    from core.memory import memory_db
-
     try:
         message = update_session_history_message_record(
-            memory_db,
             session_id,
             message_id,
             req.content,
@@ -869,10 +862,8 @@ async def update_session_history_message(
 @router.delete("/session/{session_id}/history/{message_id}", response_model=ResponseModel)
 async def delete_session_history_message(session_id: str, message_id: int):
     """删除单条用户可见会话消息。"""
-    from core.memory import memory_db
-
     try:
-        delete_session_history_message_record(memory_db, session_id, message_id)
+        delete_session_history_message_record(session_id, message_id)
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_history_message_deleted_response_kwargs())
@@ -1561,10 +1552,8 @@ async def batch_import_assets(items: list[BatchAssetImportItem]):
 @router.get("/session/{session_id}/export", response_model=ResponseModel)
 async def export_session_history(session_id: str):
     """【#22 新功能】服务端导出会话历史为 Markdown 格式"""
-    from core.memory import memory_db
-
     try:
-        markdown = export_session_history_markdown_record(memory_db, ssh_manager.active_sessions, session_id)
+        markdown = export_session_history_markdown_record(ssh_manager.active_sessions, session_id)
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_history_export_response_kwargs(markdown))

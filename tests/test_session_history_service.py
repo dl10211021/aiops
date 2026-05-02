@@ -58,10 +58,15 @@ class TestSessionHistoryService(unittest.TestCase):
     def test_session_history_operations_delegate_to_memory_db(self):
         memory_db = FakeMemoryDB()
 
-        messages = list_session_history_messages(memory_db, "sid-1")
-        clear_session_history_messages(memory_db, "sid-1")
-        updated = update_session_history_message_record(memory_db, "sid-1", 7, "new")
-        delete_session_history_message_record(memory_db, "sid-1", 7)
+        messages = list_session_history_messages("sid-1", memory_db=memory_db)
+        clear_session_history_messages("sid-1", memory_db=memory_db)
+        updated = update_session_history_message_record(
+            "sid-1",
+            7,
+            "new",
+            memory_db=memory_db,
+        )
+        delete_session_history_message_record("sid-1", 7, memory_db=memory_db)
 
         self.assertEqual([item["role"] for item in messages], ["user", "assistant"])
         self.assertEqual(memory_db.cleared, ["sid-1"])
@@ -73,9 +78,9 @@ class TestSessionHistoryService(unittest.TestCase):
         memory_db = FailingMemoryDB(ValueError("message not found"))
 
         with self.assertRaises(SessionHistoryServiceError) as update_ctx:
-            update_session_history_message_record(memory_db, "sid-1", 7, "new")
+            update_session_history_message_record("sid-1", 7, "new", memory_db=memory_db)
         with self.assertRaises(SessionHistoryServiceError) as delete_ctx:
-            delete_session_history_message_record(memory_db, "sid-1", 7)
+            delete_session_history_message_record("sid-1", 7, memory_db=memory_db)
 
         self.assertEqual(update_ctx.exception.status_code, 404)
         self.assertEqual(delete_ctx.exception.status_code, 404)
@@ -84,9 +89,9 @@ class TestSessionHistoryService(unittest.TestCase):
         memory_db = FailingMemoryDB(RuntimeError("db unavailable"))
 
         with self.assertRaises(SessionHistoryServiceError) as list_ctx:
-            list_session_history_messages(memory_db, "sid-1")
+            list_session_history_messages("sid-1", memory_db=memory_db)
         with self.assertRaises(SessionHistoryServiceError) as clear_ctx:
-            clear_session_history_messages(memory_db, "sid-1")
+            clear_session_history_messages("sid-1", memory_db=memory_db)
 
         self.assertEqual(list_ctx.exception.status_code, 500)
         self.assertEqual(clear_ctx.exception.status_code, 500)
@@ -95,9 +100,9 @@ class TestSessionHistoryService(unittest.TestCase):
         memory_db = FakeMemoryDB()
 
         markdown = export_session_history_markdown_record(
-            memory_db,
             {"sid-1": {"info": {"remark": "生产数据库"}}},
             "sid-1",
+            memory_db=memory_db,
         )
 
         self.assertIn("# Chat History: 生产数据库", markdown)
@@ -107,6 +112,6 @@ class TestSessionHistoryService(unittest.TestCase):
         memory_db = FakeMemoryDB([])
 
         with self.assertRaises(SessionHistoryServiceError) as ctx:
-            export_session_history_markdown_record(memory_db, {}, "sid-empty")
+            export_session_history_markdown_record({}, "sid-empty", memory_db=memory_db)
 
         self.assertEqual(ctx.exception.status_code, 404)
