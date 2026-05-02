@@ -22,6 +22,8 @@ from api.mappers import (
     custom_skill_create_kwargs,
     custom_skill_migration_kwargs,
     custom_skill_rollback_kwargs,
+    inspection_run_export_response_kwargs,
+    inspection_run_report_response_kwargs,
     inspection_run_response_kwargs,
     inspection_run_summary_response_kwargs,
     inspection_runs_response_kwargs,
@@ -1471,7 +1473,7 @@ async def get_inspection_run_report(run_id: str):
         report = get_inspection_run_report_record(run_id)
     except InspectionRunServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"report": report})
+    return ResponseModel(**inspection_run_report_response_kwargs(report))
 
 
 @router.get("/inspection-runs/{run_id}/export", response_model=ResponseModel)
@@ -1480,7 +1482,7 @@ async def export_inspection_run_report(run_id: str, format: str = "markdown"):
         payload = export_inspection_run_report_content(run_id, format)
     except InspectionRunServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data=payload)
+    return ResponseModel(**inspection_run_export_response_kwargs(payload))
 
 
 # ----------------- 系统状态与高级功能 -----------------

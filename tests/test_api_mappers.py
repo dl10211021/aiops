@@ -19,6 +19,8 @@ from api.mappers import (
     custom_skill_create_kwargs,
     custom_skill_migration_kwargs,
     custom_skill_rollback_kwargs,
+    inspection_run_export_response_kwargs,
+    inspection_run_report_response_kwargs,
     inspection_run_response_kwargs,
     inspection_run_summary_response_kwargs,
     inspection_runs_response_kwargs,
@@ -300,6 +302,12 @@ class TestApiMappers(unittest.TestCase):
         job = {"job_id": "job-1", "status": "active"}
         jobs = [job]
         run = {"id": "run-1", "status": "completed"}
+        report = {"run_id": "run-1", "summary": {"target_count": 1}}
+        export_payload = {
+            "format": "markdown",
+            "content_type": "text/markdown",
+            "content": "# 巡检报告",
+        }
         summary = {"total_runs": 1, "success_rate": 100.0}
         result = {"job_id": "job-1", "status": "completed"}
 
@@ -346,6 +354,14 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             inspection_run_response_kwargs(run),
             {"status": "success", "data": {"run": run}},
+        )
+        self.assertEqual(
+            inspection_run_report_response_kwargs(report),
+            {"status": "success", "data": {"report": report}},
+        )
+        self.assertEqual(
+            inspection_run_export_response_kwargs(export_payload),
+            {"status": "success", "data": export_payload},
         )
 
     def test_session_profile_kwargs_preserve_route_shapes(self):
