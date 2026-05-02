@@ -10,6 +10,16 @@ import sqlite3
 import uuid
 
 from core.request_context import current_request_id, request_id_context
+from core.hydration_status_service import (
+    HYDRATE_STATUS as hydrate_status,
+    finish_hydrate_run,
+    get_hydrate_status_record,
+    record_hydrate_done,
+    record_hydrate_success,
+    start_hydrate_run,
+)
+
+# Backward-compatible alias for callers that still import main.hydrate_status.
 
 # 在所有模块加载之前加载 .env 文件，确保通知配置等环境变量持久生效
 try:
@@ -78,9 +88,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] [request_id=%(request_id)s] %(message)s",
 )
 
-# 资产重连状态跟踪，供前端查询
-hydrate_status = {"total": 0, "done": 0, "success": 0, "running": False}
-
 
 async def background_hydrate_assets():
     """后台并发尝试重连历史资产，避免阻塞主服务启动"""
@@ -89,10 +96,7 @@ async def background_hydrate_assets():
 
     assets = await asyncio.to_thread(memory_db.get_all_assets)
 
-    hydrate_status["total"] = len(assets) if assets else 0
-    hydrate_status["done"] = 0
-    hydrate_status["success"] = 0
-    hydrate_status["running"] = True
+    start_hydrate_run(len(assets) if assets else 0)
 
     async def _connect_single(a):
         try:
@@ -112,13 +116,13 @@ async def background_hydrate_assets():
                 tags=a.get("tags", ["未分组"]),
                 lazy=True,
             )
-            hydrate_status["success"] += 1
+            record_hydrate_success()
             return True
         except Exception as e:
             logging.error(f"Auto-hydrate failed for {a['host']}: {e}")
             return False
         finally:
-            hydrate_status["done"] += 1
+            record_hydrate_done()
 
     if assets:
         results = await asyncio.gather(*[_connect_single(a) for a in assets])
@@ -127,7 +131,7 @@ async def background_hydrate_assets():
             f"Auto-hydrated {success_count}/{len(assets)} assets from database in background."
         )
 
-    hydrate_status["running"] = False
+    finish_hydrate_run()
 
 
 @asynccontextmanager
@@ -251,7 +255,7 @@ def healthz():
         "cron_store": {"status": "ok", "path": "cron_jobs.sqlite"},
         "storage": {"status": "ok", "path": root_dir},
         "frontend": {"status": "ok" if os.path.exists(react_index) else "warning"},
-        "hydrate": dict(hydrate_status),
+        "hydrate": get_hydrate_status_record(),
     }
 
     try:

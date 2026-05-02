@@ -1,8 +1,6 @@
 import asyncio
-import sys
 import unittest
 import warnings
-from types import ModuleType
 from unittest.mock import patch
 
 warnings.filterwarnings(
@@ -45,10 +43,8 @@ class TestSystemInfoRoutes(unittest.TestCase):
 
     def test_hydrate_status_preserves_response_shape_without_importing_main_app(self):
         status = {"total": 3, "done": 2, "success": 1, "running": True}
-        fake_main = ModuleType("main")
-        fake_main.hydrate_status = status
 
-        with patch.dict(sys.modules, {"main": fake_main}):
+        with patch("api.routes.get_hydrate_status_record", return_value=status):
             response = asyncio.run(routes.get_hydrate_status())
 
         self.assertEqual(response.status, "success")

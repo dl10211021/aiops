@@ -273,6 +273,7 @@ from core.database_capabilities_service import (
     get_database_driver_capabilities_record,
     get_oracle_client_config_record,
 )
+from core.hydration_status_service import get_hydrate_status_record
 from core.app_config_service import (
     AppConfigServiceError,
     build_llm_config_payload,
@@ -1425,9 +1426,7 @@ async def export_inspection_run_report(run_id: str, format: str = "markdown"):
 @router.get("/hydrate/status", response_model=ResponseModel)
 async def get_hydrate_status():
     """【新功能】获取启动时资产重连的进度，前端可轮询此接口展示启动状态"""
-    from main import hydrate_status
-
-    return ResponseModel(**system_info_response_kwargs(hydrate_status))
+    return ResponseModel(**system_info_response_kwargs(get_hydrate_status_record()))
 
 
 @router.post("/assets/batch_import", response_model=ResponseModel)
