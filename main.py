@@ -2,13 +2,17 @@ import uvicorn
 import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import logging
 from contextlib import asynccontextmanager
 import asyncio
-import uuid
 
-from core.request_context import current_request_id, request_id_context
+from core.request_context import current_request_id
+from core.http_middleware_service import (
+    SECURITY_HEADERS,
+    dispatch_api_token_auth,
+    dispatch_request_id,
+    dispatch_security_headers,
+)
 from core.hydration_status_service import (
     HYDRATE_STATUS as hydrate_status,
     finish_hydrate_run,
@@ -48,15 +52,6 @@ LOG_LEVELS = {
     "INFO": logging.INFO,
     "DEBUG": logging.DEBUG,
 }
-SECURITY_HEADERS = {
-    "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
-    "Referrer-Policy": "no-referrer",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-    "X-Permitted-Cross-Domain-Policies": "none",
-}
-
-
 def get_runtime_host() -> str:
     return os.environ.get("OPSCORE_HOST", DEFAULT_OPSCORE_HOST).strip() or DEFAULT_OPSCORE_HOST
 
@@ -187,35 +182,18 @@ app.add_middleware(
 
 @app.middleware("http")
 async def add_request_id(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID") or f"req_{uuid.uuid4().hex}"
-    with request_id_context(request_id):
-        request.state.request_id = request_id
-        response = await call_next(request)
-    response.headers["X-Request-ID"] = request_id
-    return response
+    return await dispatch_request_id(request, call_next)
 
 
 @app.middleware("http")
 async def api_token_auth(request: Request, call_next):
-    if request.url.path.startswith("/api/v1/") and request.method != "OPTIONS":
-        from core.security import is_authorized_request
-
-        token = os.environ.get("OPSCORE_API_TOKEN", "")
-        if not is_authorized_request(request.headers, token):
-            return JSONResponse(
-                status_code=401,
-                content={"detail": "Missing or invalid OpsCore API token"},
-            )
-    return await call_next(request)
+    token = os.environ.get("OPSCORE_API_TOKEN", "")
+    return await dispatch_api_token_auth(request, call_next, token)
 
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
-    response = await call_next(request)
-    for header, value in SECURITY_HEADERS.items():
-        if header not in response.headers:
-            response.headers[header] = value
-    return response
+    return await dispatch_security_headers(request, call_next)
 
 import sys
 
