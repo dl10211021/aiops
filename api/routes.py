@@ -95,13 +95,11 @@ from core.session_runtime import (
     set_session_permission,
     set_session_skills,
 )
-from core.session_history import (
-    build_session_history_markdown as build_session_history_markdown_content,
-)
 from core.session_history_service import (
     SessionHistoryServiceError,
     clear_session_history_messages,
     delete_session_history_message_record,
+    export_session_history_markdown_record,
     list_session_history_messages,
     update_session_history_message_record,
 )
@@ -1510,19 +1508,10 @@ async def export_session_history(session_id: str):
     from core.memory import memory_db
 
     try:
-        markdown = build_session_history_markdown_content(
-            memory_db,
-            ssh_manager.active_sessions,
-            session_id,
-        )
-        if not markdown:
-            raise HTTPException(status_code=404, detail="该会话没有可导出的历史记录。")
-
-        return ResponseModel(status="success", data={"markdown": markdown})
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        markdown = export_session_history_markdown_record(memory_db, ssh_manager.active_sessions, session_id)
+    except SessionHistoryServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return ResponseModel(status="success", data={"markdown": markdown})
 
 
 @router.get("/config/providers", response_model=ResponseModel)

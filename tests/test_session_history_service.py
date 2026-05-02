@@ -4,25 +4,27 @@ from core.session_history_service import (
     SessionHistoryServiceError,
     clear_session_history_messages,
     delete_session_history_message_record,
+    export_session_history_markdown_record,
     list_session_history_messages,
     update_session_history_message_record,
 )
 
 
 class FakeMemoryDB:
-    def __init__(self):
+    def __init__(self, messages=None):
         self.cleared = []
         self.deleted = []
         self.updated = []
-
-    def get_messages(self, session_id, for_ui=False):
-        self.session_id = session_id
-        self.for_ui = for_ui
-        return [
+        self.messages = messages if messages is not None else [
             {"role": "system", "content": "hidden"},
             {"role": "user", "content": "hi"},
             {"role": "assistant", "content": "hello"},
         ]
+
+    def get_messages(self, session_id, for_ui=False):
+        self.session_id = session_id
+        self.for_ui = for_ui
+        return self.messages
 
     def clear_history(self, session_id):
         self.cleared.append(session_id)
@@ -88,3 +90,23 @@ class TestSessionHistoryService(unittest.TestCase):
 
         self.assertEqual(list_ctx.exception.status_code, 500)
         self.assertEqual(clear_ctx.exception.status_code, 500)
+
+    def test_export_session_history_markdown_uses_session_remark_title(self):
+        memory_db = FakeMemoryDB()
+
+        markdown = export_session_history_markdown_record(
+            memory_db,
+            {"sid-1": {"info": {"remark": "生产数据库"}}},
+            "sid-1",
+        )
+
+        self.assertIn("# Chat History: 生产数据库", markdown)
+        self.assertIn("## User", markdown)
+
+    def test_export_session_history_markdown_maps_empty_history_to_404(self):
+        memory_db = FakeMemoryDB([])
+
+        with self.assertRaises(SessionHistoryServiceError) as ctx:
+            export_session_history_markdown_record(memory_db, {}, "sid-empty")
+
+        self.assertEqual(ctx.exception.status_code, 404)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.session_history import (
+    build_session_history_markdown,
     clear_session_history,
     delete_session_message,
     get_user_visible_session_history,
@@ -56,3 +57,17 @@ def delete_session_history_message_record(
         raise SessionHistoryServiceError(404, str(exc)) from exc
     except Exception as exc:
         raise SessionHistoryServiceError(500, str(exc)) from exc
+
+
+def export_session_history_markdown_record(
+    memory_db: Any,
+    active_sessions: dict[str, dict],
+    session_id: str,
+) -> str:
+    try:
+        markdown = build_session_history_markdown(memory_db, active_sessions, session_id)
+    except Exception as exc:
+        raise SessionHistoryServiceError(500, str(exc)) from exc
+    if not markdown:
+        raise SessionHistoryServiceError(404, "该会话没有可导出的历史记录。")
+    return markdown
