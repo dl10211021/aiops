@@ -12,11 +12,6 @@ from api.mappers import (
     approval_execution_response_kwargs,
     approval_request_response_kwargs,
     approval_requests_response_kwargs,
-    alert_event_list_query_kwargs,
-    alert_event_response_kwargs,
-    alert_event_update_kwargs,
-    alert_events_response_kwargs,
-    alert_webhook_response_kwargs,
     asset_deleted_response_kwargs,
     asset_normalization_applied_response_kwargs,
     asset_normalization_preview_response_kwargs,
@@ -106,6 +101,7 @@ from api.mappers import (
 )
 from api.system_info_routes import router as system_info_router
 from api.knowledge_routes import router as knowledge_router
+from api.alert_routes import router as alert_router
 from core.asset_protocols import (
     API_PROTOCOLS,
     SQL_PROTOCOLS,
@@ -275,13 +271,6 @@ from core.app_config_service import (
     save_agent_runtime_config_record,
     save_embedding_config_record,
 )
-from core.alert_webhook_service import handle_alert_webhook, read_alert_webhook_payload
-from core.alert_event_service import (
-    AlertEventServiceError,
-    get_alert_event_record,
-    list_alert_event_records,
-    update_alert_event_record,
-)
 from core.approval_request_service import (
     ApprovalRequestServiceError,
     decide_approval_request_record,
@@ -305,7 +294,6 @@ from core.session_profile_service import (
 from core.session_inspection_service import inspect_active_session_record
 from api.schemas import (
     AgentRuntimeConfigRequest,
-    AlertEventUpdateRequest,
     ApprovalDecisionRequest,
     AssetPayload,
     BatchAssetImportItem,
@@ -343,13 +331,13 @@ import logging
 import asyncio
 from pathlib import Path
 
-webhook_locks = {}
 logger = logging.getLogger(__name__)
 CUSTOM_SKILLS_DIR = Path(__file__).resolve().parent.parent / "my_custom_skills"
 
 router = APIRouter()
 router.include_router(system_info_router)
 router.include_router(knowledge_router)
+router.include_router(alert_router)
 
 
 def get_login_protocol(req: ConnectionRequest) -> str:
@@ -1191,63 +1179,6 @@ async def list_asset_verification_runs(asset_id: int, limit: int = 20):
     """查询单资产验证历史。"""
     runs = await asyncio.to_thread(list_protocol_verification_run_records, asset_id, limit)
     return ResponseModel(**asset_verification_runs_response_kwargs(runs))
-
-
-@router.get("/alerts", response_model=ResponseModel)
-async def list_alert_events(
-    status: str | None = None,
-    severity: str | None = None,
-    host: str | None = None,
-    limit: int = 200,
-):
-    """查询告警事件。"""
-    return ResponseModel(
-        **alert_events_response_kwargs(
-            list_alert_event_records(
-                **alert_event_list_query_kwargs(status, severity, host, limit)
-            )
-        )
-    )
-
-
-@router.get("/alerts/{alert_id}", response_model=ResponseModel)
-async def get_alert_event(alert_id: str):
-    """查询单个告警事件。"""
-    try:
-        alert = get_alert_event_record(alert_id)
-    except AlertEventServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**alert_event_response_kwargs(alert))
-
-
-@router.patch("/alerts/{alert_id}", response_model=ResponseModel)
-async def update_alert_event(alert_id: str, req: AlertEventUpdateRequest):
-    """更新告警状态、处理人或备注。"""
-    try:
-        alert = update_alert_event_record(
-            alert_id,
-            **alert_event_update_kwargs(req),
-        )
-    except AlertEventServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**alert_event_response_kwargs(alert))
-
-
-# ----------------- OpenClaw / ManageEngine Webhook 闭环设计 -----------------
-from fastapi import Request
-
-@router.post("/webhook/alert", response_model=ResponseModel)
-async def receive_webhook_alert(request: Request):
-    """【AIOps 高级特性】接收外部告警 (Prometheus / ManageEngine) 并推入相关 AI 会话"""
-    payload = await read_alert_webhook_payload(request.json)
-
-    result = await handle_alert_webhook(
-        payload,
-        ssh_manager.active_sessions,
-        webhook_locks,
-    )
-
-    return ResponseModel(**alert_webhook_response_kwargs(result))
 
 
 # ----------------- OpenClaw 自动化巡检 (Cron Jobs) -----------------
