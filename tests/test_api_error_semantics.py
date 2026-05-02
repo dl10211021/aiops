@@ -17,6 +17,7 @@ from api import (
     knowledge_routes,
     notification_routes,
     routes,
+    session_history_routes,
     session_runtime_routes,
 )
 from api.schemas import (
@@ -54,9 +55,9 @@ class TestApiErrorSemantics(unittest.TestCase):
 
         with patch("core.memory.memory_db", FakeMemoryDB()):
             with self.assertRaises(HTTPException) as get_ctx:
-                asyncio.run(routes.get_session_history("sid-1"))
+                asyncio.run(session_history_routes.get_session_history("sid-1"))
             with self.assertRaises(HTTPException) as delete_ctx:
-                asyncio.run(routes.delete_session_history("sid-1"))
+                asyncio.run(session_history_routes.delete_session_history("sid-1"))
 
         self.assertEqual(get_ctx.exception.status_code, 500)
         self.assertEqual(delete_ctx.exception.status_code, 500)
@@ -162,11 +163,11 @@ class TestApiErrorSemantics(unittest.TestCase):
 
         with patch("core.memory.memory_db", EmptyMemoryDB()):
             with self.assertRaises(HTTPException) as empty_ctx:
-                asyncio.run(routes.export_session_history("sid-empty"))
+                asyncio.run(session_history_routes.export_session_history("sid-empty"))
 
         with patch("core.memory.memory_db", FailingMemoryDB()):
             with self.assertRaises(HTTPException) as failing_ctx:
-                asyncio.run(routes.export_session_history("sid-error"))
+                asyncio.run(session_history_routes.export_session_history("sid-error"))
 
         self.assertEqual(empty_ctx.exception.status_code, 404)
         self.assertEqual(failing_ctx.exception.status_code, 500)

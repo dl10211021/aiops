@@ -2,7 +2,8 @@ import asyncio
 import unittest
 from unittest.mock import patch
 
-from api import routes
+from api import routes, session_history_routes
+from api.schemas import SessionMessageUpdateRequest
 
 
 class FakeMemoryDB:
@@ -31,21 +32,28 @@ class FakeMemoryDB:
 
 
 class TestSessionHistoryRoutes(unittest.TestCase):
+    def test_session_history_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/session/{session_id}/history", paths)
+        self.assertIn("/session/{session_id}/history/{message_id}", paths)
+        self.assertIn("/session/{session_id}/export", paths)
+
     def test_session_history_routes_preserve_response_shapes(self):
         memory_db = FakeMemoryDB()
 
         with patch("core.memory.memory_db", memory_db):
-            list_response = asyncio.run(routes.get_session_history("sid-1"))
-            clear_response = asyncio.run(routes.delete_session_history("sid-1"))
+            list_response = asyncio.run(session_history_routes.get_session_history("sid-1"))
+            clear_response = asyncio.run(session_history_routes.delete_session_history("sid-1"))
             update_response = asyncio.run(
-                routes.update_session_history_message(
+                session_history_routes.update_session_history_message(
                     "sid-1",
                     1,
-                    routes.SessionMessageUpdateRequest(content="updated"),
+                    SessionMessageUpdateRequest(content="updated"),
                 )
             )
             delete_response = asyncio.run(
-                routes.delete_session_history_message("sid-1", 1)
+                session_history_routes.delete_session_history_message("sid-1", 1)
             )
 
         self.assertEqual(list_response.status, "success")
@@ -66,10 +74,10 @@ class TestSessionHistoryRoutes(unittest.TestCase):
 
     def test_session_history_export_preserves_response_shape(self):
         with patch(
-            "api.routes.export_session_history_markdown_record",
+            "api.session_history_routes.export_session_history_markdown_record",
             return_value="# 生产数据库",
         ):
-            response = asyncio.run(routes.export_session_history("sid-1"))
+            response = asyncio.run(session_history_routes.export_session_history("sid-1"))
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, {"markdown": "# 生产数据库"})

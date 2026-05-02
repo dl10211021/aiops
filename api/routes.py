@@ -25,11 +25,6 @@ from api.mappers import (
     inspection_template_list_response_kwargs,
     inspection_template_save_payload,
     inspection_template_saved_response_kwargs,
-    session_history_cleared_response_kwargs,
-    session_history_export_response_kwargs,
-    session_history_message_deleted_response_kwargs,
-    session_history_message_updated_response_kwargs,
-    session_history_response_kwargs,
     session_profile_generate_kwargs,
     session_profile_generated_response_kwargs,
     session_profile_response_kwargs,
@@ -50,6 +45,7 @@ from api.connection_routes import router as connection_router
 from api.skill_routes import router as skill_router
 from api.asset_routes import router as asset_router
 from api.session_runtime_routes import router as session_runtime_router
+from api.session_history_routes import router as session_history_router
 from core.chat_attachments import (
     CHAT_ATTACHMENT_MAX_SIZE,
     ChatAttachmentError,
@@ -64,14 +60,6 @@ from core.session_webhook_service import (
     list_session_webhook_delivery_records,
     preview_session_webhook_delivery,
     send_session_webhook_delivery,
-)
-from core.session_history_service import (
-    SessionHistoryServiceError,
-    clear_session_history_messages,
-    delete_session_history_message_record,
-    export_session_history_markdown_record,
-    list_session_history_messages,
-    update_session_history_message_record,
 )
 from core.session_commands import (
     SessionCommandError,
@@ -116,7 +104,6 @@ from api.schemas import (
     InspectionTemplatePayload,
     InspectionTemplateStepPayload,
     ResponseModel,
-    SessionMessageUpdateRequest,
     SessionProfileGenerateRequest,
     SessionWebhookSendRequest,
     SlashCommandPayload,
@@ -140,6 +127,7 @@ router.include_router(connection_router)
 router.include_router(skill_router)
 router.include_router(asset_router)
 router.include_router(session_runtime_router)
+router.include_router(session_history_router)
 
 
 def _preview_attachment_content(filename: str, content_type: str, content: bytes) -> dict:
@@ -183,54 +171,6 @@ async def preview_chat_attachment(file: UploadFile = File(...)):
         content,
     )
     return ResponseModel(**chat_attachment_preview_response_kwargs(attachment))
-
-
-@router.get("/session/{session_id}/history", response_model=ResponseModel)
-async def get_session_history(session_id: str):
-    """【新功能】获取会话的历史消息记录，用于前端恢复"""
-    try:
-        messages = list_session_history_messages(session_id)
-    except SessionHistoryServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**session_history_response_kwargs(messages))
-
-
-@router.delete("/session/{session_id}/history", response_model=ResponseModel)
-async def delete_session_history(session_id: str):
-    """【新功能】清空会话的聊天记录"""
-    try:
-        clear_session_history_messages(session_id)
-    except SessionHistoryServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**session_history_cleared_response_kwargs())
-
-
-@router.patch("/session/{session_id}/history/{message_id}", response_model=ResponseModel)
-async def update_session_history_message(
-    session_id: str,
-    message_id: int,
-    req: SessionMessageUpdateRequest,
-):
-    """修改单条用户可见会话消息。"""
-    try:
-        message = update_session_history_message_record(
-            session_id,
-            message_id,
-            req.content,
-        )
-    except SessionHistoryServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**session_history_message_updated_response_kwargs(message))
-
-
-@router.delete("/session/{session_id}/history/{message_id}", response_model=ResponseModel)
-async def delete_session_history_message(session_id: str, message_id: int):
-    """删除单条用户可见会话消息。"""
-    try:
-        delete_session_history_message_record(session_id, message_id)
-    except SessionHistoryServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**session_history_message_deleted_response_kwargs())
 
 
 @router.get("/commands/custom", response_model=ResponseModel)
@@ -489,14 +429,4 @@ async def export_inspection_run_report(run_id: str, format: str = "markdown"):
     except InspectionRunServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**inspection_run_export_response_kwargs(payload))
-
-
-@router.get("/session/{session_id}/export", response_model=ResponseModel)
-async def export_session_history(session_id: str):
-    """【#22 新功能】服务端导出会话历史为 Markdown 格式"""
-    try:
-        markdown = export_session_history_markdown_record(ssh_manager.active_sessions, session_id)
-    except SessionHistoryServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**session_history_export_response_kwargs(markdown))
 
