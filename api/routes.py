@@ -9,9 +9,17 @@ from api.mappers import (
     alert_event_update_kwargs,
     alert_events_response_kwargs,
     alert_webhook_response_kwargs,
+    asset_deleted_response_kwargs,
+    asset_payload,
+    asset_response_kwargs,
+    asset_saved_response_kwargs,
+    asset_types_response_kwargs,
+    asset_updated_response_kwargs,
     asset_verification_matrix_response_kwargs,
     asset_verification_run_response_kwargs,
     asset_verification_runs_response_kwargs,
+    batch_asset_import_payload,
+    batch_asset_import_response_kwargs,
     chat_stream_agent_kwargs,
     cron_job_created_response_kwargs,
     cron_job_deleted_response_kwargs,
@@ -36,6 +44,7 @@ from api.mappers import (
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
     protocol_verification_overview_response_kwargs,
+    saved_assets_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
     session_heartbeat_update_kwargs,
@@ -1102,7 +1111,7 @@ async def get_saved_assets():
     from core.memory import memory_db
 
     assets = await asyncio.to_thread(list_saved_asset_records, memory_db)
-    return ResponseModel(status="success", data={"assets": assets})
+    return ResponseModel(**saved_assets_response_kwargs(assets))
 
 
 @router.post("/assets", response_model=ResponseModel)
@@ -1110,12 +1119,13 @@ async def create_asset(req: AssetPayload):
     """创建或按 host+资产类型+协议更新资产；密码和敏感 extra_args 会加密保存。"""
     from core.memory import memory_db
 
-    await asyncio.to_thread(save_asset_record, memory_db, req.model_dump())
-    return ResponseModel(status="success", message="资产已保存")
+    await asyncio.to_thread(save_asset_record, memory_db, asset_payload(req))
+    return ResponseModel(**asset_saved_response_kwargs())
 
 
 def _asset_types_response() -> ResponseModel:
-    return ResponseModel(status="success", data=build_asset_types_response(get_asset_catalog()))
+    data = build_asset_types_response(get_asset_catalog())
+    return ResponseModel(**asset_types_response_kwargs(data))
 
 
 @router.get("/assets/types", response_model=ResponseModel)
@@ -1149,7 +1159,7 @@ async def get_asset(asset_id: int):
         asset = await asyncio.to_thread(get_saved_asset_record, memory_db, asset_id)
     except AssetServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"asset": asset})
+    return ResponseModel(**asset_response_kwargs(asset))
 
 
 @router.put("/assets/{asset_id}", response_model=ResponseModel)
@@ -1158,14 +1168,15 @@ async def update_asset(asset_id: int, req: AssetPayload):
     from core.memory import memory_db
 
     try:
-        asset = await asyncio.to_thread(update_saved_asset_record, memory_db, asset_id, req.model_dump())
+        asset = await asyncio.to_thread(
+            update_saved_asset_record,
+            memory_db,
+            asset_id,
+            asset_payload(req),
+        )
     except AssetServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(
-        status="success",
-        message="资产已更新",
-        data={"asset": asset},
-    )
+    return ResponseModel(**asset_updated_response_kwargs(asset))
 
 
 @router.get("/assets/normalize/preview", response_model=ResponseModel)
@@ -1192,7 +1203,7 @@ async def delete_saved_asset(asset_id: int):
     from core.memory import memory_db
 
     await asyncio.to_thread(remove_saved_asset_record, memory_db, asset_id)
-    return ResponseModel(status="success", message="资产已成功移除金库。")
+    return ResponseModel(**asset_deleted_response_kwargs())
 
 
 @router.get("/dashboard/overview", response_model=ResponseModel)
@@ -1510,12 +1521,12 @@ async def batch_import_assets(items: list[BatchAssetImportItem]):
         result = await asyncio.to_thread(
             batch_import_asset_records,
             memory_db,
-            [item.model_dump() for item in items],
+            batch_asset_import_payload(items),
         )
     except AssetServiceError as exc:
         raise_http_error(exc)
 
-    return ResponseModel(status="success", message=f"成功导入 {result['imported']}/{result['total']} 条资产。")
+    return ResponseModel(**batch_asset_import_response_kwargs(result))
 
 
 @router.get("/session/{session_id}/export", response_model=ResponseModel)

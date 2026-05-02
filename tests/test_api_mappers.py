@@ -6,9 +6,17 @@ from api.mappers import (
     alert_event_update_kwargs,
     alert_events_response_kwargs,
     alert_webhook_response_kwargs,
+    asset_deleted_response_kwargs,
+    asset_payload,
+    asset_response_kwargs,
+    asset_saved_response_kwargs,
+    asset_types_response_kwargs,
+    asset_updated_response_kwargs,
     asset_verification_matrix_response_kwargs,
     asset_verification_run_response_kwargs,
     asset_verification_runs_response_kwargs,
+    batch_asset_import_payload,
+    batch_asset_import_response_kwargs,
     chat_stream_agent_kwargs,
     cron_job_created_response_kwargs,
     cron_job_deleted_response_kwargs,
@@ -33,6 +41,7 @@ from api.mappers import (
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
     protocol_verification_overview_response_kwargs,
+    saved_assets_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
     session_heartbeat_update_kwargs,
@@ -46,6 +55,8 @@ from api.mappers import (
 )
 from api.schemas import (
     AlertEventUpdateRequest,
+    AssetPayload,
+    BatchAssetImportItem,
     ChatRequest,
     CreateSkillRequest,
     CronAddRequest,
@@ -371,6 +382,104 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             dashboard_response_kwargs(payload),
             {"status": "success", "data": payload},
+        )
+
+    def test_asset_payload_preserves_request_fields(self):
+        req = AssetPayload(
+            remark="Prometheus",
+            host="prom.local",
+            port=9090,
+            username="api",
+            password="secret",
+            asset_type="prometheus",
+            protocol="http_api",
+            agent_profile="default",
+            extra_args={"api_token": "token", "category": "monitor"},
+            skills=["prometheus"],
+            tags=["monitor"],
+        )
+
+        self.assertEqual(
+            asset_payload(req),
+            {
+                "remark": "Prometheus",
+                "host": "prom.local",
+                "port": 9090,
+                "username": "api",
+                "password": "secret",
+                "asset_type": "prometheus",
+                "protocol": "http_api",
+                "agent_profile": "default",
+                "extra_args": {"api_token": "token", "category": "monitor"},
+                "skills": ["prometheus"],
+                "tags": ["monitor"],
+            },
+        )
+
+    def test_batch_asset_import_payload_preserves_request_fields(self):
+        item = BatchAssetImportItem(
+            remark="Linux",
+            host="10.0.0.10",
+            username="root",
+            password="secret",
+            tags=["prod"],
+        )
+
+        self.assertEqual(
+            batch_asset_import_payload([item]),
+            [
+                {
+                    "remark": "Linux",
+                    "host": "10.0.0.10",
+                    "port": 22,
+                    "username": "root",
+                    "password": "secret",
+                    "asset_type": "ssh",
+                    "protocol": None,
+                    "agent_profile": "default",
+                    "extra_args": {},
+                    "skills": [],
+                    "tags": ["prod"],
+                }
+            ],
+        )
+
+    def test_asset_response_kwargs_preserve_route_shapes(self):
+        asset = {"id": 1, "host": "prom.local", "password": "********"}
+        assets = [asset]
+        asset_types = {"types": [{"id": "linux"}], "categories": []}
+
+        self.assertEqual(
+            saved_assets_response_kwargs(assets),
+            {"status": "success", "data": {"assets": assets}},
+        )
+        self.assertEqual(
+            asset_saved_response_kwargs(),
+            {"status": "success", "message": "资产已保存"},
+        )
+        self.assertEqual(
+            asset_types_response_kwargs(asset_types),
+            {"status": "success", "data": asset_types},
+        )
+        self.assertEqual(
+            asset_response_kwargs(asset),
+            {"status": "success", "data": {"asset": asset}},
+        )
+        self.assertEqual(
+            asset_updated_response_kwargs(asset),
+            {
+                "status": "success",
+                "message": "资产已更新",
+                "data": {"asset": asset},
+            },
+        )
+        self.assertEqual(
+            asset_deleted_response_kwargs(),
+            {"status": "success", "message": "资产已成功移除金库。"},
+        )
+        self.assertEqual(
+            batch_asset_import_response_kwargs({"imported": 2, "total": 3}),
+            {"status": "success", "message": "成功导入 2/3 条资产。"},
         )
 
     def test_session_profile_kwargs_preserve_route_shapes(self):

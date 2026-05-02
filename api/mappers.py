@@ -4,6 +4,8 @@ from typing import Any
 
 from api.schemas import (
     AlertEventUpdateRequest,
+    AssetPayload,
+    BatchAssetImportItem,
     ChatRequest,
     CreateSkillRequest,
     CronAddRequest,
@@ -191,6 +193,64 @@ def dashboard_response_kwargs(data: Any) -> dict[str, Any]:
     return {
         "status": "success",
         "data": data,
+    }
+
+
+def asset_payload(req: AssetPayload) -> dict[str, Any]:
+    return req.model_dump()
+
+
+def batch_asset_import_payload(items: list[BatchAssetImportItem]) -> list[dict[str, Any]]:
+    return [item.model_dump() for item in items]
+
+
+def saved_assets_response_kwargs(assets: list[Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"assets": assets},
+    }
+
+
+def asset_saved_response_kwargs() -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "资产已保存",
+    }
+
+
+def asset_types_response_kwargs(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": data,
+    }
+
+
+def asset_response_kwargs(asset: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"asset": asset},
+    }
+
+
+def asset_updated_response_kwargs(asset: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "资产已更新",
+        "data": {"asset": asset},
+    }
+
+
+def asset_deleted_response_kwargs() -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "资产已成功移除金库。",
+    }
+
+
+def batch_asset_import_response_kwargs(result: dict[str, int]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": f"成功导入 {result['imported']}/{result['total']} 条资产。",
     }
 
 
