@@ -9,7 +9,7 @@ from unittest.mock import patch
 from fastapi import HTTPException, UploadFile
 from pydantic import ValidationError
 
-from api import routes
+from api import knowledge_routes, routes
 
 
 class TestApiErrorSemantics(unittest.TestCase):
@@ -48,7 +48,7 @@ class TestApiErrorSemantics(unittest.TestCase):
         upload = UploadFile(filename="payload.exe", file=io.BytesIO(b"nope"))
 
         with self.assertRaises(HTTPException) as ctx:
-            asyncio.run(routes.upload_knowledge_document(upload))
+            asyncio.run(knowledge_routes.upload_knowledge_document(upload))
 
         self.assertEqual(ctx.exception.status_code, 415)
 
@@ -67,7 +67,7 @@ class TestApiErrorSemantics(unittest.TestCase):
                 patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
             ):
                 with self.assertRaises(HTTPException) as ctx:
-                    asyncio.run(routes.upload_knowledge_document(upload))
+                    asyncio.run(knowledge_routes.upload_knowledge_document(upload))
 
         self.assertEqual(ctx.exception.status_code, 422)
 
@@ -81,9 +81,9 @@ class TestApiErrorSemantics(unittest.TestCase):
 
         with patch("core.rag.kb_manager", FakeKnowledgeBase()):
             with self.assertRaises(HTTPException) as list_ctx:
-                asyncio.run(routes.list_knowledge_documents())
+                asyncio.run(knowledge_routes.list_knowledge_documents())
             with self.assertRaises(HTTPException) as delete_ctx:
-                asyncio.run(routes.delete_knowledge_document("missing.txt"))
+                asyncio.run(knowledge_routes.delete_knowledge_document("missing.txt"))
 
         self.assertEqual(list_ctx.exception.status_code, 500)
         self.assertEqual(delete_ctx.exception.status_code, 404)

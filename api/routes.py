@@ -57,9 +57,6 @@ from api.mappers import (
     inspection_template_list_response_kwargs,
     inspection_template_save_payload,
     inspection_template_saved_response_kwargs,
-    knowledge_document_deleted_response_kwargs,
-    knowledge_document_uploaded_response_kwargs,
-    knowledge_documents_response_kwargs,
     legacy_command_response_kwargs,
     llm_config_response_kwargs,
     models_response_kwargs,
@@ -108,6 +105,7 @@ from api.mappers import (
     user_interaction_submitted_response_kwargs,
 )
 from api.system_info_routes import router as system_info_router
+from api.knowledge_routes import router as knowledge_router
 from core.asset_protocols import (
     API_PROTOCOLS,
     SQL_PROTOCOLS,
@@ -277,12 +275,6 @@ from core.app_config_service import (
     save_agent_runtime_config_record,
     save_embedding_config_record,
 )
-from core.knowledge_base_service import (
-    KnowledgeBaseServiceError,
-    ingest_knowledge_document,
-    list_knowledge_document_records,
-    remove_knowledge_document_record,
-)
 from core.alert_webhook_service import handle_alert_webhook, read_alert_webhook_payload
 from core.alert_event_service import (
     AlertEventServiceError,
@@ -357,6 +349,7 @@ CUSTOM_SKILLS_DIR = Path(__file__).resolve().parent.parent / "my_custom_skills"
 
 router = APIRouter()
 router.include_router(system_info_router)
+router.include_router(knowledge_router)
 
 
 def get_login_protocol(req: ConnectionRequest) -> str:
@@ -1242,39 +1235,6 @@ async def update_alert_event(alert_id: str, req: AlertEventUpdateRequest):
 
 # ----------------- OpenClaw / ManageEngine Webhook 闭环设计 -----------------
 from fastapi import Request
-
-from fastapi import UploadFile, File
-
-
-@router.post("/knowledge/upload", response_model=ResponseModel)
-async def upload_knowledge_document(file: UploadFile = File(...)):
-    """【新功能】上传运维文档并注入 LanceDB 知识库"""
-    try:
-        message = await ingest_knowledge_document(file)
-    except KnowledgeBaseServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**knowledge_document_uploaded_response_kwargs(message))
-
-
-@router.get("/knowledge/list", response_model=ResponseModel)
-async def list_knowledge_documents():
-    """【新功能】列出已注入知识库的文档列表"""
-    try:
-        files = await list_knowledge_document_records()
-    except KnowledgeBaseServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**knowledge_documents_response_kwargs(files))
-
-
-@router.delete("/knowledge/{filename}", response_model=ResponseModel)
-async def delete_knowledge_document(filename: str):
-    """【新功能】从知识库中删除某个文档"""
-    try:
-        message = await remove_knowledge_document_record(filename)
-    except KnowledgeBaseServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**knowledge_document_deleted_response_kwargs(message))
-
 
 @router.post("/webhook/alert", response_model=ResponseModel)
 async def receive_webhook_alert(request: Request):
