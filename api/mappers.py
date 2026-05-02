@@ -6,6 +6,7 @@ from api.schemas import (
     ChatRequest,
     CreateSkillRequest,
     HeartbeatUpdateRequest,
+    InspectionTemplatePayload,
     MigrateRequest,
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,
@@ -74,6 +75,35 @@ def custom_skill_migration_kwargs(req: MigrateRequest) -> dict[str, Any]:
     return {
         "source_path": req.source_path,
         "target_dir_name": req.target_dir_name,
+    }
+
+
+def inspection_template_save_payload(req: InspectionTemplatePayload) -> dict[str, Any]:
+    return req.model_dump()
+
+
+def inspection_template_list_response_kwargs(templates: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"templates": templates},
+    }
+
+
+def inspection_template_saved_response_kwargs(
+    template: dict[str, Any],
+    message: str,
+) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": message,
+        "data": {"template": template},
+    }
+
+
+def inspection_template_deleted_response_kwargs() -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "巡检模板已删除",
     }
 
 

@@ -8,6 +8,10 @@ from api.mappers import (
     custom_skill_create_kwargs,
     custom_skill_migration_kwargs,
     custom_skill_rollback_kwargs,
+    inspection_template_deleted_response_kwargs,
+    inspection_template_list_response_kwargs,
+    inspection_template_save_payload,
+    inspection_template_saved_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
     session_heartbeat_update_kwargs,
@@ -931,8 +935,7 @@ async def delete_custom_slash_command(command_id: str):
 async def list_inspection_templates():
     """列出内置与自定义巡检模板。"""
     return ResponseModel(
-        status="success",
-        data={"templates": list_inspection_template_records()},
+        **inspection_template_list_response_kwargs(list_inspection_template_records())
     )
 
 
@@ -940,20 +943,27 @@ async def list_inspection_templates():
 async def create_inspection_template(req: InspectionTemplatePayload):
     """创建巡检模板；模板必须通过只读安全校验。"""
     try:
-        template = save_inspection_template_record(req.model_dump())
+        template = save_inspection_template_record(inspection_template_save_payload(req))
     except InspectionTemplateServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="巡检模板已保存", data={"template": template})
+    return ResponseModel(
+        **inspection_template_saved_response_kwargs(template, "巡检模板已保存")
+    )
 
 
 @router.put("/inspection-templates/{template_id}", response_model=ResponseModel)
 async def update_inspection_template(template_id: str, req: InspectionTemplatePayload):
     """更新巡检模板；路径 ID 优先，避免请求体误改主键。"""
     try:
-        template = save_inspection_template_record(req.model_dump(), template_id)
+        template = save_inspection_template_record(
+            inspection_template_save_payload(req),
+            template_id,
+        )
     except InspectionTemplateServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="巡检模板已更新", data={"template": template})
+    return ResponseModel(
+        **inspection_template_saved_response_kwargs(template, "巡检模板已更新")
+    )
 
 
 @router.delete("/inspection-templates/{template_id}", response_model=ResponseModel)
@@ -963,7 +973,7 @@ async def delete_inspection_template(template_id: str):
         remove_inspection_template_record(template_id)
     except InspectionTemplateServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="巡检模板已删除")
+    return ResponseModel(**inspection_template_deleted_response_kwargs())
 
 
 @router.post("/session/{session_id}/inspect", response_model=ResponseModel)

@@ -5,6 +5,10 @@ from api.mappers import (
     custom_skill_create_kwargs,
     custom_skill_migration_kwargs,
     custom_skill_rollback_kwargs,
+    inspection_template_deleted_response_kwargs,
+    inspection_template_list_response_kwargs,
+    inspection_template_save_payload,
+    inspection_template_saved_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
     session_heartbeat_update_kwargs,
@@ -17,6 +21,7 @@ from api.schemas import (
     ChatRequest,
     CreateSkillRequest,
     HeartbeatUpdateRequest,
+    InspectionTemplatePayload,
     MigrateRequest,
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,
@@ -174,6 +179,57 @@ class TestApiMappers(unittest.TestCase):
                 "source_path": "D:/imports/skill",
                 "target_dir_name": "database-health",
             },
+        )
+
+    def test_inspection_template_save_payload_preserves_schema_dump(self):
+        req = InspectionTemplatePayload(
+            id="linux-basic-custom",
+            name="Linux Basic Custom",
+            asset_type="linux",
+            protocol="ssh",
+            enabled=True,
+            steps=[
+                {
+                    "name": "uptime",
+                    "title": "Uptime",
+                    "tool": "linux_execute_command",
+                    "command": "uptime",
+                }
+            ],
+        )
+
+        payload = inspection_template_save_payload(req)
+
+        self.assertEqual(payload["id"], "linux-basic-custom")
+        self.assertEqual(payload["name"], "Linux Basic Custom")
+        self.assertEqual(payload["asset_type"], "linux")
+        self.assertEqual(payload["protocol"], "ssh")
+        self.assertTrue(payload["enabled"])
+        self.assertEqual(payload["steps"][0]["name"], "uptime")
+        self.assertEqual(payload["steps"][0]["tool"], "linux_execute_command")
+        self.assertEqual(payload["steps"][0]["command"], "uptime")
+        self.assertEqual(payload["steps"][0]["method"], "GET")
+        self.assertEqual(payload["steps"][0]["timeout"], 15)
+
+    def test_inspection_template_response_kwargs_preserve_route_shapes(self):
+        templates = [{"id": "builtin-linux"}]
+        template = {"id": "linux-basic-custom"}
+
+        self.assertEqual(
+            inspection_template_list_response_kwargs(templates),
+            {"status": "success", "data": {"templates": templates}},
+        )
+        self.assertEqual(
+            inspection_template_saved_response_kwargs(template, "巡检模板已保存"),
+            {
+                "status": "success",
+                "message": "巡检模板已保存",
+                "data": {"template": template},
+            },
+        )
+        self.assertEqual(
+            inspection_template_deleted_response_kwargs(),
+            {"status": "success", "message": "巡检模板已删除"},
         )
 
     def test_session_poll_response_kwargs_normalizes_empty_messages(self):
