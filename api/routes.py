@@ -4,6 +4,11 @@ from fastapi.responses import StreamingResponse
 from core.agent import chat_stream_agent
 from api.errors import raise_http_error
 from api.mappers import (
+    alert_event_list_query_kwargs,
+    alert_event_response_kwargs,
+    alert_event_update_kwargs,
+    alert_events_response_kwargs,
+    alert_webhook_response_kwargs,
     asset_verification_matrix_response_kwargs,
     asset_verification_run_response_kwargs,
     asset_verification_runs_response_kwargs,
@@ -1252,11 +1257,19 @@ async def list_asset_verification_runs(asset_id: int, limit: int = 20):
 
 
 @router.get("/alerts", response_model=ResponseModel)
-async def list_alert_events(status: str | None = None, severity: str | None = None, host: str | None = None, limit: int = 200):
+async def list_alert_events(
+    status: str | None = None,
+    severity: str | None = None,
+    host: str | None = None,
+    limit: int = 200,
+):
     """查询告警事件。"""
     return ResponseModel(
-        status="success",
-        data={"alerts": list_alert_event_records(status=status, severity=severity, host=host, limit=limit)},
+        **alert_events_response_kwargs(
+            list_alert_event_records(
+                **alert_event_list_query_kwargs(status, severity, host, limit)
+            )
+        )
     )
 
 
@@ -1267,7 +1280,7 @@ async def get_alert_event(alert_id: str):
         alert = get_alert_event_record(alert_id)
     except AlertEventServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"alert": alert})
+    return ResponseModel(**alert_event_response_kwargs(alert))
 
 
 @router.patch("/alerts/{alert_id}", response_model=ResponseModel)
@@ -1276,13 +1289,11 @@ async def update_alert_event(alert_id: str, req: AlertEventUpdateRequest):
     try:
         alert = update_alert_event_record(
             alert_id,
-            status=req.status,
-            assignee=req.assignee,
-            note=req.note,
+            **alert_event_update_kwargs(req),
         )
     except AlertEventServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"alert": alert})
+    return ResponseModel(**alert_event_response_kwargs(alert))
 
 
 # ----------------- OpenClaw / ManageEngine Webhook 闭环设计 -----------------
@@ -1345,11 +1356,7 @@ async def receive_webhook_alert(request: Request):
         run_single_heartbeat,
     )
 
-    return ResponseModel(
-        status="success",
-        message=result["message"],
-        data=result["data"],
-    )
+    return ResponseModel(**alert_webhook_response_kwargs(result))
 
 
 # ----------------- OpenClaw 自动化巡检 (Cron Jobs) -----------------

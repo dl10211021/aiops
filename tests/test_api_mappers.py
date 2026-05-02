@@ -1,6 +1,11 @@
 import unittest
 
 from api.mappers import (
+    alert_event_list_query_kwargs,
+    alert_event_response_kwargs,
+    alert_event_update_kwargs,
+    alert_events_response_kwargs,
+    alert_webhook_response_kwargs,
     asset_verification_matrix_response_kwargs,
     asset_verification_run_response_kwargs,
     asset_verification_runs_response_kwargs,
@@ -25,6 +30,7 @@ from api.mappers import (
     protocol_verification_overview_response_kwargs,
 )
 from api.schemas import (
+    AlertEventUpdateRequest,
     ChatRequest,
     CreateSkillRequest,
     HeartbeatUpdateRequest,
@@ -285,6 +291,51 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             asset_verification_runs_response_kwargs(runs),
             {"status": "success", "data": {"runs": runs}},
+        )
+
+    def test_alert_event_kwargs_preserve_route_shapes(self):
+        alert = {"id": "alert-1", "status": "open"}
+        alerts = [alert]
+        webhook_result = {"message": "告警已接收", "data": {"alert": alert}}
+
+        self.assertEqual(
+            alert_event_list_query_kwargs("open", "critical", "db.local", 20),
+            {
+                "status": "open",
+                "severity": "critical",
+                "host": "db.local",
+                "limit": 20,
+            },
+        )
+        self.assertEqual(
+            alert_event_update_kwargs(
+                AlertEventUpdateRequest(
+                    status="acknowledged",
+                    assignee="ops",
+                    note="checking",
+                )
+            ),
+            {
+                "status": "acknowledged",
+                "assignee": "ops",
+                "note": "checking",
+            },
+        )
+        self.assertEqual(
+            alert_events_response_kwargs(alerts),
+            {"status": "success", "data": {"alerts": alerts}},
+        )
+        self.assertEqual(
+            alert_event_response_kwargs(alert),
+            {"status": "success", "data": {"alert": alert}},
+        )
+        self.assertEqual(
+            alert_webhook_response_kwargs(webhook_result),
+            {
+                "status": "success",
+                "message": "告警已接收",
+                "data": {"alert": alert},
+            },
         )
 
     def test_session_poll_response_kwargs_normalizes_empty_messages(self):
