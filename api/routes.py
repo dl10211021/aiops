@@ -13,9 +13,18 @@ from api.mappers import (
     asset_verification_run_response_kwargs,
     asset_verification_runs_response_kwargs,
     chat_stream_agent_kwargs,
+    cron_job_created_response_kwargs,
+    cron_job_deleted_response_kwargs,
+    cron_job_payload,
+    cron_job_response_kwargs,
+    cron_job_run_trigger_response_kwargs,
+    cron_jobs_response_kwargs,
     custom_skill_create_kwargs,
     custom_skill_migration_kwargs,
     custom_skill_rollback_kwargs,
+    inspection_run_response_kwargs,
+    inspection_run_summary_response_kwargs,
+    inspection_runs_response_kwargs,
     inspection_template_deleted_response_kwargs,
     inspection_template_list_response_kwargs,
     inspection_template_save_payload,
@@ -23,6 +32,7 @@ from api.mappers import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    protocol_verification_overview_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
     session_heartbeat_update_kwargs,
@@ -33,7 +43,6 @@ from api.mappers import (
     session_profile_response_kwargs,
     session_webhook_delivery_kwargs,
     tool_approval_response_kwargs,
-    protocol_verification_overview_response_kwargs,
 )
 from core.asset_protocols import (
     API_PROTOCOLS,
@@ -1367,21 +1376,17 @@ async def receive_webhook_alert(request: Request):
 async def add_cron_job(req: CronAddRequest):
     """【新功能】添加大模型定时巡检任务 (类似 openclaw cron add)"""
     try:
-        payload = create_inspection_job_record(req.model_dump())
+        payload = create_inspection_job_record(cron_job_payload(req))
     except InspectionJobServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(
-        status="success",
-        message=f"已成功添加定时巡检计划: {payload['job_id']}",
-        data=payload,
-    )
+    return ResponseModel(**cron_job_created_response_kwargs(payload))
 
 
 @router.get("/cron/list", response_model=ResponseModel)
 async def list_cron_jobs():
     """【新功能】查看所有的定时巡检计划"""
     jobs = await asyncio.to_thread(list_inspection_job_records)
-    return ResponseModel(status="success", data={"jobs": jobs})
+    return ResponseModel(**cron_jobs_response_kwargs(jobs))
 
 
 @router.delete("/cron/{job_id}", response_model=ResponseModel)
@@ -1391,16 +1396,20 @@ async def delete_cron_job(job_id: str):
         await asyncio.to_thread(remove_inspection_job_record, job_id)
     except InspectionJobServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message=f"巡检计划 {job_id} 已取消。")
+    return ResponseModel(**cron_job_deleted_response_kwargs(job_id))
 
 
 @router.put("/cron/{job_id}", response_model=ResponseModel)
 async def update_cron_job(job_id: str, req: CronAddRequest):
     try:
-        job = await asyncio.to_thread(update_inspection_job_record, job_id, req.model_dump())
+        job = await asyncio.to_thread(
+            update_inspection_job_record,
+            job_id,
+            cron_job_payload(req),
+        )
     except InspectionJobServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="巡检计划已更新", data={"job": job})
+    return ResponseModel(**cron_job_response_kwargs(job, "巡检计划已更新"))
 
 
 @router.post("/cron/{job_id}/pause", response_model=ResponseModel)
@@ -1409,7 +1418,7 @@ async def pause_cron_job(job_id: str):
         job = await asyncio.to_thread(pause_inspection_job_record, job_id)
     except InspectionJobServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="巡检计划已暂停", data={"job": job})
+    return ResponseModel(**cron_job_response_kwargs(job, "巡检计划已暂停"))
 
 
 @router.post("/cron/{job_id}/resume", response_model=ResponseModel)
@@ -1418,7 +1427,7 @@ async def resume_cron_job(job_id: str):
         job = await asyncio.to_thread(resume_inspection_job_record, job_id)
     except InspectionJobServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="巡检计划已恢复", data={"job": job})
+    return ResponseModel(**cron_job_response_kwargs(job, "巡检计划已恢复"))
 
 
 @router.post("/cron/{job_id}/run", response_model=ResponseModel)
@@ -1427,28 +1436,24 @@ async def run_cron_job_now(job_id: str):
         result = await run_inspection_job_record_now(job_id)
     except InspectionJobServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="巡检计划已手动触发", data={"result": result})
+    return ResponseModel(**cron_job_run_trigger_response_kwargs(result))
 
 
 @router.get("/cron/{job_id}/runs", response_model=ResponseModel)
 async def list_cron_job_runs(job_id: str, limit: int = 50, asset_id: int | None = None):
-    return ResponseModel(
-        status="success",
-        data={"runs": list_inspection_run_records(job_id=job_id, limit=limit, asset_id=asset_id)},
-    )
+    runs = list_inspection_run_records(job_id=job_id, limit=limit, asset_id=asset_id)
+    return ResponseModel(**inspection_runs_response_kwargs(runs))
 
 
 @router.get("/inspection-runs", response_model=ResponseModel)
 async def list_inspection_runs(job_id: str | None = None, asset_id: int | None = None, limit: int = 50):
-    return ResponseModel(
-        status="success",
-        data={"runs": list_inspection_run_records(job_id=job_id, asset_id=asset_id, limit=limit)},
-    )
+    runs = list_inspection_run_records(job_id=job_id, asset_id=asset_id, limit=limit)
+    return ResponseModel(**inspection_runs_response_kwargs(runs))
 
 
 @router.get("/cron/runs/summary", response_model=ResponseModel)
 async def get_cron_run_summary():
-    return ResponseModel(status="success", data={"summary": inspection_run_summary()})
+    return ResponseModel(**inspection_run_summary_response_kwargs(inspection_run_summary()))
 
 
 @router.get("/cron/runs/{run_id}", response_model=ResponseModel)
@@ -1457,7 +1462,7 @@ async def get_cron_job_run(run_id: str):
         run = get_inspection_run_record(run_id)
     except InspectionRunServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"run": run})
+    return ResponseModel(**inspection_run_response_kwargs(run))
 
 
 @router.get("/inspection-runs/{run_id}/report", response_model=ResponseModel)

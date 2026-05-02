@@ -10,9 +10,18 @@ from api.mappers import (
     asset_verification_run_response_kwargs,
     asset_verification_runs_response_kwargs,
     chat_stream_agent_kwargs,
+    cron_job_created_response_kwargs,
+    cron_job_deleted_response_kwargs,
+    cron_job_payload,
+    cron_job_response_kwargs,
+    cron_job_run_trigger_response_kwargs,
+    cron_jobs_response_kwargs,
     custom_skill_create_kwargs,
     custom_skill_migration_kwargs,
     custom_skill_rollback_kwargs,
+    inspection_run_response_kwargs,
+    inspection_run_summary_response_kwargs,
+    inspection_runs_response_kwargs,
     inspection_template_deleted_response_kwargs,
     inspection_template_list_response_kwargs,
     inspection_template_save_payload,
@@ -20,6 +29,7 @@ from api.mappers import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    protocol_verification_overview_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
     session_heartbeat_update_kwargs,
@@ -30,12 +40,12 @@ from api.mappers import (
     session_profile_response_kwargs,
     session_webhook_delivery_kwargs,
     tool_approval_response_kwargs,
-    protocol_verification_overview_response_kwargs,
 )
 from api.schemas import (
     AlertEventUpdateRequest,
     ChatRequest,
     CreateSkillRequest,
+    CronAddRequest,
     HeartbeatUpdateRequest,
     InspectionTemplatePayload,
     MigrateRequest,
@@ -247,6 +257,95 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             inspection_template_deleted_response_kwargs(),
             {"status": "success", "message": "巡检模板已删除"},
+        )
+
+    def test_cron_job_payload_preserves_request_fields(self):
+        req = CronAddRequest(
+            cron_expr="*/15 * * * *",
+            message="inspect database group",
+            host="10.0.0.8",
+            username="ops",
+            agent_profile="deep",
+            password="secret",
+            asset_id=7,
+            target_scope="tag",
+            scope_value="prod-db",
+            template_id="mysql-basic",
+            notification_channel="wechat",
+            retry_count=2,
+            active_skills=["mysql-health", "disk-check"],
+        )
+
+        self.assertEqual(
+            cron_job_payload(req),
+            {
+                "cron_expr": "*/15 * * * *",
+                "message": "inspect database group",
+                "host": "10.0.0.8",
+                "username": "ops",
+                "agent_profile": "deep",
+                "password": "secret",
+                "private_key_path": None,
+                "asset_id": 7,
+                "target_scope": "tag",
+                "scope_value": "prod-db",
+                "template_id": "mysql-basic",
+                "notification_channel": "wechat",
+                "retry_count": 2,
+                "active_skills": ["mysql-health", "disk-check"],
+            },
+        )
+
+    def test_cron_job_response_kwargs_preserve_route_shapes(self):
+        job = {"job_id": "job-1", "status": "active"}
+        jobs = [job]
+        run = {"id": "run-1", "status": "completed"}
+        summary = {"total_runs": 1, "success_rate": 100.0}
+        result = {"job_id": "job-1", "status": "completed"}
+
+        self.assertEqual(
+            cron_job_created_response_kwargs(job),
+            {
+                "status": "success",
+                "message": "已成功添加定时巡检计划: job-1",
+                "data": job,
+            },
+        )
+        self.assertEqual(
+            cron_jobs_response_kwargs(jobs),
+            {"status": "success", "data": {"jobs": jobs}},
+        )
+        self.assertEqual(
+            cron_job_deleted_response_kwargs("job-1"),
+            {"status": "success", "message": "巡检计划 job-1 已取消。"},
+        )
+        self.assertEqual(
+            cron_job_response_kwargs(job, "巡检计划已更新"),
+            {
+                "status": "success",
+                "message": "巡检计划已更新",
+                "data": {"job": job},
+            },
+        )
+        self.assertEqual(
+            cron_job_run_trigger_response_kwargs(result),
+            {
+                "status": "success",
+                "message": "巡检计划已手动触发",
+                "data": {"result": result},
+            },
+        )
+        self.assertEqual(
+            inspection_runs_response_kwargs([run]),
+            {"status": "success", "data": {"runs": [run]}},
+        )
+        self.assertEqual(
+            inspection_run_summary_response_kwargs(summary),
+            {"status": "success", "data": {"summary": summary}},
+        )
+        self.assertEqual(
+            inspection_run_response_kwargs(run),
+            {"status": "success", "data": {"run": run}},
         )
 
     def test_session_profile_kwargs_preserve_route_shapes(self):
