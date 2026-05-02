@@ -860,12 +860,7 @@ async def update_session_group(session_id: str, req: SessionGroupUpdateRequest):
 @router.get("/sessions/active", response_model=ResponseModel)
 async def get_active_sessions():
     """【新功能】前端刷新页面时同步当前后端的活跃会话"""
-    from core.chat_runs import is_chat_running
-
-    sessions_data = build_active_sessions_payload(
-        ssh_manager.active_sessions,
-        is_session_streaming=is_chat_running,
-    )
+    sessions_data = build_active_sessions_payload(ssh_manager.active_sessions)
     return ResponseModel(**active_sessions_response_kwargs(sessions_data))
 
 
