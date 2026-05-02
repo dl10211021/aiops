@@ -244,8 +244,8 @@ class TestAssetCrudRoutes(unittest.TestCase):
         }
 
         with (
-            patch("core.asset_cleanup.build_asset_cleanup_plan", return_value=plan),
-            patch("core.asset_cleanup.apply_asset_cleanup", return_value=report),
+            patch("api.routes.build_asset_cleanup_plan_record", return_value=plan),
+            patch("api.routes.apply_asset_cleanup_record", return_value=report),
         ):
             preview = asyncio.run(routes.preview_asset_normalization())
             applied = asyncio.run(routes.apply_asset_normalization())

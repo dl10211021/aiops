@@ -185,6 +185,10 @@ from core.asset_service import (
     save_asset_record,
     update_saved_asset_record,
 )
+from core.asset_cleanup_service import (
+    apply_asset_cleanup_record,
+    build_asset_cleanup_plan_record,
+)
 from core.notification_config import (
     build_notification_config,
 )
@@ -1124,18 +1128,14 @@ async def update_asset(asset_id: int, req: AssetPayload):
 @router.get("/assets/normalize/preview", response_model=ResponseModel)
 async def preview_asset_normalization():
     """预览资产协议、host/port 与重复数据清理计划。"""
-    from core.asset_cleanup import build_asset_cleanup_plan
-
-    plan = await asyncio.to_thread(build_asset_cleanup_plan)
+    plan = await asyncio.to_thread(build_asset_cleanup_plan_record)
     return ResponseModel(**asset_normalization_preview_response_kwargs(plan))
 
 
 @router.post("/assets/normalize/apply", response_model=ResponseModel)
 async def apply_asset_normalization():
     """执行资产规范化清理；执行前会生成本地备份文件。"""
-    from core.asset_cleanup import apply_asset_cleanup
-
-    report = await asyncio.to_thread(apply_asset_cleanup)
+    report = await asyncio.to_thread(apply_asset_cleanup_record)
     return ResponseModel(**asset_normalization_applied_response_kwargs(report))
 
 
