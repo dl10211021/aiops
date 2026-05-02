@@ -1,6 +1,10 @@
 import unittest
 
-from api.mappers import chat_stream_agent_kwargs, session_webhook_delivery_kwargs
+from api.mappers import (
+    chat_stream_agent_kwargs,
+    session_webhook_delivery_kwargs,
+    tool_approval_response_kwargs,
+)
 from api.schemas import ChatRequest, SessionWebhookSendRequest
 
 
@@ -51,6 +55,36 @@ class TestApiMappers(unittest.TestCase):
                 "title": "日报",
                 "model_name": "ops-model",
                 "allow_private_targets": True,
+            },
+        )
+
+    def test_tool_approval_response_kwargs_omits_data_for_pending_future(self):
+        self.assertEqual(
+            tool_approval_response_kwargs(
+                {
+                    "message": "Approval action submitted.",
+                    "approval": None,
+                    "include_approval": False,
+                }
+            ),
+            {"status": "success", "message": "Approval action submitted."},
+        )
+
+    def test_tool_approval_response_kwargs_includes_orphaned_approval_record(self):
+        approval = {"id": "call-1", "status": "approved"}
+
+        self.assertEqual(
+            tool_approval_response_kwargs(
+                {
+                    "message": "Approval action recorded.",
+                    "approval": approval,
+                    "include_approval": True,
+                }
+            ),
+            {
+                "status": "success",
+                "message": "Approval action recorded.",
+                "data": {"approval": approval},
             },
         )
 

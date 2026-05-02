@@ -3,7 +3,11 @@ from connections.ssh_manager import ssh_manager
 from fastapi.responses import StreamingResponse
 from core.agent import chat_stream_agent
 from api.errors import raise_http_error
-from api.mappers import chat_stream_agent_kwargs, session_webhook_delivery_kwargs
+from api.mappers import (
+    chat_stream_agent_kwargs,
+    session_webhook_delivery_kwargs,
+    tool_approval_response_kwargs,
+)
 from core.asset_protocols import (
     API_PROTOCOLS,
     SQL_PROTOCOLS,
@@ -313,13 +317,7 @@ async def approve_tool_call(session_id: str, req: ToolApprovalRequest):
         )
     except SessionInteractionServiceError as exc:
         raise_http_error(exc)
-    if result["include_approval"]:
-        return ResponseModel(
-            status="success",
-            message=result["message"],
-            data={"approval": result["approval"]},
-        )
-    return ResponseModel(status="success", message=result["message"])
+    return ResponseModel(**tool_approval_response_kwargs(result))
 
 
 @router.post("/session/{session_id}/interaction", response_model=ResponseModel)

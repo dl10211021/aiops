@@ -25,3 +25,13 @@ def session_webhook_delivery_kwargs(req: SessionWebhookSendRequest) -> dict[str,
         "model_name": req.model_name,
         "allow_private_targets": req.allow_private_targets,
     }
+
+
+def tool_approval_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
+    response = {
+        "status": "success",
+        "message": result["message"],
+    }
+    if result["include_approval"]:
+        response["data"] = {"approval": result["approval"]}
+    return response
