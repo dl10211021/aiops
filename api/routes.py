@@ -1105,18 +1105,14 @@ async def close_ssh_connection(session_id: str):
 @router.get("/assets/saved", response_model=ResponseModel)
 async def get_saved_assets():
     """【新功能】获取 SQLite 中持久化的所有资产信息（通讯录）"""
-    from core.memory import memory_db
-
-    assets = await asyncio.to_thread(list_saved_asset_records, memory_db)
+    assets = await asyncio.to_thread(list_saved_asset_records)
     return ResponseModel(**saved_assets_response_kwargs(assets))
 
 
 @router.post("/assets", response_model=ResponseModel)
 async def create_asset(req: AssetPayload):
     """创建或按 host+资产类型+协议更新资产；密码和敏感 extra_args 会加密保存。"""
-    from core.memory import memory_db
-
-    await asyncio.to_thread(save_asset_record, memory_db, asset_payload(req))
+    await asyncio.to_thread(save_asset_record, asset_payload(req))
     return ResponseModel(**asset_saved_response_kwargs())
 
 
@@ -1152,10 +1148,8 @@ async def get_database_driver_capabilities_api():
 @router.get("/assets/{asset_id}", response_model=ResponseModel)
 async def get_asset(asset_id: int):
     """查询单个资产详情；响应会脱敏密码和敏感 extra_args。"""
-    from core.memory import memory_db
-
     try:
-        asset = await asyncio.to_thread(get_saved_asset_record, memory_db, asset_id)
+        asset = await asyncio.to_thread(get_saved_asset_record, asset_id)
     except AssetServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**asset_response_kwargs(asset))
@@ -1164,12 +1158,9 @@ async def get_asset(asset_id: int):
 @router.put("/assets/{asset_id}", response_model=ResponseModel)
 async def update_asset(asset_id: int, req: AssetPayload):
     """按资产 ID 修改资产；传入 ******** 会保留原密码/密钥。"""
-    from core.memory import memory_db
-
     try:
         asset = await asyncio.to_thread(
             update_saved_asset_record,
-            memory_db,
             asset_id,
             asset_payload(req),
         )
@@ -1199,9 +1190,7 @@ async def apply_asset_normalization():
 @router.delete("/assets/{asset_id}", response_model=ResponseModel)
 async def delete_saved_asset(asset_id: int):
     """【新功能】删除持久化的资产"""
-    from core.memory import memory_db
-
-    await asyncio.to_thread(remove_saved_asset_record, memory_db, asset_id)
+    await asyncio.to_thread(remove_saved_asset_record, asset_id)
     return ResponseModel(**asset_deleted_response_kwargs())
 
 
@@ -1514,12 +1503,9 @@ async def get_hydrate_status():
 @router.post("/assets/batch_import", response_model=ResponseModel)
 async def batch_import_assets(items: list[BatchAssetImportItem]):
     """【#25 新功能】批量导入资产到金库（通讯录），支持 JSON 数组格式"""
-    from core.memory import memory_db
-
     try:
         result = await asyncio.to_thread(
             batch_import_asset_records,
-            memory_db,
             batch_asset_import_payload(items),
         )
     except AssetServiceError as exc:

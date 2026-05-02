@@ -66,8 +66,8 @@ class TestAssetService(unittest.TestCase):
     def test_list_and_get_mask_sensitive_fields(self):
         store = FakeAssetStore()
 
-        assets = list_saved_asset_records(store)
-        asset = get_saved_asset_record(store, 1)
+        assets = list_saved_asset_records(memory_db=store)
+        asset = get_saved_asset_record(1, memory_db=store)
 
         self.assertEqual(assets[0]["password"], "********")
         self.assertEqual(assets[0]["extra_args"]["api_token"], "********")
@@ -77,7 +77,6 @@ class TestAssetService(unittest.TestCase):
     def test_save_asset_maps_payload_to_memory_call(self):
         store = FakeAssetStore()
         save_asset_record(
-            store,
             {
                 "remark": "K8s",
                 "host": "k8s.local",
@@ -91,6 +90,7 @@ class TestAssetService(unittest.TestCase):
                 "tags": ["prod"],
                 "protocol": "k8s",
             },
+            memory_db=store,
         )
 
         self.assertEqual(store.saved[1], "k8s.local")
@@ -99,26 +99,26 @@ class TestAssetService(unittest.TestCase):
 
     def test_update_missing_asset_raises_404(self):
         with self.assertRaises(AssetServiceError) as ctx:
-            update_saved_asset_record(FakeAssetStore(), 404, {"host": "missing"})
+            update_saved_asset_record(404, {"host": "missing"}, memory_db=FakeAssetStore())
 
         self.assertEqual(ctx.exception.status_code, 404)
 
     def test_delete_delegates_to_store_without_changing_legacy_missing_behavior(self):
         store = FakeAssetStore()
 
-        remove_saved_asset_record(store, 404)
+        remove_saved_asset_record(404, memory_db=store)
 
         self.assertEqual(store.deleted, [404])
 
     def test_batch_import_requires_items_and_returns_counts(self):
         store = FakeAssetStore()
 
-        result = batch_import_asset_records(store, [{"host": "db.local"}])
+        result = batch_import_asset_records([{"host": "db.local"}], memory_db=store)
 
         self.assertEqual(result, {"imported": 1, "total": 1})
         self.assertEqual(store.batch_saved, [{"host": "db.local"}])
         with self.assertRaises(AssetServiceError) as ctx:
-            batch_import_asset_records(store, [])
+            batch_import_asset_records([], memory_db=store)
         self.assertEqual(ctx.exception.status_code, 422)
 
     def test_batch_import_wraps_store_errors(self):
@@ -127,7 +127,7 @@ class TestAssetService(unittest.TestCase):
                 raise RuntimeError("disk full")
 
         with self.assertRaises(AssetServiceError) as ctx:
-            batch_import_asset_records(BrokenStore(), [{"host": "db.local"}])
+            batch_import_asset_records([{"host": "db.local"}], memory_db=BrokenStore())
 
         self.assertEqual(ctx.exception.status_code, 500)
         self.assertIn("disk full", ctx.exception.detail)
