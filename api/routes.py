@@ -113,7 +113,7 @@ from core.asset_protocols import (
     SQL_PROTOCOLS,
     get_asset_catalog,
 )
-from core.connection_inspection_service import inspect_connection_session
+from core.connection_inspection_service import inspect_connection_request
 from core.connection_request_service import (
     asset_matches_connection_request,
     get_login_protocol_from_request,
@@ -524,13 +524,9 @@ async def test_connection(req: ConnectionRequest):
 @router.post("/connect/inspect", response_model=ResponseModel)
 async def inspect_connection(req: ConnectionInspectionRequest):
     """临时建立会话并执行只读巡检，默认巡检后自动断开。"""
-    from core.session_inspector import inspect_session
-
     req, restored_password = get_restored_connection_request(req)
-    result = await inspect_connection_session(
+    result = await inspect_connection_request(
         req,
-        ssh_manager,
-        inspect_session,
         restored_password=restored_password,
     )
     return ResponseModel(**result)

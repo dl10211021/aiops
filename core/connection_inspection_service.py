@@ -6,6 +6,8 @@ from typing import Any, Awaitable, Callable
 from core.asset_protocols import resolve_asset_identity
 from core.connection_request_service import normalize_private_key_path
 from core.connection_test_service import connection_error_result
+from core.session_inspection_service import inspect_active_session_record
+from connections.ssh_manager import ssh_manager as default_ssh_manager
 
 
 InspectSessionCallable = Callable[[str], Awaitable[dict[str, Any]]]
@@ -100,3 +102,18 @@ async def inspect_connection_session(
             "inspection": report,
         },
     }
+
+
+async def inspect_connection_request(
+    req: Any,
+    *,
+    restored_password: str | None,
+    ssh_manager: Any = default_ssh_manager,
+    inspector: InspectSessionCallable = inspect_active_session_record,
+) -> dict[str, Any]:
+    return await inspect_connection_session(
+        req,
+        ssh_manager,
+        inspector,
+        restored_password=restored_password,
+    )

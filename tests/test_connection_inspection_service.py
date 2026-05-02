@@ -2,7 +2,10 @@ import asyncio
 import unittest
 from types import SimpleNamespace
 
-from core.connection_inspection_service import inspect_connection_session
+from core.connection_inspection_service import (
+    inspect_connection_request,
+    inspect_connection_session,
+)
 
 
 class FakeSSHManager:
@@ -120,6 +123,22 @@ class TestConnectionInspectionService(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["data"]["error"]["code"], "AUTH_FAILED")
         self.assertEqual(result["data"]["error"]["protocol"], "mysql")
+
+    def test_inspect_connection_request_uses_injected_manager_and_inspector(self):
+        ssh_manager = FakeSSHManager()
+
+        result = asyncio.run(
+            inspect_connection_request(
+                request(),
+                restored_password="secret",
+                ssh_manager=ssh_manager,
+                inspector=successful_inspector,
+            )
+        )
+
+        self.assertEqual(result["message"], "inspected sid-inspect")
+        self.assertEqual(ssh_manager.connect_calls[0]["password"], "secret")
+        self.assertEqual(ssh_manager.disconnect_calls, ["sid-inspect"])
 
 
 if __name__ == "__main__":
