@@ -23,7 +23,7 @@ class TestSystemInfoRoutes(unittest.TestCase):
         }
 
         with patch(
-            "connections.db_manager.discover_oracle_client_lib_dir",
+            "api.routes.get_oracle_client_config_record",
             return_value=config,
         ):
             response = asyncio.run(routes.get_oracle_client_config())
@@ -35,7 +35,7 @@ class TestSystemInfoRoutes(unittest.TestCase):
         capabilities = {"drivers": {"oracle": {"id": "oracle", "ready": True}}}
 
         with patch(
-            "connections.db_manager.get_database_driver_capabilities",
+            "api.routes.get_database_driver_capabilities_record",
             return_value=capabilities,
         ):
             response = asyncio.run(routes.get_database_driver_capabilities_api())
