@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from core import dispatcher as dispatcher_module
 from core.asset_protocols import (
     API_PROTOCOLS,
     CONTAINER_ASSET_TYPES,
@@ -37,6 +38,10 @@ class LegacyCommandServiceError(Exception):
         super().__init__(detail)
         self.status_code = status_code
         self.detail = detail
+
+
+def _resolve_dispatcher(dispatcher: Any | None = None) -> Any:
+    return dispatcher if dispatcher is not None else dispatcher_module.dispatcher
 
 
 def map_legacy_execute_tool_call(identity: dict[str, Any], command: str, tool_registry: Any) -> tuple[str, dict[str, Any]]:
@@ -106,11 +111,11 @@ def map_legacy_execute_tool_call(identity: dict[str, Any], command: str, tool_re
 
 async def execute_legacy_command_record(
     active_sessions: dict[str, Any],
-    dispatcher: Any,
     tool_registry: Any,
     *,
     session_id: str,
     command: str,
+    dispatcher: Any | None = None,
 ) -> dict[str, Any]:
     if session_id not in active_sessions:
         raise LegacyCommandServiceError(404, "会话不存在或已断开")
@@ -132,14 +137,15 @@ async def execute_legacy_command_record(
         "extra_args": identity["extra_args"],
     }
     tool_name, tool_args = map_legacy_execute_tool_call(identity, command, tool_registry)
-    needs_approval, approval_reason = dispatcher.check_approval_needed(tool_name, tool_args, context)
+    resolved_dispatcher = _resolve_dispatcher(dispatcher)
+    needs_approval, approval_reason = resolved_dispatcher.check_approval_needed(tool_name, tool_args, context)
     if needs_approval:
         raise LegacyCommandServiceError(
             409,
             f"该操作需要后端审批：{approval_reason}。请在聊天会话中执行，以便弹出审批确认。",
         )
 
-    result_str = await dispatcher.route_and_execute(tool_name, tool_args, context)
+    result_str = await resolved_dispatcher.route_and_execute(tool_name, tool_args, context)
     try:
         result = json.loads(result_str)
     except Exception:

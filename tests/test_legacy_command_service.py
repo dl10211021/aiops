@@ -1,6 +1,7 @@
 import asyncio
 import json
 import unittest
+from unittest.mock import patch
 
 from core.legacy_command_service import (
     LegacyCommandServiceError,
@@ -62,10 +63,10 @@ class TestLegacyCommandService(unittest.TestCase):
         result = asyncio.run(
             execute_legacy_command_record(
                 sessions,
-                dispatcher,
                 FakeToolRegistry(),
                 session_id="sid-db",
                 command="SELECT 1",
+                dispatcher=dispatcher,
             )
         )
 
@@ -82,10 +83,10 @@ class TestLegacyCommandService(unittest.TestCase):
             asyncio.run(
                 execute_legacy_command_record(
                     sessions,
-                    dispatcher,
                     FakeToolRegistry(),
                     session_id="sid-db",
                     command="UPDATE users SET disabled = 1",
+                    dispatcher=dispatcher,
                 )
             )
 
@@ -100,10 +101,10 @@ class TestLegacyCommandService(unittest.TestCase):
             asyncio.run(
                 execute_legacy_command_record(
                     sessions,
-                    dispatcher,
                     FakeToolRegistry(),
                     session_id="sid-linux",
                     command="uptime",
+                    dispatcher=dispatcher,
                 )
             )
 
@@ -115,14 +116,31 @@ class TestLegacyCommandService(unittest.TestCase):
             asyncio.run(
                 execute_legacy_command_record(
                     {},
-                    FakeDispatcher(),
                     FakeToolRegistry(),
                     session_id="missing",
                     command="uptime",
+                    dispatcher=FakeDispatcher(),
                 )
             )
 
         self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_execute_uses_default_dispatcher_when_not_injected(self):
+        sessions = {"sid-linux": {"info": session_info("linux", "ssh")}}
+        dispatcher = FakeDispatcher(response=json.dumps({"success": True, "output": "ok"}))
+
+        with patch("core.legacy_command_service.dispatcher_module.dispatcher", dispatcher):
+            result = asyncio.run(
+                execute_legacy_command_record(
+                    sessions,
+                    FakeToolRegistry(),
+                    session_id="sid-linux",
+                    command="uptime",
+                )
+            )
+
+        self.assertEqual(result["output"], "ok")
+        self.assertEqual(dispatcher.executions[0][0], "linux_execute_command")
 
     def test_http_api_mapping_prefers_registered_specific_tool(self):
         registry = FakeToolRegistry(["http_api_request", "database_api_request"])

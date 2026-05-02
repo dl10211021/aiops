@@ -475,8 +475,6 @@ async def decide_approval_request(approval_id: str, req: ApprovalDecisionRequest
 @router.post("/approvals/{approval_id}/execute", response_model=ResponseModel)
 async def execute_approval_request(approval_id: str):
     """执行已经批准且支持后续执行的审批请求。"""
-    from core.dispatcher import dispatcher
-
     try:
         result = await execute_custom_skill_rollback_approval(
             approval_id,
@@ -544,12 +542,9 @@ async def execute_remote_command(req: CommandRequest):
     """
     logger.info(f"API called: Executing legacy command on session {req.session_id}")
 
-    from core.dispatcher import dispatcher
-
     try:
         data = await execute_legacy_command_record(
             ssh_manager.active_sessions,
-            dispatcher,
             tool_registry,
             session_id=req.session_id,
             command=req.command,
@@ -1319,15 +1314,10 @@ async def receive_webhook_alert(request: Request):
     """【AIOps 高级特性】接收外部告警 (Prometheus / ManageEngine) 并推入相关 AI 会话"""
     payload = await read_alert_webhook_payload(request.json)
 
-    from core.dispatcher import dispatcher
-    from core.heartbeat import run_single_heartbeat
-
     result = await handle_alert_webhook(
         payload,
         ssh_manager.active_sessions,
         webhook_locks,
-        dispatcher,
-        run_single_heartbeat,
     )
 
     return ResponseModel(**alert_webhook_response_kwargs(result))

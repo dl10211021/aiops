@@ -166,3 +166,43 @@ class TestAlertWebhookService(unittest.TestCase):
 
         self.assertEqual(result["data"]["injected_count"], 1)
         self.assertEqual(memory.messages[0][0], "sid-1")
+
+    def test_idle_session_uses_default_dispatcher_and_heartbeat_runner(self):
+        from core import alert_events
+
+        memory = FakeMemory()
+        active_sessions = {"sid-1": {"info": {"host": "db.local"}}}
+        runner_calls = []
+        scheduled = []
+
+        def heartbeat_runner(*args, **kwargs):
+            runner_calls.append((args, kwargs))
+
+            async def noop():
+                return None
+
+            return noop()
+
+        def task_factory(coro):
+            scheduled.append(coro)
+            coro.close()
+
+        with (
+            patch.object(alert_events, "ALERT_STORE_PATH", self._store_path("default_runtime")),
+            patch("core.alert_webhook_service.dispatcher_module.dispatcher", "default-dispatcher"),
+            patch("core.alert_webhook_service.heartbeat_module.run_single_heartbeat", heartbeat_runner),
+        ):
+            result = asyncio.run(
+                handle_alert_webhook(
+                    {"host": "db.local", "alert_name": "DiskFull", "severity": "critical"},
+                    active_sessions,
+                    {},
+                    memory_db=memory,
+                    task_factory=task_factory,
+                )
+            )
+
+        self.assertEqual(result["data"]["injected_count"], 1)
+        self.assertEqual(len(scheduled), 1)
+        self.assertEqual(runner_calls[0][0][0], "sid-1")
+        self.assertEqual(runner_calls[0][0][3], "default-dispatcher")

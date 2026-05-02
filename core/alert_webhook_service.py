@@ -5,6 +5,8 @@ import logging
 from collections.abc import Callable, Mapping, MutableMapping
 from typing import Any, Awaitable
 
+from core import dispatcher as dispatcher_module
+from core import heartbeat as heartbeat_module
 from core import memory as memory_module
 from core.alert_events import create_alert_event
 
@@ -18,6 +20,14 @@ ACTIVE_ALERT_MESSAGE_TEMPLATE = "告警已成功推送到 {count} 个值班中�
 
 def _resolve_memory_db(memory_db: Any | None = None) -> Any:
     return memory_db if memory_db is not None else memory_module.memory_db
+
+
+def _resolve_dispatcher(dispatcher: Any | None = None) -> Any:
+    return dispatcher if dispatcher is not None else dispatcher_module.dispatcher
+
+
+def _resolve_heartbeat_runner(heartbeat_runner: Callable[..., Awaitable[Any]] | None = None) -> Callable[..., Awaitable[Any]]:
+    return heartbeat_runner if heartbeat_runner is not None else heartbeat_module.run_single_heartbeat
 
 
 def affected_alert_sessions(active_sessions: Mapping[str, dict], host: str) -> list[str]:
@@ -56,8 +66,8 @@ async def handle_alert_webhook(
     payload: dict[str, Any],
     active_sessions: MutableMapping[str, dict],
     session_locks: MutableMapping[str, asyncio.Lock],
-    dispatcher,
-    heartbeat_runner: Callable[..., Awaitable[Any]],
+    dispatcher: Any | None = None,
+    heartbeat_runner: Callable[..., Awaitable[Any]] | None = None,
     *,
     memory_db: Any | None = None,
     task_factory: Callable[[Awaitable[Any]], Any] = asyncio.create_task,
@@ -87,6 +97,8 @@ async def handle_alert_webhook(
     injection_message = build_alert_injection_message(alert_event)
     injected_count = 0
     store = _resolve_memory_db(memory_db)
+    resolved_dispatcher = _resolve_dispatcher(dispatcher)
+    resolved_heartbeat_runner = _resolve_heartbeat_runner(heartbeat_runner)
     for session_id in affected_sessions:
         info = active_sessions[session_id].get("info", {})
         lock = session_locks.setdefault(session_id, asyncio.Lock())
@@ -98,11 +110,11 @@ async def handle_alert_webhook(
                 info["heartbeat_in_progress"] = True
                 logger.info("Actively triggering background AI task for session %s due to alert.", session_id)
                 task_factory(
-                    heartbeat_runner(
+                    resolved_heartbeat_runner(
                         session_id,
                         info,
                         store,
-                        dispatcher,
+                        resolved_dispatcher,
                         trigger_msg=injection_message,
                     )
                 )
