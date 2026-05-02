@@ -2,12 +2,21 @@ import unittest
 
 from api.mappers import (
     chat_stream_agent_kwargs,
+    custom_skill_create_kwargs,
+    custom_skill_migration_kwargs,
+    custom_skill_rollback_kwargs,
     session_group_response_kwargs,
     session_poll_response_kwargs,
     session_webhook_delivery_kwargs,
     tool_approval_response_kwargs,
 )
-from api.schemas import ChatRequest, SessionWebhookSendRequest
+from api.schemas import (
+    ChatRequest,
+    CreateSkillRequest,
+    MigrateRequest,
+    SessionWebhookSendRequest,
+    SkillRollbackRequest,
+)
 
 
 class TestApiMappers(unittest.TestCase):
@@ -57,6 +66,85 @@ class TestApiMappers(unittest.TestCase):
                 "title": "日报",
                 "model_name": "ops-model",
                 "allow_private_targets": True,
+            },
+        )
+
+    def test_custom_skill_create_kwargs_preserves_all_request_fields(self):
+        req = CreateSkillRequest(
+            skill_id="disk-check",
+            description="磁盘检查",
+            instructions="执行磁盘巡检",
+            script_name="check_disk.py",
+            script_content="print('ok')",
+            overwrite_existing=True,
+        )
+
+        self.assertEqual(
+            custom_skill_create_kwargs(req),
+            {
+                "skill_id": "disk-check",
+                "description": "磁盘检查",
+                "instructions": "执行磁盘巡检",
+                "script_name": "check_disk.py",
+                "script_content": "print('ok')",
+                "overwrite_existing": True,
+            },
+        )
+
+    def test_custom_skill_create_kwargs_preserves_optional_empty_script_fields(self):
+        req = CreateSkillRequest(
+            skill_id="disk-check",
+            description="磁盘检查",
+            instructions="执行磁盘巡检",
+        )
+
+        self.assertEqual(
+            custom_skill_create_kwargs(req),
+            {
+                "skill_id": "disk-check",
+                "description": "磁盘检查",
+                "instructions": "执行磁盘巡检",
+                "script_name": None,
+                "script_content": None,
+                "overwrite_existing": False,
+            },
+        )
+
+    def test_custom_skill_rollback_kwargs_preserves_defaults_and_approval(self):
+        self.assertEqual(
+            custom_skill_rollback_kwargs(SkillRollbackRequest(version_id="v1")),
+            {
+                "file_name": "SKILL.md",
+                "version_id": "v1",
+                "approval_id": None,
+            },
+        )
+        self.assertEqual(
+            custom_skill_rollback_kwargs(
+                SkillRollbackRequest(
+                    file_name="scripts/check.py",
+                    version_id="v2",
+                    approval_id="approval-1",
+                )
+            ),
+            {
+                "file_name": "scripts/check.py",
+                "version_id": "v2",
+                "approval_id": "approval-1",
+            },
+        )
+
+    def test_custom_skill_migration_kwargs_preserves_request_fields(self):
+        req = MigrateRequest(
+            source_path="D:/imports/skill",
+            target_dir_name="database-health",
+        )
+
+        self.assertEqual(
+            custom_skill_migration_kwargs(req),
+            {
+                "source_path": "D:/imports/skill",
+                "target_dir_name": "database-health",
             },
         )
 

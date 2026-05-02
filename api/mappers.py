@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from api.schemas import ChatRequest, SessionWebhookSendRequest
+from api.schemas import (
+    ChatRequest,
+    CreateSkillRequest,
+    MigrateRequest,
+    SessionWebhookSendRequest,
+    SkillRollbackRequest,
+)
 
 
 def chat_stream_agent_kwargs(req: ChatRequest) -> dict[str, Any]:
@@ -24,6 +30,32 @@ def session_webhook_delivery_kwargs(req: SessionWebhookSendRequest) -> dict[str,
         "title": req.title,
         "model_name": req.model_name,
         "allow_private_targets": req.allow_private_targets,
+    }
+
+
+def custom_skill_create_kwargs(req: CreateSkillRequest) -> dict[str, Any]:
+    return {
+        "skill_id": req.skill_id,
+        "description": req.description,
+        "instructions": req.instructions,
+        "script_name": req.script_name,
+        "script_content": req.script_content,
+        "overwrite_existing": req.overwrite_existing,
+    }
+
+
+def custom_skill_rollback_kwargs(req: SkillRollbackRequest) -> dict[str, Any]:
+    return {
+        "file_name": req.file_name,
+        "version_id": req.version_id,
+        "approval_id": req.approval_id,
+    }
+
+
+def custom_skill_migration_kwargs(req: MigrateRequest) -> dict[str, Any]:
+    return {
+        "source_path": req.source_path,
+        "target_dir_name": req.target_dir_name,
     }
 
 

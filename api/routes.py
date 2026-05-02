@@ -5,6 +5,9 @@ from core.agent import chat_stream_agent
 from api.errors import raise_http_error
 from api.mappers import (
     chat_stream_agent_kwargs,
+    custom_skill_create_kwargs,
+    custom_skill_migration_kwargs,
+    custom_skill_rollback_kwargs,
     session_group_response_kwargs,
     session_poll_response_kwargs,
     session_webhook_delivery_kwargs,
@@ -523,12 +526,7 @@ async def create_skill(req: CreateSkillRequest):
         result = create_custom_skill_record(
             CUSTOM_SKILLS_DIR,
             dispatcher,
-            skill_id=req.skill_id,
-            description=req.description,
-            instructions=req.instructions,
-            script_name=req.script_name,
-            script_content=req.script_content,
-            overwrite_existing=req.overwrite_existing,
+            **custom_skill_create_kwargs(req),
         )
     except CustomSkillCreateServiceError as exc:
         raise_http_error(exc)
@@ -562,9 +560,7 @@ async def rollback_skill_version(skill_id: str, req: SkillRollbackRequest):
             CUSTOM_SKILLS_DIR,
             dispatcher,
             skill_id=skill_id,
-            file_name=req.file_name,
-            version_id=req.version_id,
-            approval_id=req.approval_id,
+            **custom_skill_rollback_kwargs(req),
         )
     except CustomSkillRollbackServiceError as exc:
         raise_http_error(exc)
@@ -584,8 +580,7 @@ async def migrate_skill(req: MigrateRequest):
         result = migrate_custom_skill_record(
             CUSTOM_SKILLS_DIR,
             dispatcher,
-            source_path=req.source_path,
-            target_dir_name=req.target_dir_name,
+            **custom_skill_migration_kwargs(req),
         )
     except CustomSkillMigrationServiceError as exc:
         raise_http_error(exc)
