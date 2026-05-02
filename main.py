@@ -30,18 +30,12 @@ from core.runtime_config_service import (
 )
 from core.application_lifecycle_service import start_app_services, stop_app_services
 from core.logging_service import configure_logging
+from core.environment_service import load_dotenv_if_available
 
 # Backward-compatible alias for callers that still import main.hydrate_status.
 
 # 在所有模块加载之前加载 .env 文件，确保通知配置等环境变量持久生效
-try:
-    from dotenv import load_dotenv
-
-    env_path = os.path.join(os.path.dirname(__file__), ".env")
-    if os.path.exists(env_path):
-        load_dotenv(env_path, override=True)
-except ImportError:
-    pass  # python-dotenv 未安装则跳过
+load_dotenv_if_available(__file__)
 
 # 导入上面写好的 API 路由
 from api.routes import router as ssh_router
