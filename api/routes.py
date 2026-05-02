@@ -25,10 +25,6 @@ from api.mappers import (
     inspection_template_list_response_kwargs,
     inspection_template_save_payload,
     inspection_template_saved_response_kwargs,
-    session_webhook_history_response_kwargs,
-    session_webhook_preview_response_kwargs,
-    session_webhook_delivery_kwargs,
-    session_webhook_sent_response_kwargs,
 )
 from api.system_info_routes import router as system_info_router
 from api.knowledge_routes import router as knowledge_router
@@ -44,6 +40,7 @@ from api.asset_routes import router as asset_router
 from api.session_runtime_routes import router as session_runtime_router
 from api.session_history_routes import router as session_history_router
 from api.session_profile_routes import router as session_profile_router
+from api.session_webhook_routes import router as session_webhook_router
 from core.chat_attachments import (
     CHAT_ATTACHMENT_MAX_SIZE,
     ChatAttachmentError,
@@ -52,12 +49,6 @@ from core.chat_attachments import (
 from core.chat_session_service import (
     ChatSessionServiceError,
     start_session_chat_run,
-)
-from core.session_webhook_service import (
-    SessionWebhookServiceError,
-    list_session_webhook_delivery_records,
-    preview_session_webhook_delivery,
-    send_session_webhook_delivery,
 )
 from core.session_commands import (
     SessionCommandError,
@@ -95,7 +86,6 @@ from api.schemas import (
     InspectionTemplatePayload,
     InspectionTemplateStepPayload,
     ResponseModel,
-    SessionWebhookSendRequest,
     SlashCommandPayload,
 )
 
@@ -119,6 +109,7 @@ router.include_router(asset_router)
 router.include_router(session_runtime_router)
 router.include_router(session_history_router)
 router.include_router(session_profile_router)
+router.include_router(session_webhook_router)
 
 
 def _preview_attachment_content(filename: str, content_type: str, content: bytes) -> dict:
@@ -243,44 +234,6 @@ async def delete_inspection_template(template_id: str):
     except InspectionTemplateServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**inspection_template_deleted_response_kwargs())
-
-
-@router.post("/session/{session_id}/webhook/send", response_model=ResponseModel)
-async def send_session_webhook(session_id: str, req: SessionWebhookSendRequest):
-    """将会话画像、摘要或完整 Markdown 发送到指定 Webhook。"""
-    try:
-        payload = await send_session_webhook_delivery(
-            ssh_manager.active_sessions,
-            session_id=session_id,
-            **session_webhook_delivery_kwargs(req),
-        )
-    except SessionWebhookServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**session_webhook_sent_response_kwargs(payload))
-
-
-@router.post("/session/{session_id}/webhook/preview", response_model=ResponseModel)
-async def preview_session_webhook(session_id: str, req: SessionWebhookSendRequest):
-    """发送前预览会话 Webhook 目标和载荷，不实际发出请求。"""
-    try:
-        payload = await preview_session_webhook_delivery(
-            ssh_manager.active_sessions,
-            session_id=session_id,
-            **session_webhook_delivery_kwargs(req),
-        )
-    except SessionWebhookServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**session_webhook_preview_response_kwargs(payload))
-
-
-@router.get("/session/{session_id}/webhook/history", response_model=ResponseModel)
-async def list_session_webhook_history(session_id: str, limit: int = 10):
-    """查看当前会话最近 Webhook 发送历史。"""
-    try:
-        deliveries = await list_session_webhook_delivery_records(session_id, limit)
-    except SessionWebhookServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**session_webhook_history_response_kwargs(deliveries))
 
 
 # ----------------- OpenClaw 自动化巡检 (Cron Jobs) -----------------

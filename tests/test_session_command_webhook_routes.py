@@ -2,7 +2,8 @@ import asyncio
 import unittest
 from unittest.mock import patch
 
-from api import connection_routes, routes
+from api import connection_routes, routes, session_webhook_routes
+from api.schemas import SessionWebhookSendRequest
 
 
 class TestSessionCommandWebhookRoutes(unittest.TestCase):
@@ -14,7 +15,7 @@ class TestSessionCommandWebhookRoutes(unittest.TestCase):
         )
 
     def _webhook_request(self):
-        return routes.SessionWebhookSendRequest(
+        return SessionWebhookSendRequest(
             webhook_url="https://example.invalid/hook",
             payload_type="markdown",
             channel="generic",
@@ -53,18 +54,28 @@ class TestSessionCommandWebhookRoutes(unittest.TestCase):
         deliveries = [{"id": 1, "status": "success"}]
         request = self._webhook_request()
 
-        with patch("api.routes.send_session_webhook_delivery", return_value=payload):
-            send_response = asyncio.run(routes.send_session_webhook("sid-1", request))
-
-        with patch("api.routes.preview_session_webhook_delivery", return_value=payload):
-            preview_response = asyncio.run(routes.preview_session_webhook("sid-1", request))
+        with patch(
+            "api.session_webhook_routes.send_session_webhook_delivery",
+            return_value=payload,
+        ):
+            send_response = asyncio.run(
+                session_webhook_routes.send_session_webhook("sid-1", request)
+            )
 
         with patch(
-            "api.routes.list_session_webhook_delivery_records",
+            "api.session_webhook_routes.preview_session_webhook_delivery",
+            return_value=payload,
+        ):
+            preview_response = asyncio.run(
+                session_webhook_routes.preview_session_webhook("sid-1", request)
+            )
+
+        with patch(
+            "api.session_webhook_routes.list_session_webhook_delivery_records",
             return_value=deliveries,
         ):
             history_response = asyncio.run(
-                routes.list_session_webhook_history("sid-1", limit=5)
+                session_webhook_routes.list_session_webhook_history("sid-1", limit=5)
             )
 
         self.assertEqual(send_response.status, "success")
@@ -74,6 +85,13 @@ class TestSessionCommandWebhookRoutes(unittest.TestCase):
         self.assertEqual(preview_response.data, payload)
         self.assertEqual(history_response.status, "success")
         self.assertEqual(history_response.data, {"deliveries": deliveries})
+
+    def test_session_webhook_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/session/{session_id}/webhook/send", paths)
+        self.assertIn("/session/{session_id}/webhook/preview", paths)
+        self.assertIn("/session/{session_id}/webhook/history", paths)
 
     def test_close_connection_preserves_response_shape(self):
         with patch.object(connection_routes.ssh_manager, "disconnect", return_value=True):
