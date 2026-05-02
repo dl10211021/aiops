@@ -4,7 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
-from api import routes
+from api import routes, session_profile_routes
+from api.schemas import SessionProfileGenerateRequest
 from core.session_profile_service import SessionProfileServiceError
 
 
@@ -13,8 +14,8 @@ class TestSessionProfileRoutes(unittest.TestCase):
         profile = {"session_id": "sid-1", "risk_level": "watch"}
 
         get_profile = AsyncMock(return_value=profile)
-        with patch("api.routes.get_session_profile_record", get_profile):
-            response = asyncio.run(routes.get_active_session_profile("sid-1"))
+        with patch("api.session_profile_routes.get_session_profile_record", get_profile):
+            response = asyncio.run(session_profile_routes.get_active_session_profile("sid-1"))
 
         get_profile.assert_awaited_once_with("sid-1")
         self.assertEqual(response.status, "success")
@@ -24,11 +25,14 @@ class TestSessionProfileRoutes(unittest.TestCase):
         profile = {"session_id": "sid-1", "risk_level": "normal"}
         generate_profile = AsyncMock(return_value=profile)
 
-        with patch("api.routes.generate_session_profile_record", generate_profile):
+        with patch(
+            "api.session_profile_routes.generate_session_profile_record",
+            generate_profile,
+        ):
             response = asyncio.run(
-                routes.generate_active_session_profile(
+                session_profile_routes.generate_active_session_profile(
                     "sid-1",
-                    routes.SessionProfileGenerateRequest(
+                    SessionProfileGenerateRequest(
                         model_name="ops-model",
                         include_inspection=False,
                     ),
@@ -49,17 +53,26 @@ class TestSessionProfileRoutes(unittest.TestCase):
             side_effect=SessionProfileServiceError(404, "会话不存在")
         )
 
-        with patch("api.routes.generate_session_profile_record", generate_profile):
+        with patch(
+            "api.session_profile_routes.generate_session_profile_record",
+            generate_profile,
+        ):
             with self.assertRaises(HTTPException) as ctx:
                 asyncio.run(
-                    routes.generate_active_session_profile(
+                    session_profile_routes.generate_active_session_profile(
                         "missing",
-                        routes.SessionProfileGenerateRequest(),
+                        SessionProfileGenerateRequest(),
                     )
                 )
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "会话不存在")
+
+    def test_session_profile_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/session/{session_id}/profile", paths)
+        self.assertIn("/session/{session_id}/profile/generate", paths)
 
 
 if __name__ == "__main__":

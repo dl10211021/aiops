@@ -25,9 +25,6 @@ from api.mappers import (
     inspection_template_list_response_kwargs,
     inspection_template_save_payload,
     inspection_template_saved_response_kwargs,
-    session_profile_generate_kwargs,
-    session_profile_generated_response_kwargs,
-    session_profile_response_kwargs,
     session_webhook_history_response_kwargs,
     session_webhook_preview_response_kwargs,
     session_webhook_delivery_kwargs,
@@ -46,6 +43,7 @@ from api.skill_routes import router as skill_router
 from api.asset_routes import router as asset_router
 from api.session_runtime_routes import router as session_runtime_router
 from api.session_history_routes import router as session_history_router
+from api.session_profile_routes import router as session_profile_router
 from core.chat_attachments import (
     CHAT_ATTACHMENT_MAX_SIZE,
     ChatAttachmentError,
@@ -73,7 +71,6 @@ from core.inspection_template_service import (
     remove_inspection_template_record,
     save_inspection_template_record,
 )
-from core.session_inspection_response import build_inspection_response_payload
 from core.inspection_run_service import (
     InspectionRunServiceError,
     export_inspection_run_report_content,
@@ -92,19 +89,12 @@ from core.inspection_job_service import (
     run_inspection_job_record_now,
     update_inspection_job_record,
 )
-from core.session_profile_service import (
-    SessionProfileServiceError,
-    generate_session_profile_record,
-    get_session_profile_record,
-)
-from core.session_inspection_service import inspect_active_session_record
 from api.schemas import (
     ChatRequest,
     CronAddRequest,
     InspectionTemplatePayload,
     InspectionTemplateStepPayload,
     ResponseModel,
-    SessionProfileGenerateRequest,
     SessionWebhookSendRequest,
     SlashCommandPayload,
 )
@@ -128,6 +118,7 @@ router.include_router(skill_router)
 router.include_router(asset_router)
 router.include_router(session_runtime_router)
 router.include_router(session_history_router)
+router.include_router(session_profile_router)
 
 
 def _preview_attachment_content(filename: str, content_type: str, content: bytes) -> dict:
@@ -252,33 +243,6 @@ async def delete_inspection_template(template_id: str):
     except InspectionTemplateServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**inspection_template_deleted_response_kwargs())
-
-
-@router.post("/session/{session_id}/inspect", response_model=ResponseModel)
-async def inspect_active_session(session_id: str):
-    """对已建立的会话执行只读巡检。"""
-    report = await inspect_active_session_record(session_id)
-    return ResponseModel(**build_inspection_response_payload(report))
-
-
-@router.get("/session/{session_id}/profile", response_model=ResponseModel)
-async def get_active_session_profile(session_id: str):
-    """读取当前会话沉淀的资产画像。"""
-    profile = await get_session_profile_record(session_id)
-    return ResponseModel(**session_profile_response_kwargs(profile))
-
-
-@router.post("/session/{session_id}/profile/generate", response_model=ResponseModel)
-async def generate_active_session_profile(session_id: str, req: SessionProfileGenerateRequest):
-    """基于会话历史和只读巡检生成资产画像，并写入独立画像记忆。"""
-    try:
-        profile = await generate_session_profile_record(
-            session_id,
-            **session_profile_generate_kwargs(req),
-        )
-    except SessionProfileServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**session_profile_generated_response_kwargs(profile))
 
 
 @router.post("/session/{session_id}/webhook/send", response_model=ResponseModel)
