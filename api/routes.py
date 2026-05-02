@@ -5,6 +5,8 @@ from core.agent import chat_stream_agent
 from api.errors import raise_http_error
 from api.mappers import (
     chat_stream_agent_kwargs,
+    session_group_response_kwargs,
+    session_poll_response_kwargs,
     session_webhook_delivery_kwargs,
     tool_approval_response_kwargs,
 )
@@ -734,13 +736,7 @@ async def poll_session_messages(session_id: str):
     except SessionRuntimeError as exc:
         raise_http_error(exc)
 
-    if pending:
-        return ResponseModel(
-            status="success",
-            data={"messages": pending},
-        )
-
-    return ResponseModel(status="success", data={"messages": []})
+    return ResponseModel(**session_poll_response_kwargs(pending))
 
 
 @router.get("/session/{session_id}/history", response_model=ResponseModel)
@@ -825,11 +821,7 @@ async def update_session_group(session_id: str, req: SessionGroupUpdateRequest):
         raise_http_error(exc)
     logger.info("Session %s group changed to: %s", session_id, group_name)
 
-    return ResponseModel(
-        status="success",
-        message="会话分组已更新",
-        data={"session_id": session_id, "tags": info["tags"], "group_name": group_name},
-    )
+    return ResponseModel(**session_group_response_kwargs(session_id, info, group_name))
 
 
 @router.get("/sessions/active", response_model=ResponseModel)

@@ -2,6 +2,8 @@ import unittest
 
 from api.mappers import (
     chat_stream_agent_kwargs,
+    session_group_response_kwargs,
+    session_poll_response_kwargs,
     session_webhook_delivery_kwargs,
     tool_approval_response_kwargs,
 )
@@ -55,6 +57,42 @@ class TestApiMappers(unittest.TestCase):
                 "title": "日报",
                 "model_name": "ops-model",
                 "allow_private_targets": True,
+            },
+        )
+
+    def test_session_poll_response_kwargs_normalizes_empty_messages(self):
+        self.assertEqual(
+            session_poll_response_kwargs([]),
+            {"status": "success", "data": {"messages": []}},
+        )
+        self.assertEqual(
+            session_poll_response_kwargs(None),
+            {"status": "success", "data": {"messages": []}},
+        )
+
+    def test_session_poll_response_kwargs_preserves_pending_messages(self):
+        messages = [{"role": "assistant", "content": "ok"}]
+
+        self.assertEqual(
+            session_poll_response_kwargs(messages),
+            {"status": "success", "data": {"messages": messages}},
+        )
+
+    def test_session_group_response_kwargs_preserves_route_payload_shape(self):
+        self.assertEqual(
+            session_group_response_kwargs(
+                "sid-1",
+                {"tags": ["数据库核心组", "P0"]},
+                "数据库核心组",
+            ),
+            {
+                "status": "success",
+                "message": "会话分组已更新",
+                "data": {
+                    "session_id": "sid-1",
+                    "tags": ["数据库核心组", "P0"],
+                    "group_name": "数据库核心组",
+                },
             },
         )
 

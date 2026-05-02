@@ -27,6 +27,25 @@ def session_webhook_delivery_kwargs(req: SessionWebhookSendRequest) -> dict[str,
     }
 
 
+def session_poll_response_kwargs(pending: list[Any] | None) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"messages": pending or []},
+    }
+
+
+def session_group_response_kwargs(session_id: str, info: dict[str, Any], group_name: str) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "会话分组已更新",
+        "data": {
+            "session_id": session_id,
+            "tags": info["tags"],
+            "group_name": group_name,
+        },
+    }
+
+
 def tool_approval_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
     response = {
         "status": "success",
