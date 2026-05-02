@@ -26,6 +26,14 @@ from core.frontend_entry_service import (
     get_react_assets_dir,
     resolve_frontend_entry,
 )
+from core.runtime_config_service import (
+    DEFAULT_OPSCORE_HOST,
+    DEFAULT_OPSCORE_PORT,
+    get_allowed_origins,
+    get_log_level,
+    get_runtime_host,
+    get_runtime_port,
+)
 
 # Backward-compatible alias for callers that still import main.hydrate_status.
 
@@ -41,35 +49,6 @@ except ImportError:
 
 # 导入上面写好的 API 路由
 from api.routes import router as ssh_router
-
-
-DEFAULT_OPSCORE_HOST = "0.0.0.0"
-DEFAULT_OPSCORE_PORT = 8000
-LOG_LEVELS = {
-    "CRITICAL": logging.CRITICAL,
-    "ERROR": logging.ERROR,
-    "WARNING": logging.WARNING,
-    "INFO": logging.INFO,
-    "DEBUG": logging.DEBUG,
-}
-def get_runtime_host() -> str:
-    return os.environ.get("OPSCORE_HOST", DEFAULT_OPSCORE_HOST).strip() or DEFAULT_OPSCORE_HOST
-
-
-def get_runtime_port() -> int:
-    raw_port = os.environ.get("OPSCORE_PORT", str(DEFAULT_OPSCORE_PORT)).strip()
-    try:
-        port = int(raw_port)
-    except ValueError as exc:
-        raise ValueError("OPSCORE_PORT must be an integer") from exc
-    if not 1 <= port <= 65535:
-        raise ValueError("OPSCORE_PORT must be between 1 and 65535")
-    return port
-
-
-def get_log_level() -> int:
-    raw_level = os.environ.get("LOG_LEVEL", "INFO").strip().upper()
-    return LOG_LEVELS.get(raw_level, logging.INFO)
 
 
 _old_log_record_factory = logging.getLogRecordFactory()
@@ -161,14 +140,7 @@ app = FastAPI(
 
 from fastapi.staticfiles import StaticFiles
 
-allowed_origins = [
-    origin.strip()
-    for origin in os.environ.get(
-        "OPSCORE_ALLOWED_ORIGINS",
-        "http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173,http://127.0.0.1:5173",
-    ).split(",")
-    if origin.strip()
-]
+allowed_origins = get_allowed_origins()
 
 # ------------- 跨域配置 -------------
 app.add_middleware(
