@@ -17,6 +17,9 @@ from api.mappers import (
     session_heartbeat_update_kwargs,
     session_poll_response_kwargs,
     session_permission_update_kwargs,
+    session_profile_generate_kwargs,
+    session_profile_generated_response_kwargs,
+    session_profile_response_kwargs,
     session_webhook_delivery_kwargs,
     tool_approval_response_kwargs,
 )
@@ -991,7 +994,7 @@ async def get_active_session_profile(session_id: str):
     from core.session_profile import get_session_profile
 
     profile = await asyncio.to_thread(get_session_profile, session_id)
-    return ResponseModel(status="success", data={"profile": profile})
+    return ResponseModel(**session_profile_response_kwargs(profile))
 
 
 @router.post("/session/{session_id}/profile/generate", response_model=ResponseModel)
@@ -1002,12 +1005,11 @@ async def generate_active_session_profile(session_id: str, req: SessionProfileGe
     try:
         profile = await generate_session_profile(
             session_id,
-            model_name=req.model_name,
-            include_inspection=req.include_inspection,
+            **session_profile_generate_kwargs(req),
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    return ResponseModel(status="success", message="资产画像已生成", data={"profile": profile})
+    return ResponseModel(**session_profile_generated_response_kwargs(profile))
 
 
 @router.post("/session/{session_id}/webhook/send", response_model=ResponseModel)

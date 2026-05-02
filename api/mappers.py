@@ -10,6 +10,7 @@ from api.schemas import (
     MigrateRequest,
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,
+    SessionProfileGenerateRequest,
     SessionWebhookSendRequest,
     SkillRollbackRequest,
 )
@@ -107,6 +108,28 @@ def inspection_template_deleted_response_kwargs() -> dict[str, Any]:
     }
 
 
+def session_profile_generate_kwargs(req: SessionProfileGenerateRequest) -> dict[str, Any]:
+    return {
+        "model_name": req.model_name,
+        "include_inspection": req.include_inspection,
+    }
+
+
+def session_profile_response_kwargs(profile: dict[str, Any] | None) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"profile": profile},
+    }
+
+
+def session_profile_generated_response_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "资产画像已生成",
+        "data": {"profile": profile},
+    }
+
+
 def session_poll_response_kwargs(pending: list[Any] | None) -> dict[str, Any]:
     return {
         "status": "success",
@@ -114,7 +137,11 @@ def session_poll_response_kwargs(pending: list[Any] | None) -> dict[str, Any]:
     }
 
 
-def session_group_response_kwargs(session_id: str, info: dict[str, Any], group_name: str) -> dict[str, Any]:
+def session_group_response_kwargs(
+    session_id: str,
+    info: dict[str, Any],
+    group_name: str,
+) -> dict[str, Any]:
     return {
         "status": "success",
         "message": "会话分组已更新",

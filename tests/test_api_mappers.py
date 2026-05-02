@@ -14,6 +14,9 @@ from api.mappers import (
     session_heartbeat_update_kwargs,
     session_poll_response_kwargs,
     session_permission_update_kwargs,
+    session_profile_generate_kwargs,
+    session_profile_generated_response_kwargs,
+    session_profile_response_kwargs,
     session_webhook_delivery_kwargs,
     tool_approval_response_kwargs,
 )
@@ -25,6 +28,7 @@ from api.schemas import (
     MigrateRequest,
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,
+    SessionProfileGenerateRequest,
     SessionWebhookSendRequest,
     SkillRollbackRequest,
 )
@@ -230,6 +234,30 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             inspection_template_deleted_response_kwargs(),
             {"status": "success", "message": "巡检模板已删除"},
+        )
+
+    def test_session_profile_kwargs_preserve_route_shapes(self):
+        req = SessionProfileGenerateRequest(
+            model_name="ops-model",
+            include_inspection=False,
+        )
+        profile = {"session_id": "sid-1", "risk_level": "watch"}
+
+        self.assertEqual(
+            session_profile_generate_kwargs(req),
+            {"model_name": "ops-model", "include_inspection": False},
+        )
+        self.assertEqual(
+            session_profile_response_kwargs(profile),
+            {"status": "success", "data": {"profile": profile}},
+        )
+        self.assertEqual(
+            session_profile_generated_response_kwargs(profile),
+            {
+                "status": "success",
+                "message": "资产画像已生成",
+                "data": {"profile": profile},
+            },
         )
 
     def test_session_poll_response_kwargs_normalizes_empty_messages(self):
