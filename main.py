@@ -4,7 +4,6 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from contextlib import asynccontextmanager
-import asyncio
 
 from core.request_context import current_request_id
 from core.http_middleware_service import (
@@ -31,6 +30,7 @@ from core.runtime_config_service import (
     get_runtime_host,
     get_runtime_port,
 )
+from core.application_lifecycle_service import start_app_services, stop_app_services
 
 # Backward-compatible alias for callers that still import main.hydrate_status.
 
@@ -71,20 +71,9 @@ async def background_hydrate_assets():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup actions
-    from core.heartbeat import start_heartbeat
-    from core.cron_manager import CronManager
-
-    start_heartbeat()
-    logging.info("Heartbeat worker started.")
-    CronManager.start_scheduler()
-
-    # 将长耗时的资产重连放入后台并发执行，防止拖死应用启动
-    asyncio.create_task(background_hydrate_assets())
-
+    start_app_services(hydration_runner=background_hydrate_assets)
     yield
-    # Shutdown actions
-    logging.info("OpsCore Backend shutting down...")
+    stop_app_services()
 
 
 # ------------- 初始化 FastAPI 实例 -------------
