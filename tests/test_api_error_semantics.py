@@ -9,11 +9,13 @@ from unittest.mock import patch
 from fastapi import HTTPException, UploadFile
 from pydantic import ValidationError
 
-from api import config_routes, knowledge_routes, notification_routes, routes
+from api import approval_routes, config_routes, knowledge_routes, notification_routes, routes
 from api.schemas import (
+    ToolApprovalRequest,
     SafetyPolicyTestRequest,
     SafetyPolicyUpdateRequest,
     TestNotificationRequest,
+    UserInteractionResponseRequest,
 )
 
 
@@ -162,9 +164,9 @@ class TestApiErrorSemantics(unittest.TestCase):
     def test_legacy_approval_missing_request_returns_404(self):
         with self.assertRaises(HTTPException) as ctx:
             asyncio.run(
-                routes.approve_tool_call(
+                approval_routes.approve_tool_call(
                     "sid-1",
-                    routes.ToolApprovalRequest(
+                    ToolApprovalRequest(
                         tool_call_id="missing-approval",
                         approved=True,
                     ),
@@ -183,9 +185,9 @@ class TestApiErrorSemantics(unittest.TestCase):
                 "session_id": "sid-1",
             }
             try:
-                response = await routes.respond_user_interaction(
+                response = await approval_routes.respond_user_interaction(
                     "sid-1",
-                    routes.UserInteractionResponseRequest(
+                    UserInteractionResponseRequest(
                         request_id="interaction-1",
                         value="blue team",
                         label="蓝队方案",
@@ -202,9 +204,9 @@ class TestApiErrorSemantics(unittest.TestCase):
     def test_user_interaction_missing_request_returns_404(self):
         with self.assertRaises(HTTPException) as ctx:
             asyncio.run(
-                routes.respond_user_interaction(
+                approval_routes.respond_user_interaction(
                     "sid-1",
-                    routes.UserInteractionResponseRequest(request_id="missing-interaction"),
+                    UserInteractionResponseRequest(request_id="missing-interaction"),
                 )
             )
 
@@ -221,9 +223,9 @@ class TestApiErrorSemantics(unittest.TestCase):
             }
             try:
                 with self.assertRaises(HTTPException) as ctx:
-                    await routes.respond_user_interaction(
+                    await approval_routes.respond_user_interaction(
                         "sid-other",
-                        routes.UserInteractionResponseRequest(
+                        UserInteractionResponseRequest(
                             request_id="interaction-2",
                             value="should-not-submit",
                         ),

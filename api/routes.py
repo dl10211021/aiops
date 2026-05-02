@@ -6,10 +6,6 @@ from api.errors import raise_http_error
 from api.mappers import (
     active_sessions_response_kwargs,
     all_sessions_poll_response_kwargs,
-    approval_decision_response_kwargs,
-    approval_execution_response_kwargs,
-    approval_request_response_kwargs,
-    approval_requests_response_kwargs,
     asset_deleted_response_kwargs,
     asset_normalization_applied_response_kwargs,
     asset_normalization_preview_response_kwargs,
@@ -78,8 +74,6 @@ from api.mappers import (
     skill_validation_response_kwargs,
     skill_versions_response_kwargs,
     tool_catalog_response_kwargs,
-    tool_approval_response_kwargs,
-    user_interaction_submitted_response_kwargs,
 )
 from api.system_info_routes import router as system_info_router
 from api.knowledge_routes import router as knowledge_router
@@ -88,6 +82,7 @@ from api.dashboard_routes import router as dashboard_router
 from api.protocol_verification_routes import router as protocol_verification_router
 from api.notification_routes import router as notification_router
 from api.config_routes import router as config_router
+from api.approval_routes import router as approval_router
 from core.asset_protocols import (
     API_PROTOCOLS,
     SQL_PROTOCOLS,
@@ -216,21 +211,6 @@ from core.inspection_job_service import (
     run_inspection_job_record_now,
     update_inspection_job_record,
 )
-from core.approval_request_service import (
-    ApprovalRequestServiceError,
-    decide_approval_request_record,
-    get_approval_request_record,
-    list_approval_request_records,
-)
-from core.approval_execution_service import (
-    ApprovalExecutionServiceError,
-    execute_custom_skill_rollback_approval,
-)
-from core.session_interaction_service import (
-    SessionInteractionServiceError,
-    approve_session_tool_call,
-    submit_user_interaction_response,
-)
 from core.session_profile_service import (
     SessionProfileServiceError,
     generate_session_profile_record,
@@ -238,7 +218,6 @@ from core.session_profile_service import (
 )
 from core.session_inspection_service import inspect_active_session_record
 from api.schemas import (
-    ApprovalDecisionRequest,
     AssetPayload,
     BatchAssetImportItem,
     ChatRequest,
@@ -261,8 +240,6 @@ from api.schemas import (
     SkillsUpdateRequest,
     SkillValidationRequest,
     SlashCommandPayload,
-    ToolApprovalRequest,
-    UserInteractionResponseRequest,
 )
 
 import logging
@@ -280,6 +257,7 @@ router.include_router(dashboard_router)
 router.include_router(protocol_verification_router)
 router.include_router(notification_router)
 router.include_router(config_router)
+router.include_router(approval_router)
 
 
 def get_login_protocol(req: ConnectionRequest) -> str:
@@ -331,87 +309,6 @@ async def preview_chat_attachment(file: UploadFile = File(...)):
         content,
     )
     return ResponseModel(**chat_attachment_preview_response_kwargs(attachment))
-
-
-@router.post("/session/{session_id}/approve", response_model=ResponseModel)
-async def approve_tool_call(session_id: str, req: ToolApprovalRequest):
-    """【新功能】用户确认是否允许 AI 执行敏感指令"""
-    try:
-        result = approve_session_tool_call(
-            ssh_manager.active_sessions,
-            session_id,
-            req.tool_call_id,
-            approved=req.approved,
-            auto_approve_all=req.auto_approve_all,
-            operator=req.operator or "user",
-            note=req.note or "",
-        )
-    except SessionInteractionServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**tool_approval_response_kwargs(result))
-
-
-@router.post("/session/{session_id}/interaction", response_model=ResponseModel)
-async def respond_user_interaction(session_id: str, req: UserInteractionResponseRequest):
-    """提交前台聊天中的文本、密码或选项交互响应。"""
-    try:
-        submit_user_interaction_response(
-            session_id,
-            req.request_id,
-            value=req.value,
-            label=req.label,
-        )
-    except SessionInteractionServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**user_interaction_submitted_response_kwargs())
-
-
-@router.get("/approvals", response_model=ResponseModel)
-async def list_approval_requests(status: str | None = None, limit: int = 100):
-    """查询高危工具调用审批队列。"""
-    return ResponseModel(
-        **approval_requests_response_kwargs(
-            list_approval_request_records(status=status, limit=limit)
-        )
-    )
-
-
-@router.get("/approvals/{approval_id}", response_model=ResponseModel)
-async def get_approval_request(approval_id: str):
-    """查询单个审批请求。"""
-    try:
-        approval = get_approval_request_record(approval_id)
-    except ApprovalRequestServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**approval_request_response_kwargs(approval))
-
-
-@router.post("/approvals/{approval_id}/decision", response_model=ResponseModel)
-async def decide_approval_request(approval_id: str, req: ApprovalDecisionRequest):
-    """审批或拒绝高危工具调用，并写入审计状态。"""
-    try:
-        approval = decide_approval_request_record(
-            approval_id,
-            approved=req.approved,
-            operator=req.operator or "user",
-            note=req.note or "",
-        )
-    except ApprovalRequestServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**approval_decision_response_kwargs(approval))
-
-
-@router.post("/approvals/{approval_id}/execute", response_model=ResponseModel)
-async def execute_approval_request(approval_id: str):
-    """执行已经批准且支持后续执行的审批请求。"""
-    try:
-        result = await execute_custom_skill_rollback_approval(
-            approval_id,
-            base_dir=CUSTOM_SKILLS_DIR,
-        )
-    except ApprovalExecutionServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**approval_execution_response_kwargs(result))
 
 
 @router.post("/session/{session_id}/stop", response_model=ResponseModel)

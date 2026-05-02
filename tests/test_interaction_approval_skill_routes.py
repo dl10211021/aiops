@@ -3,7 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from api import routes
+from api import approval_routes, routes
+from api.schemas import ApprovalDecisionRequest, UserInteractionResponseRequest
 
 
 class FakeUploadFile:
@@ -15,6 +16,16 @@ class FakeUploadFile:
 
 
 class TestInteractionApprovalSkillRoutes(unittest.TestCase):
+    def test_approval_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/session/{session_id}/approve", paths)
+        self.assertIn("/session/{session_id}/interaction", paths)
+        self.assertIn("/approvals", paths)
+        self.assertIn("/approvals/{approval_id}", paths)
+        self.assertIn("/approvals/{approval_id}/decision", paths)
+        self.assertIn("/approvals/{approval_id}/execute", paths)
+
     def test_chat_attachment_preview_preserves_response_shape(self):
         attachment = {"filename": "runbook.txt", "text": "hello"}
 
@@ -33,33 +44,33 @@ class TestInteractionApprovalSkillRoutes(unittest.TestCase):
             result={"version_id": "v1"},
         )
 
-        with patch("api.routes.submit_user_interaction_response") as submit:
+        with patch("api.approval_routes.submit_user_interaction_response") as submit:
             interaction_response = asyncio.run(
-                routes.respond_user_interaction(
+                approval_routes.respond_user_interaction(
                     "sid-1",
-                    routes.UserInteractionResponseRequest(
+                    UserInteractionResponseRequest(
                         request_id="interaction-1",
                         value="yes",
                     ),
                 )
             )
 
-        with patch("api.routes.list_approval_request_records", return_value=[approval]):
-            list_response = asyncio.run(routes.list_approval_requests(status="pending"))
+        with patch("api.approval_routes.list_approval_request_records", return_value=[approval]):
+            list_response = asyncio.run(approval_routes.list_approval_requests(status="pending"))
 
-        with patch("api.routes.get_approval_request_record", return_value=approval):
-            get_response = asyncio.run(routes.get_approval_request("approval-1"))
+        with patch("api.approval_routes.get_approval_request_record", return_value=approval):
+            get_response = asyncio.run(approval_routes.get_approval_request("approval-1"))
 
-        with patch("api.routes.decide_approval_request_record", return_value=approval):
+        with patch("api.approval_routes.decide_approval_request_record", return_value=approval):
             decision_response = asyncio.run(
-                routes.decide_approval_request(
+                approval_routes.decide_approval_request(
                     "approval-1",
-                    routes.ApprovalDecisionRequest(approved=True),
+                    ApprovalDecisionRequest(approved=True),
                 )
             )
 
-        with patch("api.routes.execute_custom_skill_rollback_approval", return_value=execution):
-            execute_response = asyncio.run(routes.execute_approval_request("approval-1"))
+        with patch("api.approval_routes.execute_custom_skill_rollback_approval", return_value=execution):
+            execute_response = asyncio.run(approval_routes.execute_approval_request("approval-1"))
 
         with patch("api.routes.request_session_stop") as request_stop:
             stop_response = asyncio.run(routes.stop_chat_session("sid-1"))

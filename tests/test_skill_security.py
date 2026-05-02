@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-from api import routes
+from api import approval_routes, routes
 
 
 class TestSkillSecurity(unittest.TestCase):
@@ -516,6 +516,7 @@ class TestSkillSecurity(unittest.TestCase):
 
             with (
                 patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch.object(approval_routes, "CUSTOM_SKILLS_DIR", target_base),
                 patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path),
                 patch("core.dispatcher.dispatcher.refresh_skills"),
             ):
@@ -645,6 +646,7 @@ class TestSkillSecurity(unittest.TestCase):
 
             with (
                 patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch.object(approval_routes, "CUSTOM_SKILLS_DIR", target_base),
                 patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path),
                 patch("core.dispatcher.dispatcher.refresh_skills"),
             ):
@@ -660,9 +662,9 @@ class TestSkillSecurity(unittest.TestCase):
                     operator="ops-admin",
                 )
 
-                executed = asyncio.run(routes.execute_approval_request(pending.data["approval_id"]))
+                executed = asyncio.run(approval_routes.execute_approval_request(pending.data["approval_id"]))
                 with self.assertRaises(HTTPException) as repeat_ctx:
-                    asyncio.run(routes.execute_approval_request(pending.data["approval_id"]))
+                    asyncio.run(approval_routes.execute_approval_request(pending.data["approval_id"]))
                 approval = approval_queue.get_approval_request(pending.data["approval_id"])
                 restored_content = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
 

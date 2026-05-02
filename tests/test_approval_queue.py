@@ -298,11 +298,14 @@ class TestApprovalQueue(unittest.TestCase):
                 context={"host": "redis.local", "asset_type": "redis", "protocol": "redis"},
             )
 
-            listed = asyncio.run(routes.list_approval_requests(status="pending"))
+            from api import approval_routes
+            from api.schemas import ApprovalDecisionRequest
+
+            listed = asyncio.run(approval_routes.list_approval_requests(status="pending"))
             decision = asyncio.run(
-                routes.decide_approval_request(
+                approval_routes.decide_approval_request(
                     "call-4",
-                    routes.ApprovalDecisionRequest(approved=True, operator="ops-admin"),
+                    ApprovalDecisionRequest(approved=True, operator="ops-admin"),
                 )
             )
 
