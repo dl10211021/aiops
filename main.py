@@ -2,10 +2,8 @@ import uvicorn
 import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-import logging
 from contextlib import asynccontextmanager
 
-from core.request_context import current_request_id
 from core.http_middleware_service import (
     SECURITY_HEADERS,
     dispatch_api_token_auth,
@@ -31,6 +29,7 @@ from core.runtime_config_service import (
     get_runtime_port,
 )
 from core.application_lifecycle_service import start_app_services, stop_app_services
+from core.logging_service import configure_logging
 
 # Backward-compatible alias for callers that still import main.hydrate_status.
 
@@ -48,20 +47,7 @@ except ImportError:
 from api.routes import router as ssh_router
 
 
-_old_log_record_factory = logging.getLogRecordFactory()
-
-
-def _opscore_log_record_factory(*args, **kwargs):
-    record = _old_log_record_factory(*args, **kwargs)
-    record.request_id = current_request_id() or "-"
-    return record
-
-
-logging.setLogRecordFactory(_opscore_log_record_factory)
-logging.basicConfig(
-    level=get_log_level(),
-    format="%(asctime)s [%(levelname)s] [request_id=%(request_id)s] %(message)s",
-)
+configure_logging(get_log_level())
 
 
 async def background_hydrate_assets():
