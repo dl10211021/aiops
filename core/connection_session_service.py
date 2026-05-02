@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import Any
 
+from core import memory as memory_module
 from core.asset_protocols import resolve_asset_identity
 from core.connection_errors import classify_connection_error, connection_error_http_status
 from core.connection_request_service import normalize_private_key_path
@@ -30,10 +31,14 @@ def _raise_connection_error(result: dict[str, Any], protocol: str = "") -> None:
     raise ConnectionSessionServiceError(connection_error_http_status(error), error)
 
 
+def _resolve_memory_db(memory_db: Any | None = None) -> Any:
+    return memory_db if memory_db is not None else memory_module.memory_db
+
+
 async def create_connection_session(
     req: Any,
     ssh_manager: Any,
-    memory_db: Any,
+    memory_db: Any | None = None,
     *,
     restored_password: str | None,
     logger: logging.Logger | None = None,
@@ -97,7 +102,8 @@ async def create_connection_session(
     )
 
     if result["success"]:
-        memory_db.save_asset(
+        store = _resolve_memory_db(memory_db)
+        store.save_asset(
             remark=req.remark,
             host=req.host,
             port=req.port,

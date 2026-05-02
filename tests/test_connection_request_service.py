@@ -1,5 +1,6 @@
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from core.connection_request_service import (
     asset_matches_connection_request,
@@ -121,6 +122,29 @@ class TestConnectionRequestService(unittest.TestCase):
 
         self.assertIsInstance(restored_req, SimpleNamespace)
         self.assertIsNot(restored_req, req)
+        self.assertEqual(restored_req.extra_args["database"], "ops_db")
+        self.assertEqual(restored_password, "stored-password")
+
+    def test_restore_connection_request_secrets_uses_default_memory_db(self):
+        req = request()
+        memory_db = FakeMemoryDB(
+            [
+                {
+                    "host": "db.local",
+                    "port": 3306,
+                    "username": "ops",
+                    "asset_type": "mysql",
+                    "protocol": "mysql",
+                    "extra_args": {"db_type": "mysql", "database": "ops_db"},
+                    "password": "stored-password",
+                    "remark": "",
+                }
+            ]
+        )
+
+        with patch("core.memory.memory_db", memory_db):
+            restored_req, restored_password = restore_connection_request_secrets(req)
+
         self.assertEqual(restored_req.extra_args["database"], "ops_db")
         self.assertEqual(restored_password, "stored-password")
 

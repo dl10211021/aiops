@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from core import memory as memory_module
 from core.asset_protocols import resolve_asset_identity
 
 
 MASKED_SECRET = "********"
+
+
+def _resolve_memory_db(memory_db: Any | None = None) -> Any:
+    return memory_db if memory_db is not None else memory_module.memory_db
 
 
 def get_login_protocol_from_request(req: Any) -> str:
@@ -48,7 +53,7 @@ def asset_matches_connection_request(asset: dict[str, Any], req: Any) -> bool:
     )
 
 
-def restore_masked_extra_args(req: Any, memory_db: Any) -> dict[str, Any]:
+def restore_masked_extra_args(req: Any, memory_db: Any | None = None) -> dict[str, Any]:
     """Restore masked extra_args values from the matching saved asset."""
     if not getattr(req, "extra_args", None):
         return {}
@@ -56,7 +61,8 @@ def restore_masked_extra_args(req: Any, memory_db: Any) -> dict[str, Any]:
         return req.extra_args
 
     restored = dict(req.extra_args)
-    for asset in memory_db.get_all_assets():
+    store = _resolve_memory_db(memory_db)
+    for asset in store.get_all_assets():
         if not asset_matches_connection_request(asset, req):
             continue
         db_args = asset.get("extra_args", {})
@@ -67,18 +73,19 @@ def restore_masked_extra_args(req: Any, memory_db: Any) -> dict[str, Any]:
     return restored
 
 
-def restore_masked_password(req: Any, memory_db: Any) -> str | None:
+def restore_masked_password(req: Any, memory_db: Any | None = None) -> str | None:
     """Restore masked password from the matching saved asset."""
     if req.password != MASKED_SECRET:
         return req.password
 
-    for asset in memory_db.get_all_assets():
+    store = _resolve_memory_db(memory_db)
+    for asset in store.get_all_assets():
         if asset_matches_connection_request(asset, req):
             return asset.get("password")
     return None
 
 
-def restore_connection_request_secrets(req: Any, memory_db: Any) -> tuple[Any, str | None]:
+def restore_connection_request_secrets(req: Any, memory_db: Any | None = None) -> tuple[Any, str | None]:
     """Return a request rebuilt with restored extra_args plus the effective password."""
     restored_args = restore_masked_extra_args(req, memory_db)
     if hasattr(req, "model_dump"):

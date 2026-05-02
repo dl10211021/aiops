@@ -1,6 +1,7 @@
 import asyncio
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from core.connection_session_service import (
     ConnectionSessionServiceError,
@@ -97,6 +98,22 @@ class TestConnectionSessionService(unittest.TestCase):
         self.assertEqual(ssh_manager.connect_calls[0]["protocol"], "mysql")
         self.assertEqual(memory_db.saved_assets[0]["password"], "secret")
         self.assertEqual(memory_db.saved_assets[0]["extra_args"]["database"], "ops")
+
+    def test_asset_success_uses_default_memory_db_when_not_injected(self):
+        ssh_manager = FakeSSHManager()
+        memory_db = FakeMemoryDB()
+
+        with patch("core.memory.memory_db", memory_db):
+            result = asyncio.run(
+                create_connection_session(
+                    request(),
+                    ssh_manager,
+                    restored_password="secret",
+                )
+            )
+
+        self.assertEqual(result["message"], "Session Established")
+        self.assertEqual(memory_db.saved_assets[0]["password"], "secret")
 
     def test_asset_failure_raises_structured_connection_error(self):
         ssh_manager = FakeSSHManager(

@@ -509,9 +509,7 @@ async def stop_chat_session(session_id: str):
 
 def get_restored_connection_request(req: ConnectionRequest) -> tuple[ConnectionRequest, str | None]:
     """Restore masked asset secrets from persisted records before connection flows."""
-    from core.memory import memory_db
-
-    return restore_connection_request_secrets(req, memory_db)
+    return restore_connection_request_secrets(req)
 
 
 @router.post("/connect/test", response_model=ResponseModel)
@@ -537,13 +535,10 @@ async def create_ssh_connection(req: ConnectionRequest):
     """建立与远程系统的会话 (支持 SSH长连接 或 虚拟凭据会话)"""
     req, restored_password = get_restored_connection_request(req)
 
-    from core.memory import memory_db
-
     try:
         result = await create_connection_session(
             req,
             ssh_manager,
-            memory_db,
             restored_password=restored_password,
             logger=logger,
         )
