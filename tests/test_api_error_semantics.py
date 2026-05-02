@@ -9,7 +9,14 @@ from unittest.mock import patch
 from fastapi import HTTPException, UploadFile
 from pydantic import ValidationError
 
-from api import approval_routes, config_routes, knowledge_routes, notification_routes, routes
+from api import (
+    approval_routes,
+    config_routes,
+    connection_routes,
+    knowledge_routes,
+    notification_routes,
+    routes,
+)
 from api.schemas import (
     ToolApprovalRequest,
     SafetyPolicyTestRequest,
@@ -28,9 +35,9 @@ class TestApiErrorSemantics(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 404)
 
     def test_disconnect_missing_session_returns_404(self):
-        with patch.object(routes.ssh_manager, "disconnect", return_value=False):
+        with patch.object(connection_routes.ssh_manager, "disconnect", return_value=False):
             with self.assertRaises(HTTPException) as ctx:
-                asyncio.run(routes.close_ssh_connection("missing"))
+                asyncio.run(connection_routes.close_ssh_connection("missing"))
 
         self.assertEqual(ctx.exception.status_code, 404)
 

@@ -2,7 +2,7 @@ import asyncio
 import unittest
 from unittest.mock import patch
 
-from api import routes
+from api import connection_routes, routes
 
 
 class TestSessionCommandWebhookRoutes(unittest.TestCase):
@@ -76,8 +76,8 @@ class TestSessionCommandWebhookRoutes(unittest.TestCase):
         self.assertEqual(history_response.data, {"deliveries": deliveries})
 
     def test_close_connection_preserves_response_shape(self):
-        with patch.object(routes.ssh_manager, "disconnect", return_value=True):
-            response = asyncio.run(routes.close_ssh_connection("sid-1"))
+        with patch.object(connection_routes.ssh_manager, "disconnect", return_value=True):
+            response = asyncio.run(connection_routes.close_ssh_connection("sid-1"))
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.message, "Connection closed safely")

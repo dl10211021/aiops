@@ -3,8 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from api import approval_routes, routes
-from api.schemas import ApprovalDecisionRequest, UserInteractionResponseRequest
+from api import approval_routes, connection_routes, routes
+from api.schemas import ApprovalDecisionRequest, CommandRequest, UserInteractionResponseRequest
 
 
 class FakeUploadFile:
@@ -95,10 +95,10 @@ class TestInteractionApprovalSkillRoutes(unittest.TestCase):
     def test_legacy_command_route_preserves_response_shape(self):
         result = {"stdout": "ok"}
 
-        with patch("api.routes.execute_legacy_command_record", return_value=result):
+        with patch("api.connection_routes.execute_legacy_command_record", return_value=result):
             response = asyncio.run(
-                routes.execute_remote_command(
-                    routes.CommandRequest(session_id="sid-1", command="uptime")
+                connection_routes.execute_remote_command(
+                    CommandRequest(session_id="sid-1", command="uptime")
                 )
             )
 

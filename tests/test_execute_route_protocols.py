@@ -12,7 +12,8 @@ warnings.filterwarnings(
     category=PendingDeprecationWarning,
 )
 
-from api import routes
+from api import connection_routes
+from api.schemas import CommandRequest
 
 
 def session_info(asset_type: str, protocol: str, extra_args: dict | None = None) -> dict:
@@ -34,13 +35,13 @@ class TestExecuteRouteProtocols(unittest.TestCase):
         fake_sessions = {"sid-db": {"info": session_info("mysql", "mysql", {"db_type": "mysql"})}}
 
         with (
-            patch.dict(routes.ssh_manager.active_sessions, fake_sessions, clear=True),
+            patch.dict(connection_routes.ssh_manager.active_sessions, fake_sessions, clear=True),
             patch("core.dispatcher.dispatcher.route_and_execute", new_callable=AsyncMock) as execute,
         ):
             execute.return_value = json.dumps({"success": True, "data": [{"one": 1}]})
             response = asyncio.run(
-                routes.execute_remote_command(
-                    routes.CommandRequest(session_id="sid-db", command="SELECT 1")
+                connection_routes.execute_remote_command(
+                    CommandRequest(session_id="sid-db", command="SELECT 1")
                 )
             )
 
@@ -53,13 +54,13 @@ class TestExecuteRouteProtocols(unittest.TestCase):
         fake_sessions = {"sid-api": {"info": session_info("prometheus", "http_api")}}
 
         with (
-            patch.dict(routes.ssh_manager.active_sessions, fake_sessions, clear=True),
+            patch.dict(connection_routes.ssh_manager.active_sessions, fake_sessions, clear=True),
             patch("core.dispatcher.dispatcher.route_and_execute", new_callable=AsyncMock) as execute,
         ):
             execute.return_value = json.dumps({"success": True, "output": "{}"})
             asyncio.run(
-                routes.execute_remote_command(
-                    routes.CommandRequest(session_id="sid-api", command="GET /api/v1/status/buildinfo")
+                connection_routes.execute_remote_command(
+                    CommandRequest(session_id="sid-api", command="GET /api/v1/status/buildinfo")
                 )
             )
 
@@ -77,13 +78,13 @@ class TestExecuteRouteProtocols(unittest.TestCase):
         }
 
         with (
-            patch.dict(routes.ssh_manager.active_sessions, fake_sessions, clear=True),
+            patch.dict(connection_routes.ssh_manager.active_sessions, fake_sessions, clear=True),
             patch("core.dispatcher.dispatcher.route_and_execute", new_callable=AsyncMock) as execute,
         ):
             execute.return_value = json.dumps({"success": True, "output": "{}"})
             asyncio.run(
-                routes.execute_remote_command(
-                    routes.CommandRequest(session_id="sid-clickhouse", command="GET /?query=SELECT%201")
+                connection_routes.execute_remote_command(
+                    CommandRequest(session_id="sid-clickhouse", command="GET /?query=SELECT%201")
                 )
             )
 
@@ -97,13 +98,13 @@ class TestExecuteRouteProtocols(unittest.TestCase):
         fake_sessions = {"sid-snmp": {"info": session_info("snmp", "snmp")}}
 
         with (
-            patch.dict(routes.ssh_manager.active_sessions, fake_sessions, clear=True),
+            patch.dict(connection_routes.ssh_manager.active_sessions, fake_sessions, clear=True),
             patch("core.dispatcher.dispatcher.route_and_execute", new_callable=AsyncMock) as execute,
         ):
             execute.return_value = json.dumps({"success": True, "data": []})
             asyncio.run(
-                routes.execute_remote_command(
-                    routes.CommandRequest(session_id="sid-snmp", command="1.3.6.1.2.1.1.1.0")
+                connection_routes.execute_remote_command(
+                    CommandRequest(session_id="sid-snmp", command="1.3.6.1.2.1.1.1.0")
                 )
             )
 
@@ -114,13 +115,13 @@ class TestExecuteRouteProtocols(unittest.TestCase):
         fake_sessions = {"sid-docker": {"info": session_info("docker", "ssh")}}
 
         with (
-            patch.dict(routes.ssh_manager.active_sessions, fake_sessions, clear=True),
+            patch.dict(connection_routes.ssh_manager.active_sessions, fake_sessions, clear=True),
             patch("core.dispatcher.dispatcher.route_and_execute", new_callable=AsyncMock) as execute,
         ):
             execute.return_value = json.dumps({"success": True, "output": "ok"})
             asyncio.run(
-                routes.execute_remote_command(
-                    routes.CommandRequest(session_id="sid-docker", command="docker ps")
+                connection_routes.execute_remote_command(
+                    CommandRequest(session_id="sid-docker", command="docker ps")
                 )
             )
 
@@ -131,13 +132,13 @@ class TestExecuteRouteProtocols(unittest.TestCase):
         fake_sessions = {"sid-fw": {"info": session_info("firewall", "ssh")}}
 
         with (
-            patch.dict(routes.ssh_manager.active_sessions, fake_sessions, clear=True),
+            patch.dict(connection_routes.ssh_manager.active_sessions, fake_sessions, clear=True),
             patch("core.dispatcher.dispatcher.route_and_execute", new_callable=AsyncMock) as execute,
         ):
             execute.return_value = json.dumps({"success": True, "output": "ok"})
             asyncio.run(
-                routes.execute_remote_command(
-                    routes.CommandRequest(session_id="sid-fw", command="display version")
+                connection_routes.execute_remote_command(
+                    CommandRequest(session_id="sid-fw", command="display version")
                 )
             )
 
@@ -148,13 +149,13 @@ class TestExecuteRouteProtocols(unittest.TestCase):
         command = json.dumps({"collection": "system.version", "filter": {"_id": "featureCompatibilityVersion"}, "limit": 5})
 
         with (
-            patch.dict(routes.ssh_manager.active_sessions, fake_sessions, clear=True),
+            patch.dict(connection_routes.ssh_manager.active_sessions, fake_sessions, clear=True),
             patch("core.dispatcher.dispatcher.route_and_execute", new_callable=AsyncMock) as execute,
         ):
             execute.return_value = json.dumps({"success": True, "data": []})
             asyncio.run(
-                routes.execute_remote_command(
-                    routes.CommandRequest(session_id="sid-mongo", command=command)
+                connection_routes.execute_remote_command(
+                    CommandRequest(session_id="sid-mongo", command=command)
                 )
             )
 
@@ -169,13 +170,13 @@ class TestExecuteRouteProtocols(unittest.TestCase):
         fake_sessions = {"sid-db": {"info": info}}
 
         with (
-            patch.dict(routes.ssh_manager.active_sessions, fake_sessions, clear=True),
+            patch.dict(connection_routes.ssh_manager.active_sessions, fake_sessions, clear=True),
             patch("core.dispatcher.dispatcher.route_and_execute", new_callable=AsyncMock) as execute,
         ):
             with self.assertRaises(HTTPException) as ctx:
                 asyncio.run(
-                    routes.execute_remote_command(
-                        routes.CommandRequest(session_id="sid-db", command="UPDATE users SET disabled = 1")
+                    connection_routes.execute_remote_command(
+                        CommandRequest(session_id="sid-db", command="UPDATE users SET disabled = 1")
                     )
                 )
 

@@ -13,7 +13,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from api import routes
-from api.schemas import SafetyPolicyTestRequest
+from api.schemas import ConnectionRequest, SafetyPolicyTestRequest
 from core.asset_protocols import get_asset_catalog
 from core.memory import DEFAULT_SENSITIVE_EXTRA_ARG_KEYS
 
@@ -259,7 +259,7 @@ class TestAssetCrudRoutes(unittest.TestCase):
 
     def test_snmp_protocol_validation_applies_to_nas_and_ipmi(self):
         with self.assertRaises(ValidationError):
-            routes.ConnectionRequest(
+            ConnectionRequest(
                 host="nas.local",
                 port=161,
                 username="",
@@ -275,7 +275,7 @@ class TestAssetCrudRoutes(unittest.TestCase):
             )
 
     def test_oracle_connection_validation_accepts_tns_alias(self):
-        request = routes.ConnectionRequest(
+        request = ConnectionRequest(
             host="oracle.local",
             port=1521,
             username="system",

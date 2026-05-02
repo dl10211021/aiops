@@ -8,17 +8,18 @@ warnings.filterwarnings(
     category=PendingDeprecationWarning,
 )
 
-from api import routes
+from api import connection_routes, routes
+from api.schemas import ConnectionInspectionRequest, ConnectionRequest
 
 
 class TestGlobalSessionRoutes(unittest.TestCase):
     def tearDown(self):
-        routes.ssh_manager.active_sessions.clear()
+        connection_routes.ssh_manager.active_sessions.clear()
 
     def test_global_test_does_not_attempt_asset_connection(self):
         response = asyncio.run(
-            routes.test_connection(
-                routes.ConnectionRequest(
+            connection_routes.test_connection(
+                ConnectionRequest(
                     host="global",
                     port=0,
                     username="admin",
@@ -34,8 +35,8 @@ class TestGlobalSessionRoutes(unittest.TestCase):
 
     def test_global_connect_creates_virtual_orchestration_session(self):
         response = asyncio.run(
-            routes.create_ssh_connection(
-                routes.ConnectionRequest(
+            connection_routes.create_ssh_connection(
+                ConnectionRequest(
                     host="global",
                     port=0,
                     username="admin",
@@ -59,8 +60,8 @@ class TestGlobalSessionRoutes(unittest.TestCase):
 
     def test_active_sessions_include_target_scope_context(self):
         response = asyncio.run(
-            routes.create_ssh_connection(
-                routes.ConnectionRequest(
+            connection_routes.create_ssh_connection(
+                ConnectionRequest(
                     host="global",
                     port=0,
                     username="admin",
@@ -85,8 +86,8 @@ class TestGlobalSessionRoutes(unittest.TestCase):
 
     def test_global_inspect_returns_supported_without_physical_probe(self):
         response = asyncio.run(
-            routes.inspect_connection(
-                routes.ConnectionInspectionRequest(
+            connection_routes.inspect_connection(
+                ConnectionInspectionRequest(
                     host="global",
                     port=0,
                     username="admin",
