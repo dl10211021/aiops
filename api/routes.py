@@ -305,6 +305,7 @@ from core.session_profile_service import (
     generate_session_profile_record,
     get_session_profile_record,
 )
+from core.session_inspection_service import inspect_active_session_record
 from api.schemas import (
     AgentRuntimeConfigRequest,
     AlertEventUpdateRequest,
@@ -1055,9 +1056,7 @@ async def delete_inspection_template(template_id: str):
 @router.post("/session/{session_id}/inspect", response_model=ResponseModel)
 async def inspect_active_session(session_id: str):
     """对已建立的会话执行只读巡检。"""
-    from core.session_inspector import inspect_session
-
-    report = await inspect_session(session_id)
+    report = await inspect_active_session_record(session_id)
     return ResponseModel(**build_inspection_response_payload(report))
 
 
