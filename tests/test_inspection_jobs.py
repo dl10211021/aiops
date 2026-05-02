@@ -12,7 +12,7 @@ warnings.filterwarnings(
     category=PendingDeprecationWarning,
 )
 
-from api import routes
+from api import dashboard_routes, routes
 
 
 class TestInspectionJobs(unittest.TestCase):
@@ -483,7 +483,7 @@ class TestInspectionJobs(unittest.TestCase):
                 started_at="2026-04-27T01:00:00+00:00",
                 completed_at="2026-04-27T01:00:03+00:00",
             )
-            response = asyncio.run(routes.get_dashboard_inspection_run_trend())
+            response = asyncio.run(dashboard_routes.get_dashboard_inspection_run_trend())
 
         point = response.data["points"][0]
         self.assertEqual(point["date"], "2026-04-27")

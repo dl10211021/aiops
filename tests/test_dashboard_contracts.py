@@ -11,7 +11,7 @@ warnings.filterwarnings(
     category=PendingDeprecationWarning,
 )
 
-from api import routes
+from api import dashboard_routes, routes
 
 
 class FakeMemoryDB:
@@ -53,6 +53,15 @@ class TestDashboardContracts(unittest.TestCase):
         root.mkdir(parents=True, exist_ok=True)
         return root / "runs.json"
 
+    def test_dashboard_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/dashboard/overview", paths)
+        self.assertIn("/dashboard/toolsets", paths)
+        self.assertIn("/dashboard/alerts/trend", paths)
+        self.assertIn("/dashboard/risk-ranking", paths)
+        self.assertIn("/dashboard/inspection-runs/trend", paths)
+
     def test_dashboard_overview_includes_assets_alerts_and_jobs(self):
         from core import alert_events
         from core import inspection_results
@@ -73,7 +82,7 @@ class TestDashboardContracts(unittest.TestCase):
                 message="ok",
                 targets=[{"host": "10.0.0.10", "status": "success"}],
             )
-            response = asyncio.run(routes.get_dashboard_overview())
+            response = asyncio.run(dashboard_routes.get_dashboard_overview())
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data["summary"]["asset_total"], 2)
@@ -91,8 +100,8 @@ class TestDashboardContracts(unittest.TestCase):
             alert_events.create_alert_event({"host": "10.0.0.10", "alert_name": "CPUHigh", "severity": "warning"})
             alert_events.create_alert_event({"host": "10.0.0.11", "alert_name": "MemoryHigh", "severity": "warning"})
 
-            trend = asyncio.run(routes.get_dashboard_alert_trend())
-            risk = asyncio.run(routes.get_dashboard_risk_ranking())
+            trend = asyncio.run(dashboard_routes.get_dashboard_alert_trend())
+            risk = asyncio.run(dashboard_routes.get_dashboard_risk_ranking())
 
         self.assertGreaterEqual(len(trend.data["points"]), 1)
         self.assertEqual(trend.data["points"][0]["total"], 3)
