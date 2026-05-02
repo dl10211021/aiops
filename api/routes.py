@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 from connections.ssh_manager import ssh_manager
 from fastapi.responses import StreamingResponse
 from core.agent import chat_stream_agent
+from api.errors import raise_http_error
 from core.asset_protocols import (
     API_PROTOCOLS,
     SQL_PROTOCOLS,
@@ -253,7 +254,7 @@ def _preview_attachment_content(filename: str, content_type: str, content: bytes
     try:
         return build_chat_attachment_preview(filename, content_type, content)
     except ChatAttachmentError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
 
 
 # ----------------- 路由接口 -----------------
@@ -283,7 +284,7 @@ async def ai_chat_with_system(req: ChatRequest):
             ),
         )
     except ChatSessionServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return StreamingResponse(run.subscribe(), media_type="text/event-stream")
 
 
@@ -317,7 +318,7 @@ async def approve_tool_call(session_id: str, req: ToolApprovalRequest):
             note=req.note or "",
         )
     except SessionInteractionServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     if result["include_approval"]:
         return ResponseModel(
             status="success",
@@ -341,7 +342,7 @@ async def respond_user_interaction(session_id: str, req: UserInteractionResponse
             label=req.label,
         )
     except SessionInteractionServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="交互输入已提交。")
 
 
@@ -360,7 +361,7 @@ async def get_approval_request(approval_id: str):
     try:
         approval = get_approval_request_record(approval_id)
     except ApprovalRequestServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"approval": approval})
 
 
@@ -378,7 +379,7 @@ async def decide_approval_request(approval_id: str, req: ApprovalDecisionRequest
             note=req.note or "",
         )
     except ApprovalRequestServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="审批已处理", data={"approval": approval})
 
 
@@ -394,7 +395,7 @@ async def execute_approval_request(approval_id: str):
             dispatcher=dispatcher,
         )
     except ApprovalExecutionServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(
         status=result.status,
         message=result.message,
@@ -459,7 +460,7 @@ async def create_ssh_connection(req: ConnectionRequest):
             logger=logger,
         )
     except ConnectionSessionServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(**result)
 
 
@@ -482,7 +483,7 @@ async def execute_remote_command(req: CommandRequest):
             command=req.command,
         )
     except LegacyCommandServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
 
     return ResponseModel(
         status="success",
@@ -515,7 +516,7 @@ async def get_skill_detail(skill_id: str):
     try:
         detail = get_custom_skill_detail_record(dispatcher, skill_id)
     except CustomSkillCatalogServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data=detail)
 
 
@@ -536,7 +537,7 @@ async def create_skill(req: CreateSkillRequest):
             overwrite_existing=req.overwrite_existing,
         )
     except CustomSkillCreateServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message=result["message"], data=result["data"])
 
 
@@ -553,7 +554,7 @@ async def list_skill_versions(skill_id: str, file_name: str = "SKILL.md"):
     try:
         versions = list_custom_skill_version_records(CUSTOM_SKILLS_DIR, skill_id, file_name)
     except CustomSkillVersionServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"versions": versions})
 
 
@@ -572,7 +573,7 @@ async def rollback_skill_version(skill_id: str, req: SkillRollbackRequest):
             approval_id=req.approval_id,
         )
     except CustomSkillRollbackServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(
         status=result["status"],
         message=result["message"],
@@ -593,7 +594,7 @@ async def migrate_skill(req: MigrateRequest):
             target_dir_name=req.target_dir_name,
         )
     except CustomSkillMigrationServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message=result["message"])
 
 
@@ -625,7 +626,7 @@ async def update_agent_runtime_config_endpoint(req: AgentRuntimeConfigRequest):
     try:
         config = save_agent_runtime_config_record(req.chat_max_steps, req.headless_max_steps)
     except AppConfigServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"config": config}, message="Agent 执行保护配置已保存")
 
 
@@ -643,7 +644,7 @@ async def update_embedding_config_endpoint(req: EmbeddingConfigRequest):
             message=f"Embedding 配置已更新: model={req.model}, dim={req.dim}",
         )
     except AppConfigServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
 
 
 @router.get("/config/notifications", response_model=ResponseModel)
@@ -673,7 +674,7 @@ async def test_notification_channel(req: TestNotificationRequest):
         message = send_notification_channel_test(req.channel)
         return ResponseModel(status="success", message=message)
     except NotificationTestError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"测试发送失败: {str(e)}") from e
 
@@ -688,7 +689,7 @@ async def update_session_permission(session_id: str, req: PermissionUpdateReques
             req.allow_modifications,
         )
     except SessionRuntimeError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     logger.info(
         f"Session {session_id} permissions changed to: {req.allow_modifications}"
     )
@@ -707,7 +708,7 @@ async def update_session_heartbeat(session_id: str, req: HeartbeatUpdateRequest)
             req.master_interval,
         )
     except SessionRuntimeError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
 
     if req.master_interval is not None:
         logger.info(
@@ -739,7 +740,7 @@ async def poll_session_messages(session_id: str):
                 missing_detail="Session disconnected",
             )
     except SessionRuntimeError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
 
     if pending:
         return ResponseModel(
@@ -758,7 +759,7 @@ async def get_session_history(session_id: str):
     try:
         messages = list_session_history_messages(memory_db, session_id)
     except SessionHistoryServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"messages": messages})
 
 
@@ -770,7 +771,7 @@ async def delete_session_history(session_id: str):
     try:
         clear_session_history_messages(memory_db, session_id)
     except SessionHistoryServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="会话记录已清空")
 
 
@@ -791,7 +792,7 @@ async def update_session_history_message(
             req.content,
         )
     except SessionHistoryServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"message": message}, message="消息已更新")
 
 
@@ -803,7 +804,7 @@ async def delete_session_history_message(session_id: str, message_id: int):
     try:
         delete_session_history_message_record(memory_db, session_id, message_id)
     except SessionHistoryServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="消息已删除")
 
 
@@ -813,7 +814,7 @@ async def update_session_skills(session_id: str, req: SkillsUpdateRequest):
     try:
         set_session_skills(ssh_manager.active_sessions, session_id, req.active_skills)
     except SessionRuntimeError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     logger.info(f"Session {session_id} active skills changed to: {req.active_skills}")
 
     return ResponseModel(status="success", message="挂载技能已实时更新")
@@ -829,7 +830,7 @@ async def update_session_group(session_id: str, req: SessionGroupUpdateRequest):
             req.group_name,
         )
     except SessionRuntimeError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     logger.info("Session %s group changed to: %s", session_id, group_name)
 
     return ResponseModel(
@@ -869,7 +870,7 @@ async def get_session_tools(session_id: str):
             session_id,
         )
     except SessionToolContextError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(
         status="success",
         data=payload,
@@ -888,7 +889,7 @@ async def get_session_commands(session_id: str):
             session_id,
         )
     except SessionToolContextError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     custom_commands = await asyncio.to_thread(list_custom_slash_commands_data, memory_db)
     return ResponseModel(
         status="success",
@@ -940,7 +941,7 @@ async def delete_custom_slash_command(command_id: str):
     try:
         await asyncio.to_thread(remove_custom_slash_command, memory_db, command_id)
     except SessionCommandError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="快捷命令已删除")
 
 
@@ -959,7 +960,7 @@ async def create_inspection_template(req: InspectionTemplatePayload):
     try:
         template = save_inspection_template_record(req.model_dump())
     except InspectionTemplateServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="巡检模板已保存", data={"template": template})
 
 
@@ -969,7 +970,7 @@ async def update_inspection_template(template_id: str, req: InspectionTemplatePa
     try:
         template = save_inspection_template_record(req.model_dump(), template_id)
     except InspectionTemplateServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="巡检模板已更新", data={"template": template})
 
 
@@ -979,7 +980,7 @@ async def delete_inspection_template(template_id: str):
     try:
         remove_inspection_template_record(template_id)
     except InspectionTemplateServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="巡检模板已删除")
 
 
@@ -1035,7 +1036,7 @@ async def send_session_webhook(session_id: str, req: SessionWebhookSendRequest):
             allow_private_targets=req.allow_private_targets,
         )
     except SessionWebhookServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(
         status="success",
         message="Webhook 已发送",
@@ -1061,7 +1062,7 @@ async def preview_session_webhook(session_id: str, req: SessionWebhookSendReques
             allow_private_targets=req.allow_private_targets,
         )
     except SessionWebhookServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data=payload)
 
 
@@ -1073,7 +1074,7 @@ async def list_session_webhook_history(session_id: str, limit: int = 10):
     try:
         deliveries = await list_session_webhook_delivery_records(memory_db, session_id, limit)
     except SessionWebhookServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"deliveries": deliveries})
 
 
@@ -1139,7 +1140,7 @@ async def get_asset(asset_id: int):
     try:
         asset = await asyncio.to_thread(get_saved_asset_record, memory_db, asset_id)
     except AssetServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"asset": asset})
 
 
@@ -1151,7 +1152,7 @@ async def update_asset(asset_id: int, req: AssetPayload):
     try:
         asset = await asyncio.to_thread(update_saved_asset_record, memory_db, asset_id, req.model_dump())
     except AssetServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(
         status="success",
         message="资产已更新",
@@ -1239,7 +1240,7 @@ async def get_asset_verification_matrix(asset_id: int):
     try:
         matrix = await asyncio.to_thread(build_protocol_verification_matrix, memory_db, asset_id)
     except ProtocolVerificationServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"matrix": matrix})
 
 
@@ -1251,7 +1252,7 @@ async def verify_asset(asset_id: int):
     try:
         run = await run_protocol_verification_for_asset(memory_db, asset_id)
     except ProtocolVerificationServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"run": run})
 
 
@@ -1277,7 +1278,7 @@ async def get_alert_event(alert_id: str):
     try:
         alert = get_alert_event_record(alert_id)
     except AlertEventServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"alert": alert})
 
 
@@ -1292,7 +1293,7 @@ async def update_alert_event(alert_id: str, req: AlertEventUpdateRequest):
             note=req.note,
         )
     except AlertEventServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"alert": alert})
 
 
@@ -1310,7 +1311,7 @@ async def upload_knowledge_document(file: UploadFile = File(...)):
     try:
         message = await ingest_knowledge_document(kb_manager, file)
     except KnowledgeBaseServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message=message)
 
 
@@ -1322,7 +1323,7 @@ async def list_knowledge_documents():
     try:
         files = await list_knowledge_document_records(kb_manager)
     except KnowledgeBaseServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"files": files})
 
 
@@ -1334,7 +1335,7 @@ async def delete_knowledge_document(filename: str):
     try:
         message = await remove_knowledge_document_record(kb_manager, filename)
     except KnowledgeBaseServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message=message)
 
 
@@ -1370,7 +1371,7 @@ async def add_cron_job(req: CronAddRequest):
     try:
         payload = create_inspection_job_record(req.model_dump())
     except InspectionJobServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(
         status="success",
         message=f"已成功添加定时巡检计划: {payload['job_id']}",
@@ -1391,7 +1392,7 @@ async def delete_cron_job(job_id: str):
     try:
         await asyncio.to_thread(remove_inspection_job_record, job_id)
     except InspectionJobServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message=f"巡检计划 {job_id} 已取消。")
 
 
@@ -1400,7 +1401,7 @@ async def update_cron_job(job_id: str, req: CronAddRequest):
     try:
         job = await asyncio.to_thread(update_inspection_job_record, job_id, req.model_dump())
     except InspectionJobServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="巡检计划已更新", data={"job": job})
 
 
@@ -1409,7 +1410,7 @@ async def pause_cron_job(job_id: str):
     try:
         job = await asyncio.to_thread(pause_inspection_job_record, job_id)
     except InspectionJobServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="巡检计划已暂停", data={"job": job})
 
 
@@ -1418,7 +1419,7 @@ async def resume_cron_job(job_id: str):
     try:
         job = await asyncio.to_thread(resume_inspection_job_record, job_id)
     except InspectionJobServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="巡检计划已恢复", data={"job": job})
 
 
@@ -1427,7 +1428,7 @@ async def run_cron_job_now(job_id: str):
     try:
         result = await run_inspection_job_record_now(job_id)
     except InspectionJobServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="巡检计划已手动触发", data={"result": result})
 
 
@@ -1457,7 +1458,7 @@ async def get_cron_job_run(run_id: str):
     try:
         run = get_inspection_run_record(run_id)
     except InspectionRunServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"run": run})
 
 
@@ -1466,7 +1467,7 @@ async def get_inspection_run_report(run_id: str):
     try:
         report = get_inspection_run_report_record(run_id)
     except InspectionRunServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"report": report})
 
 
@@ -1475,7 +1476,7 @@ async def export_inspection_run_report(run_id: str, format: str = "markdown"):
     try:
         payload = export_inspection_run_report_content(run_id, format)
     except InspectionRunServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data=payload)
 
 
@@ -1502,7 +1503,7 @@ async def batch_import_assets(items: list[BatchAssetImportItem]):
             [item.model_dump() for item in items],
         )
     except AssetServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
 
     return ResponseModel(status="success", message=f"成功导入 {result['imported']}/{result['total']} 条资产。")
 
@@ -1515,7 +1516,7 @@ async def export_session_history(session_id: str):
     try:
         markdown = export_session_history_markdown_record(memory_db, ssh_manager.active_sessions, session_id)
     except SessionHistoryServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", data={"markdown": markdown})
 
 
@@ -1529,7 +1530,7 @@ async def update_providers_endpoint(req: list[ProviderConfig]):
     try:
         await asyncio.to_thread(save_provider_config_records, [p.model_dump() for p in req])
     except ProviderConfigServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="供应商配置已保存")
 
 
@@ -1543,7 +1544,7 @@ async def update_safety_policy_endpoint(req: SafetyPolicyUpdateRequest):
     try:
         policy = save_safety_policy_record(req.policy)
     except SafetyPolicyServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        raise_http_error(exc)
     return ResponseModel(status="success", message="安全策略已保存", data={"policy": policy})
 
 
