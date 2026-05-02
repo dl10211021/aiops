@@ -6,14 +6,20 @@ from api.mappers import (
     custom_skill_migration_kwargs,
     custom_skill_rollback_kwargs,
     session_group_response_kwargs,
+    session_group_update_kwargs,
+    session_heartbeat_update_kwargs,
     session_poll_response_kwargs,
+    session_permission_update_kwargs,
     session_webhook_delivery_kwargs,
     tool_approval_response_kwargs,
 )
 from api.schemas import (
     ChatRequest,
     CreateSkillRequest,
+    HeartbeatUpdateRequest,
     MigrateRequest,
+    PermissionUpdateRequest,
+    SessionGroupUpdateRequest,
     SessionWebhookSendRequest,
     SkillRollbackRequest,
 )
@@ -67,6 +73,28 @@ class TestApiMappers(unittest.TestCase):
                 "model_name": "ops-model",
                 "allow_private_targets": True,
             },
+        )
+
+    def test_session_runtime_update_kwargs_preserve_request_fields(self):
+        self.assertEqual(
+            session_permission_update_kwargs(
+                PermissionUpdateRequest(allow_modifications=True)
+            ),
+            {"allow_modifications": True},
+        )
+        self.assertEqual(
+            session_heartbeat_update_kwargs(
+                HeartbeatUpdateRequest(heartbeat_enabled=True, master_interval=180)
+            ),
+            {"heartbeat_enabled": True, "master_interval": 180},
+        )
+        self.assertEqual(
+            session_heartbeat_update_kwargs(HeartbeatUpdateRequest(heartbeat_enabled=False)),
+            {"heartbeat_enabled": False, "master_interval": None},
+        )
+        self.assertEqual(
+            session_group_update_kwargs(SessionGroupUpdateRequest(group_name="数据库核心组")),
+            {"group_name": "数据库核心组"},
         )
 
     def test_custom_skill_create_kwargs_preserves_all_request_fields(self):

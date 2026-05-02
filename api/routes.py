@@ -9,7 +9,10 @@ from api.mappers import (
     custom_skill_migration_kwargs,
     custom_skill_rollback_kwargs,
     session_group_response_kwargs,
+    session_group_update_kwargs,
+    session_heartbeat_update_kwargs,
     session_poll_response_kwargs,
+    session_permission_update_kwargs,
     session_webhook_delivery_kwargs,
     tool_approval_response_kwargs,
 )
@@ -671,16 +674,17 @@ async def test_notification_channel(req: TestNotificationRequest):
 @router.put("/session/{session_id}/permission", response_model=ResponseModel)
 async def update_session_permission(session_id: str, req: PermissionUpdateRequest):
     """【新功能】动态提权/降权：在不中断 SSH 的情况下，修改当前会话的 AI 修改权限"""
+    update = session_permission_update_kwargs(req)
     try:
         set_session_permission(
             ssh_manager.active_sessions,
             session_id,
-            req.allow_modifications,
+            **update,
         )
     except SessionRuntimeError as exc:
         raise_http_error(exc)
     logger.info(
-        f"Session {session_id} permissions changed to: {req.allow_modifications}"
+        f"Session {session_id} permissions changed to: {update['allow_modifications']}"
     )
 
     return ResponseModel(status="success", message="权限已实时更新")
@@ -689,22 +693,22 @@ async def update_session_permission(session_id: str, req: PermissionUpdateReques
 @router.put("/session/{session_id}/heartbeat", response_model=ResponseModel)
 async def update_session_heartbeat(session_id: str, req: HeartbeatUpdateRequest):
     """【新功能】动态开启或关闭心跳巡检"""
+    update = session_heartbeat_update_kwargs(req)
     try:
         set_session_heartbeat(
             ssh_manager.active_sessions,
             session_id,
-            req.heartbeat_enabled,
-            req.master_interval,
+            **update,
         )
     except SessionRuntimeError as exc:
         raise_http_error(exc)
 
-    if req.master_interval is not None:
+    if update["master_interval"] is not None:
         logger.info(
-            f"Session {session_id} master_interval updated to: {req.master_interval}s"
+            f"Session {session_id} master_interval updated to: {update['master_interval']}s"
         )
 
-    logger.info(f"Session {session_id} heartbeat changed to: {req.heartbeat_enabled}")
+    logger.info(f"Session {session_id} heartbeat changed to: {update['heartbeat_enabled']}")
 
     return ResponseModel(status="success", message="心跳巡检状态已更新")
 
@@ -806,11 +810,12 @@ async def update_session_skills(session_id: str, req: SkillsUpdateRequest):
 @router.put("/session/{session_id}/group", response_model=ResponseModel)
 async def update_session_group(session_id: str, req: SessionGroupUpdateRequest):
     """更新活跃会话的主分组；底层复用现有 tags[0]，保持旧会话结构兼容。"""
+    update = session_group_update_kwargs(req)
     try:
         info, group_name = set_session_group(
             ssh_manager.active_sessions,
             session_id,
-            req.group_name,
+            **update,
         )
     except SessionRuntimeError as exc:
         raise_http_error(exc)

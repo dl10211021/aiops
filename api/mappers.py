@@ -5,7 +5,10 @@ from typing import Any
 from api.schemas import (
     ChatRequest,
     CreateSkillRequest,
+    HeartbeatUpdateRequest,
     MigrateRequest,
+    PermissionUpdateRequest,
+    SessionGroupUpdateRequest,
     SessionWebhookSendRequest,
     SkillRollbackRequest,
 )
@@ -31,6 +34,21 @@ def session_webhook_delivery_kwargs(req: SessionWebhookSendRequest) -> dict[str,
         "model_name": req.model_name,
         "allow_private_targets": req.allow_private_targets,
     }
+
+
+def session_permission_update_kwargs(req: PermissionUpdateRequest) -> dict[str, Any]:
+    return {"allow_modifications": req.allow_modifications}
+
+
+def session_heartbeat_update_kwargs(req: HeartbeatUpdateRequest) -> dict[str, Any]:
+    return {
+        "heartbeat_enabled": req.heartbeat_enabled,
+        "master_interval": req.master_interval,
+    }
+
+
+def session_group_update_kwargs(req: SessionGroupUpdateRequest) -> dict[str, Any]:
+    return {"group_name": req.group_name}
 
 
 def custom_skill_create_kwargs(req: CreateSkillRequest) -> dict[str, Any]:
