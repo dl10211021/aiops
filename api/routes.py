@@ -45,6 +45,9 @@ from api.mappers import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    notification_channel_test_response_kwargs,
+    notification_config_response_kwargs,
+    notification_config_saved_response_kwargs,
     protocol_verification_overview_response_kwargs,
     saved_assets_response_kwargs,
     session_group_response_kwargs,
@@ -685,7 +688,8 @@ async def update_embedding_config_endpoint(req: EmbeddingConfigRequest):
 @router.get("/config/notifications", response_model=ResponseModel)
 async def get_notification_config():
     """【新功能】获取当前的告警通道配置"""
-    return ResponseModel(status="success", data=build_notification_config())
+    config = build_notification_config()
+    return ResponseModel(**notification_config_response_kwargs(config))
 
 
 @router.post("/config/notifications", response_model=ResponseModel)
@@ -699,7 +703,7 @@ async def update_notification_config(req: NotificationConfigRequest):
         logger.error(f"Failed to save .env file: {e}")
 
     logger.info("Notification Webhooks updated.")
-    return ResponseModel(status="success", message="告警通道配置已保存并生效")
+    return ResponseModel(**notification_config_saved_response_kwargs())
 
 
 @router.post("/config/notifications/test", response_model=ResponseModel)
@@ -707,7 +711,7 @@ async def test_notification_channel(req: TestNotificationRequest):
     """【新功能】测试通知渠道"""
     try:
         message = send_notification_channel_test(req.channel)
-        return ResponseModel(status="success", message=message)
+        return ResponseModel(**notification_channel_test_response_kwargs(message))
     except NotificationTestError as exc:
         raise_http_error(exc)
     except Exception as e:

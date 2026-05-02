@@ -42,6 +42,9 @@ from api.mappers import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    notification_channel_test_response_kwargs,
+    notification_config_response_kwargs,
+    notification_config_saved_response_kwargs,
     protocol_verification_overview_response_kwargs,
     saved_assets_response_kwargs,
     session_group_response_kwargs,
@@ -516,6 +519,22 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             system_info_response_kwargs(payload),
             {"status": "success", "data": payload},
+        )
+
+    def test_notification_response_kwargs_preserve_route_shapes(self):
+        config = {"wechat_enabled": True, "smtp_port": 465}
+
+        self.assertEqual(
+            notification_config_response_kwargs(config),
+            {"status": "success", "data": config},
+        )
+        self.assertEqual(
+            notification_config_saved_response_kwargs(),
+            {"status": "success", "message": "告警通道配置已保存并生效"},
+        )
+        self.assertEqual(
+            notification_channel_test_response_kwargs("发送成功"),
+            {"status": "success", "message": "发送成功"},
         )
 
     def test_session_profile_kwargs_preserve_route_shapes(self):
