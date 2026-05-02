@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from core import memory as memory_module
 from core.protocol_verification import (
     build_asset_matrix,
     build_overview,
@@ -18,23 +19,32 @@ class ProtocolVerificationServiceError(Exception):
         self.detail = detail
 
 
-def build_protocol_verification_overview(memory_db) -> dict[str, Any]:
-    return build_overview(memory_db.get_all_assets())
+def _resolve_memory_db(memory_db: Any | None = None) -> Any:
+    return memory_db if memory_db is not None else memory_module.memory_db
 
 
-def get_protocol_verification_asset(memory_db, asset_id: int) -> dict[str, Any]:
-    asset = memory_db.get_asset(asset_id)
+def build_protocol_verification_overview(memory_db: Any | None = None) -> dict[str, Any]:
+    store = _resolve_memory_db(memory_db)
+    return build_overview(store.get_all_assets())
+
+
+def get_protocol_verification_asset(asset_id: int, memory_db: Any | None = None) -> dict[str, Any]:
+    store = _resolve_memory_db(memory_db)
+    asset = store.get_asset(asset_id)
     if not asset:
         raise ProtocolVerificationServiceError(404, "资产不存在")
     return asset
 
 
-def build_protocol_verification_matrix(memory_db, asset_id: int) -> dict[str, Any]:
-    return build_asset_matrix(get_protocol_verification_asset(memory_db, asset_id))
+def build_protocol_verification_matrix(asset_id: int, memory_db: Any | None = None) -> dict[str, Any]:
+    return build_asset_matrix(get_protocol_verification_asset(asset_id, memory_db=memory_db))
 
 
-async def run_protocol_verification_for_asset(memory_db, asset_id: int) -> dict[str, Any]:
-    asset = await asyncio.to_thread(get_protocol_verification_asset, memory_db, asset_id)
+async def run_protocol_verification_for_asset(
+    asset_id: int,
+    memory_db: Any | None = None,
+) -> dict[str, Any]:
+    asset = await asyncio.to_thread(get_protocol_verification_asset, asset_id, memory_db)
     return await run_asset_verification(asset)
 
 

@@ -1237,19 +1237,15 @@ async def get_dashboard_inspection_run_trend():
 @router.get("/verification/protocols", response_model=ResponseModel)
 async def get_protocol_verification_overview():
     """返回全量资产协议验证矩阵概览，不包含任何敏感凭据。"""
-    from core.memory import memory_db
-
-    data = await asyncio.to_thread(build_protocol_verification_overview, memory_db)
+    data = await asyncio.to_thread(build_protocol_verification_overview)
     return ResponseModel(**protocol_verification_overview_response_kwargs(data))
 
 
 @router.get("/assets/{asset_id}/verification", response_model=ResponseModel)
 async def get_asset_verification_matrix(asset_id: int):
     """返回单资产协议验证矩阵，不包含任何敏感凭据。"""
-    from core.memory import memory_db
-
     try:
-        matrix = await asyncio.to_thread(build_protocol_verification_matrix, memory_db, asset_id)
+        matrix = await asyncio.to_thread(build_protocol_verification_matrix, asset_id)
     except ProtocolVerificationServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**asset_verification_matrix_response_kwargs(matrix))
@@ -1258,10 +1254,8 @@ async def get_asset_verification_matrix(asset_id: int):
 @router.post("/assets/{asset_id}/verify", response_model=ResponseModel)
 async def verify_asset(asset_id: int):
     """执行单资产只读端到端验证，并持久化验证历史。"""
-    from core.memory import memory_db
-
     try:
-        run = await run_protocol_verification_for_asset(memory_db, asset_id)
+        run = await run_protocol_verification_for_asset(asset_id)
     except ProtocolVerificationServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**asset_verification_run_response_kwargs(run))

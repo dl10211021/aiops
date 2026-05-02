@@ -33,20 +33,20 @@ class FakeProtocolAssetStore:
 
 class TestProtocolVerificationService(unittest.TestCase):
     def test_build_overview_delegates_to_protocol_matrix(self):
-        overview = build_protocol_verification_overview(FakeProtocolAssetStore())
+        overview = build_protocol_verification_overview(memory_db=FakeProtocolAssetStore())
 
         self.assertEqual(overview["summary"]["asset_total"], 1)
         self.assertEqual(overview["summary"]["protocols"]["ssh"], 1)
 
     def test_asset_matrix_requires_existing_asset(self):
-        matrix = build_protocol_verification_matrix(FakeProtocolAssetStore(), 1)
+        matrix = build_protocol_verification_matrix(1, memory_db=FakeProtocolAssetStore())
 
         self.assertEqual(matrix["asset"]["id"], 1)
         self.assertIn("connection_test", [step["id"] for step in matrix["steps"]])
 
     def test_missing_asset_raises_404(self):
         with self.assertRaises(ProtocolVerificationServiceError) as ctx:
-            get_protocol_verification_asset(FakeProtocolAssetStore(), 404)
+            get_protocol_verification_asset(404, memory_db=FakeProtocolAssetStore())
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "资产不存在")
