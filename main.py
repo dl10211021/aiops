@@ -4,20 +4,19 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
-from contextlib import asynccontextmanager, closing
+from contextlib import asynccontextmanager
 import asyncio
-import sqlite3
 import uuid
 
 from core.request_context import current_request_id, request_id_context
 from core.hydration_status_service import (
     HYDRATE_STATUS as hydrate_status,
     finish_hydrate_run,
-    get_hydrate_status_record,
     record_hydrate_done,
     record_hydrate_success,
     start_hydrate_run,
 )
+from core.health_service import build_health_status
 
 # Backward-compatible alias for callers that still import main.hydrate_status.
 
@@ -244,50 +243,11 @@ if os.path.exists(react_assets):
 @app.get("/healthz")
 def healthz():
     """Production health check endpoint for load balancers and container probes."""
-    base_path = get_base_path()
-    root_dir = os.path.dirname(__file__)
-    db_path = os.path.join(root_dir, "opscore.db")
-    cron_db_path = os.path.join(root_dir, "cron_jobs.sqlite")
-    react_index = os.path.join(base_path, "static_react", "index.html")
-
-    checks = {
-        "database": {"status": "ok", "path": "opscore.db"},
-        "cron_store": {"status": "ok", "path": "cron_jobs.sqlite"},
-        "storage": {"status": "ok", "path": root_dir},
-        "frontend": {"status": "ok" if os.path.exists(react_index) else "warning"},
-        "hydrate": get_hydrate_status_record(),
-    }
-
-    try:
-        with closing(sqlite3.connect(db_path, timeout=2)) as conn:
-            conn.execute("SELECT 1")
-    except Exception as e:
-        checks["database"] = {"status": "error", "path": "opscore.db", "error": str(e)}
-
-    try:
-        if os.path.exists(cron_db_path):
-            with closing(sqlite3.connect(cron_db_path, timeout=2)) as conn:
-                conn.execute("SELECT 1")
-        else:
-            checks["cron_store"] = {"status": "ok", "path": "cron_jobs.sqlite", "message": "not initialized"}
-    except Exception as e:
-        checks["cron_store"] = {"status": "error", "path": "cron_jobs.sqlite", "error": str(e)}
-
-    if not os.access(root_dir, os.W_OK):
-        checks["storage"] = {"status": "error", "path": root_dir, "error": "not writable"}
-
-    overall = "ok"
-    if any(item.get("status") == "error" for item in checks.values() if isinstance(item, dict)):
-        overall = "error"
-    elif any(item.get("status") == "warning" for item in checks.values() if isinstance(item, dict)):
-        overall = "warning"
-
-    return {
-        "status": overall,
-        "service": "opscore-aiops",
-        "version": app.version,
-        "checks": checks,
-    }
+    return build_health_status(
+        base_path=get_base_path(),
+        root_dir=os.path.dirname(__file__),
+        version=app.version,
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
