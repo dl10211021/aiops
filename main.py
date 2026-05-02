@@ -17,6 +17,11 @@ from core.hydration_status_service import (
     start_hydrate_run,
 )
 from core.health_service import build_health_status
+from core.frontend_entry_service import (
+    get_legacy_static_dir,
+    get_react_assets_dir,
+    resolve_frontend_entry,
+)
 
 # Backward-compatible alias for callers that still import main.hydrate_status.
 
@@ -223,8 +228,8 @@ def get_base_path():
 
 
 # ------------- 挂载静态文件目录 (旧版保留) -------------
-static_dir = os.path.join(get_base_path(), "static")
-if os.path.exists(static_dir):
+static_dir = get_legacy_static_dir(get_base_path())
+if static_dir:
     app.mount("/static", StaticFiles(directory=static_dir), name="static_legacy")
 
 # ------------- 注册核心 API 路由 -------------
@@ -233,9 +238,8 @@ app.include_router(ssh_router, prefix="/api/v1", tags=["OpsCore APIs"])
 from fastapi.responses import HTMLResponse
 
 # ------------- React 前端静态资源 (Vite build) -------------
-react_dir = os.path.join(get_base_path(), "static_react")
-react_assets = os.path.join(react_dir, "assets")
-if os.path.exists(react_assets):
+react_assets = get_react_assets_dir(get_base_path())
+if react_assets:
     app.mount("/assets", StaticFiles(directory=react_assets), name="react_assets")
 
 
@@ -253,15 +257,10 @@ def healthz():
 @app.get("/", response_class=HTMLResponse)
 def index():
     """优先返回 React 构建产物，降级到旧版 HTML"""
-    react_index = os.path.join(get_base_path(), "static_react", "index.html")
-    if os.path.exists(react_index):
-        with open(react_index, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
-    html_path = os.path.join(get_base_path(), "frontend_demo.html")
-    if os.path.exists(html_path):
-        with open(html_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
-    return {"status": "ok", "message": "Backend is running."}
+    entry = resolve_frontend_entry(get_base_path())
+    if entry.html is not None:
+        return HTMLResponse(content=entry.html)
+    return entry.fallback
 
 
 if __name__ == "__main__":
