@@ -1,8 +1,10 @@
 import asyncio
 import io
 import shutil
+import sys
 import unittest
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import patch
 
 from core.knowledge_base_service import (
@@ -82,6 +84,18 @@ class TestKnowledgeBaseService(unittest.TestCase):
 
         files = asyncio.run(list_knowledge_document_records(kb))
         message = asyncio.run(remove_knowledge_document_record(kb, "runbook.txt"))
+
+        self.assertEqual(files, ["runbook.txt"])
+        self.assertEqual(message, "已成功从知识库中移除 runbook.txt")
+
+    def test_records_use_default_kb_manager_when_not_injected(self):
+        kb = FakeKnowledgeBase("default")
+        fake_rag = ModuleType("core.rag")
+        fake_rag.kb_manager = kb
+
+        with patch.dict(sys.modules, {"core.rag": fake_rag}):
+            files = asyncio.run(list_knowledge_document_records())
+            message = asyncio.run(remove_knowledge_document_record("runbook.txt"))
 
         self.assertEqual(files, ["runbook.txt"])
         self.assertEqual(message, "已成功从知识库中移除 runbook.txt")

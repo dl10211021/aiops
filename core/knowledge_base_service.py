@@ -54,8 +54,22 @@ def persist_knowledge_upload(upload_file, kb_dir: str | os.PathLike[str], safe_f
     return str(file_path)
 
 
-async def ingest_knowledge_document(kb_manager, upload_file) -> str:
+def _resolve_kb_manager(kb_manager=None):
+    if kb_manager is not None:
+        return kb_manager
+    from core.rag import kb_manager as default_kb_manager
+
+    return default_kb_manager
+
+
+async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None) -> str:
     from core.llm_factory import get_embedding_client_and_model
+
+    if upload_file is None:
+        kb_manager = _resolve_kb_manager()
+        upload_file = kb_manager_or_upload_file
+    else:
+        kb_manager = _resolve_kb_manager(kb_manager_or_upload_file)
 
     safe_filename = safe_knowledge_filename(upload_file.filename)
     client, embedding_model = get_embedding_client_and_model()
@@ -72,14 +86,21 @@ async def ingest_knowledge_document(kb_manager, upload_file) -> str:
     raise KnowledgeBaseServiceError(422, str(result.get("message") or "文档内容提取或向量化失败"))
 
 
-async def list_knowledge_document_records(kb_manager) -> list[Any]:
+async def list_knowledge_document_records(kb_manager=None) -> list[Any]:
+    kb_manager = _resolve_kb_manager(kb_manager)
     try:
         return await kb_manager.list_documents()
     except Exception as exc:
         raise KnowledgeBaseServiceError(500, str(exc)) from exc
 
 
-async def remove_knowledge_document_record(kb_manager, filename: str) -> str:
+async def remove_knowledge_document_record(kb_manager_or_filename, filename: str | None = None) -> str:
+    if filename is None:
+        kb_manager = _resolve_kb_manager()
+        filename = str(kb_manager_or_filename)
+    else:
+        kb_manager = _resolve_kb_manager(kb_manager_or_filename)
+
     try:
         result = await kb_manager.delete_document(filename)
     except Exception as exc:
