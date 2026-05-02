@@ -5,8 +5,11 @@ from core.session_commands import (
     SessionCommandError,
     build_session_commands_payload_for_session,
     build_session_commands_response,
+    list_custom_slash_command_records,
     list_custom_slash_commands,
+    remove_custom_slash_command_record,
     remove_custom_slash_command,
+    save_custom_slash_command_record,
     save_custom_slash_command,
 )
 from core.tool_registry import tool_registry
@@ -120,6 +123,23 @@ class TestSessionCommands(unittest.TestCase):
             store.saved,
             [{"label": "/new"}, {"label": "/newer", "id": "cmd-1"}],
         )
+        self.assertEqual(store.deleted, ["cmd-1"])
+
+    def test_custom_slash_command_record_helpers_delegate_to_memory_db_async(self):
+        store = FakeCommandStore()
+
+        async def exercise():
+            commands = await list_custom_slash_command_records(store)
+            created = await save_custom_slash_command_record(store, {"label": "/new"})
+            updated = await save_custom_slash_command_record(store, {"label": "/newer"}, "cmd-1")
+            await remove_custom_slash_command_record(store, "cmd-1")
+            return commands, created, updated
+
+        commands, created, updated = asyncio.run(exercise())
+
+        self.assertEqual(commands, [{"id": "cmd-1", "label": "/cmd"}])
+        self.assertEqual(created, {"label": "/new"})
+        self.assertEqual(updated, {"label": "/newer", "id": "cmd-1"})
         self.assertEqual(store.deleted, ["cmd-1"])
 
     def test_remove_custom_slash_command_raises_typed_404_when_missing(self):

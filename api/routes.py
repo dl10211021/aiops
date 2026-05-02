@@ -113,9 +113,9 @@ from core.session_history_service import (
 from core.session_commands import (
     SessionCommandError,
     build_session_commands_payload_for_session,
-    list_custom_slash_commands as list_custom_slash_commands_data,
-    remove_custom_slash_command,
-    save_custom_slash_command,
+    list_custom_slash_command_records,
+    remove_custom_slash_command_record,
+    save_custom_slash_command_record,
 )
 from core.session_tool_context import (
     SessionToolContextError,
@@ -894,7 +894,7 @@ async def list_custom_slash_commands():
     """列出用户自定义快捷命令。"""
     from core.memory import memory_db
 
-    commands = await asyncio.to_thread(list_custom_slash_commands_data, memory_db)
+    commands = await list_custom_slash_command_records(memory_db)
     return ResponseModel(status="success", data={"commands": commands})
 
 
@@ -903,8 +903,7 @@ async def create_custom_slash_command(req: SlashCommandPayload):
     """创建用户自定义快捷命令。"""
     from core.memory import memory_db
 
-    command = await asyncio.to_thread(
-        save_custom_slash_command,
+    command = await save_custom_slash_command_record(
         memory_db,
         req.model_dump(),
     )
@@ -916,8 +915,7 @@ async def update_custom_slash_command(command_id: str, req: SlashCommandPayload)
     """更新用户自定义快捷命令。"""
     from core.memory import memory_db
 
-    command = await asyncio.to_thread(
-        save_custom_slash_command,
+    command = await save_custom_slash_command_record(
         memory_db,
         req.model_dump(),
         command_id,
@@ -931,7 +929,7 @@ async def delete_custom_slash_command(command_id: str):
     from core.memory import memory_db
 
     try:
-        await asyncio.to_thread(remove_custom_slash_command, memory_db, command_id)
+        await remove_custom_slash_command_record(memory_db, command_id)
     except SessionCommandError as exc:
         raise_http_error(exc)
     return ResponseModel(status="success", message="快捷命令已删除")

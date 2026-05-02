@@ -41,8 +41,24 @@ async def build_session_commands_payload_for_session(
         tool_registry,
         session_id,
     )
-    custom_commands = await asyncio.to_thread(list_custom_slash_commands, memory_db)
+    custom_commands = await list_custom_slash_command_records(memory_db)
     return build_session_commands_response(tools_payload, custom_commands)
+
+
+async def list_custom_slash_command_records(memory_db) -> list[dict[str, Any]]:
+    return await asyncio.to_thread(list_custom_slash_commands, memory_db)
+
+
+async def save_custom_slash_command_record(
+    memory_db,
+    payload: dict[str, Any],
+    command_id: str | None = None,
+) -> dict[str, Any]:
+    return await asyncio.to_thread(save_custom_slash_command, memory_db, payload, command_id)
+
+
+async def remove_custom_slash_command_record(memory_db, command_id: str) -> None:
+    await asyncio.to_thread(remove_custom_slash_command, memory_db, command_id)
 
 
 def list_custom_slash_commands(memory_db) -> list[dict[str, Any]]:
