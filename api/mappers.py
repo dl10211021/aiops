@@ -187,6 +187,13 @@ def inspection_run_export_response_kwargs(payload: dict[str, Any]) -> dict[str, 
     }
 
 
+def dashboard_response_kwargs(data: Any) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": data,
+    }
+
+
 def session_profile_generate_kwargs(req: SessionProfileGenerateRequest) -> dict[str, Any]:
     return {
         "model_name": req.model_name,

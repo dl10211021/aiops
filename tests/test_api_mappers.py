@@ -19,6 +19,7 @@ from api.mappers import (
     custom_skill_create_kwargs,
     custom_skill_migration_kwargs,
     custom_skill_rollback_kwargs,
+    dashboard_response_kwargs,
     inspection_run_export_response_kwargs,
     inspection_run_report_response_kwargs,
     inspection_run_response_kwargs,
@@ -362,6 +363,14 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             inspection_run_export_response_kwargs(export_payload),
             {"status": "success", "data": export_payload},
+        )
+
+    def test_dashboard_response_kwargs_preserves_payload(self):
+        payload = {"summary": {"asset_total": 2}, "alerts": {"open": 1}}
+
+        self.assertEqual(
+            dashboard_response_kwargs(payload),
+            {"status": "success", "data": payload},
         )
 
     def test_session_profile_kwargs_preserve_route_shapes(self):
