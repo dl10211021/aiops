@@ -1,6 +1,8 @@
 import unittest
 
 from api.mappers import (
+    agent_runtime_config_response_kwargs,
+    agent_runtime_config_saved_response_kwargs,
     alert_event_list_query_kwargs,
     alert_event_response_kwargs,
     alert_event_update_kwargs,
@@ -42,10 +44,17 @@ from api.mappers import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    llm_config_response_kwargs,
+    models_response_kwargs,
     notification_channel_test_response_kwargs,
     notification_config_response_kwargs,
     notification_config_saved_response_kwargs,
+    providers_response_kwargs,
+    providers_saved_response_kwargs,
     protocol_verification_overview_response_kwargs,
+    safety_policy_response_kwargs,
+    safety_policy_saved_response_kwargs,
+    safety_policy_test_response_kwargs,
     saved_assets_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
@@ -535,6 +544,59 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             notification_channel_test_response_kwargs("发送成功"),
             {"status": "success", "message": "发送成功"},
+        )
+
+    def test_config_response_kwargs_preserve_route_shapes(self):
+        models = [{"id": "openai|gpt-4o", "name": "gpt-4o"}]
+        llm_config = {"base_url": "https://api.example/v1", "api_key": "********"}
+        runtime_config = {"chat_max_steps": 80, "headless_max_steps": 60}
+        providers = [{"id": "openai", "api_key": "********"}]
+        policy = {"rules": []}
+        policy_result = {"action": "deny", "reason": "blocked"}
+
+        self.assertEqual(
+            models_response_kwargs(models),
+            {"status": "success", "data": {"models": models}},
+        )
+        self.assertEqual(
+            llm_config_response_kwargs(llm_config),
+            {"status": "success", "data": llm_config},
+        )
+        self.assertEqual(
+            agent_runtime_config_response_kwargs(runtime_config),
+            {"status": "success", "data": {"config": runtime_config}},
+        )
+        self.assertEqual(
+            agent_runtime_config_saved_response_kwargs(runtime_config),
+            {
+                "status": "success",
+                "data": {"config": runtime_config},
+                "message": "Agent 执行保护配置已保存",
+            },
+        )
+        self.assertEqual(
+            providers_response_kwargs(providers),
+            {"status": "success", "data": {"providers": providers}},
+        )
+        self.assertEqual(
+            providers_saved_response_kwargs(),
+            {"status": "success", "message": "供应商配置已保存"},
+        )
+        self.assertEqual(
+            safety_policy_response_kwargs(policy),
+            {"status": "success", "data": {"policy": policy}},
+        )
+        self.assertEqual(
+            safety_policy_saved_response_kwargs(policy),
+            {
+                "status": "success",
+                "message": "安全策略已保存",
+                "data": {"policy": policy},
+            },
+        )
+        self.assertEqual(
+            safety_policy_test_response_kwargs(policy_result),
+            {"status": "success", "data": {"result": policy_result}},
         )
 
     def test_session_profile_kwargs_preserve_route_shapes(self):

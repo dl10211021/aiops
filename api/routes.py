@@ -4,6 +4,8 @@ from fastapi.responses import StreamingResponse
 from core.agent import chat_stream_agent
 from api.errors import raise_http_error
 from api.mappers import (
+    agent_runtime_config_response_kwargs,
+    agent_runtime_config_saved_response_kwargs,
     alert_event_list_query_kwargs,
     alert_event_response_kwargs,
     alert_event_update_kwargs,
@@ -45,10 +47,17 @@ from api.mappers import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    llm_config_response_kwargs,
+    models_response_kwargs,
     notification_channel_test_response_kwargs,
     notification_config_response_kwargs,
     notification_config_saved_response_kwargs,
+    providers_response_kwargs,
+    providers_saved_response_kwargs,
     protocol_verification_overview_response_kwargs,
+    safety_policy_response_kwargs,
+    safety_policy_saved_response_kwargs,
+    safety_policy_test_response_kwargs,
     saved_assets_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
@@ -643,20 +652,22 @@ async def get_models(provider_id: str | None = None, refresh: bool = False):
 
     models = await get_available_models_for_provider(provider_id=provider_id, refresh=refresh)
     if models:
-        return ResponseModel(status="success", data={"models": models})
+        return ResponseModel(**models_response_kwargs(models))
     raise HTTPException(status_code=502, detail="Cannot fetch models.")
 
 
 @router.get("/config/llm", response_model=ResponseModel)
 async def get_llm_config():
     """【新功能】获取当前大模型配置"""
-    return ResponseModel(status="success", data=build_llm_config_payload())
+    return ResponseModel(**llm_config_response_kwargs(build_llm_config_payload()))
 
 
 
 @router.get("/config/agent-runtime", response_model=ResponseModel)
 async def get_agent_runtime_config_endpoint():
-    return ResponseModel(status="success", data={"config": get_agent_runtime_config_record()})
+    return ResponseModel(
+        **agent_runtime_config_response_kwargs(get_agent_runtime_config_record())
+    )
 
 
 @router.post("/config/agent-runtime", response_model=ResponseModel)
@@ -665,7 +676,7 @@ async def update_agent_runtime_config_endpoint(req: AgentRuntimeConfigRequest):
         config = save_agent_runtime_config_record(req.chat_max_steps, req.headless_max_steps)
     except AppConfigServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"config": config}, message="Agent 执行保护配置已保存")
+    return ResponseModel(**agent_runtime_config_saved_response_kwargs(config))
 
 
 @router.get("/config/embedding")
@@ -1553,7 +1564,7 @@ async def export_session_history(session_id: str):
 @router.get("/config/providers", response_model=ResponseModel)
 async def get_providers_endpoint():
     providers = await asyncio.to_thread(list_provider_config_records)
-    return ResponseModel(status="success", data={"providers": providers})
+    return ResponseModel(**providers_response_kwargs(providers))
 
 @router.post("/config/providers", response_model=ResponseModel)
 async def update_providers_endpoint(req: list[ProviderConfig]):
@@ -1561,12 +1572,12 @@ async def update_providers_endpoint(req: list[ProviderConfig]):
         await asyncio.to_thread(save_provider_config_records, [p.model_dump() for p in req])
     except ProviderConfigServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="供应商配置已保存")
+    return ResponseModel(**providers_saved_response_kwargs())
 
 
 @router.get("/config/safety-policy", response_model=ResponseModel)
 async def get_safety_policy_endpoint():
-    return ResponseModel(status="success", data={"policy": get_safety_policy_record()})
+    return ResponseModel(**safety_policy_response_kwargs(get_safety_policy_record()))
 
 
 @router.post("/config/safety-policy", response_model=ResponseModel)
@@ -1575,11 +1586,11 @@ async def update_safety_policy_endpoint(req: SafetyPolicyUpdateRequest):
         policy = save_safety_policy_record(req.policy)
     except SafetyPolicyServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message="安全策略已保存", data={"policy": policy})
+    return ResponseModel(**safety_policy_saved_response_kwargs(policy))
 
 
 @router.post("/config/safety-policy/test", response_model=ResponseModel)
 async def test_safety_policy_endpoint(req: SafetyPolicyTestRequest):
     result = explain_safety_policy_test(req)
-    return ResponseModel(status="success", data={"result": result})
+    return ResponseModel(**safety_policy_test_response_kwargs(result))
 

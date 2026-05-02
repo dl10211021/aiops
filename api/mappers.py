@@ -297,6 +297,71 @@ def notification_channel_test_response_kwargs(message: str) -> dict[str, Any]:
     }
 
 
+def models_response_kwargs(models: list[Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"models": models},
+    }
+
+
+def llm_config_response_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": config,
+    }
+
+
+def agent_runtime_config_response_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"config": config},
+    }
+
+
+def agent_runtime_config_saved_response_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"config": config},
+        "message": "Agent 执行保护配置已保存",
+    }
+
+
+def providers_response_kwargs(providers: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"providers": providers},
+    }
+
+
+def providers_saved_response_kwargs() -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "供应商配置已保存",
+    }
+
+
+def safety_policy_response_kwargs(policy: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"policy": policy},
+    }
+
+
+def safety_policy_saved_response_kwargs(policy: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "安全策略已保存",
+        "data": {"policy": policy},
+    }
+
+
+def safety_policy_test_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"result": result},
+    }
+
+
 def session_profile_generate_kwargs(req: SessionProfileGenerateRequest) -> dict[str, Any]:
     return {
         "model_name": req.model_name,
