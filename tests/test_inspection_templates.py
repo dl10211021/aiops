@@ -13,7 +13,8 @@ warnings.filterwarnings(
 
 from fastapi import HTTPException
 
-from api import routes
+from api import inspection_template_routes, routes
+from api.schemas import InspectionTemplatePayload
 
 
 class TestInspectionTemplates(unittest.TestCase):
@@ -26,12 +27,18 @@ class TestInspectionTemplates(unittest.TestCase):
         root.mkdir(parents=True, exist_ok=True)
         return root / "templates.json"
 
+    def test_inspection_template_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/inspection-templates", paths)
+        self.assertIn("/inspection-templates/{template_id}", paths)
+
     def test_template_crud_masks_disabled_and_persists_updates(self):
         from core import inspection_templates
 
         store_path = self._store_path("crud")
         with patch.object(inspection_templates, "TEMPLATE_STORE_PATH", store_path):
-            created = routes.InspectionTemplatePayload(
+            created = InspectionTemplatePayload(
                 id="linux-basic-custom",
                 name="Linux Basic Custom",
                 asset_type="linux",
@@ -46,10 +53,12 @@ class TestInspectionTemplates(unittest.TestCase):
                     }
                 ],
             )
-            response = asyncio.run(routes.create_inspection_template(created))
+            response = asyncio.run(
+                inspection_template_routes.create_inspection_template(created)
+            )
             self.assertEqual(response.status, "success")
 
-            listed = asyncio.run(routes.list_inspection_templates())
+            listed = asyncio.run(inspection_template_routes.list_inspection_templates())
             custom_templates = [
                 template
                 for template in listed.data["templates"]
@@ -58,7 +67,7 @@ class TestInspectionTemplates(unittest.TestCase):
             self.assertEqual(len(custom_templates), 1)
             self.assertFalse(custom_templates[0].get("builtin", False))
 
-            updated = routes.InspectionTemplatePayload(
+            updated = InspectionTemplatePayload(
                 id="linux-basic-custom",
                 name="Linux Basic Custom",
                 asset_type="linux",
@@ -73,12 +82,21 @@ class TestInspectionTemplates(unittest.TestCase):
                     }
                 ],
             )
-            response = asyncio.run(routes.update_inspection_template("linux-basic-custom", updated))
+            response = asyncio.run(
+                inspection_template_routes.update_inspection_template(
+                    "linux-basic-custom",
+                    updated,
+                )
+            )
             self.assertEqual(response.data["template"]["enabled"], False)
 
-            response = asyncio.run(routes.delete_inspection_template("linux-basic-custom"))
+            response = asyncio.run(
+                inspection_template_routes.delete_inspection_template(
+                    "linux-basic-custom"
+                )
+            )
             self.assertEqual(response.status, "success")
-            listed = asyncio.run(routes.list_inspection_templates())
+            listed = asyncio.run(inspection_template_routes.list_inspection_templates())
             self.assertNotIn(
                 "linux-basic-custom",
                 {template["id"] for template in listed.data["templates"]},
@@ -220,7 +238,7 @@ class TestInspectionTemplates(unittest.TestCase):
 
         store_path = self._store_path("unsafe")
         with patch.object(inspection_templates, "TEMPLATE_STORE_PATH", store_path):
-            payload = routes.InspectionTemplatePayload(
+            payload = InspectionTemplatePayload(
                 id="unsafe",
                 name="Unsafe",
                 asset_type="linux",
@@ -236,7 +254,9 @@ class TestInspectionTemplates(unittest.TestCase):
                 ],
             )
             with self.assertRaises(HTTPException) as ctx:
-                asyncio.run(routes.create_inspection_template(payload))
+                asyncio.run(
+                    inspection_template_routes.create_inspection_template(payload)
+                )
 
         self.assertEqual(ctx.exception.status_code, 422)
 

@@ -17,6 +17,7 @@ from api.schemas import (
     AssetPayload,
     BatchAssetImportItem,
     ConnectionRequest,
+    InspectionTemplateStepPayload,
     SafetyPolicyTestRequest,
 )
 from core.asset_protocols import get_asset_catalog
@@ -112,11 +113,11 @@ class TestAssetCrudRoutes(unittest.TestCase):
         self.assertEqual(second.skills, [])
         self.assertEqual(second.tags, ["未分组"])
 
-        first_step = routes.InspectionTemplateStepPayload(
+        first_step = InspectionTemplateStepPayload(
             name="basic_status",
             tool="linux_execute_command",
         )
-        second_step = routes.InspectionTemplateStepPayload(
+        second_step = InspectionTemplateStepPayload(
             name="network_status",
             tool="linux_execute_command",
         )

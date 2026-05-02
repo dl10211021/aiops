@@ -17,10 +17,6 @@ from api.mappers import (
     inspection_run_response_kwargs,
     inspection_run_summary_response_kwargs,
     inspection_runs_response_kwargs,
-    inspection_template_deleted_response_kwargs,
-    inspection_template_list_response_kwargs,
-    inspection_template_save_payload,
-    inspection_template_saved_response_kwargs,
 )
 from api.system_info_routes import router as system_info_router
 from api.knowledge_routes import router as knowledge_router
@@ -38,6 +34,7 @@ from api.session_history_routes import router as session_history_router
 from api.session_profile_routes import router as session_profile_router
 from api.session_webhook_routes import router as session_webhook_router
 from api.custom_command_routes import router as custom_command_router
+from api.inspection_template_routes import router as inspection_template_router
 from core.chat_attachments import (
     CHAT_ATTACHMENT_MAX_SIZE,
     ChatAttachmentError,
@@ -46,12 +43,6 @@ from core.chat_attachments import (
 from core.chat_session_service import (
     ChatSessionServiceError,
     start_session_chat_run,
-)
-from core.inspection_template_service import (
-    InspectionTemplateServiceError,
-    list_inspection_template_records,
-    remove_inspection_template_record,
-    save_inspection_template_record,
 )
 from core.inspection_run_service import (
     InspectionRunServiceError,
@@ -74,8 +65,6 @@ from core.inspection_job_service import (
 from api.schemas import (
     ChatRequest,
     CronAddRequest,
-    InspectionTemplatePayload,
-    InspectionTemplateStepPayload,
     ResponseModel,
 )
 
@@ -101,6 +90,7 @@ router.include_router(session_history_router)
 router.include_router(session_profile_router)
 router.include_router(session_webhook_router)
 router.include_router(custom_command_router)
+router.include_router(inspection_template_router)
 
 
 def _preview_attachment_content(filename: str, content_type: str, content: bytes) -> dict:
@@ -144,51 +134,6 @@ async def preview_chat_attachment(file: UploadFile = File(...)):
         content,
     )
     return ResponseModel(**chat_attachment_preview_response_kwargs(attachment))
-
-
-@router.get("/inspection-templates", response_model=ResponseModel)
-async def list_inspection_templates():
-    """列出内置与自定义巡检模板。"""
-    return ResponseModel(
-        **inspection_template_list_response_kwargs(list_inspection_template_records())
-    )
-
-
-@router.post("/inspection-templates", response_model=ResponseModel)
-async def create_inspection_template(req: InspectionTemplatePayload):
-    """创建巡检模板；模板必须通过只读安全校验。"""
-    try:
-        template = save_inspection_template_record(inspection_template_save_payload(req))
-    except InspectionTemplateServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(
-        **inspection_template_saved_response_kwargs(template, "巡检模板已保存")
-    )
-
-
-@router.put("/inspection-templates/{template_id}", response_model=ResponseModel)
-async def update_inspection_template(template_id: str, req: InspectionTemplatePayload):
-    """更新巡检模板；路径 ID 优先，避免请求体误改主键。"""
-    try:
-        template = save_inspection_template_record(
-            inspection_template_save_payload(req),
-            template_id,
-        )
-    except InspectionTemplateServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(
-        **inspection_template_saved_response_kwargs(template, "巡检模板已更新")
-    )
-
-
-@router.delete("/inspection-templates/{template_id}", response_model=ResponseModel)
-async def delete_inspection_template(template_id: str):
-    """删除巡检模板。"""
-    try:
-        remove_inspection_template_record(template_id)
-    except InspectionTemplateServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**inspection_template_deleted_response_kwargs())
 
 
 # ----------------- OpenClaw 自动化巡检 (Cron Jobs) -----------------
