@@ -27,9 +27,6 @@ from api.mappers import (
     custom_slash_command_saved_response_kwargs,
     custom_slash_command_updated_response_kwargs,
     custom_slash_commands_response_kwargs,
-    custom_skill_create_kwargs,
-    custom_skill_migration_kwargs,
-    custom_skill_rollback_kwargs,
     chat_attachment_preview_response_kwargs,
     chat_stop_response_kwargs,
     inspection_run_export_response_kwargs,
@@ -63,14 +60,6 @@ from api.mappers import (
     session_webhook_preview_response_kwargs,
     session_webhook_delivery_kwargs,
     session_webhook_sent_response_kwargs,
-    skill_created_response_kwargs,
-    skill_detail_response_kwargs,
-    skill_migration_response_kwargs,
-    skill_registry_response_kwargs,
-    skill_rollback_response_kwargs,
-    skill_scan_response_kwargs,
-    skill_validation_response_kwargs,
-    skill_versions_response_kwargs,
     tool_catalog_response_kwargs,
 )
 from api.system_info_routes import router as system_info_router
@@ -82,36 +71,14 @@ from api.notification_routes import router as notification_router
 from api.config_routes import router as config_router
 from api.approval_routes import router as approval_router
 from api.connection_routes import router as connection_router
+from api.skill_routes import router as skill_router
 from core.asset_protocols import (
     API_PROTOCOLS,
     SQL_PROTOCOLS,
     get_asset_catalog,
 )
 from core.active_sessions_service import build_active_sessions_payload
-from core.skill_lifecycle import validate_skill_candidate
 from core.tool_registry import tool_registry
-from core.custom_skill_catalog_service import (
-    CustomSkillCatalogServiceError,
-    get_custom_skill_detail as get_custom_skill_detail_record,
-    list_custom_skill_catalog,
-    scan_custom_skill_catalog,
-)
-from core.custom_skill_version_service import (
-    CustomSkillVersionServiceError,
-    list_custom_skill_version_records,
-)
-from core.custom_skill_create_service import (
-    CustomSkillCreateServiceError,
-    create_custom_skill_record,
-)
-from core.custom_skill_migration_service import (
-    CustomSkillMigrationServiceError,
-    migrate_custom_skill_record,
-)
-from core.custom_skill_rollback_service import (
-    CustomSkillRollbackServiceError,
-    rollback_custom_skill_version as rollback_custom_skill_version_record,
-)
 from core.chat_attachments import (
     CHAT_ATTACHMENT_MAX_SIZE,
     ChatAttachmentError,
@@ -205,30 +172,24 @@ from api.schemas import (
     AssetPayload,
     BatchAssetImportItem,
     ChatRequest,
-    CreateSkillRequest,
     CronAddRequest,
     HeartbeatUpdateRequest,
     InspectionTemplatePayload,
     InspectionTemplateStepPayload,
-    MigrateRequest,
     PermissionUpdateRequest,
     ResponseModel,
     SessionGroupUpdateRequest,
     SessionMessageUpdateRequest,
     SessionProfileGenerateRequest,
     SessionWebhookSendRequest,
-    SkillRollbackRequest,
     SkillsUpdateRequest,
-    SkillValidationRequest,
     SlashCommandPayload,
 )
 
 import logging
 import asyncio
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
-CUSTOM_SKILLS_DIR = Path(__file__).resolve().parent.parent / "my_custom_skills"
 
 router = APIRouter()
 router.include_router(system_info_router)
@@ -240,6 +201,7 @@ router.include_router(notification_router)
 router.include_router(config_router)
 router.include_router(approval_router)
 router.include_router(connection_router)
+router.include_router(skill_router)
 
 
 def _preview_attachment_content(filename: str, content_type: str, content: bytes) -> dict:
@@ -290,88 +252,6 @@ async def stop_chat_session(session_id: str):
     """【新功能】终止当前会话中正在生成的长流响应/执行任务"""
     request_session_stop(session_id)
     return ResponseModel(**chat_stop_response_kwargs())
-
-
-@router.post("/skills/scan", response_model=ResponseModel)
-async def scan_skills():
-    """【新功能】前端手动触发扫描本地磁盘目录，热加载新的技能"""
-    result = scan_custom_skill_catalog()
-    return ResponseModel(**skill_scan_response_kwargs(result))
-
-
-@router.get("/skills/registry", response_model=ResponseModel)
-async def get_skill_registry():
-    """【新功能】前端调用，获取所有已安装的技能卡带摘要以及外部市场待下载的卡带"""
-    return ResponseModel(
-        **skill_registry_response_kwargs(list_custom_skill_catalog())
-    )
-
-
-@router.get("/skills/registry/{skill_id}", response_model=ResponseModel)
-async def get_skill_detail(skill_id: str):
-    """【新功能】前端调用，获取某个特定技能卡带的完整 Markdown 原文"""
-    try:
-        detail = get_custom_skill_detail_record(skill_id)
-    except CustomSkillCatalogServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**skill_detail_response_kwargs(detail))
-
-
-@router.post("/skills/create", response_model=ResponseModel)
-async def create_skill(req: CreateSkillRequest):
-    """【新功能】用户在页面上手动创建新的定制技能卡带"""
-    try:
-        result = create_custom_skill_record(
-            CUSTOM_SKILLS_DIR,
-            **custom_skill_create_kwargs(req),
-        )
-    except CustomSkillCreateServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**skill_created_response_kwargs(result))
-
-
-@router.post("/skills/validate", response_model=ResponseModel)
-async def validate_skill(req: SkillValidationRequest):
-    """静态校验技能文件内容，不写文件、不执行脚本。"""
-    result = validate_skill_candidate(req.skill_id, req.file_name, req.content)
-    return ResponseModel(**skill_validation_response_kwargs(result))
-
-
-@router.get("/skills/{skill_id}/versions", response_model=ResponseModel)
-async def list_skill_versions(skill_id: str, file_name: str = "SKILL.md"):
-    """列出 my_custom_skills 中某个技能文件的可回滚版本。"""
-    try:
-        versions = list_custom_skill_version_records(CUSTOM_SKILLS_DIR, skill_id, file_name)
-    except CustomSkillVersionServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**skill_versions_response_kwargs(versions))
-
-
-@router.post("/skills/{skill_id}/rollback", response_model=ResponseModel)
-async def rollback_skill_version(skill_id: str, req: SkillRollbackRequest):
-    """将 my_custom_skills 中的技能文件回滚到指定备份版本。"""
-    try:
-        result = rollback_custom_skill_version_record(
-            CUSTOM_SKILLS_DIR,
-            skill_id=skill_id,
-            **custom_skill_rollback_kwargs(req),
-        )
-    except CustomSkillRollbackServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**skill_rollback_response_kwargs(result))
-
-
-@router.post("/skills/migrate", response_model=ResponseModel)
-async def migrate_skill(req: MigrateRequest):
-    """将外部卡带拷贝到专属的 my_custom_skills 目录"""
-    try:
-        result = migrate_custom_skill_record(
-            CUSTOM_SKILLS_DIR,
-            **custom_skill_migration_kwargs(req),
-        )
-    except CustomSkillMigrationServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**skill_migration_response_kwargs(result))
 
 
 @router.put("/session/{session_id}/permission", response_model=ResponseModel)

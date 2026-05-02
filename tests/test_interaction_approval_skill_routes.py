@@ -3,8 +3,16 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from api import approval_routes, connection_routes, routes
-from api.schemas import ApprovalDecisionRequest, CommandRequest, UserInteractionResponseRequest
+from api import approval_routes, connection_routes, routes, skill_routes
+from api.schemas import (
+    ApprovalDecisionRequest,
+    CommandRequest,
+    CreateSkillRequest,
+    MigrateRequest,
+    SkillRollbackRequest,
+    SkillValidationRequest,
+    UserInteractionResponseRequest,
+)
 
 
 class FakeUploadFile:
@@ -105,6 +113,18 @@ class TestInteractionApprovalSkillRoutes(unittest.TestCase):
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, result)
 
+    def test_skill_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/skills/scan", paths)
+        self.assertIn("/skills/registry", paths)
+        self.assertIn("/skills/registry/{skill_id}", paths)
+        self.assertIn("/skills/create", paths)
+        self.assertIn("/skills/validate", paths)
+        self.assertIn("/skills/{skill_id}/versions", paths)
+        self.assertIn("/skills/{skill_id}/rollback", paths)
+        self.assertIn("/skills/migrate", paths)
+
     def test_skill_routes_preserve_response_shapes(self):
         registry = {"registry": [{"id": "safe-skill"}]}
         detail = {"skill_id": "safe-skill", "content": "---"}
@@ -114,19 +134,19 @@ class TestInteractionApprovalSkillRoutes(unittest.TestCase):
         rollback = {"status": "success", "message": "已回滚", "data": {"id": "v1"}}
         migrated = {"message": "技能已导入"}
 
-        with patch("api.routes.scan_custom_skill_catalog", return_value={"message": "扫描完成"}):
-            scan_response = asyncio.run(routes.scan_skills())
+        with patch("api.skill_routes.scan_custom_skill_catalog", return_value={"message": "扫描完成"}):
+            scan_response = asyncio.run(skill_routes.scan_skills())
 
-        with patch("api.routes.list_custom_skill_catalog", return_value=registry):
-            registry_response = asyncio.run(routes.get_skill_registry())
+        with patch("api.skill_routes.list_custom_skill_catalog", return_value=registry):
+            registry_response = asyncio.run(skill_routes.get_skill_registry())
 
-        with patch("api.routes.get_custom_skill_detail_record", return_value=detail):
-            detail_response = asyncio.run(routes.get_skill_detail("safe-skill"))
+        with patch("api.skill_routes.get_custom_skill_detail_record", return_value=detail):
+            detail_response = asyncio.run(skill_routes.get_skill_detail("safe-skill"))
 
-        with patch("api.routes.create_custom_skill_record", return_value=created):
+        with patch("api.skill_routes.create_custom_skill_record", return_value=created):
             create_response = asyncio.run(
-                routes.create_skill(
-                    routes.CreateSkillRequest(
+                skill_routes.create_skill(
+                    CreateSkillRequest(
                         skill_id="safe-skill",
                         description="desc",
                         instructions="body",
@@ -134,10 +154,10 @@ class TestInteractionApprovalSkillRoutes(unittest.TestCase):
                 )
             )
 
-        with patch("api.routes.validate_skill_candidate", return_value=validation):
+        with patch("api.skill_routes.validate_skill_candidate", return_value=validation):
             validation_response = asyncio.run(
-                routes.validate_skill(
-                    routes.SkillValidationRequest(
+                skill_routes.validate_skill(
+                    SkillValidationRequest(
                         skill_id="safe-skill",
                         file_name="SKILL.md",
                         content="---",
@@ -145,21 +165,21 @@ class TestInteractionApprovalSkillRoutes(unittest.TestCase):
                 )
             )
 
-        with patch("api.routes.list_custom_skill_version_records", return_value=versions):
-            versions_response = asyncio.run(routes.list_skill_versions("safe-skill"))
+        with patch("api.skill_routes.list_custom_skill_version_records", return_value=versions):
+            versions_response = asyncio.run(skill_routes.list_skill_versions("safe-skill"))
 
-        with patch("api.routes.rollback_custom_skill_version_record", return_value=rollback):
+        with patch("api.skill_routes.rollback_custom_skill_version_record", return_value=rollback):
             rollback_response = asyncio.run(
-                routes.rollback_skill_version(
+                skill_routes.rollback_skill_version(
                     "safe-skill",
-                    routes.SkillRollbackRequest(version_id="v1"),
+                    SkillRollbackRequest(version_id="v1"),
                 )
             )
 
-        with patch("api.routes.migrate_custom_skill_record", return_value=migrated):
+        with patch("api.skill_routes.migrate_custom_skill_record", return_value=migrated):
             migrate_response = asyncio.run(
-                routes.migrate_skill(
-                    routes.MigrateRequest(
+                skill_routes.migrate_skill(
+                    MigrateRequest(
                         source_path="D:/market/safe-skill",
                         target_dir_name="safe-skill",
                     )

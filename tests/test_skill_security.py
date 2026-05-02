@@ -7,7 +7,13 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-from api import approval_routes, routes
+from api import approval_routes, skill_routes
+from api.schemas import (
+    CreateSkillRequest,
+    MigrateRequest,
+    SkillRollbackRequest,
+    SkillValidationRequest,
+)
 
 
 class TestSkillSecurity(unittest.TestCase):
@@ -210,11 +216,11 @@ class TestSkillSecurity(unittest.TestCase):
 
     def test_create_skill_rejects_invalid_id_with_http_error(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(routes, "CUSTOM_SKILLS_DIR", Path(tmp) / "custom"):
+            with patch.object(skill_routes, "CUSTOM_SKILLS_DIR", Path(tmp) / "custom"):
                 with self.assertRaises(HTTPException) as ctx:
                     asyncio.run(
-                        routes.create_skill(
-                            routes.CreateSkillRequest(
+                        skill_routes.create_skill(
+                            CreateSkillRequest(
                                 skill_id="../escape",
                                 description="bad",
                                 instructions="bad",
@@ -234,11 +240,11 @@ class TestSkillSecurity(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch.object(routes, "CUSTOM_SKILLS_DIR", target_base):
+            with patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base):
                 with self.assertRaises(HTTPException) as ctx:
                     asyncio.run(
-                        routes.create_skill(
-                            routes.CreateSkillRequest(
+                        skill_routes.create_skill(
+                            CreateSkillRequest(
                                 skill_id="existing-skill",
                                 description="demo",
                                 instructions="body",
@@ -257,12 +263,12 @@ class TestSkillSecurity(unittest.TestCase):
             (existing / "SKILL.md").write_text(old_content, encoding="utf-8")
 
             with (
-                patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base),
                 patch("core.dispatcher.dispatcher.refresh_skills") as refresh,
             ):
                 response = asyncio.run(
-                    routes.create_skill(
-                        routes.CreateSkillRequest(
+                    skill_routes.create_skill(
+                        CreateSkillRequest(
                             skill_id="existing-skill",
                             description="new",
                             instructions="new body",
@@ -296,12 +302,12 @@ class TestSkillSecurity(unittest.TestCase):
             (existing / "check.py").write_text(old_script, encoding="utf-8")
 
             with (
-                patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base),
                 patch("core.dispatcher.dispatcher.refresh_skills"),
             ):
                 response = asyncio.run(
-                    routes.create_skill(
-                        routes.CreateSkillRequest(
+                    skill_routes.create_skill(
+                        CreateSkillRequest(
                             skill_id="existing-skill",
                             description="new",
                             instructions="new body",
@@ -326,12 +332,12 @@ class TestSkillSecurity(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             target_base = Path(tmp) / "custom"
             with (
-                patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base),
                 patch("core.dispatcher.dispatcher.refresh_skills"),
             ):
                 response = asyncio.run(
-                    routes.create_skill(
-                        routes.CreateSkillRequest(
+                    skill_routes.create_skill(
+                        CreateSkillRequest(
                             skill_id="new-skill",
                             description="demo",
                             instructions="body",
@@ -348,11 +354,11 @@ class TestSkillSecurity(unittest.TestCase):
     def test_create_skill_rejects_empty_description_via_validation(self):
         with tempfile.TemporaryDirectory() as tmp:
             target_base = Path(tmp) / "custom"
-            with patch.object(routes, "CUSTOM_SKILLS_DIR", target_base):
+            with patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base):
                 with self.assertRaises(HTTPException) as ctx:
                     asyncio.run(
-                        routes.create_skill(
-                            routes.CreateSkillRequest(
+                        skill_routes.create_skill(
+                            CreateSkillRequest(
                                 skill_id="new-skill",
                                 description="",
                                 instructions="body",
@@ -367,11 +373,11 @@ class TestSkillSecurity(unittest.TestCase):
     def test_create_skill_rejects_nested_script_name_before_writing(self):
         with tempfile.TemporaryDirectory() as tmp:
             target_base = Path(tmp) / "custom"
-            with patch.object(routes, "CUSTOM_SKILLS_DIR", target_base):
+            with patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base):
                 with self.assertRaises(HTTPException) as ctx:
                     asyncio.run(
-                        routes.create_skill(
-                            routes.CreateSkillRequest(
+                        skill_routes.create_skill(
+                            CreateSkillRequest(
                                 skill_id="new-skill",
                                 description="demo",
                                 instructions="body",
@@ -388,14 +394,14 @@ class TestSkillSecurity(unittest.TestCase):
     def test_validate_skill_accepts_valid_skill_md_without_writing(self):
         with tempfile.TemporaryDirectory() as tmp:
             target_base = Path(tmp) / "custom"
-            request = routes.SkillValidationRequest(
+            request = SkillValidationRequest(
                 skill_id="safe-skill",
                 file_name="SKILL.md",
                 content="---\nname: safe-skill\ndescription: demo\n---\n\nbody\n",
             )
 
-            with patch.object(routes, "CUSTOM_SKILLS_DIR", target_base):
-                response = asyncio.run(routes.validate_skill(request))
+            with patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base):
+                response = asyncio.run(skill_routes.validate_skill(request))
 
             self.assertFalse(target_base.exists())
 
@@ -404,13 +410,13 @@ class TestSkillSecurity(unittest.TestCase):
         self.assertEqual(response.data["issues"], [])
 
     def test_validate_skill_reports_id_and_path_issues(self):
-        request = routes.SkillValidationRequest(
+        request = SkillValidationRequest(
             skill_id="../escape",
             file_name="nested/SKILL.md",
             content="missing frontmatter",
         )
 
-        response = asyncio.run(routes.validate_skill(request))
+        response = asyncio.run(skill_routes.validate_skill(request))
 
         codes = {issue["code"] for issue in response.data["issues"]}
         self.assertEqual(response.status, "success")
@@ -419,13 +425,13 @@ class TestSkillSecurity(unittest.TestCase):
         self.assertIn("invalid_file_name", codes)
 
     def test_validate_skill_warns_for_executable_sidecar(self):
-        request = routes.SkillValidationRequest(
+        request = SkillValidationRequest(
             skill_id="safe-skill",
             file_name="check.py",
             content="print('ok')\n",
         )
 
-        response = asyncio.run(routes.validate_skill(request))
+        response = asyncio.run(skill_routes.validate_skill(request))
 
         self.assertTrue(response.data["valid"])
         self.assertEqual(response.data["warnings"][0]["code"], "executable_file")
@@ -440,11 +446,11 @@ class TestSkillSecurity(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch.object(routes, "CUSTOM_SKILLS_DIR", root / "custom"):
+            with patch.object(skill_routes, "CUSTOM_SKILLS_DIR", root / "custom"):
                 with self.assertRaises(HTTPException) as ctx:
                     asyncio.run(
-                        routes.migrate_skill(
-                            routes.MigrateRequest(
+                        skill_routes.migrate_skill(
+                            MigrateRequest(
                                 source_path=str(source),
                                 target_dir_name="../escape",
                             )
@@ -465,12 +471,12 @@ class TestSkillSecurity(unittest.TestCase):
             target_base = root / "custom"
 
             with (
-                patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base),
                 patch("core.dispatcher.dispatcher.refresh_skills"),
             ):
                 response = asyncio.run(
-                    routes.migrate_skill(
-                        routes.MigrateRequest(
+                    skill_routes.migrate_skill(
+                        MigrateRequest(
                             source_path=str(source),
                             target_dir_name="market_skill",
                         )
@@ -492,8 +498,8 @@ class TestSkillSecurity(unittest.TestCase):
             (versions_dir / "SKILL.md.20260428010101.1.bak").write_text("old", encoding="utf-8")
             (versions_dir / "notes.py.20260428010101.1.bak").write_text("ignore", encoding="utf-8")
 
-            with patch.object(routes, "CUSTOM_SKILLS_DIR", target_base):
-                response = asyncio.run(routes.list_skill_versions("safe-skill"))
+            with patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base):
+                response = asyncio.run(skill_routes.list_skill_versions("safe-skill"))
 
         versions = response.data["versions"]
         self.assertEqual(len(versions), 1)
@@ -515,15 +521,15 @@ class TestSkillSecurity(unittest.TestCase):
             (versions_dir / version_id).write_text(previous, encoding="utf-8")
 
             with (
-                patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base),
                 patch.object(approval_routes, "CUSTOM_SKILLS_DIR", target_base),
                 patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path),
                 patch("core.dispatcher.dispatcher.refresh_skills"),
             ):
                 pending = asyncio.run(
-                    routes.rollback_skill_version(
+                    skill_routes.rollback_skill_version(
                         "safe-skill",
-                        routes.SkillRollbackRequest(
+                        SkillRollbackRequest(
                             file_name="SKILL.md",
                             version_id=version_id,
                         ),
@@ -537,9 +543,9 @@ class TestSkillSecurity(unittest.TestCase):
                     operator="ops-admin",
                 )
                 response = asyncio.run(
-                    routes.rollback_skill_version(
+                    skill_routes.rollback_skill_version(
                         "safe-skill",
-                        routes.SkillRollbackRequest(
+                        SkillRollbackRequest(
                             file_name="SKILL.md",
                             version_id=version_id,
                             approval_id=pending.data["approval_id"],
@@ -549,9 +555,9 @@ class TestSkillSecurity(unittest.TestCase):
                 approval = approval_queue.get_approval_request(pending.data["approval_id"])
                 with self.assertRaises(HTTPException) as repeat_ctx:
                     asyncio.run(
-                        routes.rollback_skill_version(
+                        skill_routes.rollback_skill_version(
                             "safe-skill",
-                            routes.SkillRollbackRequest(
+                            SkillRollbackRequest(
                                 file_name="SKILL.md",
                                 version_id=version_id,
                                 approval_id=pending.data["approval_id"],
@@ -589,20 +595,20 @@ class TestSkillSecurity(unittest.TestCase):
             )
 
             with (
-                patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base),
                 patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path),
             ):
                 pending = asyncio.run(
-                    routes.rollback_skill_version(
+                    skill_routes.rollback_skill_version(
                         "safe-skill",
-                        routes.SkillRollbackRequest(file_name="SKILL.md", version_id=version_id),
+                        SkillRollbackRequest(file_name="SKILL.md", version_id=version_id),
                     )
                 )
                 with self.assertRaises(HTTPException) as pending_ctx:
                     asyncio.run(
-                        routes.rollback_skill_version(
+                        skill_routes.rollback_skill_version(
                             "safe-skill",
-                            routes.SkillRollbackRequest(
+                            SkillRollbackRequest(
                                 file_name="SKILL.md",
                                 version_id=version_id,
                                 approval_id=pending.data["approval_id"],
@@ -616,9 +622,9 @@ class TestSkillSecurity(unittest.TestCase):
                 )
                 with self.assertRaises(HTTPException) as mismatch_ctx:
                     asyncio.run(
-                        routes.rollback_skill_version(
+                        skill_routes.rollback_skill_version(
                             "safe-skill",
-                            routes.SkillRollbackRequest(
+                            SkillRollbackRequest(
                                 file_name="notes.md",
                                 version_id=version_id,
                                 approval_id=pending.data["approval_id"],
@@ -645,15 +651,15 @@ class TestSkillSecurity(unittest.TestCase):
             (versions_dir / version_id).write_text(previous, encoding="utf-8")
 
             with (
-                patch.object(routes, "CUSTOM_SKILLS_DIR", target_base),
+                patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base),
                 patch.object(approval_routes, "CUSTOM_SKILLS_DIR", target_base),
                 patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path),
                 patch("core.dispatcher.dispatcher.refresh_skills"),
             ):
                 pending = asyncio.run(
-                    routes.rollback_skill_version(
+                    skill_routes.rollback_skill_version(
                         "safe-skill",
-                        routes.SkillRollbackRequest(file_name="SKILL.md", version_id=version_id),
+                        SkillRollbackRequest(file_name="SKILL.md", version_id=version_id),
                     )
                 )
                 approval_queue.resolve_approval_request(
@@ -684,12 +690,12 @@ class TestSkillSecurity(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch.object(routes, "CUSTOM_SKILLS_DIR", target_base):
+            with patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base):
                 with self.assertRaises(HTTPException) as ctx:
                     asyncio.run(
-                        routes.rollback_skill_version(
+                        skill_routes.rollback_skill_version(
                             "safe-skill",
-                            routes.SkillRollbackRequest(
+                            SkillRollbackRequest(
                                 file_name="SKILL.md",
                                 version_id="../escape.bak",
                             ),
@@ -709,12 +715,12 @@ class TestSkillSecurity(unittest.TestCase):
             version_id = "SKILL.md.20260428010101.1.bak"
             (versions_dir / version_id).write_text("missing frontmatter", encoding="utf-8")
 
-            with patch.object(routes, "CUSTOM_SKILLS_DIR", target_base):
+            with patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base):
                 with self.assertRaises(HTTPException) as ctx:
                     asyncio.run(
-                        routes.rollback_skill_version(
+                        skill_routes.rollback_skill_version(
                             "safe-skill",
-                            routes.SkillRollbackRequest(
+                            SkillRollbackRequest(
                                 file_name="SKILL.md",
                                 version_id=version_id,
                             ),
@@ -736,12 +742,12 @@ class TestSkillSecurity(unittest.TestCase):
             version_id = "SKILL.md.20260428010101.1.bak"
             (versions_dir / version_id).write_bytes(b"\xff\xfe\x00")
 
-            with patch.object(routes, "CUSTOM_SKILLS_DIR", target_base):
+            with patch.object(skill_routes, "CUSTOM_SKILLS_DIR", target_base):
                 with self.assertRaises(HTTPException) as ctx:
                     asyncio.run(
-                        routes.rollback_skill_version(
+                        skill_routes.rollback_skill_version(
                             "safe-skill",
-                            routes.SkillRollbackRequest(
+                            SkillRollbackRequest(
                                 file_name="SKILL.md",
                                 version_id=version_id,
                             ),
