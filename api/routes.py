@@ -3,6 +3,7 @@ from connections.ssh_manager import ssh_manager
 from fastapi.responses import StreamingResponse
 from core.agent import chat_stream_agent
 from api.errors import raise_http_error
+from api.mappers import session_webhook_delivery_kwargs
 from core.asset_protocols import (
     API_PROTOCOLS,
     SQL_PROTOCOLS,
@@ -1028,12 +1029,7 @@ async def send_session_webhook(session_id: str, req: SessionWebhookSendRequest):
             memory_db,
             ssh_manager.active_sessions,
             session_id=session_id,
-            webhook_url=req.webhook_url,
-            payload_type=req.payload_type,
-            channel=req.channel,
-            title=req.title,
-            model_name=req.model_name,
-            allow_private_targets=req.allow_private_targets,
+            **session_webhook_delivery_kwargs(req),
         )
     except SessionWebhookServiceError as exc:
         raise_http_error(exc)
@@ -1054,12 +1050,7 @@ async def preview_session_webhook(session_id: str, req: SessionWebhookSendReques
             memory_db,
             ssh_manager.active_sessions,
             session_id=session_id,
-            webhook_url=req.webhook_url,
-            payload_type=req.payload_type,
-            channel=req.channel,
-            title=req.title,
-            model_name=req.model_name,
-            allow_private_targets=req.allow_private_targets,
+            **session_webhook_delivery_kwargs(req),
         )
     except SessionWebhookServiceError as exc:
         raise_http_error(exc)
