@@ -58,13 +58,13 @@ class TestSessionWebhookService(unittest.TestCase):
     def test_preview_delivery_uses_session_history_markdown(self):
         payload = asyncio.run(
             preview_session_webhook_delivery(
-                self.memory,
                 self.active_sessions,
                 session_id="sid-1",
                 webhook_url="http://127.0.0.1:9000/webhook",
                 payload_type="markdown",
                 channel="generic",
                 allow_private_targets=True,
+                memory_db=self.memory,
             )
         )
 
@@ -79,13 +79,13 @@ class TestSessionWebhookService(unittest.TestCase):
 
         payload = asyncio.run(
             send_session_webhook_delivery(
-                self.memory,
                 self.active_sessions,
                 session_id="sid-1",
                 webhook_url="http://127.0.0.1:9000/webhook",
                 payload_type="markdown",
                 channel="generic",
                 allow_private_targets=True,
+                memory_db=self.memory,
                 poster=poster,
             )
         )
@@ -101,13 +101,13 @@ class TestSessionWebhookService(unittest.TestCase):
         with self.assertRaises(SessionWebhookServiceError) as ctx:
             asyncio.run(
                 send_session_webhook_delivery(
-                    self.memory,
                     self.active_sessions,
                     session_id="sid-1",
                     webhook_url="http://127.0.0.1:9000/webhook",
                     payload_type="markdown",
                     channel="generic",
                     allow_private_targets=True,
+                    memory_db=self.memory,
                     poster=poster,
                 )
             )
@@ -119,7 +119,9 @@ class TestSessionWebhookService(unittest.TestCase):
     def test_list_delivery_records_delegates_to_memory_db(self):
         self.memory.deliveries = [{"id": 1}, {"id": 2}]
 
-        deliveries = asyncio.run(list_session_webhook_delivery_records(self.memory, "sid-1", 1))
+        deliveries = asyncio.run(
+            list_session_webhook_delivery_records("sid-1", 1, memory_db=self.memory)
+        )
 
         self.assertEqual(deliveries, [{"id": 1}])
         self.assertEqual(self.memory.list_args, ("sid-1", 1))
@@ -130,6 +132,12 @@ class TestSessionWebhookService(unittest.TestCase):
                 raise RuntimeError("db unavailable")
 
         with self.assertRaises(SessionWebhookServiceError) as ctx:
-            asyncio.run(list_session_webhook_delivery_records(FailingMemory(), "sid-1", 10))
+            asyncio.run(
+                list_session_webhook_delivery_records(
+                    "sid-1",
+                    10,
+                    memory_db=FailingMemory(),
+                )
+            )
 
         self.assertEqual(ctx.exception.status_code, 500)

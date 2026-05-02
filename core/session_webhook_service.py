@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Mapping
 from typing import Any, Callable
 
+from core import memory as memory_module
 from core.session_history import build_session_history_markdown as build_session_history_markdown_content
 from core.session_webhook import (
     SessionWebhookError,
@@ -23,6 +24,10 @@ class SessionWebhookServiceError(Exception):
 
 SUPPORTED_PAYLOAD_TYPES = {"profile", "summary", "markdown"}
 SUPPORTED_CHANNELS = {"generic", "wechat", "dingtalk"}
+
+
+def _resolve_memory_db(memory_db: Any | None) -> Any:
+    return memory_db if memory_db is not None else memory_module.memory_db
 
 
 def normalize_session_webhook_options(payload_type: str | None, channel: str | None) -> tuple[str, str]:
@@ -45,18 +50,19 @@ def resolve_session_webhook_target(url: str, allow_private_targets: bool = False
 
 
 async def build_session_webhook_markdown(
-    memory_db,
     active_sessions: Mapping[str, dict],
     session_id: str,
     payload_type: str,
     model_name: str | None = None,
+    memory_db: Any | None = None,
 ) -> tuple[str, dict | None]:
     from core.session_profile import generate_session_profile, get_session_profile, profile_to_markdown
 
+    resolved_memory_db = _resolve_memory_db(memory_db)
     if payload_type == "markdown":
         markdown = await asyncio.to_thread(
             build_session_history_markdown_content,
-            memory_db,
+            resolved_memory_db,
             active_sessions,
             session_id,
         )
@@ -72,7 +78,7 @@ async def build_session_webhook_markdown(
 
     history_markdown = await asyncio.to_thread(
         build_session_history_markdown_content,
-        memory_db,
+        resolved_memory_db,
         active_sessions,
         session_id,
     )
@@ -86,7 +92,6 @@ def ensure_session_webhook_markdown(markdown: str) -> None:
 
 
 async def preview_session_webhook_delivery(
-    memory_db,
     active_sessions: Mapping[str, dict],
     *,
     session_id: str,
@@ -96,15 +101,16 @@ async def preview_session_webhook_delivery(
     title: str | None = None,
     model_name: str | None = None,
     allow_private_targets: bool = False,
+    memory_db: Any | None = None,
 ) -> dict[str, Any]:
     _, target = resolve_session_webhook_target(webhook_url, allow_private_targets)
     normalized_payload_type, normalized_channel = normalize_session_webhook_options(payload_type, channel)
     markdown, profile = await build_session_webhook_markdown(
-        memory_db,
         active_sessions,
         session_id,
         normalized_payload_type,
         model_name,
+        memory_db=memory_db,
     )
     ensure_session_webhook_markdown(markdown)
 
@@ -152,7 +158,6 @@ def _webhook_delivery_record(
 
 
 async def send_session_webhook_delivery(
-    memory_db,
     active_sessions: Mapping[str, dict],
     *,
     session_id: str,
@@ -162,16 +167,18 @@ async def send_session_webhook_delivery(
     title: str | None = None,
     model_name: str | None = None,
     allow_private_targets: bool = False,
+    memory_db: Any | None = None,
     poster: Callable[[str, dict], tuple[int, str]] = post_webhook,
 ) -> dict[str, Any]:
     webhook_url, target = resolve_session_webhook_target(webhook_url, allow_private_targets)
     normalized_payload_type, normalized_channel = normalize_session_webhook_options(payload_type, channel)
+    resolved_memory_db = _resolve_memory_db(memory_db)
     markdown, profile = await build_session_webhook_markdown(
-        memory_db,
         active_sessions,
         session_id,
         normalized_payload_type,
         model_name,
+        memory_db=resolved_memory_db,
     )
     ensure_session_webhook_markdown(markdown)
 
@@ -188,7 +195,7 @@ async def send_session_webhook_delivery(
     try:
         status_code, response_body = await asyncio.to_thread(poster, webhook_url, payload)
         await asyncio.to_thread(
-            memory_db.append_webhook_delivery,
+            resolved_memory_db.append_webhook_delivery,
             _webhook_delivery_record(
                 session_id=session_id,
                 target=target,
@@ -203,7 +210,7 @@ async def send_session_webhook_delivery(
         )
     except Exception as exc:
         await asyncio.to_thread(
-            memory_db.append_webhook_delivery,
+            resolved_memory_db.append_webhook_delivery,
             _webhook_delivery_record(
                 session_id=session_id,
                 target=target,
@@ -227,8 +234,16 @@ async def send_session_webhook_delivery(
     }
 
 
-async def list_session_webhook_delivery_records(memory_db, session_id: str, limit: int = 10) -> list[dict]:
+async def list_session_webhook_delivery_records(
+    session_id: str,
+    limit: int = 10,
+    memory_db: Any | None = None,
+) -> list[dict]:
     try:
-        return await asyncio.to_thread(memory_db.list_webhook_deliveries, session_id, limit)
+        return await asyncio.to_thread(
+            _resolve_memory_db(memory_db).list_webhook_deliveries,
+            session_id,
+            limit,
+        )
     except Exception as exc:
         raise SessionWebhookServiceError(500, str(exc)) from exc

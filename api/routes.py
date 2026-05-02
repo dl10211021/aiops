@@ -1057,11 +1057,8 @@ async def generate_active_session_profile(session_id: str, req: SessionProfileGe
 @router.post("/session/{session_id}/webhook/send", response_model=ResponseModel)
 async def send_session_webhook(session_id: str, req: SessionWebhookSendRequest):
     """将会话画像、摘要或完整 Markdown 发送到指定 Webhook。"""
-    from core.memory import memory_db
-
     try:
         payload = await send_session_webhook_delivery(
-            memory_db,
             ssh_manager.active_sessions,
             session_id=session_id,
             **session_webhook_delivery_kwargs(req),
@@ -1074,11 +1071,8 @@ async def send_session_webhook(session_id: str, req: SessionWebhookSendRequest):
 @router.post("/session/{session_id}/webhook/preview", response_model=ResponseModel)
 async def preview_session_webhook(session_id: str, req: SessionWebhookSendRequest):
     """发送前预览会话 Webhook 目标和载荷，不实际发出请求。"""
-    from core.memory import memory_db
-
     try:
         payload = await preview_session_webhook_delivery(
-            memory_db,
             ssh_manager.active_sessions,
             session_id=session_id,
             **session_webhook_delivery_kwargs(req),
@@ -1091,10 +1085,8 @@ async def preview_session_webhook(session_id: str, req: SessionWebhookSendReques
 @router.get("/session/{session_id}/webhook/history", response_model=ResponseModel)
 async def list_session_webhook_history(session_id: str, limit: int = 10):
     """查看当前会话最近 Webhook 发送历史。"""
-    from core.memory import memory_db
-
     try:
-        deliveries = await list_session_webhook_delivery_records(memory_db, session_id, limit)
+        deliveries = await list_session_webhook_delivery_records(session_id, limit)
     except SessionWebhookServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_webhook_history_response_kwargs(deliveries))
