@@ -189,6 +189,7 @@ from core.notification_config import (
     build_notification_config,
     save_notification_config as save_notification_config_record,
 )
+from core.model_catalog_service import fetch_model_catalog
 from core.notification_test import (
     NotificationTestError,
     send_notification_channel_test,
@@ -638,9 +639,7 @@ async def migrate_skill(req: MigrateRequest):
 @router.get("/models", response_model=ResponseModel)
 async def get_models(provider_id: str | None = None, refresh: bool = False):
     # Dynamic fetch of models
-    from core.agent import get_available_models_for_provider
-
-    models = await get_available_models_for_provider(provider_id=provider_id, refresh=refresh)
+    models = await fetch_model_catalog(provider_id=provider_id, refresh=refresh)
     if models:
         return ResponseModel(**models_response_kwargs(models))
     raise HTTPException(status_code=502, detail="Cannot fetch models.")

@@ -396,7 +396,7 @@ class TestApiErrorSemantics(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 422)
 
     def test_models_empty_result_returns_bad_gateway(self):
-        with patch("core.agent.get_available_models_for_provider", return_value=[]):
+        with patch("api.routes.fetch_model_catalog", return_value=[]):
             with self.assertRaises(HTTPException) as ctx:
                 asyncio.run(routes.get_models())
 

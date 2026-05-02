@@ -9,7 +9,7 @@ class TestConfigRoutes(unittest.TestCase):
     def test_get_models_preserves_response_shape(self):
         models = [{"id": "openai|gpt-4o", "name": "gpt-4o"}]
 
-        with patch("core.agent.get_available_models_for_provider", return_value=models):
+        with patch("api.routes.fetch_model_catalog", return_value=models):
             response = asyncio.run(routes.get_models(provider_id="openai", refresh=True))
 
         self.assertEqual(response.status, "success")
