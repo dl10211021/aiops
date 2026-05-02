@@ -15,11 +15,8 @@ from core.http_middleware_service import (
 )
 from core.hydration_status_service import (
     HYDRATE_STATUS as hydrate_status,
-    finish_hydrate_run,
-    record_hydrate_done,
-    record_hydrate_success,
-    start_hydrate_run,
 )
+from core.asset_hydration_service import hydrate_assets
 from core.health_service import build_health_status
 from core.frontend_entry_service import (
     get_legacy_static_dir,
@@ -69,47 +66,7 @@ logging.basicConfig(
 
 async def background_hydrate_assets():
     """后台并发尝试重连历史资产，避免阻塞主服务启动"""
-    from core.memory import memory_db
-    from connections.ssh_manager import ssh_manager
-
-    assets = await asyncio.to_thread(memory_db.get_all_assets)
-
-    start_hydrate_run(len(assets) if assets else 0)
-
-    async def _connect_single(a):
-        try:
-            await asyncio.to_thread(
-                ssh_manager.connect,
-                host=a["host"],
-                port=a["port"] or 22,
-                username=a["username"] or "",
-                password=a["password"],
-                allow_modifications=False,
-                active_skills=a["skills"],
-                agent_profile=a["agent_profile"],
-                remark=a["remark"],
-                asset_type=a.get("asset_type", "ssh"),
-                protocol=a.get("protocol"),
-                extra_args=a["extra_args"],
-                tags=a.get("tags", ["未分组"]),
-                lazy=True,
-            )
-            record_hydrate_success()
-            return True
-        except Exception as e:
-            logging.error(f"Auto-hydrate failed for {a['host']}: {e}")
-            return False
-        finally:
-            record_hydrate_done()
-
-    if assets:
-        results = await asyncio.gather(*[_connect_single(a) for a in assets])
-        success_count = sum(1 for r in results if r)
-        logging.info(
-            f"Auto-hydrated {success_count}/{len(assets)} assets from database in background."
-        )
-
-    finish_hydrate_run()
+    await hydrate_assets()
 
 
 @asynccontextmanager
