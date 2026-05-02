@@ -269,6 +269,13 @@ def asset_normalization_applied_response_kwargs(report: dict[str, Any]) -> dict[
     }
 
 
+def system_info_response_kwargs(data: Any) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": data,
+    }
+
+
 def session_profile_generate_kwargs(req: SessionProfileGenerateRequest) -> dict[str, Any]:
     return {
         "model_name": req.model_name,

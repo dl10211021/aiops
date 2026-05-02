@@ -56,6 +56,7 @@ from api.mappers import (
     session_profile_generated_response_kwargs,
     session_profile_response_kwargs,
     session_webhook_delivery_kwargs,
+    system_info_response_kwargs,
     tool_approval_response_kwargs,
 )
 from core.asset_protocols import (
@@ -1141,7 +1142,8 @@ async def get_oracle_client_config():
     """返回本机 Oracle Instant Client 自动探测结果，供前端填充 Thick Mode 配置。"""
     from connections.db_manager import discover_oracle_client_lib_dir
 
-    return ResponseModel(status="success", data=discover_oracle_client_lib_dir())
+    data = discover_oracle_client_lib_dir()
+    return ResponseModel(**system_info_response_kwargs(data))
 
 
 @router.get("/database/driver-capabilities", response_model=ResponseModel)
@@ -1149,7 +1151,8 @@ async def get_database_driver_capabilities_api():
     """返回数据库连接器、Python 包和外部客户端安装状态。"""
     from connections.db_manager import get_database_driver_capabilities
 
-    return ResponseModel(status="success", data=get_database_driver_capabilities())
+    data = get_database_driver_capabilities()
+    return ResponseModel(**system_info_response_kwargs(data))
 
 
 @router.get("/assets/{asset_id}", response_model=ResponseModel)
@@ -1511,7 +1514,7 @@ async def get_hydrate_status():
     """【新功能】获取启动时资产重连的进度，前端可轮询此接口展示启动状态"""
     from main import hydrate_status
 
-    return ResponseModel(status="success", data=hydrate_status)
+    return ResponseModel(**system_info_response_kwargs(hydrate_status))
 
 
 @router.post("/assets/batch_import", response_model=ResponseModel)

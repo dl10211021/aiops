@@ -53,6 +53,7 @@ from api.mappers import (
     session_profile_generated_response_kwargs,
     session_profile_response_kwargs,
     session_webhook_delivery_kwargs,
+    system_info_response_kwargs,
     tool_approval_response_kwargs,
 )
 from api.schemas import (
@@ -507,6 +508,14 @@ class TestApiMappers(unittest.TestCase):
                 "message": "资产规范化清理完成",
                 "data": report,
             },
+        )
+
+    def test_system_info_response_kwargs_preserves_payload(self):
+        payload = {"detected": True, "lib_dir": "D:/oracle/instantclient"}
+
+        self.assertEqual(
+            system_info_response_kwargs(payload),
+            {"status": "success", "data": payload},
         )
 
     def test_session_profile_kwargs_preserve_route_shapes(self):
