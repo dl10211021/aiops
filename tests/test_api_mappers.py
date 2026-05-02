@@ -17,6 +17,9 @@ from api.mappers import (
     inspection_template_list_response_kwargs,
     inspection_template_save_payload,
     inspection_template_saved_response_kwargs,
+    knowledge_document_deleted_response_kwargs,
+    knowledge_document_uploaded_response_kwargs,
+    knowledge_documents_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
     session_heartbeat_update_kwargs,
@@ -336,6 +339,22 @@ class TestApiMappers(unittest.TestCase):
                 "message": "告警已接收",
                 "data": {"alert": alert},
             },
+        )
+
+    def test_knowledge_document_response_kwargs_preserve_route_shapes(self):
+        files = ["runbook.md", "network.log"]
+
+        self.assertEqual(
+            knowledge_document_uploaded_response_kwargs("文档已注入知识库"),
+            {"status": "success", "message": "文档已注入知识库"},
+        )
+        self.assertEqual(
+            knowledge_documents_response_kwargs(files),
+            {"status": "success", "data": {"files": files}},
+        )
+        self.assertEqual(
+            knowledge_document_deleted_response_kwargs("文档已删除"),
+            {"status": "success", "message": "文档已删除"},
         )
 
     def test_session_poll_response_kwargs_normalizes_empty_messages(self):

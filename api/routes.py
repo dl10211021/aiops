@@ -20,6 +20,9 @@ from api.mappers import (
     inspection_template_list_response_kwargs,
     inspection_template_save_payload,
     inspection_template_saved_response_kwargs,
+    knowledge_document_deleted_response_kwargs,
+    knowledge_document_uploaded_response_kwargs,
+    knowledge_documents_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
     session_heartbeat_update_kwargs,
@@ -1311,7 +1314,7 @@ async def upload_knowledge_document(file: UploadFile = File(...)):
         message = await ingest_knowledge_document(kb_manager, file)
     except KnowledgeBaseServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message=message)
+    return ResponseModel(**knowledge_document_uploaded_response_kwargs(message))
 
 
 @router.get("/knowledge/list", response_model=ResponseModel)
@@ -1323,7 +1326,7 @@ async def list_knowledge_documents():
         files = await list_knowledge_document_records(kb_manager)
     except KnowledgeBaseServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", data={"files": files})
+    return ResponseModel(**knowledge_documents_response_kwargs(files))
 
 
 @router.delete("/knowledge/{filename}", response_model=ResponseModel)
@@ -1335,7 +1338,7 @@ async def delete_knowledge_document(filename: str):
         message = await remove_knowledge_document_record(kb_manager, filename)
     except KnowledgeBaseServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(status="success", message=message)
+    return ResponseModel(**knowledge_document_deleted_response_kwargs(message))
 
 
 @router.post("/webhook/alert", response_model=ResponseModel)

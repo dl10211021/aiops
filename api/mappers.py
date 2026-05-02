@@ -203,6 +203,27 @@ def alert_webhook_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def knowledge_document_uploaded_response_kwargs(message: str) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": message,
+    }
+
+
+def knowledge_documents_response_kwargs(files: list[Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"files": files},
+    }
+
+
+def knowledge_document_deleted_response_kwargs(message: str) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": message,
+    }
+
+
 def session_poll_response_kwargs(pending: list[Any] | None) -> dict[str, Any]:
     return {
         "status": "success",
