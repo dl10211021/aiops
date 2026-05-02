@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from core.custom_skill_create_service import (
     CustomSkillCreateServiceError,
@@ -47,6 +48,22 @@ class TestCustomSkillCreateService(unittest.TestCase):
             self.assertTrue((skill_dir / "check.py").exists())
             self.assertFalse(result["data"]["updated"])
             self.assertEqual(result["data"]["backup_paths"], [])
+            self.assertEqual(dispatcher.refresh_calls, [True])
+
+    def test_create_uses_default_dispatcher_when_not_injected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base_dir = Path(tmp) / "custom"
+            dispatcher = FakeDispatcher()
+
+            with patch("core.dispatcher.dispatcher", dispatcher):
+                result = create_custom_skill_record(
+                    base_dir,
+                    skill_id="new-skill",
+                    description="demo",
+                    instructions="body",
+                )
+
+            self.assertEqual(result["data"]["skill_id"], "new-skill")
             self.assertEqual(dispatcher.refresh_calls, [True])
 
     def test_rejects_invalid_or_duplicate_skill_without_writing(self):

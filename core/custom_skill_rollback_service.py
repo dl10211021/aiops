@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from core import dispatcher as dispatcher_module
 from core import approval_queue
 from core.custom_skill_storage import (
     CustomSkillStorageError,
@@ -19,6 +20,10 @@ class CustomSkillRollbackServiceError(Exception):
         super().__init__(detail)
         self.status_code = status_code
         self.detail = detail
+
+
+def _resolve_dispatcher(dispatcher: Any | None = None) -> Any:
+    return dispatcher if dispatcher is not None else dispatcher_module.dispatcher
 
 
 def _load_rollback_candidate(
@@ -102,16 +107,17 @@ def _validate_rollback_approval(
 
 def rollback_custom_skill_version(
     base_dir: Path,
-    dispatcher: Any,
+    dispatcher: Any | None = None,
     *,
     skill_id: str,
     file_name: str,
     version_id: str,
     approval_id: str | None = None,
 ) -> dict[str, Any]:
+    resolved_dispatcher = _resolve_dispatcher(dispatcher)
     candidate = _load_rollback_candidate(
         base_dir,
-        dispatcher,
+        resolved_dispatcher,
         skill_id=skill_id,
         file_name=file_name,
         version_id=version_id,
@@ -135,9 +141,9 @@ def rollback_custom_skill_version(
         version_file=version_file,
     )
 
-    backup_path = dispatcher._backup_existing_skill_file(str(target_file))
+    backup_path = resolved_dispatcher._backup_existing_skill_file(str(target_file))
     atomic_replace_bytes(target_file, content)
-    dispatcher.refresh_skills(force=True)
+    resolved_dispatcher.refresh_skills(force=True)
 
     result = {
         "status": "SUCCESS",

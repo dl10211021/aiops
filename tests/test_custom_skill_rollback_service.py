@@ -73,6 +73,27 @@ class TestCustomSkillRollbackService(unittest.TestCase):
             self.assertEqual(approval["args"]["skill_id"], "safe-skill")
             self.assertEqual(approval["args"]["version_id"], version_id)
 
+    def test_rollback_request_uses_default_dispatcher_when_not_injected(self):
+        with temporary_workspace() as tmp:
+            root = Path(tmp)
+            base_dir, version_id, current, _previous = self._write_skill_with_version(root)
+            store_path = root / "approvals.json"
+            dispatcher = FakeDispatcher()
+
+            with (
+                patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path),
+                patch("core.dispatcher.dispatcher", dispatcher),
+            ):
+                result = rollback_custom_skill_version(
+                    base_dir,
+                    skill_id="safe-skill",
+                    file_name="SKILL.md",
+                    version_id=version_id,
+                )
+
+            self.assertEqual(result["status"], "pending_approval")
+            self.assertEqual((base_dir / "safe-skill" / "SKILL.md").read_text(encoding="utf-8"), current)
+
     def test_approved_request_restores_version_once_and_audits_execution(self):
         with temporary_workspace() as tmp:
             root = Path(tmp)

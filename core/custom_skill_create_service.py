@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from core import dispatcher as dispatcher_module
 from core.custom_skill_storage import (
     CustomSkillStorageError,
     atomic_replace_bytes,
@@ -18,6 +19,10 @@ class CustomSkillCreateServiceError(Exception):
         self.detail = detail
 
 
+def _resolve_dispatcher(dispatcher: Any | None = None) -> Any:
+    return dispatcher if dispatcher is not None else dispatcher_module.dispatcher
+
+
 def reject_invalid_skill_candidate(validation: dict[str, Any]) -> None:
     if validation["valid"]:
         return
@@ -27,7 +32,7 @@ def reject_invalid_skill_candidate(validation: dict[str, Any]) -> None:
 
 def create_custom_skill_record(
     base_dir: Path,
-    dispatcher: Any,
+    dispatcher: Any | None = None,
     *,
     skill_id: str,
     description: str,
@@ -36,6 +41,7 @@ def create_custom_skill_record(
     script_content: str | None = None,
     overwrite_existing: bool = False,
 ) -> dict[str, Any]:
+    resolved_dispatcher = _resolve_dispatcher(dispatcher)
     md_content = f"---\nname: {skill_id}\ndescription: {description}\n---\n\n{instructions}\n"
     reject_invalid_skill_candidate(validate_skill_candidate(skill_id, "SKILL.md", md_content))
 
@@ -58,7 +64,7 @@ def create_custom_skill_record(
 
         backup_paths: list[str] = []
         if dest_path.exists():
-            skill_backup = dispatcher._backup_existing_skill_file(str(dest_path / "SKILL.md"))
+            skill_backup = resolved_dispatcher._backup_existing_skill_file(str(dest_path / "SKILL.md"))
             if skill_backup:
                 backup_paths.append(skill_backup)
         else:
@@ -68,12 +74,12 @@ def create_custom_skill_record(
 
         if script_validation:
             script_path = dest_path / script_validation["file_name"]
-            script_backup = dispatcher._backup_existing_skill_file(str(script_path))
+            script_backup = resolved_dispatcher._backup_existing_skill_file(str(script_path))
             if script_backup:
                 backup_paths.append(script_backup)
             atomic_replace_bytes(script_path, script_content.encode("utf-8"))
 
-        dispatcher.refresh_skills(force=True)
+        resolved_dispatcher.refresh_skills(force=True)
 
         action = "更新" if overwrite_existing else "创建"
         return {

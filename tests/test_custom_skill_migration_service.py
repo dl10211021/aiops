@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from core.custom_skill_migration_service import (
     CustomSkillMigrationServiceError,
@@ -42,6 +43,27 @@ class TestCustomSkillMigrationService(unittest.TestCase):
             self.assertEqual((dest / "notes.md").read_text(encoding="utf-8"), "notes")
             self.assertEqual(dispatcher.refresh_calls, [True])
             self.assertEqual(result["message"], "卡带 imported-skill 已成功导入专属库！")
+
+    def test_migrate_uses_default_dispatcher_when_not_injected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "external-skill"
+            source.mkdir()
+            (source / "SKILL.md").write_text(
+                "---\nname: imported-skill\ndescription: demo\n---\n\nbody\n",
+                encoding="utf-8",
+            )
+            dispatcher = FakeDispatcher()
+
+            with patch("core.dispatcher.dispatcher", dispatcher):
+                result = migrate_custom_skill_record(
+                    root / "custom",
+                    source_path=str(source),
+                    target_dir_name="imported-skill",
+                )
+
+            self.assertEqual(result["skill_path"], str(root / "custom" / "imported-skill"))
+            self.assertEqual(dispatcher.refresh_calls, [True])
 
     def test_overwrites_existing_destination_directory(self):
         with tempfile.TemporaryDirectory() as tmp:

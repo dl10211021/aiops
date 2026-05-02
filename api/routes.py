@@ -574,29 +574,23 @@ async def execute_remote_command(req: CommandRequest):
 @router.post("/skills/scan", response_model=ResponseModel)
 async def scan_skills():
     """【新功能】前端手动触发扫描本地磁盘目录，热加载新的技能"""
-    from core.dispatcher import dispatcher
-
-    result = scan_custom_skill_catalog(dispatcher)
+    result = scan_custom_skill_catalog()
     return ResponseModel(**skill_scan_response_kwargs(result))
 
 
 @router.get("/skills/registry", response_model=ResponseModel)
 async def get_skill_registry():
     """【新功能】前端调用，获取所有已安装的技能卡带摘要以及外部市场待下载的卡带"""
-    from core.dispatcher import dispatcher
-
     return ResponseModel(
-        **skill_registry_response_kwargs(list_custom_skill_catalog(dispatcher))
+        **skill_registry_response_kwargs(list_custom_skill_catalog())
     )
 
 
 @router.get("/skills/registry/{skill_id}", response_model=ResponseModel)
 async def get_skill_detail(skill_id: str):
     """【新功能】前端调用，获取某个特定技能卡带的完整 Markdown 原文"""
-    from core.dispatcher import dispatcher
-
     try:
-        detail = get_custom_skill_detail_record(dispatcher, skill_id)
+        detail = get_custom_skill_detail_record(skill_id)
     except CustomSkillCatalogServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**skill_detail_response_kwargs(detail))
@@ -606,11 +600,8 @@ async def get_skill_detail(skill_id: str):
 async def create_skill(req: CreateSkillRequest):
     """【新功能】用户在页面上手动创建新的定制技能卡带"""
     try:
-        from core.dispatcher import dispatcher
-
         result = create_custom_skill_record(
             CUSTOM_SKILLS_DIR,
-            dispatcher,
             **custom_skill_create_kwargs(req),
         )
     except CustomSkillCreateServiceError as exc:
@@ -638,12 +629,9 @@ async def list_skill_versions(skill_id: str, file_name: str = "SKILL.md"):
 @router.post("/skills/{skill_id}/rollback", response_model=ResponseModel)
 async def rollback_skill_version(skill_id: str, req: SkillRollbackRequest):
     """将 my_custom_skills 中的技能文件回滚到指定备份版本。"""
-    from core.dispatcher import dispatcher
-
     try:
         result = rollback_custom_skill_version_record(
             CUSTOM_SKILLS_DIR,
-            dispatcher,
             skill_id=skill_id,
             **custom_skill_rollback_kwargs(req),
         )
@@ -656,11 +644,8 @@ async def rollback_skill_version(skill_id: str, req: SkillRollbackRequest):
 async def migrate_skill(req: MigrateRequest):
     """将外部卡带拷贝到专属的 my_custom_skills 目录"""
     try:
-        from core.dispatcher import dispatcher
-
         result = migrate_custom_skill_record(
             CUSTOM_SKILLS_DIR,
-            dispatcher,
             **custom_skill_migration_kwargs(req),
         )
     except CustomSkillMigrationServiceError as exc:
