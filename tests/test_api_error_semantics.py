@@ -17,6 +17,7 @@ from api import (
     knowledge_routes,
     notification_routes,
     routes,
+    session_runtime_routes,
 )
 from api.schemas import (
     ToolApprovalRequest,
@@ -30,9 +31,9 @@ from api.schemas import (
 
 class TestApiErrorSemantics(unittest.TestCase):
     def test_poll_missing_session_returns_404(self):
-        with patch.dict(routes.ssh_manager.active_sessions, {}, clear=True):
+        with patch.dict(session_runtime_routes.ssh_manager.active_sessions, {}, clear=True):
             with self.assertRaises(HTTPException) as ctx:
-                asyncio.run(routes.poll_session_messages("missing"))
+                asyncio.run(session_runtime_routes.poll_session_messages("missing"))
 
         self.assertEqual(ctx.exception.status_code, 404)
 

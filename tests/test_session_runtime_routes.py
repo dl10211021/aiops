@@ -3,45 +3,61 @@ import unittest
 
 from fastapi import HTTPException
 
-from api import routes
+from api import routes, session_runtime_routes
+from api.schemas import HeartbeatUpdateRequest, PermissionUpdateRequest, SkillsUpdateRequest
 
 
 class TestSessionRuntimeRoutes(unittest.TestCase):
     def tearDown(self):
-        routes.ssh_manager.active_sessions.clear()
+        session_runtime_routes.ssh_manager.active_sessions.clear()
+
+    def test_session_runtime_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/session/{session_id}/stop", paths)
+        self.assertIn("/session/{session_id}/permission", paths)
+        self.assertIn("/session/{session_id}/heartbeat", paths)
+        self.assertIn("/sessions/poll_all", paths)
+        self.assertIn("/session/{session_id}/poll", paths)
+        self.assertIn("/session/{session_id}/skills", paths)
+        self.assertIn("/session/{session_id}/group", paths)
+        self.assertIn("/sessions/active", paths)
+        self.assertIn("/tools/catalog", paths)
+        self.assertIn("/session/{session_id}/tools", paths)
+        self.assertIn("/session/{session_id}/commands", paths)
 
     def test_update_session_permission_updates_existing_session(self):
-        routes.ssh_manager.active_sessions["sid-1"] = {
+        session_runtime_routes.ssh_manager.active_sessions["sid-1"] = {
             "info": {"allow_modifications": False}
         }
 
         response = asyncio.run(
-            routes.update_session_permission(
+            session_runtime_routes.update_session_permission(
                 "sid-1",
-                routes.PermissionUpdateRequest(allow_modifications=True),
+                PermissionUpdateRequest(allow_modifications=True),
             )
         )
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.message, "权限已实时更新")
         self.assertTrue(
-            routes.ssh_manager.active_sessions["sid-1"]["info"]["allow_modifications"]
+            session_runtime_routes.ssh_manager.active_sessions["sid-1"]["info"]["allow_modifications"]
         )
 
     def test_update_session_heartbeat_updates_enabled_state_and_interval(self):
-        routes.ssh_manager.active_sessions["sid-1"] = {"info": {}}
+        session_runtime_routes.ssh_manager.active_sessions["sid-1"] = {"info": {}}
 
         response = asyncio.run(
-            routes.update_session_heartbeat(
+            session_runtime_routes.update_session_heartbeat(
                 "sid-1",
-                routes.HeartbeatUpdateRequest(
+                HeartbeatUpdateRequest(
                     heartbeat_enabled=True,
                     master_interval=180,
                 ),
             )
         )
 
-        info = routes.ssh_manager.active_sessions["sid-1"]["info"]
+        info = session_runtime_routes.ssh_manager.active_sessions["sid-1"]["info"]
         self.assertEqual(response.status, "success")
         self.assertEqual(response.message, "心跳巡检状态已更新")
         self.assertTrue(info["heartbeat_enabled"])
@@ -51,20 +67,20 @@ class TestSessionRuntimeRoutes(unittest.TestCase):
     def test_update_session_heartbeat_rejects_missing_session(self):
         with self.assertRaises(HTTPException) as ctx:
             asyncio.run(
-                routes.update_session_heartbeat(
+                session_runtime_routes.update_session_heartbeat(
                     "missing",
-                    routes.HeartbeatUpdateRequest(heartbeat_enabled=True),
+                    HeartbeatUpdateRequest(heartbeat_enabled=True),
                 )
             )
 
         self.assertEqual(ctx.exception.status_code, 404)
 
     def test_poll_all_sessions_messages_preserves_response_shape(self):
-        routes.ssh_manager.active_sessions["sid-1"] = {
+        session_runtime_routes.ssh_manager.active_sessions["sid-1"] = {
             "info": {"pending_messages": [{"role": "assistant", "content": "ok"}]}
         }
 
-        response = asyncio.run(routes.poll_all_sessions_messages())
+        response = asyncio.run(session_runtime_routes.poll_all_sessions_messages())
 
         self.assertEqual(response.status, "success")
         self.assertEqual(
@@ -72,24 +88,24 @@ class TestSessionRuntimeRoutes(unittest.TestCase):
             {"updates": {"sid-1": [{"role": "assistant", "content": "ok"}]}},
         )
         self.assertEqual(
-            routes.ssh_manager.active_sessions["sid-1"]["info"]["pending_messages"],
+            session_runtime_routes.ssh_manager.active_sessions["sid-1"]["info"]["pending_messages"],
             [],
         )
 
     def test_update_session_skills_preserves_response_shape(self):
-        routes.ssh_manager.active_sessions["sid-1"] = {"info": {"active_skills": []}}
+        session_runtime_routes.ssh_manager.active_sessions["sid-1"] = {"info": {"active_skills": []}}
 
         response = asyncio.run(
-            routes.update_session_skills(
+            session_runtime_routes.update_session_skills(
                 "sid-1",
-                routes.SkillsUpdateRequest(active_skills=["oracle"]),
+                SkillsUpdateRequest(active_skills=["oracle"]),
             )
         )
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.message, "挂载技能已实时更新")
         self.assertEqual(
-            routes.ssh_manager.active_sessions["sid-1"]["info"]["active_skills"],
+            session_runtime_routes.ssh_manager.active_sessions["sid-1"]["info"]["active_skills"],
             ["oracle"],
         )
 

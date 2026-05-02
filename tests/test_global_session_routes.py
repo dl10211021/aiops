@@ -8,7 +8,7 @@ warnings.filterwarnings(
     category=PendingDeprecationWarning,
 )
 
-from api import connection_routes, routes
+from api import connection_routes, session_runtime_routes
 from api.schemas import ConnectionInspectionRequest, ConnectionRequest
 
 
@@ -51,7 +51,7 @@ class TestGlobalSessionRoutes(unittest.TestCase):
         )
 
         sid = response.data["session_id"]
-        info = routes.ssh_manager.active_sessions[sid]["info"]
+        info = connection_routes.ssh_manager.active_sessions[sid]["info"]
         self.assertEqual(info["asset_type"], "virtual")
         self.assertEqual(info["protocol"], "virtual")
         self.assertEqual(info["target_scope"], "global")
@@ -77,7 +77,7 @@ class TestGlobalSessionRoutes(unittest.TestCase):
         )
 
         sid = response.data["session_id"]
-        active = asyncio.run(routes.get_active_sessions())
+        active = asyncio.run(session_runtime_routes.get_active_sessions())
         session = active.data["sessions"][sid]
 
         self.assertEqual(session["target_scope"], "global")

@@ -18,12 +18,12 @@ warnings.filterwarnings(
 
 from fastapi import HTTPException
 
-from api import routes
+from api import session_runtime_routes
 
 
 class TestToolCatalogRoutes(unittest.TestCase):
     def test_platform_tool_catalog_returns_metadata_only(self):
-        response = asyncio.run(routes.get_tool_catalog())
+        response = asyncio.run(session_runtime_routes.get_tool_catalog())
 
         self.assertEqual(response.status, "success")
         payload = response.data
@@ -49,8 +49,8 @@ class TestToolCatalogRoutes(unittest.TestCase):
             }
         }
 
-        with patch.dict(routes.ssh_manager.active_sessions, fake_sessions, clear=True):
-            response = asyncio.run(routes.get_session_tools("sid-win"))
+        with patch.dict(session_runtime_routes.ssh_manager.active_sessions, fake_sessions, clear=True):
+            response = asyncio.run(session_runtime_routes.get_session_tools("sid-win"))
 
         self.assertEqual(response.status, "success")
         payload = response.data
@@ -62,9 +62,9 @@ class TestToolCatalogRoutes(unittest.TestCase):
         self.assertNotIn("secret-key", dumped)
 
     def test_session_tool_catalog_missing_session_raises_404(self):
-        with patch.dict(routes.ssh_manager.active_sessions, {}, clear=True):
+        with patch.dict(session_runtime_routes.ssh_manager.active_sessions, {}, clear=True):
             with self.assertRaises(HTTPException) as ctx:
-                asyncio.run(routes.get_session_tools("missing"))
+                asyncio.run(session_runtime_routes.get_session_tools("missing"))
 
         self.assertEqual(ctx.exception.status_code, 404)
 
@@ -84,9 +84,9 @@ class TestToolCatalogRoutes(unittest.TestCase):
             }
         }
 
-        with patch.dict(routes.ssh_manager.active_sessions, fake_sessions, clear=True):
-            tools = asyncio.run(routes.get_session_tools("sid-k8s"))
-            commands = asyncio.run(routes.get_session_commands("sid-k8s"))
+        with patch.dict(session_runtime_routes.ssh_manager.active_sessions, fake_sessions, clear=True):
+            tools = asyncio.run(session_runtime_routes.get_session_tools("sid-k8s"))
+            commands = asyncio.run(session_runtime_routes.get_session_commands("sid-k8s"))
 
         self.assertIn("k8s_api_request", tools.data["active_tools"])
         self.assertNotIn("http_api_request", tools.data["active_tools"])

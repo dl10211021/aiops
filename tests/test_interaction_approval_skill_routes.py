@@ -3,7 +3,13 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from api import approval_routes, connection_routes, routes, skill_routes
+from api import (
+    approval_routes,
+    connection_routes,
+    routes,
+    session_runtime_routes,
+    skill_routes,
+)
 from api.schemas import (
     ApprovalDecisionRequest,
     CommandRequest,
@@ -80,8 +86,8 @@ class TestInteractionApprovalSkillRoutes(unittest.TestCase):
         with patch("api.approval_routes.execute_custom_skill_rollback_approval", return_value=execution):
             execute_response = asyncio.run(approval_routes.execute_approval_request("approval-1"))
 
-        with patch("api.routes.request_session_stop") as request_stop:
-            stop_response = asyncio.run(routes.stop_chat_session("sid-1"))
+        with patch("api.session_runtime_routes.request_session_stop") as request_stop:
+            stop_response = asyncio.run(session_runtime_routes.stop_chat_session("sid-1"))
 
         submit.assert_called_once()
         request_stop.assert_called_once()

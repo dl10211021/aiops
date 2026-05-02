@@ -3,53 +3,54 @@ import unittest
 
 from fastapi import HTTPException
 
-from api import routes
+from api import session_runtime_routes
+from api.schemas import SessionGroupUpdateRequest
 
 
 class TestSessionGroupRoutes(unittest.TestCase):
     def tearDown(self):
-        routes.ssh_manager.active_sessions.clear()
+        session_runtime_routes.ssh_manager.active_sessions.clear()
 
     def test_update_session_group_updates_primary_tag_and_keeps_secondary_tags(self):
-        routes.ssh_manager.active_sessions["sid-1"] = {
+        session_runtime_routes.ssh_manager.active_sessions["sid-1"] = {
             "info": {
                 "tags": ["旧组", "P0", "数据库"],
             }
         }
 
         response = asyncio.run(
-            routes.update_session_group(
+            session_runtime_routes.update_session_group(
                 "sid-1",
-                routes.SessionGroupUpdateRequest(group_name="数据库核心组"),
+                SessionGroupUpdateRequest(group_name="数据库核心组"),
             )
         )
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data["group_name"], "数据库核心组")
         self.assertEqual(
-            routes.ssh_manager.active_sessions["sid-1"]["info"]["tags"],
+            session_runtime_routes.ssh_manager.active_sessions["sid-1"]["info"]["tags"],
             ["数据库核心组", "P0", "数据库"],
         )
 
     def test_update_session_group_rejects_missing_session(self):
         with self.assertRaises(HTTPException) as ctx:
             asyncio.run(
-                routes.update_session_group(
+                session_runtime_routes.update_session_group(
                     "missing",
-                    routes.SessionGroupUpdateRequest(group_name="数据库核心组"),
+                    SessionGroupUpdateRequest(group_name="数据库核心组"),
                 )
             )
 
         self.assertEqual(ctx.exception.status_code, 404)
 
     def test_update_session_group_rejects_blank_group(self):
-        routes.ssh_manager.active_sessions["sid-1"] = {"info": {"tags": ["旧组"]}}
+        session_runtime_routes.ssh_manager.active_sessions["sid-1"] = {"info": {"tags": ["旧组"]}}
 
         with self.assertRaises(HTTPException) as ctx:
             asyncio.run(
-                routes.update_session_group(
+                session_runtime_routes.update_session_group(
                     "sid-1",
-                    routes.SessionGroupUpdateRequest(group_name="   "),
+                    SessionGroupUpdateRequest(group_name="   "),
                 )
             )
 
