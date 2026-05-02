@@ -1345,7 +1345,6 @@ async def receive_webhook_alert(request: Request):
     """【AIOps 高级特性】接收外部告警 (Prometheus / ManageEngine) 并推入相关 AI 会话"""
     payload = await read_alert_webhook_payload(request.json)
 
-    from core.memory import memory_db
     from core.dispatcher import dispatcher
     from core.heartbeat import run_single_heartbeat
 
@@ -1353,7 +1352,6 @@ async def receive_webhook_alert(request: Request):
         payload,
         ssh_manager.active_sessions,
         webhook_locks,
-        memory_db,
         dispatcher,
         run_single_heartbeat,
     )

@@ -5,6 +5,7 @@ import logging
 from collections.abc import Callable, Mapping, MutableMapping
 from typing import Any, Awaitable
 
+from core import memory as memory_module
 from core.alert_events import create_alert_event
 
 
@@ -13,6 +14,10 @@ logger = logging.getLogger(__name__)
 
 NO_ACTIVE_ALERT_MESSAGE = "告警已接收，但目前无人值守，已记录日志。"
 ACTIVE_ALERT_MESSAGE_TEMPLATE = "告警已成功推送到 {count} 个值班中的 AI 大脑中，并已唤醒 AI 进行排查！"
+
+
+def _resolve_memory_db(memory_db: Any | None = None) -> Any:
+    return memory_db if memory_db is not None else memory_module.memory_db
 
 
 def affected_alert_sessions(active_sessions: Mapping[str, dict], host: str) -> list[str]:
@@ -51,10 +56,10 @@ async def handle_alert_webhook(
     payload: dict[str, Any],
     active_sessions: MutableMapping[str, dict],
     session_locks: MutableMapping[str, asyncio.Lock],
-    memory_db,
     dispatcher,
     heartbeat_runner: Callable[..., Awaitable[Any]],
     *,
+    memory_db: Any | None = None,
     task_factory: Callable[[Awaitable[Any]], Any] = asyncio.create_task,
 ) -> dict[str, Any]:
     alert_event = create_alert_event(payload)
@@ -81,12 +86,13 @@ async def handle_alert_webhook(
 
     injection_message = build_alert_injection_message(alert_event)
     injected_count = 0
+    store = _resolve_memory_db(memory_db)
     for session_id in affected_sessions:
         info = active_sessions[session_id].get("info", {})
         lock = session_locks.setdefault(session_id, asyncio.Lock())
         async with lock:
             if info.get("heartbeat_in_progress"):
-                memory_db.append_message(session_id, {"role": "user", "content": injection_message})
+                store.append_message(session_id, {"role": "user", "content": injection_message})
                 logger.info("Session %s is busy, appended alert to context only.", session_id)
             else:
                 info["heartbeat_in_progress"] = True
@@ -95,7 +101,7 @@ async def handle_alert_webhook(
                     heartbeat_runner(
                         session_id,
                         info,
-                        memory_db,
+                        store,
                         dispatcher,
                         trigger_msg=injection_message,
                     )

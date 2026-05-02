@@ -50,9 +50,9 @@ class TestAlertWebhookService(unittest.TestCase):
                     {"host": "db.local", "alert_name": "DiskFull", "severity": "critical"},
                     {},
                     {},
-                    FakeMemory(),
                     object(),
                     lambda *_args, **_kwargs: None,
+                    memory_db=FakeMemory(),
                 )
             )
 
@@ -91,9 +91,9 @@ class TestAlertWebhookService(unittest.TestCase):
                     {"host": "db.local", "alert_name": "DiskFull", "severity": "critical"},
                     active_sessions,
                     {},
-                    memory,
                     object(),
                     lambda *_args, **_kwargs: None,
+                    memory_db=memory,
                     task_factory=task_factory,
                 )
             )
@@ -130,9 +130,9 @@ class TestAlertWebhookService(unittest.TestCase):
                     {"host": "db.local", "alert_name": "DiskFull", "severity": "critical"},
                     active_sessions,
                     {},
-                    memory,
                     "dispatcher",
                     heartbeat_runner,
+                    memory_db=memory,
                     task_factory=task_factory,
                 )
             )
@@ -143,3 +143,26 @@ class TestAlertWebhookService(unittest.TestCase):
         self.assertEqual(runner_calls[0][0][0], "sid-1")
         self.assertEqual(runner_calls[0][0][3], "dispatcher")
         self.assertIn("DiskFull", runner_calls[0][1]["trigger_msg"])
+
+    def test_busy_session_uses_default_memory_db_when_not_injected(self):
+        from core import alert_events
+
+        memory = FakeMemory()
+        active_sessions = {"sid-1": {"info": {"host": "db.local", "heartbeat_in_progress": True}}}
+
+        with (
+            patch.object(alert_events, "ALERT_STORE_PATH", self._store_path("default_memory")),
+            patch("core.memory.memory_db", memory),
+        ):
+            result = asyncio.run(
+                handle_alert_webhook(
+                    {"host": "db.local", "alert_name": "DiskFull", "severity": "critical"},
+                    active_sessions,
+                    {},
+                    object(),
+                    lambda *_args, **_kwargs: None,
+                )
+            )
+
+        self.assertEqual(result["data"]["injected_count"], 1)
+        self.assertEqual(memory.messages[0][0], "sid-1")
