@@ -11,10 +11,6 @@ from api.mappers import (
     cron_job_response_kwargs,
     cron_job_run_trigger_response_kwargs,
     cron_jobs_response_kwargs,
-    custom_slash_command_deleted_response_kwargs,
-    custom_slash_command_saved_response_kwargs,
-    custom_slash_command_updated_response_kwargs,
-    custom_slash_commands_response_kwargs,
     chat_attachment_preview_response_kwargs,
     inspection_run_export_response_kwargs,
     inspection_run_report_response_kwargs,
@@ -41,6 +37,7 @@ from api.session_runtime_routes import router as session_runtime_router
 from api.session_history_routes import router as session_history_router
 from api.session_profile_routes import router as session_profile_router
 from api.session_webhook_routes import router as session_webhook_router
+from api.custom_command_routes import router as custom_command_router
 from core.chat_attachments import (
     CHAT_ATTACHMENT_MAX_SIZE,
     ChatAttachmentError,
@@ -49,12 +46,6 @@ from core.chat_attachments import (
 from core.chat_session_service import (
     ChatSessionServiceError,
     start_session_chat_run,
-)
-from core.session_commands import (
-    SessionCommandError,
-    list_custom_slash_command_records,
-    remove_custom_slash_command_record,
-    save_custom_slash_command_record,
 )
 from core.inspection_template_service import (
     InspectionTemplateServiceError,
@@ -86,7 +77,6 @@ from api.schemas import (
     InspectionTemplatePayload,
     InspectionTemplateStepPayload,
     ResponseModel,
-    SlashCommandPayload,
 )
 
 import logging
@@ -110,6 +100,7 @@ router.include_router(session_runtime_router)
 router.include_router(session_history_router)
 router.include_router(session_profile_router)
 router.include_router(session_webhook_router)
+router.include_router(custom_command_router)
 
 
 def _preview_attachment_content(filename: str, content_type: str, content: bytes) -> dict:
@@ -153,42 +144,6 @@ async def preview_chat_attachment(file: UploadFile = File(...)):
         content,
     )
     return ResponseModel(**chat_attachment_preview_response_kwargs(attachment))
-
-
-@router.get("/commands/custom", response_model=ResponseModel)
-async def list_custom_slash_commands():
-    """列出用户自定义快捷命令。"""
-    commands = await list_custom_slash_command_records()
-    return ResponseModel(**custom_slash_commands_response_kwargs(commands))
-
-
-@router.post("/commands/custom", response_model=ResponseModel)
-async def create_custom_slash_command(req: SlashCommandPayload):
-    """创建用户自定义快捷命令。"""
-    command = await save_custom_slash_command_record(
-        req.model_dump(),
-    )
-    return ResponseModel(**custom_slash_command_saved_response_kwargs(command))
-
-
-@router.put("/commands/custom/{command_id}", response_model=ResponseModel)
-async def update_custom_slash_command(command_id: str, req: SlashCommandPayload):
-    """更新用户自定义快捷命令。"""
-    command = await save_custom_slash_command_record(
-        req.model_dump(),
-        command_id,
-    )
-    return ResponseModel(**custom_slash_command_updated_response_kwargs(command))
-
-
-@router.delete("/commands/custom/{command_id}", response_model=ResponseModel)
-async def delete_custom_slash_command(command_id: str):
-    """删除用户自定义快捷命令。"""
-    try:
-        await remove_custom_slash_command_record(command_id)
-    except SessionCommandError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**custom_slash_command_deleted_response_kwargs())
 
 
 @router.get("/inspection-templates", response_model=ResponseModel)

@@ -2,13 +2,18 @@ import asyncio
 import unittest
 from unittest.mock import patch
 
-from api import connection_routes, routes, session_webhook_routes
-from api.schemas import SessionWebhookSendRequest
+from api import (
+    connection_routes,
+    custom_command_routes,
+    routes,
+    session_webhook_routes,
+)
+from api.schemas import SessionWebhookSendRequest, SlashCommandPayload
 
 
 class TestSessionCommandWebhookRoutes(unittest.TestCase):
     def _slash_command_request(self):
-        return routes.SlashCommandPayload(
+        return SlashCommandPayload(
             id="inspect",
             label="巡检",
             prompt_template="请巡检当前资产",
@@ -25,17 +30,31 @@ class TestSessionCommandWebhookRoutes(unittest.TestCase):
         command = {"id": "inspect", "label": "巡检"}
         request = self._slash_command_request()
 
-        with patch("api.routes.list_custom_slash_command_records", return_value=[command]):
-            list_response = asyncio.run(routes.list_custom_slash_commands())
-
-        with patch("api.routes.save_custom_slash_command_record", return_value=command):
-            create_response = asyncio.run(routes.create_custom_slash_command(request))
-            update_response = asyncio.run(
-                routes.update_custom_slash_command("inspect", request)
+        with patch(
+            "api.custom_command_routes.list_custom_slash_command_records",
+            return_value=[command],
+        ):
+            list_response = asyncio.run(
+                custom_command_routes.list_custom_slash_commands()
             )
 
-        with patch("api.routes.remove_custom_slash_command_record") as remove_command:
-            delete_response = asyncio.run(routes.delete_custom_slash_command("inspect"))
+        with patch(
+            "api.custom_command_routes.save_custom_slash_command_record",
+            return_value=command,
+        ):
+            create_response = asyncio.run(
+                custom_command_routes.create_custom_slash_command(request)
+            )
+            update_response = asyncio.run(
+                custom_command_routes.update_custom_slash_command("inspect", request)
+            )
+
+        with patch(
+            "api.custom_command_routes.remove_custom_slash_command_record"
+        ) as remove_command:
+            delete_response = asyncio.run(
+                custom_command_routes.delete_custom_slash_command("inspect")
+            )
 
         remove_command.assert_called_once()
         self.assertEqual(list_response.status, "success")
@@ -48,6 +67,12 @@ class TestSessionCommandWebhookRoutes(unittest.TestCase):
         self.assertEqual(update_response.data, {"command": command})
         self.assertEqual(delete_response.status, "success")
         self.assertEqual(delete_response.message, "快捷命令已删除")
+
+    def test_custom_slash_command_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/commands/custom", paths)
+        self.assertIn("/commands/custom/{command_id}", paths)
 
     def test_session_webhook_routes_preserve_response_shapes(self):
         payload = {"payload_type": "markdown", "target": {"url": "https://example.invalid/hook"}}
