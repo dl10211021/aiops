@@ -32,5 +32,13 @@ def start_session_chat_run(
     return start_run(session_id, stream_factory)
 
 
-def request_session_stop(cancel_flags: MutableMapping[str, bool], session_id: str) -> None:
-    cancel_flags[session_id] = True
+def _resolve_cancel_flags(cancel_flags: MutableMapping[str, bool] | None = None) -> MutableMapping[str, bool]:
+    if cancel_flags is not None:
+        return cancel_flags
+    from core.agent import cancel_flags as default_cancel_flags
+
+    return default_cancel_flags
+
+
+def request_session_stop(session_id: str, cancel_flags: MutableMapping[str, bool] | None = None) -> None:
+    _resolve_cancel_flags(cancel_flags)[session_id] = True

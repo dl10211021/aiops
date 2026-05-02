@@ -488,9 +488,7 @@ async def execute_approval_request(approval_id: str):
 @router.post("/session/{session_id}/stop", response_model=ResponseModel)
 async def stop_chat_session(session_id: str):
     """【新功能】终止当前会话中正在生成的长流响应/执行任务"""
-    from core.agent import cancel_flags
-
-    request_session_stop(cancel_flags, session_id)
+    request_session_stop(session_id)
     return ResponseModel(**chat_stop_response_kwargs())
 
 

@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from core.chat_session_service import (
     ChatSessionServiceError,
@@ -43,6 +44,14 @@ class TestChatSessionService(unittest.TestCase):
     def test_request_session_stop_sets_cancel_flag(self):
         cancel_flags = {}
 
-        request_session_stop(cancel_flags, "sid-1")
+        request_session_stop("sid-1", cancel_flags=cancel_flags)
 
         self.assertTrue(cancel_flags["sid-1"])
+
+    def test_request_session_stop_uses_default_cancel_flags(self):
+        cancel_flags = {}
+
+        with patch("core.agent.cancel_flags", cancel_flags):
+            request_session_stop("sid-default")
+
+        self.assertTrue(cancel_flags["sid-default"])
