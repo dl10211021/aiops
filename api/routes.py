@@ -184,7 +184,7 @@ from core.approval_request_service import (
 )
 from core.approval_execution_service import (
     ApprovalExecutionServiceError,
-    execute_approval_request_action,
+    execute_custom_skill_rollback_approval,
 )
 from core.session_interaction_service import (
     SessionInteractionServiceError,
@@ -382,18 +382,14 @@ async def decide_approval_request(approval_id: str, req: ApprovalDecisionRequest
 @router.post("/approvals/{approval_id}/execute", response_model=ResponseModel)
 async def execute_approval_request(approval_id: str):
     """执行已经批准且支持后续执行的审批请求。"""
-    async def rollback_executor(skill_id: str, file_name: str, version_id: str, approval_id: str):
-        return await rollback_skill_version(
-            skill_id,
-            SkillRollbackRequest(
-                file_name=file_name,
-                version_id=version_id,
-                approval_id=approval_id,
-            ),
-        )
+    from core.dispatcher import dispatcher
 
     try:
-        result = await execute_approval_request_action(approval_id, rollback_executor)
+        result = await execute_custom_skill_rollback_approval(
+            approval_id,
+            base_dir=CUSTOM_SKILLS_DIR,
+            dispatcher=dispatcher,
+        )
     except ApprovalExecutionServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(

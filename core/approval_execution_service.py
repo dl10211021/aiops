@@ -2,9 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 from core.approval_queue import get_approval_request
+from core.custom_skill_rollback_service import (
+    CustomSkillRollbackServiceError,
+    rollback_custom_skill_version,
+)
 
 RollbackExecutor = Callable[[str, str, str, str], Awaitable[Any]]
 
@@ -58,3 +63,30 @@ async def execute_approval_request_action(
         approval=executed_approval or approval,
         result=getattr(response, "data", None),
     )
+
+
+async def execute_custom_skill_rollback_approval(
+    approval_id: str,
+    *,
+    base_dir: Any,
+    dispatcher: Any,
+) -> ApprovalExecutionResult:
+    async def rollback_executor(skill_id: str, file_name: str, version_id: str, approval_id: str):
+        try:
+            result = rollback_custom_skill_version(
+                base_dir,
+                dispatcher,
+                skill_id=skill_id,
+                file_name=file_name,
+                version_id=version_id,
+                approval_id=approval_id,
+            )
+        except CustomSkillRollbackServiceError as exc:
+            raise ApprovalExecutionServiceError(exc.status_code, exc.detail) from exc
+        return SimpleNamespace(
+            status=result.get("status", "success"),
+            message=result.get("message", ""),
+            data=result.get("data"),
+        )
+
+    return await execute_approval_request_action(approval_id, rollback_executor)

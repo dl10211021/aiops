@@ -7,8 +7,10 @@ from unittest.mock import patch
 from core import approval_queue
 from core.approval_execution_service import (
     ApprovalExecutionServiceError,
+    execute_custom_skill_rollback_approval,
     execute_approval_request_action,
 )
+from core.custom_skill_rollback_service import CustomSkillRollbackServiceError
 
 
 class TestApprovalExecutionService(unittest.IsolatedAsyncioTestCase):
@@ -114,3 +116,43 @@ class TestApprovalExecutionService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(executed_ctx.exception.status_code, 409)
         self.assertEqual(wrong_tool_ctx.exception.status_code, 422)
         self.assertEqual(incomplete_ctx.exception.status_code, 422)
+
+    async def test_execute_custom_skill_rollback_approval_injects_rollback_service(self):
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", self._store_path("custom")):
+            self._record_rollback_approval("call-custom")
+            approval_queue.resolve_approval_request("call-custom", approved=True, operator="ops")
+            with patch(
+                "core.approval_execution_service.rollback_custom_skill_version",
+                return_value={
+                    "status": "success",
+                    "message": "技能文件 SKILL.md 已回滚",
+                    "data": {"version_id": "SKILL.md.20260428010101.1.bak"},
+                },
+            ) as rollback:
+                result = await execute_custom_skill_rollback_approval(
+                    "call-custom",
+                    base_dir=Path("custom"),
+                    dispatcher=object(),
+                )
+
+        rollback.assert_called_once()
+        self.assertEqual(result.status, "success")
+        self.assertEqual(result.message, "技能文件 SKILL.md 已回滚")
+        self.assertEqual(result.result["version_id"], "SKILL.md.20260428010101.1.bak")
+
+    async def test_execute_custom_skill_rollback_approval_maps_rollback_errors(self):
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", self._store_path("custom_error")):
+            self._record_rollback_approval("call-custom-error")
+            approval_queue.resolve_approval_request("call-custom-error", approved=True, operator="ops")
+            with patch(
+                "core.approval_execution_service.rollback_custom_skill_version",
+                side_effect=CustomSkillRollbackServiceError(409, "技能回滚审批尚未批准。"),
+            ):
+                with self.assertRaises(ApprovalExecutionServiceError) as ctx:
+                    await execute_custom_skill_rollback_approval(
+                        "call-custom-error",
+                        base_dir=Path("custom"),
+                        dispatcher=object(),
+                    )
+
+        self.assertEqual(ctx.exception.status_code, 409)
