@@ -300,6 +300,11 @@ from core.session_interaction_service import (
     approve_session_tool_call,
     submit_user_interaction_response,
 )
+from core.session_profile_service import (
+    SessionProfileServiceError,
+    generate_session_profile_record,
+    get_session_profile_record,
+)
 from api.schemas import (
     AgentRuntimeConfigRequest,
     AlertEventUpdateRequest,
@@ -1059,24 +1064,20 @@ async def inspect_active_session(session_id: str):
 @router.get("/session/{session_id}/profile", response_model=ResponseModel)
 async def get_active_session_profile(session_id: str):
     """读取当前会话沉淀的资产画像。"""
-    from core.session_profile import get_session_profile
-
-    profile = await asyncio.to_thread(get_session_profile, session_id)
+    profile = await get_session_profile_record(session_id)
     return ResponseModel(**session_profile_response_kwargs(profile))
 
 
 @router.post("/session/{session_id}/profile/generate", response_model=ResponseModel)
 async def generate_active_session_profile(session_id: str, req: SessionProfileGenerateRequest):
     """基于会话历史和只读巡检生成资产画像，并写入独立画像记忆。"""
-    from core.session_profile import generate_session_profile
-
     try:
-        profile = await generate_session_profile(
+        profile = await generate_session_profile_record(
             session_id,
             **session_profile_generate_kwargs(req),
         )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    except SessionProfileServiceError as exc:
+        raise_http_error(exc)
     return ResponseModel(**session_profile_generated_response_kwargs(profile))
 
 
