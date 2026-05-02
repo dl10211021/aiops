@@ -60,11 +60,11 @@ class TestApprovalRequestService(unittest.TestCase):
             listed = list_approval_request_records(status="pending")
             loaded = get_approval_request_record("call-1")
             decided = decide_approval_request_record(
-                dispatcher,
                 "call-1",
                 approved=True,
                 operator="ops",
                 note="approved",
+                dispatcher=dispatcher,
             )
 
         self.assertEqual(listed[0]["id"], "call-1")
@@ -79,7 +79,31 @@ class TestApprovalRequestService(unittest.TestCase):
             with self.assertRaises(ApprovalRequestServiceError) as get_ctx:
                 get_approval_request_record("missing")
             with self.assertRaises(ApprovalRequestServiceError) as decide_ctx:
-                decide_approval_request_record(dispatcher, "missing", approved=False)
+                decide_approval_request_record("missing", approved=False, dispatcher=dispatcher)
 
         self.assertEqual(get_ctx.exception.status_code, 404)
         self.assertEqual(decide_ctx.exception.status_code, 404)
+
+    def test_decide_uses_default_dispatcher_when_not_injected(self):
+        dispatcher = FakeDispatcher()
+        future = FakeFuture()
+        dispatcher.pending_approvals["call-default"] = future
+
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", self._store_path("default")):
+            approval_queue.record_approval_request(
+                tool_call_id="call-default",
+                session_id="sid-1",
+                tool_name="linux_execute_command",
+                args={"command": "systemctl restart nginx"},
+                context={"host": "db.local"},
+                reason="高危服务重启",
+            )
+            with patch("core.approval_request_service.dispatcher_module.dispatcher", dispatcher):
+                decided = decide_approval_request_record(
+                    "call-default",
+                    approved=True,
+                    operator="ops",
+                )
+
+        self.assertEqual(decided["status"], "approved")
+        self.assertTrue(future.done())

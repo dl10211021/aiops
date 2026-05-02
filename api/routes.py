@@ -407,13 +407,9 @@ async def preview_chat_attachment(file: UploadFile = File(...)):
 @router.post("/session/{session_id}/approve", response_model=ResponseModel)
 async def approve_tool_call(session_id: str, req: ToolApprovalRequest):
     """【新功能】用户确认是否允许 AI 执行敏感指令"""
-    from core.dispatcher import dispatcher
-    from connections.ssh_manager import ssh_manager
-
     try:
         result = approve_session_tool_call(
             ssh_manager.active_sessions,
-            dispatcher,
             session_id,
             req.tool_call_id,
             approved=req.approved,
@@ -429,11 +425,8 @@ async def approve_tool_call(session_id: str, req: ToolApprovalRequest):
 @router.post("/session/{session_id}/interaction", response_model=ResponseModel)
 async def respond_user_interaction(session_id: str, req: UserInteractionResponseRequest):
     """提交前台聊天中的文本、密码或选项交互响应。"""
-    from core.dispatcher import dispatcher
-
     try:
         submit_user_interaction_response(
-            dispatcher,
             session_id,
             req.request_id,
             value=req.value,
@@ -467,11 +460,8 @@ async def get_approval_request(approval_id: str):
 @router.post("/approvals/{approval_id}/decision", response_model=ResponseModel)
 async def decide_approval_request(approval_id: str, req: ApprovalDecisionRequest):
     """审批或拒绝高危工具调用，并写入审计状态。"""
-    from core.dispatcher import dispatcher
-
     try:
         approval = decide_approval_request_record(
-            dispatcher,
             approval_id,
             approved=req.approved,
             operator=req.operator or "user",
@@ -491,7 +481,6 @@ async def execute_approval_request(approval_id: str):
         result = await execute_custom_skill_rollback_approval(
             approval_id,
             base_dir=CUSTOM_SKILLS_DIR,
-            dispatcher=dispatcher,
         )
     except ApprovalExecutionServiceError as exc:
         raise_http_error(exc)

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
+from core import dispatcher as dispatcher_module
 from core.approval_queue import get_approval_request
 from core.custom_skill_rollback_service import (
     CustomSkillRollbackServiceError,
@@ -27,6 +28,10 @@ class ApprovalExecutionResult:
     message: str
     approval: dict[str, Any]
     result: Any
+
+
+def _resolve_dispatcher(dispatcher: Any | None = None) -> Any:
+    return dispatcher if dispatcher is not None else dispatcher_module.dispatcher
 
 
 def _load_executable_rollback_approval(approval_id: str) -> tuple[dict[str, Any], str, str, str]:
@@ -69,13 +74,15 @@ async def execute_custom_skill_rollback_approval(
     approval_id: str,
     *,
     base_dir: Any,
-    dispatcher: Any,
+    dispatcher: Any | None = None,
 ) -> ApprovalExecutionResult:
+    resolved_dispatcher = _resolve_dispatcher(dispatcher)
+
     async def rollback_executor(skill_id: str, file_name: str, version_id: str, approval_id: str):
         try:
             result = rollback_custom_skill_version(
                 base_dir,
-                dispatcher,
+                resolved_dispatcher,
                 skill_id=skill_id,
                 file_name=file_name,
                 version_id=version_id,

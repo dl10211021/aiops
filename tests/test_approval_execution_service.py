@@ -140,6 +140,31 @@ class TestApprovalExecutionService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.message, "技能文件 SKILL.md 已回滚")
         self.assertEqual(result.result["version_id"], "SKILL.md.20260428010101.1.bak")
 
+    async def test_execute_custom_skill_rollback_approval_uses_default_dispatcher(self):
+        default_dispatcher = object()
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", self._store_path("custom_default")):
+            self._record_rollback_approval("call-custom-default")
+            approval_queue.resolve_approval_request("call-custom-default", approved=True, operator="ops")
+            with patch(
+                "core.approval_execution_service.dispatcher_module.dispatcher",
+                default_dispatcher,
+            ), patch(
+                "core.approval_execution_service.rollback_custom_skill_version",
+                return_value={
+                    "status": "success",
+                    "message": "技能文件 SKILL.md 已回滚",
+                    "data": {"version_id": "SKILL.md.20260428010101.1.bak"},
+                },
+            ) as rollback:
+                result = await execute_custom_skill_rollback_approval(
+                    "call-custom-default",
+                    base_dir=Path("custom"),
+                )
+
+        rollback.assert_called_once()
+        self.assertIs(rollback.call_args.args[1], default_dispatcher)
+        self.assertEqual(result.status, "success")
+
     async def test_execute_custom_skill_rollback_approval_maps_rollback_errors(self):
         with patch.object(approval_queue, "APPROVAL_STORE_PATH", self._store_path("custom_error")):
             self._record_rollback_approval("call-custom-error")

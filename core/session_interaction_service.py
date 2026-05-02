@@ -4,6 +4,7 @@ import logging
 from collections.abc import MutableMapping
 from typing import Any
 
+from core import dispatcher as dispatcher_module
 from core.approval_queue import resolve_approval_request
 
 logger = logging.getLogger(__name__)
@@ -16,9 +17,12 @@ class SessionInteractionServiceError(Exception):
         self.detail = detail
 
 
+def _resolve_dispatcher(dispatcher: Any | None = None) -> Any:
+    return dispatcher if dispatcher is not None else dispatcher_module.dispatcher
+
+
 def approve_session_tool_call(
     active_sessions: MutableMapping[str, dict[str, Any]],
-    dispatcher: Any,
     session_id: str,
     tool_call_id: str,
     *,
@@ -26,12 +30,14 @@ def approve_session_tool_call(
     auto_approve_all: bool = False,
     operator: str | None = "user",
     note: str | None = "",
+    dispatcher: Any | None = None,
 ) -> dict[str, Any]:
     if auto_approve_all and session_id in active_sessions:
         active_sessions[session_id]["info"]["auto_approve_all"] = True
         logger.info("Session %s set to auto-approve all tools.", session_id)
 
-    future = dispatcher.pending_approvals.get(tool_call_id)
+    resolved_dispatcher = _resolve_dispatcher(dispatcher)
+    future = resolved_dispatcher.pending_approvals.get(tool_call_id)
     if future and not future.done():
         future.set_result(approved)
         try:
@@ -70,14 +76,15 @@ def approve_session_tool_call(
 
 
 def submit_user_interaction_response(
-    dispatcher: Any,
     session_id: str,
     request_id: str,
     *,
     value: str | None = "",
     label: str | None = "",
+    dispatcher: Any | None = None,
 ) -> dict[str, str]:
-    entry = dispatcher.pending_interactions.get(request_id)
+    resolved_dispatcher = _resolve_dispatcher(dispatcher)
+    entry = resolved_dispatcher.pending_interactions.get(request_id)
     future = entry.get("future") if isinstance(entry, dict) else entry
     expected_session_id = entry.get("session_id") if isinstance(entry, dict) else None
     if expected_session_id and expected_session_id != session_id:

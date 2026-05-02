@@ -60,13 +60,13 @@ class TestSessionInteractionService(unittest.TestCase):
             )
             result = approve_session_tool_call(
                 active_sessions,
-                dispatcher,
                 "sid-1",
                 "call-1",
                 approved=True,
                 auto_approve_all=True,
                 operator="ops",
                 note="approved",
+                dispatcher=dispatcher,
             )
             approval = approval_queue.get_approval_request("call-1")
 
@@ -93,11 +93,11 @@ class TestSessionInteractionService(unittest.TestCase):
             )
             result = approve_session_tool_call(
                 active_sessions,
-                dispatcher,
                 "sid-1",
                 "call-2",
                 approved=False,
                 operator="ops",
+                dispatcher=dispatcher,
             )
 
         self.assertEqual(result["message"], "Approval action recorded.")
@@ -110,10 +110,10 @@ class TestSessionInteractionService(unittest.TestCase):
             with self.assertRaises(SessionInteractionServiceError) as ctx:
                 approve_session_tool_call(
                     {},
-                    dispatcher,
                     "sid-1",
                     "missing",
                     approved=True,
+                    dispatcher=dispatcher,
                 )
 
         self.assertEqual(ctx.exception.status_code, 404)
@@ -127,11 +127,11 @@ class TestSessionInteractionService(unittest.TestCase):
         }
 
         result = submit_user_interaction_response(
-            dispatcher,
             "sid-1",
             "interaction-1",
             value="blue team",
             label="蓝队方案",
+            dispatcher=dispatcher,
         )
 
         self.assertEqual(result, {"value": "blue team", "label": "蓝队方案"})
@@ -148,11 +148,30 @@ class TestSessionInteractionService(unittest.TestCase):
 
         with self.assertRaises(SessionInteractionServiceError) as ctx:
             submit_user_interaction_response(
-                dispatcher,
                 "sid-other",
                 "interaction-2",
                 value="should-not-submit",
+                dispatcher=dispatcher,
             )
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertFalse(future.done())
+
+    def test_uses_default_dispatcher_when_not_injected(self):
+        dispatcher = FakeDispatcher()
+        future = FakeFuture()
+        dispatcher.pending_interactions["interaction-default"] = {
+            "future": future,
+            "session_id": "sid-1",
+        }
+
+        with patch("core.session_interaction_service.dispatcher_module.dispatcher", dispatcher):
+            result = submit_user_interaction_response(
+                "sid-1",
+                "interaction-default",
+                value="ack",
+                label="确认",
+            )
+
+        self.assertEqual(result, {"value": "ack", "label": "确认"})
+        self.assertTrue(future.done())
