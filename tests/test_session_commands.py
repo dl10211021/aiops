@@ -99,8 +99,8 @@ class TestSessionCommands(unittest.TestCase):
             build_session_commands_payload_for_session(
                 sessions,
                 tool_registry,
-                store,
                 "sid-1",
+                memory_db=store,
             )
         )
 
@@ -129,10 +129,14 @@ class TestSessionCommands(unittest.TestCase):
         store = FakeCommandStore()
 
         async def exercise():
-            commands = await list_custom_slash_command_records(store)
-            created = await save_custom_slash_command_record(store, {"label": "/new"})
-            updated = await save_custom_slash_command_record(store, {"label": "/newer"}, "cmd-1")
-            await remove_custom_slash_command_record(store, "cmd-1")
+            commands = await list_custom_slash_command_records(memory_db=store)
+            created = await save_custom_slash_command_record({"label": "/new"}, memory_db=store)
+            updated = await save_custom_slash_command_record(
+                {"label": "/newer"},
+                "cmd-1",
+                memory_db=store,
+            )
+            await remove_custom_slash_command_record("cmd-1", memory_db=store)
             return commands, created, updated
 
         commands, created, updated = asyncio.run(exercise())

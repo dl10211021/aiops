@@ -935,13 +935,10 @@ async def get_session_tools(session_id: str):
 @router.get("/session/{session_id}/commands", response_model=ResponseModel)
 async def get_session_commands(session_id: str):
     """返回当前会话可用 Slash Commands；由后端根据资产协议生成 prompt。"""
-    from core.memory import memory_db
-
     try:
         payload = await build_session_commands_payload_for_session(
             ssh_manager.active_sessions,
             tool_registry,
-            memory_db,
             session_id,
         )
     except SessionToolContextError as exc:
@@ -952,19 +949,14 @@ async def get_session_commands(session_id: str):
 @router.get("/commands/custom", response_model=ResponseModel)
 async def list_custom_slash_commands():
     """列出用户自定义快捷命令。"""
-    from core.memory import memory_db
-
-    commands = await list_custom_slash_command_records(memory_db)
+    commands = await list_custom_slash_command_records()
     return ResponseModel(**custom_slash_commands_response_kwargs(commands))
 
 
 @router.post("/commands/custom", response_model=ResponseModel)
 async def create_custom_slash_command(req: SlashCommandPayload):
     """创建用户自定义快捷命令。"""
-    from core.memory import memory_db
-
     command = await save_custom_slash_command_record(
-        memory_db,
         req.model_dump(),
     )
     return ResponseModel(**custom_slash_command_saved_response_kwargs(command))
@@ -973,10 +965,7 @@ async def create_custom_slash_command(req: SlashCommandPayload):
 @router.put("/commands/custom/{command_id}", response_model=ResponseModel)
 async def update_custom_slash_command(command_id: str, req: SlashCommandPayload):
     """更新用户自定义快捷命令。"""
-    from core.memory import memory_db
-
     command = await save_custom_slash_command_record(
-        memory_db,
         req.model_dump(),
         command_id,
     )
@@ -986,10 +975,8 @@ async def update_custom_slash_command(command_id: str, req: SlashCommandPayload)
 @router.delete("/commands/custom/{command_id}", response_model=ResponseModel)
 async def delete_custom_slash_command(command_id: str):
     """删除用户自定义快捷命令。"""
-    from core.memory import memory_db
-
     try:
-        await remove_custom_slash_command_record(memory_db, command_id)
+        await remove_custom_slash_command_record(command_id)
     except SessionCommandError as exc:
         raise_http_error(exc)
     return ResponseModel(**custom_slash_command_deleted_response_kwargs())
