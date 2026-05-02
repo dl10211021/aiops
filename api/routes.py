@@ -20,9 +20,6 @@ from api.mappers import (
     asset_saved_response_kwargs,
     asset_types_response_kwargs,
     asset_updated_response_kwargs,
-    asset_verification_matrix_response_kwargs,
-    asset_verification_run_response_kwargs,
-    asset_verification_runs_response_kwargs,
     batch_asset_import_payload,
     batch_asset_import_response_kwargs,
     chat_stream_agent_kwargs,
@@ -59,7 +56,6 @@ from api.mappers import (
     notification_config_saved_response_kwargs,
     providers_response_kwargs,
     providers_saved_response_kwargs,
-    protocol_verification_overview_response_kwargs,
     safety_policy_response_kwargs,
     safety_policy_saved_response_kwargs,
     safety_policy_test_response_kwargs,
@@ -102,6 +98,7 @@ from api.system_info_routes import router as system_info_router
 from api.knowledge_routes import router as knowledge_router
 from api.alert_routes import router as alert_router
 from api.dashboard_routes import router as dashboard_router
+from api.protocol_verification_routes import router as protocol_verification_router
 from core.asset_protocols import (
     API_PROTOCOLS,
     SQL_PROTOCOLS,
@@ -239,13 +236,6 @@ from core.inspection_job_service import (
     run_inspection_job_record_now,
     update_inspection_job_record,
 )
-from core.protocol_verification_service import (
-    ProtocolVerificationServiceError,
-    build_protocol_verification_matrix,
-    build_protocol_verification_overview,
-    list_protocol_verification_run_records,
-    run_protocol_verification_for_asset,
-)
 from core.safety_policy_service import (
     SafetyPolicyServiceError,
     explain_safety_policy_test,
@@ -333,6 +323,7 @@ router.include_router(system_info_router)
 router.include_router(knowledge_router)
 router.include_router(alert_router)
 router.include_router(dashboard_router)
+router.include_router(protocol_verification_router)
 
 
 def get_login_protocol(req: ConnectionRequest) -> str:
@@ -1103,40 +1094,6 @@ async def delete_saved_asset(asset_id: int):
     """【新功能】删除持久化的资产"""
     await asyncio.to_thread(remove_saved_asset_record, asset_id)
     return ResponseModel(**asset_deleted_response_kwargs())
-
-
-@router.get("/verification/protocols", response_model=ResponseModel)
-async def get_protocol_verification_overview():
-    """返回全量资产协议验证矩阵概览，不包含任何敏感凭据。"""
-    data = await asyncio.to_thread(build_protocol_verification_overview)
-    return ResponseModel(**protocol_verification_overview_response_kwargs(data))
-
-
-@router.get("/assets/{asset_id}/verification", response_model=ResponseModel)
-async def get_asset_verification_matrix(asset_id: int):
-    """返回单资产协议验证矩阵，不包含任何敏感凭据。"""
-    try:
-        matrix = await asyncio.to_thread(build_protocol_verification_matrix, asset_id)
-    except ProtocolVerificationServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**asset_verification_matrix_response_kwargs(matrix))
-
-
-@router.post("/assets/{asset_id}/verify", response_model=ResponseModel)
-async def verify_asset(asset_id: int):
-    """执行单资产只读端到端验证，并持久化验证历史。"""
-    try:
-        run = await run_protocol_verification_for_asset(asset_id)
-    except ProtocolVerificationServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**asset_verification_run_response_kwargs(run))
-
-
-@router.get("/assets/{asset_id}/verification/runs", response_model=ResponseModel)
-async def list_asset_verification_runs(asset_id: int, limit: int = 20):
-    """查询单资产验证历史。"""
-    runs = await asyncio.to_thread(list_protocol_verification_run_records, asset_id, limit)
-    return ResponseModel(**asset_verification_runs_response_kwargs(runs))
 
 
 # ----------------- OpenClaw 自动化巡检 (Cron Jobs) -----------------

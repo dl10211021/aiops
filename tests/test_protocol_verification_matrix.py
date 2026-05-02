@@ -12,7 +12,7 @@ warnings.filterwarnings(
     category=PendingDeprecationWarning,
 )
 
-from api import routes
+from api import protocol_verification_routes, routes
 
 
 class FakeMemoryDB:
@@ -65,11 +65,19 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
         root.mkdir(parents=True, exist_ok=True)
         return root / "runs.json"
 
+    def test_protocol_verification_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/verification/protocols", paths)
+        self.assertIn("/assets/{asset_id}/verification", paths)
+        self.assertIn("/assets/{asset_id}/verify", paths)
+        self.assertIn("/assets/{asset_id}/verification/runs", paths)
+
     def test_asset_verification_matrix_is_protocol_aware_and_secret_free(self):
         from core import memory
 
         with patch.object(memory, "memory_db", FakeMemoryDB()):
-            response = asyncio.run(routes.get_asset_verification_matrix(2))
+            response = asyncio.run(protocol_verification_routes.get_asset_verification_matrix(2))
 
         self.assertEqual(response.status, "success")
         matrix = response.data["matrix"]
@@ -91,7 +99,7 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
         from core import memory
 
         with patch.object(memory, "memory_db", FakeMemoryDB()):
-            response = asyncio.run(routes.get_protocol_verification_overview())
+            response = asyncio.run(protocol_verification_routes.get_protocol_verification_overview())
 
         self.assertEqual(response.status, "success")
         summary = response.data["summary"]
@@ -128,8 +136,8 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
                 "summary": "ok",
                 "checks": [{"name": "sql_ping", "status": "success"}],
             }
-            response = asyncio.run(routes.verify_asset(2))
-            history = asyncio.run(routes.list_asset_verification_runs(2))
+            response = asyncio.run(protocol_verification_routes.verify_asset(2))
+            history = asyncio.run(protocol_verification_routes.list_asset_verification_runs(2))
 
         self.assertEqual(response.status, "success")
         run = response.data["run"]
@@ -161,7 +169,7 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
             patch("core.session_inspector.inspect_session") as inspect_session,
         ):
             connect.return_value = {"success": False, "message": "auth failed"}
-            response = asyncio.run(routes.verify_asset(1))
+            response = asyncio.run(protocol_verification_routes.verify_asset(1))
 
         run = response.data["run"]
         self.assertEqual(run["status"], "failed")
@@ -190,7 +198,7 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
                 "message": "native probe failed",
                 "details": {"tool": "db_execute_query"},
             }
-            response = asyncio.run(routes.verify_asset(2))
+            response = asyncio.run(protocol_verification_routes.verify_asset(2))
 
         run = response.data["run"]
         self.assertEqual(run["status"], "failed")
