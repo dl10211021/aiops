@@ -111,7 +111,10 @@ from core.session_commands import (
     remove_custom_slash_command,
     save_custom_slash_command,
 )
-from core.session_tool_context import build_session_tools_response
+from core.session_tool_context import (
+    SessionToolContextError,
+    build_session_tools_payload_for_session,
+)
 from core.inspection_template_service import (
     InspectionTemplateServiceError,
     list_inspection_template_records,
@@ -859,14 +862,17 @@ async def get_tool_catalog():
 @router.get("/session/{session_id}/tools", response_model=ResponseModel)
 async def get_session_tools(session_id: str):
     """返回指定会话当前会暴露给模型的工具集。"""
-    if session_id not in ssh_manager.active_sessions:
-        raise HTTPException(status_code=404, detail="会话不存在或已断开")
-
-    info = dict(ssh_manager.active_sessions[session_id]["info"])
-    info["session_id"] = session_id
+    try:
+        payload = build_session_tools_payload_for_session(
+            ssh_manager.active_sessions,
+            tool_registry,
+            session_id,
+        )
+    except SessionToolContextError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return ResponseModel(
         status="success",
-        data=build_session_tools_response(tool_registry, info),
+        data=payload,
     )
 
 
@@ -875,12 +881,14 @@ async def get_session_commands(session_id: str):
     """返回当前会话可用 Slash Commands；由后端根据资产协议生成 prompt。"""
     from core.memory import memory_db
 
-    if session_id not in ssh_manager.active_sessions:
-        raise HTTPException(status_code=404, detail="会话不存在或已断开")
-
-    info = dict(ssh_manager.active_sessions[session_id]["info"])
-    info["session_id"] = session_id
-    tools_payload = build_session_tools_response(tool_registry, info)
+    try:
+        tools_payload = build_session_tools_payload_for_session(
+            ssh_manager.active_sessions,
+            tool_registry,
+            session_id,
+        )
+    except SessionToolContextError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     custom_commands = await asyncio.to_thread(list_custom_slash_commands_data, memory_db)
     return ResponseModel(
         status="success",

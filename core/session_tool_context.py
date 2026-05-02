@@ -5,6 +5,21 @@ from typing import Any
 from core.asset_protocols import resolve_asset_identity
 
 
+class SessionToolContextError(Exception):
+    def __init__(self, status_code: int, detail: str):
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+
+
+def build_session_info_for_tools(active_sessions: dict[str, dict], session_id: str) -> dict[str, Any]:
+    if session_id not in active_sessions:
+        raise SessionToolContextError(404, "会话不存在或已断开")
+    info = dict(active_sessions[session_id]["info"])
+    info["session_id"] = session_id
+    return info
+
+
 def build_session_tool_context(info: dict[str, Any]) -> dict[str, Any]:
     identity = resolve_asset_identity(
         info.get("asset_type"),
@@ -47,3 +62,14 @@ def build_session_tools_response(tool_registry, info: dict[str, Any]) -> dict[st
             "port": context["port"],
         },
     }
+
+
+def build_session_tools_payload_for_session(
+    active_sessions: dict[str, dict],
+    tool_registry,
+    session_id: str,
+) -> dict[str, Any]:
+    return build_session_tools_response(
+        tool_registry,
+        build_session_info_for_tools(active_sessions, session_id),
+    )
