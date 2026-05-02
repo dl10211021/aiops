@@ -3,7 +3,7 @@ from connections.ssh_manager import ssh_manager
 from fastapi.responses import StreamingResponse
 from core.agent import chat_stream_agent
 from api.errors import raise_http_error
-from api.mappers import session_webhook_delivery_kwargs
+from api.mappers import chat_stream_agent_kwargs, session_webhook_delivery_kwargs
 from core.asset_protocols import (
     API_PROTOCOLS,
     SQL_PROTOCOLS,
@@ -275,14 +275,7 @@ async def ai_chat_with_system(req: ChatRequest):
         run = start_session_chat_run(
             ssh_manager.active_sessions,
             req.session_id,
-            lambda: chat_stream_agent(
-                session_id=req.session_id,
-                user_message=req.message,
-                user_display_message=req.display_message,
-                model_name=req.model_name,
-                thinking_mode=req.thinking_mode or "off",
-                user_attachments=req.attachments,
-            ),
+            lambda: chat_stream_agent(**chat_stream_agent_kwargs(req)),
         )
     except ChatSessionServiceError as exc:
         raise_http_error(exc)
