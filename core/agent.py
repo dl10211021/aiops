@@ -29,17 +29,15 @@ from core.agent_runtime_config import (
     get_agent_runtime_config,
     update_agent_runtime_config,
 )
+from core.agent_prompts import (
+    render_chat_system_prompt,
+    render_headless_system_prompt,
+)
 from core.agent_session_context import build_agent_session_context
 from core.agent_tool_events import (
     build_tool_end_event,
     parse_tool_arguments,
     summarize_tool_result_for_sse,
-)
-from core.agent_protocol_context import (
-    SENSITIVE_CONTEXT_KEYWORDS,
-    format_extra_args_for_prompt,
-    protocol_tool_guidance,
-    protocol_tool_list,
 )
 from core.agent_profiles import load_agent_profile_prompt
 from core.model_catalog import get_available_models, get_available_models_for_provider
@@ -83,15 +81,8 @@ async def chat_stream_agent(
         session_info,
         skill_path_resolver=dispatcher.get_active_skill_paths,
     )
-    allow_modifications = session_context.allow_modifications
     active_skills = session_context.active_skills
     agent_profile = session_context.agent_profile
-    asset_type = session_context.asset_type
-    protocol = session_context.protocol
-    host = session_context.host
-    port = session_context.port
-    username = session_context.username
-    extra_args = session_context.extra_args
 
     # 从外部 Markdown 文件加载 Agent 的核心人格 (Soul)
     base_prompt = load_agent_profile_prompt(agent_profile)
@@ -105,44 +96,15 @@ async def chat_stream_agent(
         logger.error(f"LTM retrieve error: {e}")
         ltm_context = ""
 
-    # 凭证信息格式化为字符串 (已移除，防泄漏)
-
-    extra_creds_str = format_extra_args_for_prompt(extra_args)
-    SYSTEM_PROMPT = f"""
-{base_prompt}
-
-[当前持有的资产凭证]
-一台通过{protocol.upper()}协议纳管的 {asset_type.upper()} 资产：
-- 目标IP/主机名: {host}
-- 端口: {port}
-- 账号: {username}
-- 凭证信息: (已安全托管，底层工具执行时自动注入，无需在脚本中自行填写)\n{extra_creds_str}
-{protocol_tool_guidance(protocol, asset_type, host)}
-
-[已知安全模式]
-1. 用户动态加载的「可用Skills」决定了你「什么时候能调什么路」。仔细阅读已加载的技能说明！
-2. 当前会话权限状态：{"**高级读写修改权限**：可以执行修改系统的操作" if allow_modifications else "**只读巡检模式**：允许执行不改变目标状态的查询/巡检命令；禁止文件写入、服务启停、账号权限、数据修改、安装卸载等变更操作。"}
-3. 执行某些较高风险脚本时，请仔细参考技能说明中提供的 `<SKILL_ABSOLUTE_PATH>` 路径和 `cwd` 工作目录路径。不要自己凭空猜测目录。
-
-[AIOps 专家行为准则 (CRITICAL)]
-作为运维管理工程师现场助手级别的专业伙伴：
-- **启用超能力 (Using Superpowers)**：你现在已被赋予 OpsCore 平台的“Superpowers”（超能力扩展）。你必须将已挂载的专业技能 (Skills) 视为你的第一准则。**只要有挂载的 Skill，你必须无条件、优先遵照 Skill 内部的 `<INSTRUCTIONS>` 步骤进行思考、规划和执行！绝对不允许跳过 Skill 的流程去自由发挥。**
-- **主动规划 (Proactive Planning)**：在接到运维操作任务时，明确列出操作思路和步骤 (Step 1, Step 2...)，不要盲目执行指令- **根因分析 (Root Cause Analysis)**：不要肤浅地只看表面。要像一名工程师一样，一步一步深入地直接指向异常
-- **闭环思维 (Closed-loop)**：操作、修复后自动执行修复验证确认修复
-- **连接失败与防死循环 (Anti-Loop & Boundary)**：对目标资产（{host}）的系统级交互【必须且只能】通过当前协议对应的原生工具完成。如果原生工具报错“认证失败”或“无法连接”，代表系统底层通信已断开。此时请【立即停止重试】并直接向用户报告失败。绝不允许编写 Paramiko/WinRM/数据库/API 脚本尝试绕过资产中心凭据，也绝不允许获取宿主机信息作为替代。
-- **自我进化与未知资产应对 (Self-Evolution)**：当用户要你「安装」「修复」「改」或「打一个新技能」时，使用 `evolve_skill` 去修复或变更你的代码。只有 `VIRTUAL` 技能研发会话允许使用本地脚本；Windows、Linux、数据库、API、SNMP 等真实资产会话禁止用本地脚本代替原生协议工具。
-- **用户交互请求 (Interactive Input)**：当确实需要用户补充密码、选择方案、确认偏好或提供业务上下文时，调用 `request_user_interaction`，让前端弹出输入/选择卡片；不要在普通文本里等待用户输入。
-- **工具执行表达规范**：真实资产会话中，不要说“无法通过本地脚本”“改用平台原生工具”这类解释；直接说明“正在通过当前会话的原生协议工具执行巡检”即可。
-
-[使用的基础执行工具]
-{protocol_tool_list(protocol, session_context.has_local_skill_scripts, asset_type)}
-
-[当前已加载专业技能说明 (Skills)]
-以下是当前专业技能的详细 <INSTRUCTIONS> 指令，请严格遵照其中的步骤进行操作
-{dispatcher.get_skill_instructions(active_skills, allow_local_scripts=session_context.local_skill_scripts_allowed)}
-
-{ltm_context}
-"""
+    SYSTEM_PROMPT = render_chat_system_prompt(
+        session_context=session_context,
+        base_prompt=base_prompt,
+        skill_instructions=dispatcher.get_skill_instructions(
+            active_skills,
+            allow_local_scripts=session_context.local_skill_scripts_allowed,
+        ),
+        ltm_context=ltm_context,
+    )
 
     # 从 SQLite 中读取之前的有效会话（去掉之前的 system 提示词）
     db_messages = memory_db.get_messages(session_id)
@@ -591,39 +553,15 @@ async def headless_agent_chat(
         ),
     )
     agent_profile = session_context.agent_profile
-    asset_type = session_context.asset_type
-    protocol = session_context.protocol
     host = session_context.host
-    port = session_context.port
-    username = session_context.username
-    extra_args = session_context.extra_args
 
     base_prompt = load_agent_profile_prompt(agent_profile)
 
-    extra_creds_str = format_extra_args_for_prompt(extra_args)
-
-    SYSTEM_PROMPT = f"""{base_prompt}
-
-[当前持有的资产凭证]
-一台通过{protocol.upper()}协议纳管的 {asset_type.upper()} 资产：
-- 目标IP/主机名: {host}
-- 端口: {port}
-- 账号: {username}
-- 凭证信息: (已安全托管，底层工具执行时自动注入，无需在脚本中自行填写)\n{extra_creds_str}
-{protocol_tool_guidance(protocol, asset_type, host)}
-
-[上级指挥官委派的任务]
-你是第一线的运维管理工程师调用的 Agent。
-上级委派给你的任务是：
-{task_description}
-
-请在当前的会话（{host}）内，利用你的技能和工具，全力完成该任务。
-在完成操作、修复或检查完成后，给出一份详细的「执行结果报告」。该报告将直接返回给上级指挥官作为你的工作内容。
-真实资产会话中，不要说“无法通过本地脚本”“改用平台原生工具”这类解释；直接通过当前会话的原生协议工具执行。
-
-[使用的基础执行工具]
-{protocol_tool_list(protocol, session_context.has_local_skill_scripts, asset_type)}
-"""
+    SYSTEM_PROMPT = render_headless_system_prompt(
+        session_context=session_context,
+        base_prompt=base_prompt,
+        task_description=task_description,
+    )
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
