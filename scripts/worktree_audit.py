@@ -92,11 +92,12 @@ def _with_git_state(item: dict[str, object], status: str) -> dict[str, object]:
 
 def classify_path(status: str, path: str) -> dict[str, object]:
     normalized = _normalize(path)
-    name = Path(normalized).name
-    suffix = Path(normalized).suffix.lower()
+    classification_path = normalized.split(" -> ", 1)[1] if " -> " in normalized else normalized
+    name = Path(classification_path).name
+    suffix = Path(classification_path).suffix.lower()
     deleted = "D" in status
 
-    if normalized.startswith(EXTERNAL_SOURCE_PREFIXES):
+    if classification_path.startswith(EXTERNAL_SOURCE_PREFIXES):
         return _with_git_state({
             "path": normalized,
             "category": "external_source",
@@ -104,7 +105,7 @@ def classify_path(status: str, path: str) -> dict[str, object]:
             "recommendation": "Treat as read-only third-party or research source. Do not clean, format, or commit changes unless explicitly requested.",
         }, status)
 
-    if normalized.startswith("frontend/node_modules/") or "/node_modules/" in normalized:
+    if classification_path.startswith("frontend/node_modules/") or "/node_modules/" in classification_path:
         return _with_git_state({
             "path": normalized,
             "category": "dependency_artifact",
@@ -121,7 +122,7 @@ def classify_path(status: str, path: str) -> dict[str, object]:
             "recommendation": f"{action}; do not commit this file or its deletion without an explicit secret-rotation plan.",
         }, status)
 
-    if suffix in RUNTIME_STATE_SUFFIXES or name in RUNTIME_STATE_NAMES or normalized.startswith(("memory/", "opscore_lancedb/", "data/")):
+    if suffix in RUNTIME_STATE_SUFFIXES or name in RUNTIME_STATE_NAMES or classification_path.startswith(("memory/", "opscore_lancedb/", "data/")):
         return _with_git_state({
             "path": normalized,
             "category": "runtime_state",
@@ -129,7 +130,7 @@ def classify_path(status: str, path: str) -> dict[str, object]:
             "recommendation": "Back up before cleanup. Usually keep out of git and migrate to mounted production storage.",
         }, status)
 
-    if suffix == ".log" or normalized.endswith((".out.log", ".err.log")) or "/logs/" in normalized:
+    if suffix == ".log" or classification_path.endswith((".out.log", ".err.log")) or "/logs/" in classification_path:
         return _with_git_state({
             "path": normalized,
             "category": "runtime_output",
@@ -137,7 +138,7 @@ def classify_path(status: str, path: str) -> dict[str, object]:
             "recommendation": "Safe to ignore or delete after confirming no incident evidence is needed.",
         }, status)
 
-    if normalized.startswith("static_react/assets/") or normalized == "static_react/index.html" or suffix == ".tsbuildinfo":
+    if classification_path.startswith("static_react/assets/") or classification_path == "static_react/index.html" or suffix == ".tsbuildinfo":
         return _with_git_state({
             "path": normalized,
             "category": "frontend_build_artifact",
@@ -145,11 +146,19 @@ def classify_path(status: str, path: str) -> dict[str, object]:
             "recommendation": "Commit only if this repository intentionally stores built frontend assets; otherwise ignore and build during deployment.",
         }, status)
 
+    if classification_path.startswith("legacy/"):
+        return _with_git_state({
+            "path": normalized,
+            "category": "legacy_archive",
+            "requires_human_review": False,
+            "recommendation": "Historical archive content. Keep out of active product paths and do not extend for new product work.",
+        }, status)
+
     if (
-        normalized.startswith(".agents/")
-        or normalized.startswith("tmp")
+        classification_path.startswith(".agents/")
+        or classification_path.startswith("tmp")
         or name.startswith(("patch_", "fix_", "update_"))
-        or normalized in {
+        or classification_path in {
             "tmp_history.json",
             ".git_log_frontend.txt",
             "test_chat.py",
@@ -246,6 +255,8 @@ def next_steps_for_items(items: list[dict[str, object]]) -> list[str]:
         steps.append("Commit product_change entries in focused groups after review.")
     if categories & {"runtime_output", "temporary_artifact", "frontend_build_artifact"}:
         steps.append("Ignore or clean generated artifacts only after confirming they are not needed for debugging or deployment.")
+    if "legacy_archive" in categories:
+        steps.append("Keep legacy_archive paths documented and out of active product imports.")
     steps.append("Do not use git reset --hard or recursive deletes for this cleanup.")
     return steps
 

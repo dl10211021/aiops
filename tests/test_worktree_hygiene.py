@@ -93,6 +93,22 @@ class TestWorktreeHygiene(unittest.TestCase):
         self.assertEqual(item["category"], "temporary_artifact")
         self.assertFalse(item["requires_human_review"])
 
+    def test_classifies_legacy_archive_before_scratch_name_rules(self):
+        item = classify_path("A ", "legacy/scratch-scripts/update_client.js")
+
+        self.assertEqual(item["category"], "legacy_archive")
+        self.assertFalse(item["requires_human_review"])
+        self.assertEqual(commit_blockers([item]), [])
+
+    def test_classifies_rename_by_new_path(self):
+        item = classify_path(
+            "R ",
+            "update_client.js -> legacy/scratch-scripts/update_client.js",
+        )
+
+        self.assertEqual(item["category"], "legacy_archive")
+        self.assertEqual(commit_blockers([item]), [])
+
     def test_commit_gate_blocks_staged_sensitive_and_added_dependency_artifacts(self):
         items = [
             classify_path("D ", ".fernet.key"),

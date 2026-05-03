@@ -59,6 +59,15 @@ Use `stage_summary` to understand whether the noise is already staged or only lo
 - `temporary_artifact`: patch/fix/update scripts, tmp files, local debug helpers.
 - `external_source`: `.research/hermes-agent/` and any future vendored/research source trees. Default read-only during OpsCore work.
 
+## Legacy Archive
+
+Tracked one-off root scripts that are no longer part of the active product surface should be moved to `legacy/` instead of being deleted. This preserves history while keeping the repository root focused on maintained entrypoints.
+
+- `legacy/scratch-scripts/`: historical patch, update, and experiment scripts.
+- `legacy/tooling/`: historical local-agent or external-tool configuration.
+
+New product automation should live under `scripts/` with tests or documentation. Do not add new one-off patch scripts to the repository root.
+
 ## Safe Cleanup Policy
 
 1. Back up `runtime_state` and `sensitive_runtime_state`.
