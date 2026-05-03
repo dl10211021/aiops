@@ -6,6 +6,14 @@ import importlib.util
 import threading
 from typing import Any
 
+from connections.db_execution_result import (
+    commit_if_needed,
+    query_success,
+    should_commit_after_statement,
+    statement_success,
+    statement_type,
+)
+
 logger = logging.getLogger(__name__)
 
 _ORACLE_CLIENT_LOCK = threading.Lock()
@@ -581,58 +589,23 @@ class DatabaseExecutor:
 
     @staticmethod
     def _statement_type(sql: str) -> str:
-        root = str(sql or "").strip().split(None, 1)[0].lower()
-        return root or "unknown"
+        return statement_type(sql)
 
     @staticmethod
     def _should_commit_after_statement(sql: str) -> bool:
-        root = DatabaseExecutor._statement_type(sql)
-        return bool(root) and root not in {
-            "select",
-            "show",
-            "describe",
-            "desc",
-            "explain",
-            "with",
-            "commit",
-            "rollback",
-        }
+        return should_commit_after_statement(sql)
 
     @staticmethod
     def _commit_if_needed(conn: Any, sql: str) -> None:
-        if not DatabaseExecutor._should_commit_after_statement(sql):
-            return
-        commit = getattr(conn, "commit", None)
-        if callable(commit):
-            commit()
+        commit_if_needed(conn, sql)
 
     @staticmethod
     def _query_success(sql: str, rows: list[Any], data: list[Any] | None = None) -> dict:
-        return {
-            "success": True,
-            "has_result_set": True,
-            "statement_type": DatabaseExecutor._statement_type(sql),
-            "committed": False,
-            "count": len(rows),
-            "data": data if data is not None else rows,
-        }
+        return query_success(sql, rows, data)
 
     @staticmethod
     def _statement_success(conn: Any, cursor: Any, sql: str) -> dict:
-        should_commit = DatabaseExecutor._should_commit_after_statement(sql)
-        if should_commit:
-            DatabaseExecutor._commit_if_needed(conn, sql)
-        affected_rows = getattr(cursor, "rowcount", -1)
-        statement_type = DatabaseExecutor._statement_type(sql)
-        return {
-            "success": True,
-            "has_result_set": False,
-            "statement_type": statement_type,
-            "committed": should_commit,
-            "affected_rows": affected_rows,
-            "message": f"{statement_type.upper()} 已执行" + ("并提交" if should_commit else ""),
-            "data": [],
-        }
+        return statement_success(conn, cursor, sql)
 
     @staticmethod
     def _execute_mysql(host, port, user, password, database, sql) -> dict:

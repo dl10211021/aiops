@@ -48,6 +48,7 @@ backend*.log
 .tmp/
 temp_sandbox/
 tmp*/
+oracle_client_*/
 tmp_history.json
 patch_*.py
 fix_*.py
