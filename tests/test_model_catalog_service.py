@@ -24,7 +24,7 @@ class TestModelCatalogService(unittest.TestCase):
         self.assertEqual(result, models)
         self.assertEqual(calls, [{"provider_id": "openai", "refresh": True}])
 
-    def test_fetch_model_catalog_uses_default_agent_fetcher(self):
+    def test_fetch_model_catalog_uses_default_fetcher(self):
         from unittest.mock import patch
 
         models = [{"id": "default|model", "name": "model"}]
@@ -32,7 +32,7 @@ class TestModelCatalogService(unittest.TestCase):
         async def fetcher(**_kwargs):
             return models
 
-        with patch("core.agent.get_available_models_for_provider", fetcher):
+        with patch("core.model_catalog.get_available_models_for_provider", fetcher):
             result = asyncio.run(fetch_model_catalog())
 
         self.assertEqual(result, models)

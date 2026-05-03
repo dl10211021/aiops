@@ -13,6 +13,6 @@ async def fetch_model_catalog(
     fetcher: ModelCatalogFetcher | None = None,
 ) -> list[dict[str, Any]]:
     if fetcher is None:
-        from core.agent import get_available_models_for_provider as fetcher
+        from core.model_catalog import get_available_models_for_provider as fetcher
 
     return await fetcher(provider_id=provider_id, refresh=refresh)

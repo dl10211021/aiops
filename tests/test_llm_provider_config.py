@@ -83,7 +83,7 @@ class TestLLMProviderConfig(unittest.TestCase):
         self.assertEqual(saved[0]["models"], "")
 
     def test_refresh_models_fetches_remote_even_when_manual_models_exist(self):
-        from core import agent
+        from core import model_catalog
 
         class FakeModel:
             def __init__(self, model_id):
@@ -114,7 +114,10 @@ class TestLLMProviderConfig(unittest.TestCase):
             patch("openai.AsyncOpenAI", FakeOpenAI),
         ):
             result = asyncio.run(
-                agent.get_available_models_for_provider(provider_id="gpu", refresh=True)
+                model_catalog.get_available_models_for_provider(
+                    provider_id="gpu",
+                    refresh=True,
+                )
             )
 
         names = [model["name"] for model in result[0]["models"]]

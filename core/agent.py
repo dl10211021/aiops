@@ -45,6 +45,7 @@ from core.agent_tool_events import (
     parse_tool_arguments,
     summarize_tool_result_for_sse,
 )
+from core.model_catalog import get_available_models, get_available_models_for_provider
 from core.embedding_config import (
     EMBEDDING_DIM,
     EMBEDDING_MODEL,
@@ -81,66 +82,6 @@ def format_extra_args_for_prompt(extra_args: dict) -> str:
             if v
         ]
     )
-
-
-async def get_available_models() -> list:
-    return await get_available_models_for_provider()
-
-
-async def get_available_models_for_provider(
-    provider_id: str | None = None, refresh: bool = False
-) -> list:
-    try:
-        from core.llm_factory import get_all_providers
-        from openai import AsyncOpenAI
-        import asyncio
-        import logging
-        
-        providers = get_all_providers()
-        if provider_id:
-            providers = [p for p in providers if p.get("id") == provider_id]
-        
-        async def fetch_provider_models(p):
-            models_list = []
-            manual_models = [m.strip() for m in p.get("models", "").split(",") if m.strip()]
-            
-            if manual_models and not refresh:
-                for m in manual_models:
-                    models_list.append({"id": f"{p['id']}|{m}", "name": m})
-            if (refresh or not models_list) and p.get("protocol") == "openai":
-                try:
-                    api_key = p.get("api_key")
-                    if not api_key:
-                        api_key = "dummy"
-                        
-                    base_url = p.get("base_url")
-                    if not base_url:
-                        base_url = "https://api.openai.com/v1"
-                        
-                    temp_client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=30.0)
-                    response = await temp_client.models.list()
-                    models_list = []
-                    for m in response.data:
-                        models_list.append({"id": f"{p['id']}|{m.id}", "name": m.id})
-                except Exception as e:
-                    import logging
-                    logging.getLogger(__name__).warning(f"Failed to fetch models for {p.get('name')}: {e}")
-                    if manual_models:
-                        models_list = [{"id": f"{p['id']}|{m}", "name": m} for m in manual_models]
-            
-            if not models_list:
-                models_list.append({"id": f"{p['id']}|none", "name": "未获取到模型或配置错误"})
-            
-            return {"provider_id": p["id"], "provider_name": p["name"], "models": models_list}
-
-        results = await asyncio.gather(*(fetch_provider_models(p) for p in providers))
-        
-        grouped_models = [res for res in results if res is not None]
-        return grouped_models
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Failed to fetch models: {e}")
-        return []
 
 
 def protocol_tool_guidance(protocol: str, asset_type: str, host: str) -> str:
