@@ -84,6 +84,18 @@ class TestProductionReadiness(unittest.TestCase):
         self.assertIn("HEALTHCHECK", dockerfile)
         self.assertIn("/healthz", dockerfile)
 
+    def test_static_frontend_is_generated_during_build(self):
+        gitignore = Path(".gitignore").read_text(encoding="utf-8")
+        dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
+        dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+
+        self.assertIn("/static_react/", gitignore)
+        self.assertIn("static_react/", dockerignore)
+        self.assertIn("AS frontend-build", dockerfile)
+        self.assertIn("npm ci", dockerfile)
+        self.assertIn("npm run build", dockerfile)
+        self.assertIn("COPY --from=frontend-build /app/static_react ./static_react", dockerfile)
+
     def test_preflight_script_runs_required_quality_gates(self):
         preflight = Path("scripts/preflight.py").read_text(encoding="utf-8")
 

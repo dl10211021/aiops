@@ -19,6 +19,7 @@ ENV/
 build/
 develop-eggs/
 dist/
+static_react/
 downloads/
 eggs/
 .eggs/
@@ -44,6 +45,7 @@ tmp_history.json
 .pytest_cache/
 .ruff_cache/
 .research/
+_archive/
 tmp*/
 patch_*.py
 fix_*.py

@@ -33,7 +33,7 @@ This runs the staged worktree audit, backend unit tests, Python compile check, s
 - `core/`: Agent loop, dispatcher, memory, RAG, cron jobs, approval queue, verification logic.
 - `connections/`: Protocol managers for SSH, databases, WinRM, SNMP, and related integrations.
 - `frontend/`: React/Vite source application.
-- `static_react/`: Built frontend assets served by the backend.
+- `static_react/`: Generated React build output created by `npm run build` and served by the backend; it is not tracked in Git.
 - `docs/`: Architecture, deployment, backup, release, and cleanup documentation.
 - `tests/`: Unit and contract tests used by local preflight and CI.
 

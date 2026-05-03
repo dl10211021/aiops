@@ -4,7 +4,7 @@
 
 - Health check: `GET /healthz`
 - API prefix: `/api/v1`
-- Static frontend: `static_react/`
+- Static frontend: generated into `static_react/` by `npm run build`
 - Required config file: `.env`, based on `.env.example`
 - Release gate: `python scripts/preflight.py`
 
@@ -47,7 +47,7 @@ docker build -t opscore-aiops:latest .
 docker run --name opscore-aiops -p 8000:8000 --env-file .env -v ${PWD}:/app/state opscore-aiops:latest
 ```
 
-The Docker health check probes `/healthz`. Keep persistent state on a host volume in production.
+The Docker image builds the React frontend in a Node stage and copies the generated `static_react/` output into the Python runtime image. The Docker health check probes `/healthz`. Keep persistent state on a host volume in production.
 
 ## systemd Example
 

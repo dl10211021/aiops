@@ -3,7 +3,8 @@
 ## Before Release
 
 - Run `python scripts/preflight.py`.
-- Build frontend with `npm run build` from `frontend/`.
+- Build frontend with `npm run build` from `frontend/` and confirm `static_react/index.html` is generated locally or inside the Docker image.
+- Confirm `static_react/` is not staged in Git unless an explicit built-asset exception has been approved.
 - Confirm `GET /healthz` returns `status: ok` or only accepted warnings.
 - Confirm `.env` is based on `.env.example`.
 - Confirm no secrets are committed.

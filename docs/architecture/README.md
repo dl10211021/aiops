@@ -31,7 +31,7 @@ OpsCore 是一个基于 FastAPI 与大语言模型 (LLM) 深度整合的 AIOps �
 │   └── db_manager.py      # 数据库连接池（如 MySQL, Oracle 等关系型数据库分析）
 ├── skills/                # 官方内置技能库 (以目录和 SKILL.md 形式存在)
 ├── my_custom_skills/      # 用户自定义私有技能库
-├── static_react/          # 前端 React 构建产物挂载点
+├── static_react/          # npm run build 生成的 React 静态产物挂载点 (不入库)
 └── opscore.db             # 主控数据库 (SQLite)
 ```
 

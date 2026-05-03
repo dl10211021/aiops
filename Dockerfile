@@ -1,3 +1,13 @@
+FROM node:22-slim AS frontend-build
+
+WORKDIR /app/frontend
+
+COPY frontend/package*.json ./
+RUN npm ci
+
+COPY frontend ./
+RUN npm run build
+
 FROM python:3.10-slim
 
 # 设置工作目录
@@ -15,6 +25,9 @@ RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua
 
 # 复制项目所有代码到容器中 (受 .dockerignore 控制)
 COPY . .
+
+# 复制由 Node 构建阶段生成的 React 静态前端
+COPY --from=frontend-build /app/static_react ./static_react
 
 # 暴露 FastAPI 的默认端口
 EXPOSE 8000
