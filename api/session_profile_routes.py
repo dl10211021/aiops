@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from api.errors import raise_http_error
-from api.mappers import (
+from api.response_mappers.session import (
     session_profile_generate_kwargs,
     session_profile_generated_response_kwargs,
     session_profile_response_kwargs,

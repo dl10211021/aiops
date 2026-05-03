@@ -4,7 +4,7 @@ from fastapi import APIRouter
 
 from connections.ssh_manager import ssh_manager
 from api.errors import raise_http_error
-from api.mappers import (
+from api.response_mappers.approvals import (
     approval_decision_response_kwargs,
     approval_execution_response_kwargs,
     approval_request_response_kwargs,

@@ -3,7 +3,7 @@ import asyncio
 from fastapi import APIRouter
 
 from api.errors import raise_http_error
-from api.mappers import (
+from api.response_mappers.protocols import (
     asset_verification_matrix_response_kwargs,
     asset_verification_run_response_kwargs,
     asset_verification_runs_response_kwargs,

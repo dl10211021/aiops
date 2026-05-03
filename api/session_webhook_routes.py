@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from api.errors import raise_http_error
-from api.mappers import (
+from api.response_mappers.session import (
     session_webhook_delivery_kwargs,
     session_webhook_history_response_kwargs,
     session_webhook_preview_response_kwargs,

@@ -4,7 +4,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from api.errors import raise_http_error
-from api.mappers import (
+from api.response_mappers.connections import (
     legacy_command_response_kwargs,
     session_closed_response_kwargs,
 )

@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter
 
 from api.errors import raise_http_error
-from api.mappers import (
+from api.response_mappers.session import (
     active_sessions_response_kwargs,
     all_sessions_poll_response_kwargs,
     session_commands_response_kwargs,
