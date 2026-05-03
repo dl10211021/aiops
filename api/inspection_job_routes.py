@@ -3,7 +3,7 @@ import asyncio
 from fastapi import APIRouter
 
 from api.errors import raise_http_error
-from api.mappers import (
+from api.response_mappers.inspection import (
     cron_job_created_response_kwargs,
     cron_job_deleted_response_kwargs,
     cron_job_payload,

@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from api.errors import raise_http_error
-from api.mappers import (
+from api.response_mappers.notifications import (
     notification_channel_test_response_kwargs,
     notification_config_response_kwargs,
     notification_config_saved_response_kwargs,

@@ -3,10 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from api.schemas import (
-    AlertEventUpdateRequest,
-    CronAddRequest,
     HeartbeatUpdateRequest,
-    InspectionTemplatePayload,
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,
     SessionProfileGenerateRequest,
@@ -43,6 +40,44 @@ from api.response_mappers.assets import (
     batch_asset_import_response_kwargs,
     saved_assets_response_kwargs,
 )
+from api.response_mappers.inspection import (
+    cron_job_created_response_kwargs,
+    cron_job_deleted_response_kwargs,
+    cron_job_payload,
+    cron_job_response_kwargs,
+    cron_job_run_trigger_response_kwargs,
+    cron_jobs_response_kwargs,
+    inspection_run_export_response_kwargs,
+    inspection_run_report_response_kwargs,
+    inspection_run_response_kwargs,
+    inspection_run_summary_response_kwargs,
+    inspection_runs_response_kwargs,
+    inspection_template_deleted_response_kwargs,
+    inspection_template_list_response_kwargs,
+    inspection_template_save_payload,
+    inspection_template_saved_response_kwargs,
+)
+from api.response_mappers.system import (
+    dashboard_response_kwargs,
+    system_info_response_kwargs,
+)
+from api.response_mappers.notifications import (
+    notification_channel_test_response_kwargs,
+    notification_config_response_kwargs,
+    notification_config_saved_response_kwargs,
+)
+from api.response_mappers.knowledge import (
+    knowledge_document_deleted_response_kwargs,
+    knowledge_document_uploaded_response_kwargs,
+    knowledge_documents_response_kwargs,
+)
+from api.response_mappers.alerts import (
+    alert_event_list_query_kwargs,
+    alert_event_response_kwargs,
+    alert_event_update_kwargs,
+    alert_events_response_kwargs,
+    alert_webhook_response_kwargs,
+)
 
 
 def session_webhook_delivery_kwargs(req: SessionWebhookSendRequest) -> dict[str, Any]:
@@ -69,147 +104,6 @@ def session_heartbeat_update_kwargs(req: HeartbeatUpdateRequest) -> dict[str, An
 
 def session_group_update_kwargs(req: SessionGroupUpdateRequest) -> dict[str, Any]:
     return {"group_name": req.group_name}
-
-
-def inspection_template_save_payload(req: InspectionTemplatePayload) -> dict[str, Any]:
-    return req.model_dump()
-
-
-def inspection_template_list_response_kwargs(templates: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": {"templates": templates},
-    }
-
-
-def inspection_template_saved_response_kwargs(
-    template: dict[str, Any],
-    message: str,
-) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": message,
-        "data": {"template": template},
-    }
-
-
-def inspection_template_deleted_response_kwargs() -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": "巡检模板已删除",
-    }
-
-
-def cron_job_payload(req: CronAddRequest) -> dict[str, Any]:
-    return req.model_dump()
-
-
-def cron_job_created_response_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": f"已成功添加定时巡检计划: {payload['job_id']}",
-        "data": payload,
-    }
-
-
-def cron_jobs_response_kwargs(jobs: list[Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": {"jobs": jobs},
-    }
-
-
-def cron_job_deleted_response_kwargs(job_id: str) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": f"巡检计划 {job_id} 已取消。",
-    }
-
-
-def cron_job_response_kwargs(job: dict[str, Any], message: str) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": message,
-        "data": {"job": job},
-    }
-
-
-def cron_job_run_trigger_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": "巡检计划已手动触发",
-        "data": {"result": result},
-    }
-
-
-def inspection_runs_response_kwargs(runs: list[Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": {"runs": runs},
-    }
-
-
-def inspection_run_summary_response_kwargs(summary: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": {"summary": summary},
-    }
-
-
-def inspection_run_response_kwargs(run: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": {"run": run},
-    }
-
-
-def inspection_run_report_response_kwargs(report: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": {"report": report},
-    }
-
-
-def inspection_run_export_response_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": payload,
-    }
-
-
-def dashboard_response_kwargs(data: Any) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": data,
-    }
-
-
-def system_info_response_kwargs(data: Any) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": data,
-    }
-
-
-def notification_config_response_kwargs(config: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": config,
-    }
-
-
-def notification_config_saved_response_kwargs() -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": "告警通道配置已保存并生效",
-    }
-
-
-def notification_channel_test_response_kwargs(message: str) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": message,
-    }
 
 
 def models_response_kwargs(models: list[Any]) -> dict[str, Any]:
@@ -331,71 +225,6 @@ def asset_verification_runs_response_kwargs(runs: list[dict[str, Any]]) -> dict[
     return {
         "status": "success",
         "data": {"runs": runs},
-    }
-
-
-def alert_event_list_query_kwargs(
-    status: str | None,
-    severity: str | None,
-    host: str | None,
-    limit: int,
-) -> dict[str, Any]:
-    return {
-        "status": status,
-        "severity": severity,
-        "host": host,
-        "limit": limit,
-    }
-
-
-def alert_event_update_kwargs(req: AlertEventUpdateRequest) -> dict[str, Any]:
-    return {
-        "status": req.status,
-        "assignee": req.assignee,
-        "note": req.note,
-    }
-
-
-def alert_events_response_kwargs(alerts: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": {"alerts": alerts},
-    }
-
-
-def alert_event_response_kwargs(alert: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": {"alert": alert},
-    }
-
-
-def alert_webhook_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": result["message"],
-        "data": result["data"],
-    }
-
-
-def knowledge_document_uploaded_response_kwargs(message: str) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": message,
-    }
-
-
-def knowledge_documents_response_kwargs(files: list[Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": {"files": files},
-    }
-
-
-def knowledge_document_deleted_response_kwargs(message: str) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": message,
     }
 
 

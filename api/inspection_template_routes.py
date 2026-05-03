@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from api.errors import raise_http_error
-from api.mappers import (
+from api.response_mappers.inspection import (
     inspection_template_deleted_response_kwargs,
     inspection_template_list_response_kwargs,
     inspection_template_save_payload,

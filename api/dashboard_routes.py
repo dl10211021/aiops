@@ -3,7 +3,7 @@ import asyncio
 from fastapi import APIRouter
 
 from connections.ssh_manager import ssh_manager
-from api.mappers import dashboard_response_kwargs
+from api.response_mappers.system import dashboard_response_kwargs
 from api.schemas import ResponseModel
 from core.dashboard_service import (
     build_dashboard_alert_trend_payload,

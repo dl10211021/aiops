@@ -1,7 +1,7 @@
 from fastapi import APIRouter, File, UploadFile
 
 from api.errors import raise_http_error
-from api.mappers import (
+from api.response_mappers.knowledge import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,

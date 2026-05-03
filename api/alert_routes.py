@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 
 from connections.ssh_manager import ssh_manager
 from api.errors import raise_http_error
-from api.mappers import (
+from api.response_mappers.alerts import (
     alert_event_list_query_kwargs,
     alert_event_response_kwargs,
     alert_event_update_kwargs,
