@@ -6,7 +6,6 @@ import logging
 import datetime
 import asyncio
 import sys
-import time
 from contextlib import contextmanager
 import pyarrow as pa
 import lancedb
@@ -15,6 +14,7 @@ from cryptography.fernet import Fernet
 from core.asset_profile_store import AssetProfileStore
 from core.asset_protocols import normalize_protocol, resolve_asset_identity
 from core.lancedb_utils import ensure_lancedb_table, lancedb_table_names
+from core.session_message_store import SessionMessageStore, is_protocol_retry_noise
 from core.slash_command_store import SlashCommandStore, slash_command_row
 from core.webhook_delivery_store import WebhookDeliveryStore
 
@@ -80,6 +80,7 @@ class MemoryDB:
 
         self.sensitive_keys = list(DEFAULT_SENSITIVE_EXTRA_ARG_KEYS)
         self._encrypted_prefix = "fernet:"
+        self._session_message_store = SessionMessageStore(self._connect, self._db_lock)
         self._slash_command_store = SlashCommandStore(self._connect, self._db_lock)
         self._asset_profile_store = AssetProfileStore(self._connect, self._db_lock)
         self._webhook_delivery_store = WebhookDeliveryStore(self._connect, self._db_lock)
@@ -704,231 +705,28 @@ class MemoryDB:
     # -------- 对话记忆管理 (STM + LTM) --------
 
     def _is_protocol_retry_noise(self, msg: dict) -> bool:
-        """Drop obsolete local-script retry loops from model context.
-
-        Older prompts exposed local_execute_script for native protocol sessions,
-        which caused repeated "adjust command format" loops. Keeping those
-        messages in LLM context makes the model repeat the same bad path.
-        """
-        if msg.get("name") == "local_execute_script":
-            return True
-        content = str(msg.get("content") or "")
-        if "禁止在 local_execute_script 中使用 Shell 控制符" in content:
-            return True
-        if "调整命令格式" in content and "WinRM" in content and "Shell 控制符" in content:
-            return True
-        if "run_winrm.py" in content or "local_execute_script" in content:
-            return True
-        if "本地脚本" in content and ("WinRM" in content or "Windows" in content):
-            return True
-        if "无法获取明文密码" in content or "常见弱口令" in content:
-            return True
-        return False
+        return is_protocol_retry_noise(msg)
 
     def get_messages(self, session_id: str, for_ui: bool = False) -> list:
-        """获取 SQLite 中的短期记忆"""
-        try:
-            with self._db_lock, self._connect() as conn:
-                cursor = conn.cursor()
-                if for_ui:
-                    cursor.execute(
-                        "SELECT id, message_json FROM memory WHERE session_id = ? ORDER BY id ASC",
-                        (session_id,),
-                    )
-                else:
-                    cursor.execute(
-                        "SELECT id, message_json FROM memory WHERE session_id = ? AND is_compressed = 0 ORDER BY id ASC",
-                        (session_id,),
-                    )
-                rows = cursor.fetchall()
-                messages = []
-                for row in rows:
-                    try:
-                        msg = json.loads(row[1])
-                        if isinstance(msg, dict) and "role" in msg:
-                            if for_ui:
-                                msg["_memory_id"] = row[0]
-                            if not for_ui and self._is_protocol_retry_noise(msg):
-                                continue
-                            if (
-                                msg.get("role") == "user"
-                                and "[System Auto Reply] Tools execution complete."
-                                in str(msg.get("content"))
-                            ):
-                                continue
-                            if msg.get(
-                                "role"
-                            ) == "assistant" and "[System Notice:" in str(
-                                msg.get("content")
-                            ):
-                                continue
-                            messages.append(msg)
-                    except:
-                        pass
-
-                # 重新构建一条严格符合 sequence 的记录，防止多并发导致 tool orphan 或未完成的 tool call
-                valid_messages = []
-                expected_tool_calls = set()
-
-                for msg in messages:
-                    role = msg.get("role")
-
-                    if role == "tool":
-                        tc_id = msg.get("tool_call_id")
-                        if tc_id in expected_tool_calls:
-                            expected_tool_calls.remove(tc_id)
-                            valid_messages.append(msg)
-                        else:
-                            # 孤立的 tool message，直接丢弃
-                            continue
-                    else:
-                        # 如果我们在期待 tool 的时候收到了其他消息（如 user），说明之前的 tool_calls 被打断了
-                        if expected_tool_calls:
-                            # 修正前一个 assistant 消息
-                            for i in range(len(valid_messages) - 1, -1, -1):
-                                prev_msg = valid_messages[i]
-                                if (
-                                    prev_msg.get("role") == "assistant"
-                                    and "tool_calls" in prev_msg
-                                ):
-                                    prev_msg.pop("tool_calls", None)
-                                    if not prev_msg.get("content"):
-                                        prev_msg["content"] = (
-                                            "[Action aborted or incomplete]"
-                                        )
-                                    break
-                            expected_tool_calls.clear()
-
-                            # 将已经被 append 的部分 tool 执行结果也回退掉
-                            while (
-                                valid_messages
-                                and valid_messages[-1].get("role") == "tool"
-                            ):
-                                valid_messages.pop()
-
-                        if role == "assistant":
-                            valid_messages.append(msg)
-                            if "tool_calls" in msg and msg["tool_calls"]:
-                                expected_tool_calls = {
-                                    tc["id"] for tc in msg["tool_calls"]
-                                }
-                        else:
-                            valid_messages.append(msg)
-
-                # 最后兜底：如果对话在 tool 执行完之前就意外中断了，同样清理掉
-                if expected_tool_calls:
-                    for i in range(len(valid_messages) - 1, -1, -1):
-                        prev_msg = valid_messages[i]
-                        if (
-                            prev_msg.get("role") == "assistant"
-                            and "tool_calls" in prev_msg
-                        ):
-                            prev_msg.pop("tool_calls", None)
-                            if not prev_msg.get("content"):
-                                prev_msg["content"] = "[Action aborted or incomplete]"
-                            break
-                    while valid_messages and valid_messages[-1].get("role") == "tool":
-                        valid_messages.pop()
-
-                messages = valid_messages
-
-                # STM 取最近的上下文，保证不越界
-                MAX_CHARS = 10_000_000
-                truncated = []
-                current_len = 0
-                for msg in reversed(messages):
-                    msg_str = json.dumps(msg, ensure_ascii=False)
-                    if current_len + len(msg_str) > MAX_CHARS:
-                        break
-                    truncated.insert(0, msg)
-                    current_len += len(msg_str)
-
-                while truncated:
-                    first_msg = truncated[0]
-                    if first_msg.get("role") == "tool":
-                        truncated.pop(0)
-                    elif (
-                        first_msg.get("role") == "assistant"
-                        and "tool_calls" in first_msg
-                    ):
-                        truncated.pop(0)
-                    elif first_msg.get("role") == "assistant" and not first_msg.get(
-                        "content"
-                    ):
-                        truncated.pop(0)
-                    elif first_msg.get("role") == "user":
-                        break
-                    else:
-                        break
-
-                return truncated
-        except Exception as e:
-            logger.error(f"读取短期记忆库失败: {e}")
-            return []
+        return self._session_message_store.get_messages(session_id, for_ui)
 
     def append_message(self, session_id: str, message_dict: dict):
-        """存入 SQLite 作为短期记忆"""
-        try:
-            with self._db_lock, self._connect() as conn:
-                conn.execute(
-                    "INSERT INTO memory (session_id, message_json) VALUES (?, ?)",
-                    (session_id, json.dumps(message_dict, ensure_ascii=False)),
-                )
-        except Exception as e:
-            logger.error(f"保存记忆至 DB 失败: {e}")
+        self._session_message_store.append_message(session_id, message_dict)
 
     def update_message_content(self, session_id: str, message_id: int, content: str) -> dict:
-        """修改单条用户可见消息内容。"""
-        with self._db_lock, self._connect() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT message_json FROM memory WHERE id = ? AND session_id = ?",
-                (message_id, session_id),
-            )
-            row = cursor.fetchone()
-            if not row:
-                raise ValueError("消息不存在或不属于当前会话")
-            message = json.loads(row[0])
-            if message.get("role") not in {"user", "assistant"}:
-                raise ValueError("只能修改用户消息或 AI 输出")
-            message["content"] = str(content or "")
-            message["edited_at"] = time.time()
-            if message.get("role") == "assistant":
-                message.pop("tool_calls", None)
-            cursor.execute(
-                "UPDATE memory SET message_json = ? WHERE id = ? AND session_id = ?",
-                (json.dumps(message, ensure_ascii=False), message_id, session_id),
-            )
-            conn.commit()
-            message["_memory_id"] = message_id
-            return message
+        return self._session_message_store.update_message_content(
+            session_id,
+            message_id,
+            content,
+        )
 
     def delete_message(self, session_id: str, message_id: int):
-        """删除单条用户可见消息。"""
-        with self._db_lock, self._connect() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT message_json FROM memory WHERE id = ? AND session_id = ?",
-                (message_id, session_id),
-            )
-            row = cursor.fetchone()
-            if not row:
-                raise ValueError("消息不存在或不属于当前会话")
-            message = json.loads(row[0])
-            if message.get("role") not in {"user", "assistant"}:
-                raise ValueError("只能删除用户消息或 AI 输出")
-            cursor.execute(
-                "DELETE FROM memory WHERE id = ? AND session_id = ?",
-                (message_id, session_id),
-            )
-            conn.commit()
+        self._session_message_store.delete_message(session_id, message_id)
 
     def clear_history(self, session_id: str):
         """清空指定会话的短期记忆"""
         try:
-            with self._db_lock, self._connect() as conn:
-                conn.execute("DELETE FROM memory WHERE session_id = ?", (session_id,))
-                conn.commit()
+            self._session_message_store.clear_history(session_id)
             logger.info(f"已清空会话 {session_id} 的历史记忆")
 
             # 清理长期记忆向量碎片
