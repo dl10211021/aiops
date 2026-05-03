@@ -14,6 +14,7 @@ from core.dispatcher_skill_evolution import (
     backup_existing_skill_file,
     execute_skill_evolution_tool,
 )
+from core.dispatcher_utility_tools import UTILITY_TOOL_NAMES, execute_utility_tool
 from core.local_script_execution import execute_local_script, validate_local_execution
 from core.safety_policy import (
     check_approval_needed as policy_check_approval_needed,
@@ -255,19 +256,8 @@ class SkillDispatcher:
             except Exception as e:
                 return json.dumps({"error": str(e)})
 
-        elif tool_call_name == "send_notification":
-            channel = args.get("channel", "auto")
-            title = args.get("title")
-            content = args.get("content")
-
-            def do_notify():
-                logger.info(f"AI 发起了群组通知 -> 渠道: {channel}, 标题: {title}")
-                from core.notifier import send_notification
-
-                result = send_notification(channel, title, content)
-                return json.dumps(result)
-
-            return await asyncio.to_thread(do_notify)
+        elif tool_call_name in UTILITY_TOOL_NAMES:
+            return await execute_utility_tool(tool_call_name, args, logger)
 
         elif tool_call_name in DATABASE_TOOL_NAMES:
             return await execute_database_tool(tool_call_name, args, context)
@@ -280,82 +270,6 @@ class SkillDispatcher:
 
         elif tool_call_name == "evolve_skill":
             return execute_skill_evolution_tool(args, self._custom_skills_base(), self.refresh_skills, logger)
-
-        elif tool_call_name == "search_knowledge_base":
-            from core.rag import kb_manager
-            from core.llm_factory import get_embedding_client_and_model
-
-            client, embedding_model = get_embedding_client_and_model()
-
-            query = args.get("query")
-            try:
-                result = await asyncio.wait_for(
-                    kb_manager.search(query, client, embedding_model), timeout=60.0
-                )
-                return json.dumps({"status": "SUCCESS", "results": result})
-            except asyncio.TimeoutError:
-                return json.dumps({"error": "知识库检索超时被强制截断。"})
-            except Exception as e:
-                return json.dumps({"error": f"知识库检索异常: {str(e)}"})
-
-        elif tool_call_name == "web_search":
-            query = args.get("query")
-            try:
-
-                def do_search():
-                    from duckduckgo_search import DDGS
-
-                    logger.info(f"AI 发起了外网检索: {query}")
-                    with DDGS() as ddgs:
-                        return [r for r in ddgs.text(query, max_results=5)]
-
-                results = await asyncio.to_thread(do_search)
-                return json.dumps(
-                    {"status": "SUCCESS", "results": results}, ensure_ascii=False
-                )
-            except Exception as e:
-                return json.dumps({"error": f"外网检索异常: {str(e)}"})
-
-        elif tool_call_name == "search_assets_by_tag":
-            tags_to_search = args.get("tags", [])
-            from core.memory import memory_db
-
-            try:
-                all_assets = await asyncio.to_thread(memory_db.get_all_assets)
-
-                # Filter assets by tags
-                matched_assets = []
-                for asset in all_assets:
-                    asset_tags = asset.get("tags", [])
-                    # Verify if the asset has all the requested tags
-                    if all(tag in asset_tags for tag in tags_to_search):
-                        # Filter out sensitive fields
-                        safe_asset = {
-                            "id": asset.get("id"),
-                            "host": asset.get("host"),
-                            "port": asset.get("port"),
-                            "username": asset.get("username"),
-                            "asset_type": asset.get("asset_type"),
-                            "protocol": asset.get("protocol"),
-                            "remark": asset.get("remark"),
-                            "tags": asset.get("tags"),
-                        }
-                        matched_assets.append(safe_asset)
-
-                logger.info(
-                    f"AI 发起了全局资产检索 tags={tags_to_search}, 匹配 {len(matched_assets)} 台"
-                )
-                return json.dumps(
-                    {
-                        "status": "SUCCESS",
-                        "matched_count": len(matched_assets),
-                        "assets": matched_assets,
-                    },
-                    ensure_ascii=False,
-                )
-            except Exception as e:
-                logger.error(f"search_assets_by_tag 发生异常: {e}")
-                return json.dumps({"error": f"全局检索异常: {str(e)}"})
 
         return '{"error": "Unknown tool"}'
 
