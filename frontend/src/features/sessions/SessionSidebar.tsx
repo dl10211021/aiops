@@ -32,14 +32,9 @@ export default function SessionSidebar() {
         </div>
 
         <SessionGroupManager
-          currentSession={model.currentSession}
           groupDraft={model.groupDraft}
-          selectedGroup={model.selectedGroup}
           onDraftChange={model.setGroupDraft}
           onCreateGroup={model.handleCreateGroup}
-          onRenameGroup={model.handleRenameGroup}
-          onDeleteGroup={model.handleDeleteGroup}
-          onMoveCurrentSession={model.handleMoveCurrentSession}
         />
 
         <div className="mt-2">
@@ -62,6 +57,8 @@ export default function SessionSidebar() {
         sessionList={model.sessionList}
         onDisconnect={model.handleDisconnect}
         onEdit={model.handleEditSession}
+        onDeleteGroup={model.handleDeleteGroup}
+        onRenameGroup={model.handleRenameGroup}
         onSelectGroup={model.setSelectedGroup}
         onSelectSession={model.handleSelectSession}
         onToggleGroup={model.toggleGroup}

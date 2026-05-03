@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Session } from '@/types'
 import { protocolLabel } from '@/utils/assetDisplay'
-import { sessionPrimaryGroup, uniqueSessionGroups } from './sessionGroups'
+import { normalizeSessionGroupName, sessionPrimaryGroup, uniqueSessionGroups } from './sessionGroups'
 
 export interface SessionEditValues {
   groupName: string
@@ -29,11 +29,13 @@ export default function SessionEditModal({
   const [remark, setRemark] = useState(session.remark || '')
   const [groupName, setGroupName] = useState(currentGroup)
   const [tagsText, setTagsText] = useState((session.tags || []).slice(1).join(', '))
+  const [formError, setFormError] = useState('')
 
   useEffect(() => {
     setRemark(session.remark || '')
     setGroupName(sessionPrimaryGroup(session))
     setTagsText((session.tags || []).slice(1).join(', '))
+    setFormError('')
   }, [session])
 
   const selectableGroups = useMemo(
@@ -43,8 +45,14 @@ export default function SessionEditModal({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const nextGroup = normalizeSessionGroupName(groupName)
+    if (!nextGroup) {
+      setFormError('会话组不能为空')
+      return
+    }
+    setFormError('')
     onSave({
-      groupName,
+      groupName: nextGroup,
       remark: remark.trim(),
       tags: parseTags(tagsText),
     })
@@ -93,15 +101,18 @@ export default function SessionEditModal({
 
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-ops-subtext">会话组</span>
-            <select
+            <input
+              list={`session-group-options-${session.id}`}
               value={groupName}
               onChange={(event) => setGroupName(event.target.value)}
               className="w-full rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors focus:border-ops-accent"
-            >
+              placeholder="选择已有组或输入新组名"
+            />
+            <datalist id={`session-group-options-${session.id}`}>
               {selectableGroups.map((group) => (
                 <option key={group} value={group}>{group}</option>
               ))}
-            </select>
+            </datalist>
           </label>
 
           <label className="block">
@@ -113,6 +124,11 @@ export default function SessionEditModal({
               className="w-full rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
             />
           </label>
+          {formError && (
+            <div className="rounded-md border border-ops-alert/35 bg-ops-alert/10 px-3 py-2 text-xs text-ops-alert">
+              {formError}
+            </div>
+          )}
         </div>
 
         <div className="mt-4 flex justify-end gap-2">

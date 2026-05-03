@@ -13,7 +13,6 @@ import {
 import { summarizeSessions } from './sessionMetrics'
 import {
   disconnectSidebarSession,
-  moveSessionGroupToBackend,
   saveSessionMetadataToBackend,
   syncSessionsGroupToBackend,
 } from './sessionSidebarEffects'
@@ -26,7 +25,6 @@ export function useSessionSidebarModel() {
   const createSessionGroup = useStore((state) => state.createSessionGroup)
   const renameSessionGroup = useStore((state) => state.renameSessionGroup)
   const deleteSessionGroup = useStore((state) => state.deleteSessionGroup)
-  const moveSessionToGroup = useStore((state) => state.moveSessionToGroup)
   const collapsedGroups = useStore((state) => state.collapsedGroups)
   const toggleGroup = useStore((state) => state.toggleGroup)
   const sidebarOpen = useStore((state) => state.sidebarOpen)
@@ -87,8 +85,8 @@ export function useSessionSidebarModel() {
 
   useEffect(() => {
     if (currentSession) setSelectedGroup(currentSessionGroup)
-    // Only follow the selected session when the session changes; afterwards the
-    // operator can select a different target group for "move current".
+    // Follow the selected session when the active session changes; operators can
+    // still select another group for group-level rename/delete actions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSessionId])
 
@@ -101,9 +99,6 @@ export function useSessionSidebarModel() {
   }, [editingSessionId, sessions])
 
   const sessionMetrics = useMemo(() => summarizeSessions(sessionList), [sessionList])
-  const selectedGroupSessions = grouped[selectedGroup] || []
-  const selectedIsDefault = selectedGroup === DEFAULT_SESSION_GROUP
-
   const handleDisconnect = async (sid: string, event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     await disconnectSidebarSession(sid, removeSession)
@@ -131,52 +126,44 @@ export function useSessionSidebarModel() {
     addToast(`已创建会话组：${name}`, 'success')
   }
 
-  const handleRenameGroup = () => {
-    const nextName = normalizeSessionGroupName(groupDraft)
-    if (selectedIsDefault) {
+  const handleRenameGroup = (group: string, nextNameInput: string) => {
+    const currentName = normalizeSessionGroupName(group)
+    const nextName = normalizeSessionGroupName(nextNameInput)
+    if (currentName === DEFAULT_SESSION_GROUP) {
       addToast('默认组不能重命名', 'error')
-      return
+      return false
     }
     if (!nextName) {
       addToast('请输入新的会话组名称', 'error')
-      return
+      return false
     }
-    if (groupNames.includes(nextName) && nextName !== selectedGroup) {
+    if (nextName === currentName) {
+      addToast('组名称没有变化', 'info')
+      return true
+    }
+    if (groupNames.includes(nextName) && nextName !== currentName) {
       addToast('目标会话组已存在', 'error')
-      return
+      return false
     }
-    const affected = selectedGroupSessions.slice()
-    renameSessionGroup(selectedGroup, nextName)
-    setSelectedGroup(nextName)
-    setGroupDraft('')
+    const affected = (grouped[currentName] || []).slice()
+    renameSessionGroup(currentName, nextName)
+    if (selectedGroup === currentName) setSelectedGroup(nextName)
     void syncSessionsGroupToBackend(affected, nextName, addToast)
     addToast(`已重命名为：${nextName}`, 'success')
+    return true
   }
 
-  const handleDeleteGroup = () => {
-    if (selectedIsDefault) {
+  const handleDeleteGroup = (group: string) => {
+    const currentName = normalizeSessionGroupName(group)
+    if (currentName === DEFAULT_SESSION_GROUP) {
       addToast('默认组不能删除', 'error')
       return
     }
-    const affected = selectedGroupSessions.slice()
-    deleteSessionGroup(selectedGroup, DEFAULT_SESSION_GROUP)
-    setSelectedGroup(DEFAULT_SESSION_GROUP)
-    setGroupDraft('')
+    const affected = (grouped[currentName] || []).slice()
+    deleteSessionGroup(currentName, DEFAULT_SESSION_GROUP)
+    if (selectedGroup === currentName) setSelectedGroup(DEFAULT_SESSION_GROUP)
     void syncSessionsGroupToBackend(affected, DEFAULT_SESSION_GROUP, addToast)
-    addToast(`已删除会话组：${selectedGroup}`, 'success')
-  }
-
-  const handleMoveCurrentSession = async () => {
-    if (!currentSession || !currentSessionId) {
-      addToast('请先选择一个会话', 'error')
-      return
-    }
-    await moveSessionGroupToBackend({
-      addToast,
-      groupName: selectedGroup,
-      moveSessionToGroup,
-      sessionId: currentSessionId,
-    })
+    addToast(`已删除会话组：${currentName}`, 'success')
   }
 
   const handleSelectSession = (sessionId: string, group: string) => {
@@ -187,10 +174,15 @@ export function useSessionSidebarModel() {
 
   const handleSaveSessionEdit = async (values: SessionEditValues) => {
     if (!editingSessionId) return
+    const groupName = normalizeSessionGroupName(values.groupName)
+    if (!groupName) {
+      addToast('会话组不能为空', 'error')
+      return
+    }
     setEditingBusy(true)
     const saved = await saveSessionMetadataToBackend({
       addToast,
-      groupName: values.groupName,
+      groupName,
       remark: values.remark,
       sessionId: editingSessionId,
       tags: values.tags,
@@ -198,7 +190,8 @@ export function useSessionSidebarModel() {
     })
     setEditingBusy(false)
     if (saved) {
-      setSelectedGroup(values.groupName)
+      if (!groupNames.includes(saved.group_name)) createSessionGroup(saved.group_name)
+      setSelectedGroup(saved.group_name)
       setEditingSessionId(null)
     }
   }
@@ -216,7 +209,6 @@ export function useSessionSidebarModel() {
     handleDeleteGroup,
     handleDisconnect,
     handleEditSession,
-    handleMoveCurrentSession,
     handleRenameGroup,
     handleSaveSessionEdit,
     handleSelectSession,

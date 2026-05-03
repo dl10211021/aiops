@@ -1,6 +1,8 @@
-import type { MouseEvent } from 'react'
+import { useEffect, useState } from 'react'
+import type { KeyboardEvent, MouseEvent } from 'react'
 import type { Session } from '@/types'
 import SessionItem from './SessionItem'
+import { DEFAULT_SESSION_GROUP } from './sessionGroups'
 import { summarizeSessions } from './sessionMetrics'
 
 interface SessionGroupListProps {
@@ -12,6 +14,8 @@ interface SessionGroupListProps {
   sessionList: Session[]
   onDisconnect: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
   onEdit: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
+  onDeleteGroup: (group: string) => void
+  onRenameGroup: (oldName: string, newName: string) => boolean
   onSelectGroup: (group: string) => void
   onSelectSession: (sessionId: string, group: string) => void
   onToggleGroup: (group: string) => void
@@ -27,11 +31,45 @@ export default function SessionGroupList({
   sessionList,
   onDisconnect,
   onEdit,
+  onDeleteGroup,
+  onRenameGroup,
   onSelectGroup,
   onSelectSession,
   onToggleGroup,
   searching = false,
 }: SessionGroupListProps) {
+  const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
+
+  useEffect(() => {
+    if (renamingGroup && !groupNames.includes(renamingGroup)) {
+      setRenamingGroup(null)
+      setRenameDraft('')
+    }
+  }, [groupNames, renamingGroup])
+
+  const startRename = (group: string) => {
+    setRenamingGroup(group)
+    setRenameDraft(group)
+    onSelectGroup(group)
+  }
+
+  const cancelRename = () => {
+    setRenamingGroup(null)
+    setRenameDraft('')
+  }
+
+  const submitRename = () => {
+    if (!renamingGroup) return
+    const saved = onRenameGroup(renamingGroup, renameDraft)
+    if (saved) cancelRename()
+  }
+
+  const handleRenameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') submitRename()
+    if (event.key === 'Escape') cancelRename()
+  }
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-2">
       {sessionList.length === 0 && (
@@ -45,6 +83,8 @@ export default function SessionGroupList({
       {groupNames.map((group) => {
         const items = grouped[group] || []
         const selected = group === selectedGroup
+        const isDefaultGroup = group === DEFAULT_SESSION_GROUP
+        const renaming = renamingGroup === group
         return (
           <section
             key={group}
@@ -60,14 +100,61 @@ export default function SessionGroupList({
               >
                 {collapsedGroups.has(group) ? '▶' : '▼'}
               </button>
-              <button
-                onClick={() => onSelectGroup(group)}
-                className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-xs text-ops-subtext transition-colors hover:text-ops-text"
-                title={group}
-              >
-                <span className="truncate font-semibold">{group}</span>
-                <GroupMetrics sessions={items} />
-              </button>
+              {renaming ? (
+                <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_36px_36px] gap-1">
+                  <input
+                    autoFocus
+                    value={renameDraft}
+                    onChange={(event) => setRenameDraft(event.target.value)}
+                    onKeyDown={handleRenameKeyDown}
+                    className="h-8 min-w-0 rounded-md border border-ops-accent/60 bg-ops-dark/55 px-2 text-xs font-semibold text-ops-text outline-none"
+                    aria-label={`重命名会话组 ${group}`}
+                  />
+                  <button
+                    onClick={submitRename}
+                    className="rounded-md border border-ops-accent/45 bg-ops-accent/12 text-[11px] font-bold text-ops-accent hover:bg-ops-accent/18"
+                    title="保存组名称"
+                  >
+                    保存
+                  </button>
+                  <button
+                    onClick={cancelRename}
+                    className="rounded-md border border-ops-surface1 bg-ops-surface0/60 text-[11px] font-semibold text-ops-subtext hover:text-ops-text"
+                    title="取消重命名"
+                  >
+                    取消
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => onSelectGroup(group)}
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-xs text-ops-subtext transition-colors hover:text-ops-text"
+                    title={group}
+                  >
+                    <span className="truncate font-semibold">{group}</span>
+                    <GroupMetrics sessions={items} />
+                  </button>
+                  {!isDefaultGroup && (
+                    <div className="flex shrink-0 items-center gap-1 opacity-80">
+                      <button
+                        onClick={() => startRename(group)}
+                        className="rounded-md border border-ops-surface1 bg-ops-surface0/45 px-1.5 py-1 text-[11px] font-semibold text-ops-subtext transition-colors hover:border-ops-accent hover:text-ops-text"
+                        title={`重命名 ${group}`}
+                      >
+                        重命名
+                      </button>
+                      <button
+                        onClick={() => onDeleteGroup(group)}
+                        className="rounded-md border border-ops-alert/35 bg-ops-alert/8 px-1.5 py-1 text-[11px] font-semibold text-ops-alert transition-colors hover:bg-ops-alert/14"
+                        title={`删除 ${group}`}
+                      >
+                        删除
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             {!collapsedGroups.has(group) && (

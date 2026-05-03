@@ -28,26 +28,6 @@ export async function disconnectSidebarSession(
   }
 }
 
-export async function moveSessionGroupToBackend({
-  addToast,
-  groupName,
-  moveSessionToGroup,
-  sessionId,
-}: {
-  addToast: AddToast
-  groupName: string
-  moveSessionToGroup: (sessionId: string, groupName: string) => void
-  sessionId: string
-}) {
-  try {
-    await updateSessionGroup(sessionId, groupName)
-    moveSessionToGroup(sessionId, groupName)
-    addToast(`当前会话已移动到：${groupName}`, 'success')
-  } catch {
-    addToast('会话分组同步失败', 'error')
-  }
-}
-
 export async function saveSessionMetadataToBackend({
   addToast,
   groupName,
@@ -74,9 +54,16 @@ export async function saveSessionMetadataToBackend({
       tags: response.data.tags,
     })
     addToast('会话信息已更新', 'success')
-    return true
-  } catch {
-    addToast('会话信息保存失败', 'error')
-    return false
+    return response.data
+  } catch (error) {
+    addToast(operationErrorMessage(error, '会话信息保存失败'), 'error')
+    return null
   }
+}
+
+function operationErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return `${fallback}：${error.message}`
+  }
+  return fallback
 }
