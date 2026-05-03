@@ -3,21 +3,24 @@ import json
 import asyncio
 import logging
 import time
-from pathlib import Path
 from typing import Dict, Any, List
 
 from core.asset_protocols import NETWORK_CLI_ASSET_TYPES, STORAGE_ASSET_TYPES, resolve_asset_identity
-from core.custom_skill_storage import CustomSkillStorageError, resolve_custom_skill_resource_file
 from core.dispatcher_api_tools import API_TOOL_NAMES, execute_api_tool
 from core.dispatcher_database_tools import DATABASE_TOOL_NAMES, execute_database_tool
 from core.dispatcher_scope_tools import execute_on_scope_tool
+from core.dispatcher_skill_evolution import (
+    atomic_write_text,
+    backup_existing_skill_file,
+    execute_skill_evolution_tool,
+)
 from core.local_script_execution import execute_local_script, validate_local_execution
 from core.safety_policy import (
     check_approval_needed as policy_check_approval_needed,
     check_hard_block,
     check_readonly_block,
 )
-from core.skill_lifecycle import validate_skill_candidate, validate_skill_frontmatter
+from core.skill_lifecycle import validate_skill_frontmatter
 from core.skill_registry_scanner import (
     format_skills_for_ui,
     parse_installed_skill_md,
@@ -182,36 +185,11 @@ class SkillDispatcher:
 
     @staticmethod
     def _atomic_write_text(file_path: str, content: str) -> None:
-        tmp_path = os.path.join(
-            os.path.dirname(file_path),
-            f".{os.path.basename(file_path)}.{time.time_ns()}.tmp",
-        )
-        try:
-            with open(tmp_path, "w", encoding="utf-8", newline="\n") as f:
-                f.write(content)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, file_path)
-        finally:
-            if os.path.exists(tmp_path):
-                try:
-                    os.remove(tmp_path)
-                except OSError:
-                    pass
+        atomic_write_text(file_path, content)
 
     @staticmethod
     def _backup_existing_skill_file(file_path: str) -> str | None:
-        if not os.path.exists(file_path):
-            return None
-        versions_dir = os.path.join(os.path.dirname(file_path), ".versions")
-        os.makedirs(versions_dir, exist_ok=True)
-        backup_name = f"{os.path.basename(file_path)}.{time.strftime('%Y%m%d%H%M%S')}.{time.time_ns()}.bak"
-        backup_path = os.path.join(versions_dir, backup_name)
-        with open(file_path, "rb") as src, open(backup_path, "wb") as dst:
-            dst.write(src.read())
-            dst.flush()
-            os.fsync(dst.fileno())
-        return backup_path
+        return backup_existing_skill_file(file_path)
 
     def _validate_local_execution(
         self, command: str, cwd: str, context: Dict[str, Any]
@@ -462,47 +440,7 @@ class SkillDispatcher:
             return await execute_on_scope_tool(args, context)
 
         elif tool_call_name == "evolve_skill":
-            skill_id = args.get("skill_id", "")
-            file_name = args.get("file_name", "")
-            content = args.get("content", "")
-
-            skill_id = str(skill_id or "").strip()
-            file_name = str(file_name or "").strip()
-            content = str(content or "")
-
-            # 限制只能修改自己的 my_custom_skills 目录
-            target_base = self._custom_skills_base()
-            os.makedirs(target_base, exist_ok=True)
-
-            validation = validate_skill_candidate(skill_id, file_name, content, allow_nested=True)
-            if not validation["valid"]:
-                detail = "；".join(issue["message"] for issue in validation["issues"])
-                return json.dumps({"error": detail}, ensure_ascii=False)
-
-            safe_file_name = validation["file_name"]
-            try:
-                file_path = resolve_custom_skill_resource_file(Path(target_base), skill_id, safe_file_name)
-                file_path.parent.mkdir(parents=True, exist_ok=True)
-                backup_path = self._backup_existing_skill_file(str(file_path))
-                self._atomic_write_text(str(file_path), content)
-                logger.info(f"AI 成功自我进化：更新了文件 -> {file_path}")
-
-                # 通知 Dispatcher 重新加载
-                self.refresh_skills()
-                return json.dumps(
-                    {
-                        "status": "SUCCESS",
-                        "message": f"技能卡带文件 {file_name} 已经成功更新并热重载！现在您可以告诉用户它已经生效了。",
-                        "skill_id": skill_id,
-                        "file_name": safe_file_name,
-                        "file_path": str(file_path),
-                        "backup_path": backup_path,
-                    }
-                )
-            except CustomSkillStorageError as e:
-                return json.dumps({"error": e.detail}, ensure_ascii=False)
-            except Exception as e:
-                return json.dumps({"error": f"写入文件失败: {str(e)}"})
+            return execute_skill_evolution_tool(args, self._custom_skills_base(), self.refresh_skills, logger)
 
         elif tool_call_name == "search_knowledge_base":
             from core.rag import kb_manager
