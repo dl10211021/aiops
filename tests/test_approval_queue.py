@@ -313,14 +313,14 @@ class TestApprovalQueue(unittest.TestCase):
         self.assertEqual(decision.data["approval"]["status"], "approved")
 
     def test_agent_records_approval_request_with_policy_timeout(self):
-        from core import agent, approval_queue
+        from core import agent_approval, approval_queue
 
         store_path = self._store_path("agent")
         with (
             patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path),
-            patch.object(agent, "approval_timeout_seconds", return_value=45),
+            patch.object(agent_approval, "approval_timeout_seconds", return_value=45),
         ):
-            recorded = agent.record_tool_approval_request(
+            recorded = agent_approval.record_tool_approval_request(
                 tool_call_id="call-5",
                 session_id="sid-2",
                 tool_name="linux_execute_command",

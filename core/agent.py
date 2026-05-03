@@ -2,7 +2,6 @@ import os
 import json
 import asyncio
 import logging
-import uuid
 from core.dispatcher import dispatcher
 from core.asset_protocols import (
     API_PROTOCOLS,
@@ -20,6 +19,10 @@ from core.agent_attachments import (
     _chat_image_attachments,
     _model_supports_image_input,
     _safe_user_message_for_memory,
+)
+from core.agent_approval import (
+    record_headless_approval_block,
+    record_tool_approval_request,
 )
 from core.agent_runtime_config import (
     DEFAULT_AGENT_MAX_STEPS,
@@ -64,61 +67,6 @@ SENSITIVE_CONTEXT_KEYWORDS = {
     "token",
     "api_key",
 }
-
-def record_tool_approval_request(
-    *,
-    tool_call_id: str,
-    session_id: str,
-    tool_name: str,
-    args: dict,
-    reason: str,
-    context: dict,
-) -> dict:
-    from core.approval_queue import record_approval_request
-
-    return record_approval_request(
-        tool_call_id=tool_call_id,
-        session_id=session_id,
-        tool_name=tool_name,
-        args=args,
-        reason=reason,
-        context=context,
-        timeout_seconds=approval_timeout_seconds(),
-    )
-
-
-def record_headless_approval_block(
-    *,
-    tool_call_id: str,
-    session_id: str,
-    tool_name: str,
-    args: dict,
-    reason: str,
-    context: dict,
-) -> dict:
-    """Audit and block approval-required tool calls from unattended runs."""
-    approval_id = str(tool_call_id or "").strip() or f"headless-{uuid.uuid4().hex[:16]}"
-    recorded = record_tool_approval_request(
-        tool_call_id=approval_id,
-        session_id=session_id,
-        tool_name=tool_name,
-        args=args,
-        reason=reason,
-        context={**(context or {}), "execution_mode": "headless"},
-    )
-
-    try:
-        from core.approval_queue import resolve_approval_request
-
-        return resolve_approval_request(
-            approval_id,
-            approved=False,
-            operator="system",
-            note="后台自治任务触发需审批工具调用，系统已自动阻断；请在前台人工确认后重试。",
-        )
-    except KeyError:
-        return recorded
-
 
 def _normalize_interaction_options(options: object) -> list[dict[str, str]]:
     if not isinstance(options, list):
