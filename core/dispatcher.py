@@ -10,6 +10,7 @@ from core.asset_protocols import NETWORK_CLI_ASSET_TYPES, STORAGE_ASSET_TYPES, r
 from core.custom_skill_storage import CustomSkillStorageError, resolve_custom_skill_resource_file
 from core.dispatcher_api_tools import API_TOOL_NAMES, execute_api_tool
 from core.dispatcher_database_tools import DATABASE_TOOL_NAMES, execute_database_tool
+from core.dispatcher_scope_tools import execute_on_scope_tool
 from core.local_script_execution import execute_local_script, validate_local_execution
 from core.safety_policy import (
     check_approval_needed as policy_check_approval_needed,
@@ -458,131 +459,7 @@ class SkillDispatcher:
             )
 
         elif tool_call_name == "execute_on_scope":
-            scope_target = args.get("scope_target", "ALL")
-            command = args.get("command", "")
-            blocked, reason = check_readonly_block(tool_call_name, args, context)
-            if blocked:
-                return _blocked_tool_response(tool_call_name, args, context, reason)
-            if not str(command).strip():
-                return json.dumps({"status": "ERROR", "error": "范围执行命令不能为空。"}, ensure_ascii=False)
-
-            from connections.ssh_manager import ssh_manager
-
-            target_tag = context.get("scope_value", "")
-            if (
-                isinstance(target_tag, str)
-                and target_tag.startswith("[")
-                and target_tag.endswith("]")
-            ):
-                target_tag = target_tag[1:-1]
-
-            tasks = []
-            for sid, sdata in ssh_manager.active_sessions.items():
-                info = sdata["info"]
-                identity = resolve_asset_identity(
-                    info.get("asset_type"),
-                    info.get("protocol"),
-                    info.get("extra_args", {}),
-                    info.get("host"),
-                    info.get("port"),
-                    info.get("remark"),
-                )
-                if identity["protocol"] != "ssh":
-                    continue
-
-                if target_tag and target_tag not in info.get("tags", []):
-                    continue
-
-                host = info.get("host")
-                remark = info.get("remark", "")
-
-                if (
-                    scope_target == "ALL"
-                    or (host and host in scope_target)
-                    or (remark and remark in scope_target)
-                ):
-                    tasks.append((sid, host or remark, identity["asset_type"]))
-
-            if not tasks:
-                return json.dumps(
-                    {
-                        "error": f"找不到匹配的在线资产会话 (Tag: {target_tag}, Target: {scope_target})。"
-                    }
-                )
-
-            sem = asyncio.Semaphore(50)
-
-            async def _run_single(t_sid, t_host, t_asset_type):
-                async with sem:
-                    if t_asset_type in NETWORK_CLI_ASSET_TYPES:
-                        actual_tool = "network_cli_execute_command"
-                    elif t_asset_type in STORAGE_SSH_ASSET_TYPES:
-                        actual_tool = "storage_execute_command"
-                    else:
-                        actual_tool = "linux_execute_command"
-                    session_info = ssh_manager.active_sessions.get(t_sid, {}).get("info", {})
-                    hard_blocked, hard_reason = check_hard_block(actual_tool, args, {**context, **session_info})
-                    if hard_blocked:
-                        return t_host, {"success": False, "error": hard_reason}
-                    readonly_blocked, readonly_reason = check_readonly_block(
-                        actual_tool, args, {**context, **session_info}
-                    )
-                    if readonly_blocked:
-                        return t_host, {"success": False, "error": readonly_reason}
-
-                    if actual_tool == "network_cli_execute_command":
-                        res = await asyncio.to_thread(
-                            ssh_manager.execute_network_cli_command, t_sid, command
-                        )
-                    else:
-                        res = await asyncio.to_thread(
-                            ssh_manager.execute_command, t_sid, command
-                        )
-                    return t_host, res
-
-            completed = await asyncio.gather(
-                *(_run_single(sid, host, asset_type) for sid, host, asset_type in tasks)
-            )
-
-            results_dict = {}
-            for h, res in completed:
-                if res.get("success"):
-                    out = str(res.get("output", ""))
-                else:
-                    out = str(res.get("error", "ERROR"))
-
-                if not out.strip():
-                    out = "[空输出]"
-
-                if out not in results_dict:
-                    results_dict[out] = []
-                results_dict[out].append(h)
-
-            aggregated_res = {}
-            unique_outputs_count = 0
-            
-            # Sort by number of hosts (descending) so we keep the most common outputs first
-            sorted_results = sorted(results_dict.items(), key=lambda x: len(x[1]), reverse=True)
-            
-            for out, hosts in sorted_results:
-                unique_outputs_count += 1
-                if unique_outputs_count > 20:
-                    aggregated_res["..."] = {"note": f"剩余 {len(sorted_results) - 20} 种不同的输出结果因篇幅限制被折叠。为了保护上下文，建议您优化命令输出(例如只返回关键的 error code 或做 wc -l 统计)。"}
-                    break
-                    
-                summary_key = f"{len(hosts)} hosts returned this output"
-                display_hosts = hosts[:5] + (["..."] if len(hosts) > 5 else [])
-                aggregated_res[summary_key] = {"hosts": display_hosts, "output": out}
-
-            return json.dumps(
-                {
-                    "status": "BATCH_COMPLETE",
-                    "total_hosts": len(tasks),
-                    "unique_outputs": len(results_dict),
-                    "results": aggregated_res,
-                },
-                ensure_ascii=False,
-            )
+            return await execute_on_scope_tool(args, context)
 
         elif tool_call_name == "evolve_skill":
             skill_id = args.get("skill_id", "")
