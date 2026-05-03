@@ -29,6 +29,7 @@ from core.agent_runtime_config import (
     get_agent_runtime_config,
     update_agent_runtime_config,
 )
+from core.agent_session_context import build_agent_session_context
 from core.agent_tool_events import (
     build_tool_end_event,
     parse_tool_arguments,
@@ -36,7 +37,6 @@ from core.agent_tool_events import (
 )
 from core.agent_protocol_context import (
     SENSITIVE_CONTEXT_KEYWORDS,
-    allow_local_skill_scripts,
     format_extra_args_for_prompt,
     protocol_tool_guidance,
     protocol_tool_list,
@@ -78,19 +78,20 @@ async def chat_stream_agent(
     emb_client, embedding_model = get_embedding_client_and_model(model_name)
 
     session_info = ssh_manager.active_sessions[session_id]["info"]
-    allow_modifications = session_info.get("allow_modifications", False)
-    active_skills = session_info.get("active_skills", [])
-    agent_profile = session_info.get("agent_profile", "default")
-
-    # 获取资产协议凭证信息，构建模型上下文
-    asset_type = session_info.get("asset_type", "ssh")
-    protocol = session_info.get("protocol", asset_type)
-    is_virtual = session_info.get("is_virtual", False)
-    host = session_info.get("host", "")
-    port = session_info.get("port", "")
-    username = session_info.get("username", "")
-    extra_args = session_info.get("extra_args", {})
-    password = session_info.get("password")
+    session_context = build_agent_session_context(
+        session_id,
+        session_info,
+        skill_path_resolver=dispatcher.get_active_skill_paths,
+    )
+    allow_modifications = session_context.allow_modifications
+    active_skills = session_context.active_skills
+    agent_profile = session_context.agent_profile
+    asset_type = session_context.asset_type
+    protocol = session_context.protocol
+    host = session_context.host
+    port = session_context.port
+    username = session_context.username
+    extra_args = session_context.extra_args
 
     # 从外部 Markdown 文件加载 Agent 的核心人格 (Soul)
     base_prompt = load_agent_profile_prompt(agent_profile)
@@ -107,8 +108,6 @@ async def chat_stream_agent(
     # 凭证信息格式化为字符串 (已移除，防泄漏)
 
     extra_creds_str = format_extra_args_for_prompt(extra_args)
-    active_skill_paths = dispatcher.get_active_skill_paths(active_skills)
-    local_skill_scripts_allowed = allow_local_skill_scripts(protocol)
     SYSTEM_PROMPT = f"""
 {base_prompt}
 
@@ -136,11 +135,11 @@ async def chat_stream_agent(
 - **工具执行表达规范**：真实资产会话中，不要说“无法通过本地脚本”“改用平台原生工具”这类解释；直接说明“正在通过当前会话的原生协议工具执行巡检”即可。
 
 [使用的基础执行工具]
-{protocol_tool_list(protocol, local_skill_scripts_allowed and bool(active_skill_paths), asset_type)}
+{protocol_tool_list(protocol, session_context.has_local_skill_scripts, asset_type)}
 
 [当前已加载专业技能说明 (Skills)]
 以下是当前专业技能的详细 <INSTRUCTIONS> 指令，请严格遵照其中的步骤进行操作
-{dispatcher.get_skill_instructions(active_skills, allow_local_scripts=local_skill_scripts_allowed)}
+{dispatcher.get_skill_instructions(active_skills, allow_local_scripts=session_context.local_skill_scripts_allowed)}
 
 {ltm_context}
 """
@@ -162,22 +161,7 @@ async def chat_stream_agent(
     memory_db.append_message(session_id, safe_user_msg)
     messages.append(new_user_msg)
 
-    context = {
-        "session_id": session_id,
-        "os_type": "linux",
-        "allow_modifications": allow_modifications,
-        "active_skills": active_skills,
-        "active_skill_paths": active_skill_paths if local_skill_scripts_allowed else [],
-        "asset_type": asset_type,
-        "protocol": protocol,
-        "host": host,
-        "port": port,
-        "username": username,
-        "password": password,
-        "extra_args": extra_args,
-        "target_scope": session_info.get("target_scope", "asset"),
-        "scope_value": session_info.get("scope_value", None),
-    }
+    context = session_context.tool_context()
     tools = dispatcher.get_available_tools(context)
 
     try:
@@ -598,25 +582,25 @@ async def headless_agent_chat(
 
     session_info = ssh_manager.active_sessions[session_id]["info"]
     # 继承父级 allow_modifications 并结合当前会话的权限，两者必须同时为 True 才允许
-    allow_modifications = inherited_allow_mod and session_info.get(
-        "allow_modifications", False
+    session_context = build_agent_session_context(
+        session_id,
+        session_info,
+        skill_path_resolver=dispatcher.get_active_skill_paths,
+        allow_modifications=(
+            inherited_allow_mod and session_info.get("allow_modifications", False)
+        ),
     )
-    active_skills = session_info.get("active_skills", [])
-    agent_profile = session_info.get("agent_profile", "default")
-    asset_type = session_info.get("asset_type", "ssh")
-    protocol = session_info.get("protocol", asset_type)
-    is_virtual = session_info.get("is_virtual", False)
-    host = session_info.get("host", "")
-    port = session_info.get("port", "")
-    username = session_info.get("username", "")
-    extra_args = session_info.get("extra_args", {})
-    password = session_info.get("password")
+    agent_profile = session_context.agent_profile
+    asset_type = session_context.asset_type
+    protocol = session_context.protocol
+    host = session_context.host
+    port = session_context.port
+    username = session_context.username
+    extra_args = session_context.extra_args
 
     base_prompt = load_agent_profile_prompt(agent_profile)
 
     extra_creds_str = format_extra_args_for_prompt(extra_args)
-    active_skill_paths = dispatcher.get_active_skill_paths(active_skills)
-    local_skill_scripts_allowed = allow_local_skill_scripts(protocol)
 
     SYSTEM_PROMPT = f"""{base_prompt}
 
@@ -638,7 +622,7 @@ async def headless_agent_chat(
 真实资产会话中，不要说“无法通过本地脚本”“改用平台原生工具”这类解释；直接通过当前会话的原生协议工具执行。
 
 [使用的基础执行工具]
-{protocol_tool_list(protocol, local_skill_scripts_allowed and bool(active_skill_paths), asset_type)}
+{protocol_tool_list(protocol, session_context.has_local_skill_scripts, asset_type)}
 """
 
     messages = [
@@ -646,24 +630,10 @@ async def headless_agent_chat(
         {"role": "user", "content": "请开始执行任务。"},
     ]
 
-    context = {
-        "session_id": session_id,
-        "os_type": "linux",
-        "allow_modifications": allow_modifications,
-        "active_skills": active_skills,
-        "active_skill_paths": active_skill_paths if local_skill_scripts_allowed else [],
-        "asset_type": asset_type,
-        "protocol": protocol,
-        "host": host,
-        "port": port,
-        "username": username,
-        "password": password,
-        "extra_args": extra_args,
-        "target_scope": session_info.get("target_scope", "asset"),
-        "scope_value": session_info.get("scope_value", None),
-        "execution_mode": "headless",
-        "trigger_source": "background_agent",
-    }
+    context = session_context.tool_context(
+        execution_mode="headless",
+        trigger_source="background_agent",
+    )
     tools = dispatcher.get_available_tools(context)
 
     try:
