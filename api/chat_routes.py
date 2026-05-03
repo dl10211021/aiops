@@ -4,7 +4,7 @@ from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import StreamingResponse
 
 from api.errors import raise_http_error
-from api.mappers import (
+from api.response_mappers.chat import (
     chat_attachment_preview_response_kwargs,
     chat_stream_agent_kwargs,
 )

@@ -6,7 +6,6 @@ from api.schemas import (
     AlertEventUpdateRequest,
     AssetPayload,
     BatchAssetImportItem,
-    ChatRequest,
     CreateSkillRequest,
     CronAddRequest,
     HeartbeatUpdateRequest,
@@ -18,17 +17,11 @@ from api.schemas import (
     SessionWebhookSendRequest,
     SkillRollbackRequest,
 )
-
-
-def chat_stream_agent_kwargs(req: ChatRequest) -> dict[str, Any]:
-    return {
-        "session_id": req.session_id,
-        "user_message": req.message,
-        "user_display_message": req.display_message,
-        "model_name": req.model_name,
-        "thinking_mode": req.thinking_mode or "off",
-        "user_attachments": req.attachments,
-    }
+from api.response_mappers.chat import (
+    chat_attachment_preview_response_kwargs,
+    chat_stop_response_kwargs,
+    chat_stream_agent_kwargs,
+)
 
 
 def session_webhook_delivery_kwargs(req: SessionWebhookSendRequest) -> dict[str, Any]:
@@ -635,13 +628,6 @@ def session_history_export_response_kwargs(markdown: str) -> dict[str, Any]:
     }
 
 
-def chat_attachment_preview_response_kwargs(attachment: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": {"attachment": attachment},
-    }
-
-
 def user_interaction_submitted_response_kwargs() -> dict[str, Any]:
     return {
         "status": "success",
@@ -679,13 +665,6 @@ def approval_execution_response_kwargs(result: Any) -> dict[str, Any]:
             "approval": result.approval,
             "result": result.result,
         },
-    }
-
-
-def chat_stop_response_kwargs() -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": "已发送中止信号。",
     }
 
 

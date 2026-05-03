@@ -6,7 +6,6 @@ from api.errors import raise_http_error
 from api.mappers import (
     active_sessions_response_kwargs,
     all_sessions_poll_response_kwargs,
-    chat_stop_response_kwargs,
     session_commands_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
@@ -18,6 +17,7 @@ from api.mappers import (
     session_skills_updated_response_kwargs,
     tool_catalog_response_kwargs,
 )
+from api.response_mappers.chat import chat_stop_response_kwargs
 from api.schemas import (
     HeartbeatUpdateRequest,
     PermissionUpdateRequest,
