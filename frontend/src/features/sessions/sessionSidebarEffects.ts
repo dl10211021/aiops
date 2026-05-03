@@ -28,6 +28,30 @@ export async function disconnectSidebarSession(
   }
 }
 
+export async function saveSessionGroupToBackend({
+  addToast,
+  groupName,
+  sessionId,
+  updateSession,
+}: {
+  addToast: AddToast
+  groupName: string
+  sessionId: string
+  updateSession: (sessionId: string, patch: Partial<Session>) => void
+}) {
+  try {
+    const response = await updateSessionGroup(sessionId, groupName)
+    updateSession(sessionId, {
+      tags: response.data.tags,
+    })
+    addToast(`会话已移动到：${response.data.group_name}`, 'success')
+    return response.data
+  } catch (error) {
+    addToast(operationErrorMessage(error, '会话分组保存失败'), 'error')
+    return null
+  }
+}
+
 export async function saveSessionMetadataToBackend({
   addToast,
   groupName,

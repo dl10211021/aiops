@@ -13,6 +13,7 @@ import {
 import { summarizeSessions } from './sessionMetrics'
 import {
   disconnectSidebarSession,
+  saveSessionGroupToBackend,
   saveSessionMetadataToBackend,
   syncSessionsGroupToBackend,
 } from './sessionSidebarEffects'
@@ -174,20 +175,35 @@ export function useSessionSidebarModel() {
 
   const handleSaveSessionEdit = async (values: SessionEditValues) => {
     if (!editingSessionId) return
+    const editingSession = sessions[editingSessionId]
+    if (!editingSession) return
     const groupName = normalizeSessionGroupName(values.groupName)
     if (!groupName) {
       addToast('会话组不能为空', 'error')
       return
     }
     setEditingBusy(true)
-    const saved = await saveSessionMetadataToBackend({
-      addToast,
-      groupName,
-      remark: values.remark,
-      sessionId: editingSessionId,
-      tags: values.tags,
-      updateSession,
-    })
+    const currentGroup = sessionPrimaryGroup(editingSession)
+    const currentRemark = String(editingSession.remark || '').trim()
+    const currentTags = (editingSession.tags || []).slice(1)
+    const remarkChanged = values.remark !== currentRemark
+    const secondaryTagsChanged = !sameStringList(values.tags, currentTags)
+    const groupChanged = groupName !== currentGroup
+    const saved = !remarkChanged && !secondaryTagsChanged && groupChanged
+      ? await saveSessionGroupToBackend({
+        addToast,
+        groupName,
+        sessionId: editingSessionId,
+        updateSession,
+      })
+      : await saveSessionMetadataToBackend({
+        addToast,
+        groupName,
+        remark: values.remark,
+        sessionId: editingSessionId,
+        tags: values.tags,
+        updateSession,
+      })
     setEditingBusy(false)
     if (saved) {
       if (!groupNames.includes(saved.group_name)) createSessionGroup(saved.group_name)
@@ -247,4 +263,9 @@ function sessionMatchesSearch(session: Session, group: string, query: string): b
     ...(session.skills || []),
   ]
   return fields.some((field) => normalizeSearchValue(field).includes(query))
+}
+
+function sameStringList(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false
+  return left.every((item, index) => item === right[index])
 }
