@@ -1,9 +1,8 @@
-import json
 import asyncio
 import logging
 from core.dispatcher import dispatcher
-from core.agent_approval import record_headless_approval_block
 from core.agent_errors import build_agent_loop_error_payload
+from core.agent_headless_loop import run_headless_agent_loop
 from core.agent_ltm import retrieve_ltm_context, schedule_ltm_compression
 from core.agent_runtime_config import (
     DEFAULT_AGENT_MAX_STEPS,
@@ -26,7 +25,6 @@ from core.agent_sse import sse_event
 from core.agent_streaming import AgentStreamState, stream_assistant_response
 from core.agent_tool_loop import process_chat_tool_calls
 from core.agent_task_dispatch import dispatch_group_tasks as run_group_tasks
-from core.agent_tool_events import parse_tool_arguments
 from core.agent_profiles import load_agent_profile_prompt
 from core.model_catalog import get_available_models, get_available_models_for_provider
 from core.embedding_config import (
@@ -281,91 +279,16 @@ async def headless_agent_chat(
     tools = dispatcher.get_available_tools(context)
 
     try:
-        from core.llm_execution import execute_chat_stream
-
-        assistant_content = ""
-        max_steps = agent_max_steps("headless")
-        for iteration in range(max_steps):
-            assistant_content = ""
-            thinking_content = ""
-            tool_calls = []
-
-            async for chunk in execute_chat_stream(
-                model_name, messages, "off", tools=tools
-            ):
-                if chunk["type"] == "thinking":
-                    thinking_content += chunk["content"]
-                elif chunk["type"] == "content":
-                    assistant_content += chunk["content"]
-                elif chunk["type"] == "tool_calls":
-                    tool_calls = chunk["tool_calls"]
-
-            if not tool_calls:
-                break
-
-            safe_msg = {"role": "assistant", "content": assistant_content}
-            if thinking_content:
-                safe_msg["reasoning_content"] = thinking_content
-            safe_msg["tool_calls"] = tool_calls
-
-            messages.append(safe_msg)
-
-            for tc in tool_calls:
-                func_name = tc.get("function", {}).get("name", "")
-                try:
-                    func_args = parse_tool_arguments(
-                        tc.get("function", {}).get("arguments", "{}")
-                    )
-                except Exception:
-                    func_args = {}
-
-                needs_approval, reason = dispatcher.check_approval_needed(
-                    func_name, func_args, context
-                )
-                if needs_approval:
-                    blocked = record_headless_approval_block(
-                        tool_call_id=tc.get("id", ""),
-                        session_id=session_id,
-                        tool_name=func_name,
-                        args=func_args,
-                        reason=reason,
-                        context=context,
-                    )
-                    logger.warning(
-                        "Blocked unattended tool call requiring approval: session=%s tool=%s approval=%s",
-                        session_id,
-                        func_name,
-                        blocked.get("id"),
-                    )
-                    tool_res = json.dumps(
-                        {
-                            "status": "BLOCKED",
-                            "error": f"后台自治任务触发审批策略，已自动阻断: {reason}",
-                            "approval_id": blocked.get("id"),
-                        },
-                        ensure_ascii=False,
-                    )
-                else:
-                    tool_res = await dispatcher.route_and_execute(
-                        func_name, func_args, context
-                    )
-
-                tool_msg = {
-                    "tool_call_id": tc.get("id", ""),
-                    "role": "tool",
-                    "name": func_name,
-                    "content": str(tool_res),
-                }
-                messages.append(tool_msg)
-        else:
-            return (
-                f"任务达到 {max_steps} 步执行保护上限，系统已停止继续调用工具。以下是最后一轮阶段性结果："
-                + assistant_content
-            )
-
-        return (
-            f"来自 {agent_profile} Agent ({host}) 的协同任务报告：\n"
-            + assistant_content
+        return await run_headless_agent_loop(
+            model_name=model_name,
+            messages=messages,
+            tools=tools,
+            context=context,
+            session_id=session_id,
+            agent_profile=agent_profile,
+            host=host,
+            dispatcher=dispatcher,
+            event_logger=logger,
         )
     except Exception as e:
         return f"协同任务执行失败。目标节点 {host} 执行报错: {e}"
