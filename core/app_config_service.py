@@ -7,10 +7,12 @@ from pathlib import Path
 from typing import Any
 
 from core.agent import (
-    get_agent_runtime_config,
     get_embedding_config,
-    update_agent_runtime_config,
     update_embedding_config,
+)
+from core.agent_runtime_config import (
+    get_agent_runtime_config,
+    update_agent_runtime_config,
 )
 
 
