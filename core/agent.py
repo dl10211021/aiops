@@ -2,13 +2,6 @@ import json
 import asyncio
 import logging
 from core.dispatcher import dispatcher
-from core.agent_attachments import (
-    _attachment_metadata_for_memory,
-    _build_current_user_content,
-    _chat_image_attachments,
-    _model_supports_image_input,
-    _safe_user_message_for_memory,
-)
 from core.agent_approval import (
     record_headless_approval_block,
     record_tool_approval_request,
@@ -29,6 +22,7 @@ from core.agent_runtime_config import (
     get_agent_runtime_config,
     update_agent_runtime_config,
 )
+from core.agent_message_history import build_chat_message_history
 from core.agent_prompts import (
     render_chat_system_prompt,
     render_headless_system_prompt,
@@ -107,22 +101,15 @@ async def chat_stream_agent(
         ltm_context=ltm_context,
     )
 
-    # 从 SQLite 中读取之前的有效会话（去掉之前的 system 提示词）
-    db_messages = memory_db.get_messages(session_id)
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-
-    for msg in db_messages:
-        if msg.get("role") != "system":
-            messages.append(msg)
-
-    current_user_content = _build_current_user_content(user_message, user_attachments or [], model_name)
-    safe_user_msg = _safe_user_message_for_memory(
-        user_display_message or user_message,
-        user_attachments or [],
+    messages = build_chat_message_history(
+        memory_store=memory_db,
+        session_id=session_id,
+        system_prompt=SYSTEM_PROMPT,
+        user_message=user_message,
+        user_display_message=user_display_message,
+        user_attachments=user_attachments or [],
+        model_name=model_name,
     )
-    new_user_msg = {"role": "user", "content": current_user_content}
-    memory_db.append_message(session_id, safe_user_msg)
-    messages.append(new_user_msg)
 
     context = session_context.tool_context()
     tools = dispatcher.get_available_tools(context)
