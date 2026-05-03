@@ -1,4 +1,3 @@
-import os
 import json
 import asyncio
 import logging
@@ -42,6 +41,7 @@ from core.agent_protocol_context import (
     protocol_tool_guidance,
     protocol_tool_list,
 )
+from core.agent_profiles import load_agent_profile_prompt
 from core.model_catalog import get_available_models, get_available_models_for_provider
 from core.embedding_config import (
     EMBEDDING_DIM,
@@ -93,18 +93,7 @@ async def chat_stream_agent(
     password = session_info.get("password")
 
     # 从外部 Markdown 文件加载 Agent 的核心人格 (Soul)
-    profile_path = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        "workspaces",
-        agent_profile,
-        "SOUL.md",
-    )
-
-    if os.path.exists(profile_path):
-        with open(profile_path, "r", encoding="utf-8") as f:
-            base_prompt = f.read()
-    else:
-        base_prompt = "你是 OpsCore 的高级 AI 运维专家。"
+    base_prompt = load_agent_profile_prompt(agent_profile)
 
     # 从 LanceDB 获取长期记忆（与当前话题相关的历史摘要）
     try:
@@ -623,17 +612,7 @@ async def headless_agent_chat(
     extra_args = session_info.get("extra_args", {})
     password = session_info.get("password")
 
-    profile_path = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        "workspaces",
-        agent_profile,
-        "SOUL.md",
-    )
-    if os.path.exists(profile_path):
-        with open(profile_path, "r", encoding="utf-8") as f:
-            base_prompt = f.read()
-    else:
-        base_prompt = "你是 OpsCore 的高级 AI 运维专家。"
+    base_prompt = load_agent_profile_prompt(agent_profile)
 
     extra_creds_str = format_extra_args_for_prompt(extra_args)
     active_skill_paths = dispatcher.get_active_skill_paths(active_skills)
