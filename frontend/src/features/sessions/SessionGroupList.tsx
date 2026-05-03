@@ -11,9 +11,11 @@ interface SessionGroupListProps {
   selectedGroup: string
   sessionList: Session[]
   onDisconnect: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
+  onEdit: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
   onSelectGroup: (group: string) => void
   onSelectSession: (sessionId: string, group: string) => void
   onToggleGroup: (group: string) => void
+  searching?: boolean
 }
 
 export default function SessionGroupList({
@@ -24,17 +26,19 @@ export default function SessionGroupList({
   selectedGroup,
   sessionList,
   onDisconnect,
+  onEdit,
   onSelectGroup,
   onSelectSession,
   onToggleGroup,
+  searching = false,
 }: SessionGroupListProps) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-2">
       {sessionList.length === 0 && (
         <div className="mt-8 rounded-lg border border-ops-surface1/70 bg-ops-surface0/50 px-3 py-5 text-center text-xs leading-5 text-ops-subtext">
-          暂无活跃会话
+          {searching ? '没有匹配的会话' : '暂无活跃会话'}
           <br />
-          点击上方「+ 新建」连接资产
+          {searching ? '调整搜索关键词后再试' : '点击上方「+ 新建」连接资产'}
         </div>
       )}
 
@@ -79,6 +83,7 @@ export default function SessionGroupList({
                     active={session.id === currentSessionId}
                     onSelect={() => onSelectSession(session.id, group)}
                     onDisconnect={onDisconnect}
+                    onEdit={onEdit}
                   />
                 ))}
               </div>

@@ -6,6 +6,7 @@ from api.schema_models.sessions import (
     HeartbeatUpdateRequest,
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,
+    SessionMetadataUpdateRequest,
     SessionProfileGenerateRequest,
     SessionWebhookSendRequest,
 )
@@ -35,6 +36,14 @@ def session_heartbeat_update_kwargs(req: HeartbeatUpdateRequest) -> dict[str, An
 
 def session_group_update_kwargs(req: SessionGroupUpdateRequest) -> dict[str, Any]:
     return {"group_name": req.group_name}
+
+
+def session_metadata_update_kwargs(req: SessionMetadataUpdateRequest) -> dict[str, Any]:
+    return {
+        "remark": req.remark,
+        "group_name": req.group_name,
+        "tags": req.tags,
+    }
 
 
 def session_profile_generate_kwargs(req: SessionProfileGenerateRequest) -> dict[str, Any]:
@@ -213,6 +222,23 @@ def session_group_response_kwargs(
         "message": "会话分组已更新",
         "data": {
             "session_id": session_id,
+            "tags": info["tags"],
+            "group_name": group_name,
+        },
+    }
+
+
+def session_metadata_response_kwargs(
+    session_id: str,
+    info: dict[str, Any],
+    group_name: str,
+) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "会话信息已更新",
+        "data": {
+            "session_id": session_id,
+            "remark": info.get("remark") or "",
             "tags": info["tags"],
             "group_name": group_name,
         },

@@ -1,4 +1,4 @@
-import { disconnectSession, updateSessionGroup } from '@/api/client'
+import { disconnectSession, updateSessionGroup, updateSessionMetadata } from '@/api/client'
 import type { Session } from '@/types'
 
 type AddToast = (message: string, type?: 'success' | 'error' | 'info') => void
@@ -45,5 +45,38 @@ export async function moveSessionGroupToBackend({
     addToast(`当前会话已移动到：${groupName}`, 'success')
   } catch {
     addToast('会话分组同步失败', 'error')
+  }
+}
+
+export async function saveSessionMetadataToBackend({
+  addToast,
+  groupName,
+  remark,
+  sessionId,
+  tags,
+  updateSession,
+}: {
+  addToast: AddToast
+  groupName: string
+  remark: string
+  sessionId: string
+  tags: string[]
+  updateSession: (sessionId: string, patch: Partial<Session>) => void
+}) {
+  try {
+    const response = await updateSessionMetadata(sessionId, {
+      remark,
+      group_name: groupName,
+      tags,
+    })
+    updateSession(sessionId, {
+      remark: response.data.remark,
+      tags: response.data.tags,
+    })
+    addToast('会话信息已更新', 'success')
+    return true
+  } catch {
+    addToast('会话信息保存失败', 'error')
+    return false
   }
 }

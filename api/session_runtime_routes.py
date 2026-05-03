@@ -11,6 +11,8 @@ from api.response_mappers.session import (
     session_group_update_kwargs,
     session_heartbeat_update_kwargs,
     session_heartbeat_updated_response_kwargs,
+    session_metadata_response_kwargs,
+    session_metadata_update_kwargs,
     session_poll_response_kwargs,
     session_permission_update_kwargs,
     session_permission_updated_response_kwargs,
@@ -23,6 +25,7 @@ from api.schema_models.sessions import (
     HeartbeatUpdateRequest,
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,
+    SessionMetadataUpdateRequest,
     SkillsUpdateRequest,
 )
 from connections.ssh_manager import ssh_manager
@@ -35,6 +38,7 @@ from core.session_runtime import (
     drain_session_pending_messages,
     set_session_group,
     set_session_heartbeat,
+    set_session_metadata,
     set_session_permission,
     set_session_skills,
 )
@@ -150,6 +154,23 @@ async def update_session_group(session_id: str, req: SessionGroupUpdateRequest):
     logger.info("Session %s group changed to: %s", session_id, group_name)
 
     return ResponseModel(**session_group_response_kwargs(session_id, info, group_name))
+
+
+@router.put("/session/{session_id}/metadata", response_model=ResponseModel)
+async def update_session_metadata(session_id: str, req: SessionMetadataUpdateRequest):
+    """更新活跃会话的显示名称、主分组和二级标签，不改变连接目标或执行上下文。"""
+    update = session_metadata_update_kwargs(req)
+    try:
+        info, group_name = set_session_metadata(
+            ssh_manager.active_sessions,
+            session_id,
+            **update,
+        )
+    except SessionRuntimeError as exc:
+        raise_http_error(exc)
+    logger.info("Session %s metadata changed; group=%s", session_id, group_name)
+
+    return ResponseModel(**session_metadata_response_kwargs(session_id, info, group_name))
 
 
 @router.get("/sessions/active", response_model=ResponseModel)

@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from collections.abc import MutableMapping
 
-from core.session_groups import apply_primary_session_group, normalize_session_group_name
+from core.session_groups import (
+    DEFAULT_SESSION_GROUP,
+    apply_primary_session_group,
+    normalize_session_group_name,
+)
 
 
 class SessionRuntimeError(Exception):
@@ -99,4 +103,61 @@ def set_session_group(
         )
     except ValueError as exc:
         raise SessionRuntimeError(422, str(exc)) from exc
+    return info, normalized_group
+
+
+def _normalized_secondary_tags(
+    tags: list[str] | None,
+    *,
+    current_group: str,
+    next_group: str,
+) -> list[str]:
+    secondary_tags: list[str] = []
+    blocked_primary_tags = {current_group, next_group}
+    for item in tags or []:
+        tag = normalize_session_group_name(item)
+        if not tag or tag in blocked_primary_tags or tag in secondary_tags:
+            continue
+        secondary_tags.append(tag)
+    return secondary_tags
+
+
+def set_session_metadata(
+    active_sessions: MutableMapping[str, dict],
+    session_id: str,
+    *,
+    remark: str | None = None,
+    group_name: str | None = None,
+    tags: list[str] | None = None,
+) -> tuple[MutableMapping, str]:
+    info = require_session_info(active_sessions, session_id)
+    current_tags = info.get("tags") or []
+    current_group = (
+        normalize_session_group_name(current_tags[0] if current_tags else None)
+        or DEFAULT_SESSION_GROUP
+    )
+    normalized_group = (
+        normalize_session_group_name(group_name)
+        if group_name is not None
+        else current_group
+    )
+    if not normalized_group:
+        raise SessionRuntimeError(422, "会话组名称不能为空")
+
+    if remark is not None:
+        info["remark"] = str(remark).strip()[:200]
+
+    if tags is None:
+        try:
+            info["tags"] = apply_primary_session_group(current_tags, normalized_group)
+        except ValueError as exc:
+            raise SessionRuntimeError(422, str(exc)) from exc
+    else:
+        secondary_tags = _normalized_secondary_tags(
+            tags,
+            current_group=current_group,
+            next_group=normalized_group,
+        )
+        info["tags"] = [normalized_group, *secondary_tags]
+
     return info, normalized_group

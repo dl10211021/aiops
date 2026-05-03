@@ -6,6 +6,7 @@ from core.session_runtime import (
     drain_session_pending_messages,
     set_session_group,
     set_session_heartbeat,
+    set_session_metadata,
     set_session_permission,
     set_session_skills,
 )
@@ -93,3 +94,37 @@ class TestSessionRuntime(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 422)
         self.assertEqual(ctx.exception.detail, "会话组名称不能为空")
+
+    def test_set_session_metadata_updates_remark_group_and_secondary_tags(self):
+        sessions = {
+            "sid-1": {
+                "info": {
+                    "remark": "旧名称",
+                    "tags": ["旧组", "P0", "数据库"],
+                }
+            }
+        }
+
+        info, group_name = set_session_metadata(
+            sessions,
+            "sid-1",
+            remark="  核心 MySQL  ",
+            group_name=" 数据库核心组 ",
+            tags=["旧组", "P0", "数据库", "数据库核心组", "P0"],
+        )
+
+        self.assertEqual(group_name, "数据库核心组")
+        self.assertEqual(info["remark"], "核心 MySQL")
+        self.assertEqual(info["tags"], ["数据库核心组", "P0", "数据库"])
+
+    def test_set_session_metadata_preserves_current_group_when_only_tags_change(self):
+        sessions = {"sid-1": {"info": {"tags": ["生产组", "P0"]}}}
+
+        info, group_name = set_session_metadata(
+            sessions,
+            "sid-1",
+            tags=["P1", "数据库"],
+        )
+
+        self.assertEqual(group_name, "生产组")
+        self.assertEqual(info["tags"], ["生产组", "P1", "数据库"])

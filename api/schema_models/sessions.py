@@ -66,3 +66,9 @@ class SkillsUpdateRequest(BaseModel):
 
 class SessionGroupUpdateRequest(BaseModel):
     group_name: str = Field(..., min_length=1, max_length=80)
+
+
+class SessionMetadataUpdateRequest(BaseModel):
+    remark: str | None = Field(default=None, max_length=200)
+    group_name: str | None = Field(default=None, max_length=80)
+    tags: list[str] | None = Field(default=None, max_length=40)

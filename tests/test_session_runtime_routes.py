@@ -21,6 +21,7 @@ class TestSessionRuntimeRoutes(unittest.TestCase):
         self.assertIn("/session/{session_id}/poll", paths)
         self.assertIn("/session/{session_id}/skills", paths)
         self.assertIn("/session/{session_id}/group", paths)
+        self.assertIn("/session/{session_id}/metadata", paths)
         self.assertIn("/sessions/active", paths)
         self.assertIn("/tools/catalog", paths)
         self.assertIn("/session/{session_id}/tools", paths)

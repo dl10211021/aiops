@@ -8,6 +8,7 @@ interface SessionItemProps {
   active: boolean
   onSelect: () => void
   onDisconnect: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
+  onEdit: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
 }
 
 export default function SessionItem({
@@ -15,6 +16,7 @@ export default function SessionItem({
   active,
   onSelect,
   onDisconnect,
+  onEdit,
 }: SessionItemProps) {
   const attention = sessionAttention(session)
   const needsAttention = attention.type !== 'none'
@@ -68,6 +70,13 @@ export default function SessionItem({
         {session.heartbeatEnabled && (
           <span className="h-2 w-2 shrink-0 rounded-full bg-ops-success animate-pulse" title="巡检已开启" />
         )}
+        <button
+          onClick={(event) => onEdit(session.id, event)}
+          className="hidden rounded-md px-1.5 py-1 text-xs text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text group-hover:block"
+          title="编辑"
+        >
+          编辑
+        </button>
         <button
           onClick={(event) => onDisconnect(session.id, event)}
           className="hidden rounded-md px-1.5 py-1 text-xs text-ops-alert hover:bg-ops-alert/10 group-hover:block"

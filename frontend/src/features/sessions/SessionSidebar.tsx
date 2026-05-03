@@ -1,5 +1,6 @@
 import SessionGroupList from './SessionGroupList'
 import SessionGroupManager from './SessionGroupManager'
+import SessionEditModal from './SessionEditModal'
 import { useSessionSidebarModel } from './useSessionSidebarModel'
 
 export default function SessionSidebar() {
@@ -14,7 +15,10 @@ export default function SessionSidebar() {
           <div className="min-w-0">
             <span className="block text-sm font-semibold text-ops-text">会话组</span>
             <span className="text-[11px] text-ops-overlay">
-              {model.sessionList.length} 会话{model.runningCount > 0 ? ` / ${model.runningCount} 执行中` : ''}
+              {model.sessionSearch.trim()
+                ? `${model.sessionList.length}/${model.totalSessionCount} 会话`
+                : `${model.totalSessionCount} 会话`}
+              {model.runningCount > 0 ? ` / ${model.runningCount} 执行中` : ''}
               {model.pendingApprovalCount > 0 ? ` / ${model.pendingApprovalCount} 个待审批` : ''}
               {model.pendingInputCount > 0 ? ` / ${model.pendingInputCount} 个待输入` : ''}
             </span>
@@ -37,6 +41,16 @@ export default function SessionSidebar() {
           onDeleteGroup={model.handleDeleteGroup}
           onMoveCurrentSession={model.handleMoveCurrentSession}
         />
+
+        <div className="mt-2">
+          <input
+            value={model.sessionSearch}
+            onChange={(event) => model.setSessionSearch(event.target.value)}
+            placeholder="搜索会话组 / 主机 / 协议 / 标签"
+            className="h-8 w-full rounded-md border border-ops-surface1 bg-ops-dark/35 px-2.5 text-xs text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
+            aria-label="搜索会话"
+          />
+        </div>
       </div>
 
       <SessionGroupList
@@ -47,10 +61,22 @@ export default function SessionSidebar() {
         selectedGroup={model.selectedGroup}
         sessionList={model.sessionList}
         onDisconnect={model.handleDisconnect}
+        onEdit={model.handleEditSession}
         onSelectGroup={model.setSelectedGroup}
         onSelectSession={model.handleSelectSession}
         onToggleGroup={model.toggleGroup}
+        searching={Boolean(model.sessionSearch.trim())}
       />
+
+      {model.editingSession && (
+        <SessionEditModal
+          busy={model.editingBusy}
+          groupNames={model.allGroupNames}
+          session={model.editingSession}
+          onClose={model.closeSessionEdit}
+          onSave={model.handleSaveSessionEdit}
+        />
+      )}
     </aside>
   )
 }

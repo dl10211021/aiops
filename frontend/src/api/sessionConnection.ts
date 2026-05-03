@@ -83,6 +83,19 @@ export async function updateSessionGroup(sessionId: string, groupName: string) {
   )
 }
 
+export async function updateSessionMetadata(
+  sessionId: string,
+  payload: { remark: string; group_name: string; tags: string[] },
+) {
+  return request<{ session_id: string; remark: string; tags: string[]; group_name: string }>(
+    `/session/${sessionId}/metadata`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
 export async function getSessionTools(sessionId: string) {
   return request<SessionToolCatalog>(`/session/${sessionId}/tools`)
 }
