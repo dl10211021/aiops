@@ -25,6 +25,12 @@ from core.agent_runtime_config import (
     get_agent_runtime_config,
     update_agent_runtime_config,
 )
+from core.embedding_config import (
+    EMBEDDING_DIM,
+    EMBEDDING_MODEL,
+    get_embedding_config,
+    update_embedding_config,
+)
 from core.redaction import redact_json_text, redact_text
 from core.safety_policy import approval_timeout_seconds
 from core.tool_registry import tool_registry
@@ -33,8 +39,6 @@ cancel_flags = {}
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "")
-EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "3072"))
 SENSITIVE_CONTEXT_KEYWORDS = {
     "bearer_token",
     "kubeconfig",
@@ -574,17 +578,6 @@ def protocol_tool_list(
 
 def allow_local_skill_scripts(protocol: str) -> bool:
     return normalize_protocol(protocol=protocol) == "virtual"
-
-
-def update_embedding_config(model: str, dim: int):
-    global EMBEDDING_MODEL, EMBEDDING_DIM
-    EMBEDDING_MODEL = model
-    EMBEDDING_DIM = dim
-    logger.info(f"Embedding config updated: model={model}, dim={dim}")
-
-
-def get_embedding_config():
-    return EMBEDDING_MODEL, EMBEDDING_DIM
 
 
 # 从 SQLite 持久化用户模型

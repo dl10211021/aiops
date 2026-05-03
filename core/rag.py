@@ -16,14 +16,14 @@ class KnowledgeBaseManager:
 
     def _get_embedding_model(self):
         try:
-            from core.agent import EMBEDDING_MODEL
+            from core.embedding_config import EMBEDDING_MODEL
             return EMBEDDING_MODEL
         except ImportError:
             return ""
 
     def _get_embedding_dim(self):
         try:
-            from core.agent import EMBEDDING_DIM
+            from core.embedding_config import EMBEDDING_DIM
             return EMBEDDING_DIM
         except ImportError:
             return 3072

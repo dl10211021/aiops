@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from core.agent import (
+from core.embedding_config import (
     get_embedding_config,
     update_embedding_config,
 )
