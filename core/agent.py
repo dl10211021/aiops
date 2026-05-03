@@ -1,11 +1,10 @@
-import asyncio
 import logging
+from core.agent_chat_loop import run_chat_agent_loop
 from core.dispatcher import dispatcher
 from core.agent_errors import build_agent_loop_error_payload
 from core.agent_headless_loop import run_headless_agent_loop
 from core.agent_headless_setup import prepare_headless_agent_run
 from core.agent_chat_setup import prepare_chat_agent_run
-from core.agent_ltm import schedule_ltm_compression
 from core.agent_runtime_config import (
     DEFAULT_AGENT_MAX_STEPS,
     DEFAULT_HEADLESS_AGENT_MAX_STEPS,
@@ -17,9 +16,6 @@ from core.agent_runtime_config import (
     update_agent_runtime_config,
 )
 from core.agent_sse import sse_event
-from core.agent_step_summary import stream_step_limit_summary
-from core.agent_streaming import AgentStreamState, stream_assistant_response
-from core.agent_tool_loop import process_chat_tool_calls
 from core.agent_task_dispatch import dispatch_group_tasks as run_group_tasks
 from core.model_catalog import get_available_models, get_available_models_for_provider
 from core.embedding_config import (
@@ -70,71 +66,21 @@ async def chat_stream_agent(
     tools = run.tools
 
     try:
-        # Initial status
-        yield sse_event({"type": "status", "content": "🤖 AI 正在分析并规划执行路径..."})
-        await asyncio.sleep(0.05)
-
-        max_steps = agent_max_steps("chat")
-        for iteration in range(max_steps):
-            logger.info(
-                f"Loop {iteration} for {session_id}, cancel_flags: {cancel_flags.get(session_id)}"
-            )
-            if cancel_flags.get(session_id) is True:
-                cancel_flags[session_id] = False
-                cancel_payload = {"type": "error", "content": "任务已被手动中止。"}
-                yield sse_event(cancel_payload)
-                yield sse_event({"type": "done"})
-                break
-
-            yield sse_event({"type": "status", "content": "💭 思考中..."})
-
-            stream_state = AgentStreamState()
-            async for event in stream_assistant_response(
-                model_name=model_name,
-                messages=messages,
-                thinking_mode=thinking_mode,
-                tools=tools,
-                state=stream_state,
-                cancel_requested=lambda: cancel_flags.get(session_id) is True,
-            ):
-                yield event
-
-            tool_calls = stream_state.tool_calls
-            safe_msg = stream_state.assistant_message()
-            messages.append(safe_msg)
-            memory_db.append_message(session_id, safe_msg)
-
-            if not tool_calls:
-                yield sse_event({"type": "done"})
-                break
-
-            async for event in process_chat_tool_calls(
-                tool_calls=tool_calls,
-                session_id=session_id,
-                messages=messages,
-                memory_store=memory_db,
-                dispatcher=dispatcher,
-                context=context,
-                iteration=iteration,
-            ):
-                yield event
-
-        else:
-            async for event in stream_step_limit_summary(
-                model_name=model_name,
-                messages=messages,
-                session_id=session_id,
-                max_steps=max_steps,
-                memory_store=memory_db,
-            ):
-                yield event
-
-        schedule_ltm_compression(
-            memory_store=memory_db,
+        async for event in run_chat_agent_loop(
             session_id=session_id,
+            model_name=model_name,
+            thinking_mode=thinking_mode,
+            messages=messages,
+            memory_store=memory_db,
+            dispatcher=dispatcher,
+            context=context,
+            tools=tools,
+            cancel_flags=cancel_flags,
             emb_client=emb_client,
             embedding_model=embedding_model,
-        )
+            event_logger=logger,
+        ):
+            yield event
 
     except Exception as e:
         error_msg = str(e)
