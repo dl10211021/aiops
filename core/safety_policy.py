@@ -16,6 +16,12 @@ from core.safety_action_classifiers import (
     classify_redis_actions,
     classify_windows_actions,
 )
+from core.safety_action_decisions import (
+    action_label as _resolve_action_label,
+    action_reason as _resolve_action_reason,
+    collect_action_rule_decisions,
+    top_action_decision as _resolve_top_action_decision,
+)
 from core.safety_network_boundary import check_network_boundary as _evaluate_network_boundary
 from core.safety_platform_actions import classify_platform_actions as _platform_actions
 from core.safety_action_catalog import (
@@ -966,50 +972,27 @@ def _tool_actions(tool_call_name: str, args: dict[str, Any]) -> list[str]:
 
 
 def _action_rule_decisions(policy: dict[str, Any], tool_call_name: str, args: dict[str, Any]) -> list[tuple[str, str]]:
-    category = TOOL_CATEGORY.get(tool_call_name, "")
-    if not category:
-        return []
-    rules = policy.get("action_rules", {}).get(category, {})
-    if not isinstance(rules, dict):
-        return []
-    decisions: list[tuple[str, str]] = []
-    for action in sorted(_tool_actions(tool_call_name, args), key=lambda item: _ACTION_PRIORITY.get(item, 100)):
-        decision = str(rules.get(action) or "").strip().lower()
-        if decision in {"allow", "approval", "deny"}:
-            decisions.append((action, decision))
-    return decisions
+    return collect_action_rule_decisions(
+        policy,
+        category=TOOL_CATEGORY.get(tool_call_name, ""),
+        actions=_tool_actions(tool_call_name, args),
+    )
 
 
 def _action_label(action: str) -> str:
-    detail = action_detail(action)
-    if detail:
-        return str(detail.get("label") or action)
-    return action
+    return _resolve_action_label(action)
 
 
 def _action_reason(action: str, decision: str) -> str:
-    label = _action_label(action)
-    if action == "sql.instance_admin":
-        label = "数据库实例级管理"
-    if decision == "deny":
-        return f"{label} 已被动作策略设置为禁止执行。"
-    if decision == "approval":
-        return f"{label} 已被动作策略设置为需要人工审批。"
-    return f"{label} 已被动作策略设置为允许。"
+    return _resolve_action_reason(action, decision)
 
 
 def _top_action_decision(policy: dict[str, Any], tool_call_name: str, args: dict[str, Any]) -> tuple[str, str, str]:
-    decisions = _action_rule_decisions(policy, tool_call_name, args)
-    for action, decision in decisions:
-        if decision == "deny":
-            return action, decision, _action_reason(action, decision)
-    for action, decision in decisions:
-        if decision == "approval":
-            return action, decision, _action_reason(action, decision)
-    if decisions and all(decision == "allow" for _, decision in decisions):
-        action = decisions[0][0]
-        return action, "allow", _action_reason(action, "allow")
-    return "", "", ""
+    return _resolve_top_action_decision(
+        policy,
+        category=TOOL_CATEGORY.get(tool_call_name, ""),
+        actions=_tool_actions(tool_call_name, args),
+    )
 
 
 def check_network_boundary(tool_call_name: str, args: dict[str, Any], context: dict[str, Any]) -> tuple[bool, str]:
