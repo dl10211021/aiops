@@ -3,15 +3,14 @@ import re
 import yaml
 import json
 import asyncio
-import subprocess
 import logging
 import time
-import shlex
 from pathlib import Path
 from typing import Dict, Any, List
 
 from core.asset_protocols import API_PROTOCOLS, NETWORK_CLI_ASSET_TYPES, SQL_PROTOCOLS, STORAGE_ASSET_TYPES, resolve_asset_identity
 from core.custom_skill_storage import CustomSkillStorageError, resolve_custom_skill_resource_file
+from core.local_script_execution import execute_local_script, validate_local_execution
 from core.safety_policy import (
     check_approval_needed as policy_check_approval_needed,
     explain_policy_decision,
@@ -311,53 +310,10 @@ class SkillDispatcher:
     def _validate_local_execution(
         self, command: str, cwd: str, context: Dict[str, Any]
     ) -> tuple[bool, str]:
-        if not command or not isinstance(command, str):
-            return False, "本地执行命令不能为空"
-
-        if re.search(r"(&&|\|\||[;&|`<>])", command):
-            return False, "禁止在 local_execute_script 中使用 Shell 控制符或重定向"
-
         active_paths = context.get("active_skill_paths") or self.get_active_skill_paths(
             context.get("active_skills", [])
         )
-        if not active_paths:
-            return False, "local_execute_script 只能在已挂载 Skill 的目录内执行"
-
-        real_cwd = os.path.realpath(cwd or os.getcwd())
-        real_active_paths = [os.path.realpath(p) for p in active_paths]
-        try:
-            if not any(
-                os.path.commonpath([real_cwd, p]) == p for p in real_active_paths
-            ):
-                return False, "local_execute_script 的 cwd 必须位于已挂载 Skill 目录内"
-        except ValueError:
-            return False, "local_execute_script 的 cwd 路径非法"
-
-        try:
-            parts = shlex.split(command, posix=os.name != "nt")
-        except ValueError as e:
-            return False, f"命令解析失败: {e}"
-
-        if not parts:
-            return False, "本地执行命令不能为空"
-
-        executable = os.path.basename(parts[0]).lower()
-        allowed_executables = {
-            "python",
-            "python.exe",
-            "python3",
-            "python3.exe",
-            "py",
-            "py.exe",
-            "powershell",
-            "powershell.exe",
-            "pwsh",
-            "pwsh.exe",
-        }
-        if executable not in allowed_executables:
-            return False, "local_execute_script 只允许调用解释器运行已挂载 Skill 内的脚本"
-
-        return True, ""
+        return validate_local_execution(command, cwd, active_paths)
 
     def check_approval_needed(self, tool_call_name: str, args: dict, context: dict) -> tuple[bool, str]:
         """【安全层】检查当前大模型执行的指令是否需要人类审批。"""
@@ -519,51 +475,7 @@ class SkillDispatcher:
                 return _blocked_tool_response(tool_call_name, args, context, reason)
 
             try:
-
-                def run_script():
-                    logger.info(f"Executing Local Script: {cmd} in {cwd}")
-                    env = os.environ.copy()
-                    env["PYTHONIOENCODING"] = "utf-8"
-                    env["PYTHONUTF8"] = "1"
-
-                    process = subprocess.Popen(
-                        shlex.split(cmd, posix=os.name != "nt"),
-                        shell=False,
-                        cwd=cwd,
-                        env=env,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                    )
-
-                    try:
-                        out_bytes, _ = process.communicate(timeout=60)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        out_bytes, _ = process.communicate()
-                        return json.dumps(
-                            {
-                                "status": "ERROR",
-                                "error": "脚本执行超时 (超过 60 秒)，已被系统强行中断。请检查是否有死循环或网络阻塞。",
-                            }
-                        )
-
-                    try:
-                        out = out_bytes.decode("utf-8")
-                    except UnicodeDecodeError:
-                        out = out_bytes.decode("gbk", errors="replace")
-
-                    output_limit = 2 * 1024 * 1024 # 2MB limit (适配目前主流 100万~200万 Token 的大模型上下文)
-                    if len(out) > output_limit:
-                        out = out[:output_limit] + "\\n...[警告：输出内容超大，已被截断至 2MB 以内]"
-
-                    return json.dumps(
-                        {
-                            "status": "SUCCESS" if process.returncode == 0 else "ERROR",
-                            "output": out,
-                        }
-                    )
-
-                return await asyncio.to_thread(run_script)
+                return await asyncio.to_thread(execute_local_script, cmd, cwd, logger)
             except Exception as e:
                 return json.dumps({"error": str(e)})
 
