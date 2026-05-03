@@ -34,6 +34,7 @@ from core.agent_prompts import (
     render_headless_system_prompt,
 )
 from core.agent_session_context import build_agent_session_context
+from core.agent_task_dispatch import dispatch_group_tasks as run_group_tasks
 from core.agent_tool_events import (
     build_tool_end_event,
     parse_tool_arguments,
@@ -466,63 +467,23 @@ async def chat_stream_agent(
 
 async def dispatch_group_tasks(tasks: list[dict], allow_mod: bool) -> list[dict]:
     """批量调度并执行一组任务"""
-    # 强制执行最大并发度为 10，保护系统内存和API限制
-    sem = asyncio.Semaphore(10)
-
-    async def run_task(task):
-        target_sid = task.get("target_session_id")
-        task_desc = task.get("task_description")
-
-        if not target_sid or not task_desc:
-            return {
-                "session_id": target_sid,
-                "status": "ERROR",
-                "error": "Invalid task definition",
-            }
-
-        from connections.ssh_manager import ssh_manager
-
-        target_info = ssh_manager.active_sessions.get(target_sid, {}).get("info", {})
-        target_name = target_info.get("remark") or target_info.get("host") or target_sid
-
-        logger.warning(
-            f"🤖 [Swarm 协同] 指挥官 Agent 正在向子会话 {target_name} ({target_sid}) 下达自然语言任务: {task_desc}"
+    async def run_headless_task(
+        target_sid: str,
+        task_desc: str,
+        inherited_allow_mod: bool,
+    ) -> str:
+        return await headless_agent_chat(
+            target_sid,
+            task_desc,
+            inherited_allow_mod=inherited_allow_mod,
         )
 
-        try:
-            # Set a strict 60s timeout per sub-agent to prevent hanging
-            result = await asyncio.wait_for(
-                headless_agent_chat(
-                    target_sid,
-                    task_desc,
-                    inherited_allow_mod=allow_mod,
-                ),
-                timeout=60.0,
-            )
-            return {
-                "session_id": target_sid,
-                "status": "SUCCESS",
-                "report": result,
-            }
-        except asyncio.TimeoutError:
-            return {
-                "session_id": target_sid,
-                "status": "ERROR",
-                "error": "跨域协同超时 (60秒) 被强行中断。",
-            }
-        except Exception as e:
-            return {
-                "session_id": target_sid,
-                "status": "ERROR",
-                "error": f"跨域协同异常: {str(e)}",
-            }
-
-    async def bound_run_task(task):
-        async with sem:
-            return await run_task(task)
-
-    results = await asyncio.gather(*(bound_run_task(task) for task in tasks))
-    return list(results)
+    return await run_group_tasks(
+        tasks,
+        allow_mod,
+        task_runner=run_headless_task,
+        event_logger=logger,
+    )
 
 
 async def headless_agent_chat(
