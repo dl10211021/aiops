@@ -1,6 +1,4 @@
 import os
-import re
-import yaml
 import json
 import asyncio
 import logging
@@ -18,6 +16,11 @@ from core.safety_policy import (
     check_readonly_block,
 )
 from core.skill_lifecycle import validate_skill_candidate, validate_skill_frontmatter
+from core.skill_registry_scanner import (
+    format_skills_for_ui,
+    parse_installed_skill_md,
+    parse_market_skill_md,
+)
 from core.tool_registry import tool_registry
 
 logger = logging.getLogger(__name__)
@@ -88,7 +91,9 @@ class SkillDispatcher:
 
                 if os.path.isdir(folder_path) and os.path.exists(skill_md_path):
                     try:
-                        self._parse_skill_md(skill_md_path, folder_path, new_registry)
+                        skill = parse_installed_skill_md(skill_md_path, folder_path)
+                        if skill:
+                            new_registry[skill["id"]] = skill
                     except Exception as e:
                         logger.error(f"解析 {skill_md_path} 失败: {e}")
 
@@ -97,45 +102,14 @@ class SkillDispatcher:
 
     def _parse_skill_md(self, md_path: str, folder_path: str, registry: dict):
         """解析带有 YAML frontmatter 的 Markdown 文件"""
-        with open(md_path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        # 判断该技能来自哪个技能大本营
-        if r".gemini" in folder_path:
-            source_type = "Gemini Global 官方技能库"
-        elif r".claude" in folder_path:
-            source_type = "Claude 自定义技能库"
-        elif "my_custom_skills" in folder_path:
-            source_type = "OpsCore 私有技能"
-        else:
-            source_type = "OpsCore 内置技能"
-
-        # 简单提取 --- 和 --- 之间的 yaml，以及下方的 markdown 主体
-        if content.startswith("---"):
-            parts = content.split("---", 2)
-            if len(parts) >= 3:
-                frontmatter = yaml.safe_load(parts[1])
-                body = parts[2].strip()
-
-                skill_id = frontmatter.get("name", os.path.basename(folder_path))
-
-                code_blocks = re.findall(r"```", body)
-                tool_count = max(len(code_blocks) // 2, 1)
-
-                registry[skill_id] = {
-                    "id": skill_id,
-                    "name": skill_id.replace("-", " ").title(),
-                    "description": frontmatter.get("description", "未提供描述"),
-                    "instructions": body,  # 这将喂给大模型
-                    "source_path": folder_path,
-                    "source_type": source_type,  # 标记该技能来源
-                    "tool_count": tool_count,
-                }
+        skill = parse_installed_skill_md(md_path, folder_path)
+        if skill:
+            registry[skill["id"]] = skill
 
     def get_all_registered_skills(self) -> List[Dict[str, Any]]:
         """给前端提供本地已安装技能的摘要信息"""
         self.refresh_skills()
-        return self._format_skills_for_ui(self.skills_registry.values())
+        return format_skills_for_ui(self.skills_registry.values())
 
     def get_market_skills(self) -> List[Dict[str, Any]]:
         """扫描外部插件市场，但不入库，仅供前端展示和复制"""
@@ -154,78 +128,17 @@ class SkillDispatcher:
                         continue
 
                     try:
-                        with open(skill_md_path, "r", encoding="utf-8") as f:
-                            content = f.read()
-                        if content.startswith("---"):
-                            parts = content.split("---", 2)
-                            if len(parts) >= 3:
-                                frontmatter = yaml.safe_load(parts[1])
-                                body = parts[2].strip()
-
-                                if r".gemini" in folder_path:
-                                    source_type = "Gemini Global 官方技能库"
-                                elif r".claude" in folder_path:
-                                    source_type = "Claude 自定义技能库"
-                                else:
-                                    source_type = "外部未知技能"
-
-                                market_skills.append(
-                                    {
-                                        "id": frontmatter.get("name", skill_folder),
-                                        "name": frontmatter.get("name", skill_folder)
-                                        .replace("-", " ")
-                                        .title(),
-                                        "description": frontmatter.get(
-                                            "description", "未提供描述"
-                                        ),
-                                        "instructions": body,
-                                        "source_path": folder_path,
-                                        "source_type": source_type,
-                                        "tool_count": max(
-                                            len(re.findall(r"```", body)) // 2, 1
-                                        ),
-                                        "is_market": True,  # 标记为市场技能
-                                    }
-                                )
+                        skill = parse_market_skill_md(skill_md_path, folder_path)
+                        if skill:
+                            market_skills.append(skill)
                     except Exception as e:
                         logger.error(f"解析市场卡带 {skill_md_path} 失败: {e}")
 
-        return self._format_skills_for_ui(market_skills)
+        return format_skills_for_ui(market_skills)
 
     def _format_skills_for_ui(self, skills_list) -> List[Dict[str, Any]]:
         """通用UI格式化"""
-        result = []
-        for v in skills_list:
-            extracted_tools = []
-            for line in v["instructions"].split("\n"):
-                line = line.strip()
-                if line.startswith("- **") or line.startswith("### "):
-                    clean_line = (
-                        line.replace("- **", "")
-                        .replace("**:", "")
-                        .replace("###", "")
-                        .strip()
-                    )
-                    if len(clean_line) > 2 and len(clean_line) < 30:
-                        extracted_tools.append(clean_line)
-
-            if not extracted_tools:
-                extracted_tools = ["基于 Markdown 的自定义指令"]
-
-            result.append(
-                {
-                    "id": v["id"],
-                    "name": v["name"],
-                    "description": v["description"],
-                    "tool_count": v["tool_count"],
-                    "tools": list(set(extracted_tools))[:6],
-                    "source_path": v["source_path"],
-                    "source_type": v["source_type"],
-                    "is_market": v.get("is_market", False),
-                }
-            )
-
-        return result
+        return format_skills_for_ui(skills_list)
 
     def get_skill_instructions(
         self, active_skill_ids: List[str], allow_local_scripts: bool = True
