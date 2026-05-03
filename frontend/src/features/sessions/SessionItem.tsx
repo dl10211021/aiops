@@ -21,16 +21,16 @@ export default function SessionItem({
   return (
     <div
       onClick={onSelect}
-      className={`group mx-1 flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 text-sm transition-all
+      className={`group grid min-h-[58px] cursor-pointer grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border px-2.5 py-2 text-sm transition-all
         ${active
-          ? 'border-ops-accent/35 bg-ops-accent/12 text-ops-accent shadow-[0_0_28px_rgba(243,177,90,0.12)]'
+          ? 'border-ops-accent/55 bg-ops-accent/12 text-ops-accent'
           : needsAttention
             ? 'border-yellow-300/25 bg-yellow-300/8 text-ops-text hover:bg-yellow-300/12'
-            : 'border-transparent text-ops-subtext hover:bg-ops-surface0/70 hover:text-ops-text'}`}
+            : 'border-ops-surface1/45 bg-ops-surface0/35 text-ops-subtext hover:bg-ops-surface0/70 hover:text-ops-text'}`}
     >
       <span
         title={`${session.asset_type}/${session.protocol}`}
-        className="flex h-9 w-12 shrink-0 items-center justify-center rounded-lg bg-ops-dark/70 px-1 text-center text-[10px] font-bold leading-tight text-ops-text"
+        className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-lg bg-ops-dark/70 px-1 text-center text-[10px] font-bold leading-tight text-ops-text"
       >
         {protocolLabel(session.protocol || session.asset_type)}
       </span>
@@ -60,20 +60,22 @@ export default function SessionItem({
             </span>
           )}
         </div>
-        <div className="truncate font-mono text-[10px] text-ops-overlay">
+        <div className="mt-0.5 truncate font-mono text-[10px] text-ops-overlay">
           {session.user}@{session.host}
         </div>
       </div>
-      {session.heartbeatEnabled && (
-        <span className="h-2 w-2 shrink-0 rounded-full bg-ops-success animate-pulse" title="巡检已开启" />
-      )}
-      <button
-        onClick={(event) => onDisconnect(session.id, event)}
-        className="hidden rounded-md px-1.5 py-1 text-xs text-ops-alert hover:bg-ops-alert/10 group-hover:block"
-        title="断开"
-      >
-        断开
-      </button>
+      <div className="flex items-center gap-1">
+        {session.heartbeatEnabled && (
+          <span className="h-2 w-2 shrink-0 rounded-full bg-ops-success animate-pulse" title="巡检已开启" />
+        )}
+        <button
+          onClick={(event) => onDisconnect(session.id, event)}
+          className="hidden rounded-md px-1.5 py-1 text-xs text-ops-alert hover:bg-ops-alert/10 group-hover:block"
+          title="断开"
+        >
+          断开
+        </button>
+      </div>
     </div>
   )
 }

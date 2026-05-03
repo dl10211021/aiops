@@ -1,25 +1,21 @@
 import type { ViewId } from '@/types'
 
 export const VIEW_LABELS: Record<ViewId, string> = {
-  dashboard: '总览大屏',
-  bigscreen: '总览大屏',
+  dashboard: '总览',
+  bigscreen: '总览',
   chat: 'AI 会话',
   assets: '资产中心',
-  cron: '自动化巡检',
-  alerts: '告警事件',
-  approvals: '审批中心',
-  skills: '技能市场',
+  cron: '巡检任务',
+  alerts: '告警',
+  approvals: '审批',
+  skills: 'Skills',
   knowledge: '知识库',
 }
 
 export const THEME_OPTIONS = [
   { id: 'deep-command', label: '深空指挥' },
-  { id: 'obsidian-enterprise', label: '黑曜企业' },
-  { id: 'titanium-industrial', label: '工业钛灰' },
-  { id: 'night-blueprint', label: '夜航蓝图' },
-  { id: 'cyber-amber', label: '赛博琥珀' },
-  { id: 'arctic-console', label: '极地控制台' },
-  { id: 'quantum-teal', label: '量子青绿' },
+  { id: 'titanium', label: '工业钛灰' },
+  { id: 'arctic', label: '极地控制台' },
 ] as const
 
 export type OpsTheme = typeof THEME_OPTIONS[number]['id']

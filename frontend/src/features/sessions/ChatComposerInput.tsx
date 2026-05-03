@@ -35,7 +35,7 @@ export default function ChatComposerInput({
         type="button"
         onClick={() => fileInputRef.current?.click()}
         disabled={uploadingAttachment || isStreaming}
-        className="h-14 shrink-0 rounded-lg border border-ops-surface1 bg-ops-dark px-3 text-sm text-ops-subtext transition-colors hover:border-ops-accent/70 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-[46px] shrink-0 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-sm text-ops-subtext transition-colors hover:border-ops-accent/70 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-50"
         title="上传附件"
       >
         {uploadingAttachment ? '解析中' : '附件'}
@@ -52,14 +52,14 @@ export default function ChatComposerInput({
         onPaste={onPaste}
         placeholder="输入消息，Enter 发送，Shift+Enter 换行"
         rows={1}
-        className="min-h-14 flex-1 resize-none rounded-lg border border-ops-surface1 bg-ops-dark px-4 py-4 text-sm leading-5 text-ops-text outline-none transition-colors focus:border-ops-accent"
-        style={{ height: '56px', maxHeight: '260px', overflowY: 'auto' }}
+        className="min-h-[82px] flex-1 resize-y rounded-lg border border-ops-surface1 bg-ops-panel px-4 py-3 text-sm leading-6 text-ops-text outline-none transition-colors focus:border-ops-accent"
+        style={{ height: '82px', maxHeight: '220px', overflowY: 'auto' }}
       />
 
       {isStreaming ? (
         <button
           onClick={onStop}
-          className="h-14 shrink-0 rounded-lg bg-ops-alert px-5 text-sm font-medium text-white transition-colors hover:bg-ops-alert/80"
+          className="h-[46px] shrink-0 rounded-lg bg-ops-alert px-5 text-sm font-medium text-white transition-colors hover:bg-ops-alert/80"
         >
           停止
         </button>
@@ -67,7 +67,7 @@ export default function ChatComposerInput({
         <button
           onClick={onSend}
           disabled={!hasSendableContent}
-          className="h-14 shrink-0 rounded-lg bg-ops-accent px-5 text-sm font-semibold text-ops-dark transition-colors hover:bg-ops-accent/80 disabled:cursor-not-allowed disabled:opacity-40"
+          className="h-[46px] shrink-0 rounded-lg bg-ops-accent px-5 text-sm font-bold text-ops-dark transition-colors hover:bg-ops-accent/80 disabled:cursor-not-allowed disabled:opacity-40"
         >
           发送
         </button>

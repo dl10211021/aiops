@@ -28,7 +28,7 @@ export default function ChatMessageList({
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto px-5 py-5 lg:px-8 lg:py-6 space-y-5"
+      className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-ops-surface0)_62%,transparent),transparent_190px)] px-5 py-5 lg:px-7 lg:py-6"
     >
       {messages.map((msg, index) => (
         <MessageBubble

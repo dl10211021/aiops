@@ -77,6 +77,7 @@ export default function App() {
   const appendMessage = useStore((s) => s.appendMessage)
   const sessions = useStore((s) => s.sessions)
   const currentView = useStore((s) => s.currentView)
+  const sidebarOpen = useStore((s) => s.sidebarOpen)
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const restoreStartedRef = useRef(false)
 
@@ -149,19 +150,35 @@ export default function App() {
     }
   }, [sessions, appendMessage])
 
+  const isChatView = currentView === 'chat'
+
   return (
-    <div className="ops-shell h-screen flex bg-ops-dark overflow-hidden">
-      {/* Left icon nav */}
+    <div className="ops-shell grid h-screen grid-cols-[118px_minmax(0,1fr)] grid-rows-[52px_minmax(0,1fr)] overflow-hidden bg-ops-dark">
+      {/* Global command bar */}
+      <TopBar />
+
+      {/* Left product nav */}
       <LeftNav />
 
-      {/* Sidebar with sessions */}
-      {currentView === 'chat' && <Sidebar />}
-
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        <TopBar />
-        <ViewRouter />
-      </div>
+      {/* Main product workspace */}
+      <main className="min-h-0 min-w-0 overflow-hidden p-3">
+        {isChatView ? (
+          <div
+            className={`grid h-full min-h-0 gap-3 ${
+              sidebarOpen
+                ? 'grid-cols-[minmax(268px,292px)_minmax(0,1fr)]'
+                : 'grid-cols-[minmax(0,1fr)]'
+            }`}
+          >
+            <Sidebar />
+            <ViewRouter />
+          </div>
+        ) : (
+          <div className="h-full min-h-0 overflow-auto">
+            <ViewRouter />
+          </div>
+        )}
+      </main>
 
       {/* Modals */}
       <ModalRouter />

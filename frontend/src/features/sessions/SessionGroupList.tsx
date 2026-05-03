@@ -29,9 +29,9 @@ export default function SessionGroupList({
   onToggleGroup,
 }: SessionGroupListProps) {
   return (
-    <div className="flex-1 space-y-1.5 overflow-y-auto p-2.5">
+    <div className="min-h-0 flex-1 overflow-y-auto p-2">
       {sessionList.length === 0 && (
-        <div className="mt-8 rounded-lg border border-ops-surface0 bg-ops-dark/35 px-3 py-5 text-center text-xs leading-5 text-ops-subtext">
+        <div className="mt-8 rounded-lg border border-ops-surface1/70 bg-ops-surface0/50 px-3 py-5 text-center text-xs leading-5 text-ops-subtext">
           暂无活跃会话
           <br />
           点击上方「+ 新建」连接资产
@@ -42,8 +42,13 @@ export default function SessionGroupList({
         const items = grouped[group] || []
         const selected = group === selectedGroup
         return (
-          <section key={group} className={`rounded-lg border ${selected ? 'border-ops-accent/35 bg-ops-accent/10' : 'border-transparent'}`}>
-            <div className="flex items-center gap-1">
+          <section
+            key={group}
+            className={`mb-2 rounded-lg border bg-ops-panel transition-colors ${
+              selected ? 'border-ops-accent/55 shadow-[0_0_0_1px_rgba(40,208,168,0.14)]' : 'border-ops-surface1/70'
+            }`}
+          >
+            <div className="flex items-center gap-1 px-1.5 py-1">
               <button
                 onClick={() => onToggleGroup(group)}
                 className="grid h-8 w-7 shrink-0 place-items-center rounded-md text-[10px] text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text"
@@ -62,9 +67,9 @@ export default function SessionGroupList({
             </div>
 
             {!collapsedGroups.has(group) && (
-              <div className="space-y-1 pb-1">
+              <div className="grid gap-1 px-1.5 pb-1.5">
                 {items.length === 0 ? (
-                  <div className="mx-2 rounded-md border border-dashed border-ops-surface0 px-3 py-2 text-[11px] text-ops-overlay">
+                  <div className="rounded-md border border-dashed border-ops-surface1/70 px-3 py-2 text-[11px] text-ops-overlay">
                     暂无会话
                   </div>
                 ) : items.map((session) => (

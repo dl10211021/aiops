@@ -5,7 +5,7 @@ export function SidebarToggle({ onToggle }: { onToggle: () => void }) {
   return (
     <button
       onClick={onToggle}
-      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-base text-ops-subtext hover:bg-ops-surface0/70 hover:text-ops-text"
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-ops-surface1/55 bg-ops-surface0/55 text-base text-ops-subtext hover:border-ops-accent/55 hover:text-ops-text"
       title="切换侧栏"
     >
       ☰
@@ -21,7 +21,7 @@ export function ThemeSelector({
   onChange: (theme: OpsTheme) => void
 }) {
   return (
-    <label className="hidden h-8 shrink-0 items-center gap-1.5 rounded-full border border-ops-surface1/60 bg-ops-surface0/55 px-2 text-[11px] text-ops-overlay lg:flex">
+    <label className="hidden h-8 shrink-0 items-center gap-1.5 rounded-lg border border-ops-surface1/70 bg-ops-surface0/65 px-2 text-[11px] text-ops-overlay lg:flex">
       <span>主题</span>
       <select
         value={value}
@@ -52,7 +52,7 @@ export function SessionTitle({
       </span>
       <span
         title={`${session.user}@${session.host} (${session.asset_type}/${session.protocol})`}
-        className="hidden min-w-0 max-w-[24rem] truncate rounded-full border border-ops-surface1/60 bg-ops-dark/45 px-2.5 py-1 text-[11px] text-ops-subtext lg:inline-block"
+        className="hidden min-w-0 max-w-[30rem] truncate rounded-lg border border-ops-surface1/60 bg-ops-dark/45 px-2.5 py-1 text-[11px] text-ops-subtext lg:inline-block"
       >
         {session.user}@{session.host} · {sessionAssetText}
       </span>
@@ -88,7 +88,7 @@ export function SessionActionButtons({
 
       <button
         onClick={onTogglePermission}
-        className={`h-8 rounded-full border px-3 text-xs font-semibold transition-colors ${
+        className={`h-8 rounded-lg border px-3 text-xs font-semibold transition-colors ${
           session.isReadWriteMode
             ? 'border-ops-alert/40 bg-ops-alert/15 text-ops-alert'
             : 'border-ops-surface1/60 bg-ops-surface0/60 text-ops-subtext hover:text-ops-text'
@@ -100,7 +100,7 @@ export function SessionActionButtons({
 
       <button
         onClick={onToggleHeartbeat}
-        className={`h-8 rounded-full border px-3 text-xs font-semibold transition-colors ${
+        className={`h-8 rounded-lg border px-3 text-xs font-semibold transition-colors ${
           session.heartbeatEnabled
             ? 'border-ops-success/40 bg-ops-success/15 text-ops-success'
             : 'border-ops-surface1/60 bg-ops-surface0/60 text-ops-subtext hover:text-ops-text'
@@ -112,7 +112,7 @@ export function SessionActionButtons({
 
       <button
         onClick={onDynamicSkills}
-        className="h-8 rounded-full border border-ops-surface1/60 bg-ops-surface0/60 px-3 text-xs font-semibold text-ops-subtext transition-colors hover:text-ops-text"
+        className="h-8 rounded-lg border border-ops-surface1/60 bg-ops-surface0/60 px-3 text-xs font-semibold text-ops-subtext transition-colors hover:text-ops-text"
         title="管理当前会话技能"
       >
         技能 {session.skills.length}
@@ -120,7 +120,7 @@ export function SessionActionButtons({
 
       <button
         onClick={onSessionActions}
-        className="grid h-8 w-8 place-items-center rounded-full border border-ops-surface1/60 bg-ops-surface0/60 text-xs font-semibold text-ops-subtext transition-colors hover:text-ops-text"
+        className="grid h-8 w-8 place-items-center rounded-lg border border-ops-surface1/60 bg-ops-surface0/60 text-xs font-semibold text-ops-subtext transition-colors hover:text-ops-text"
         title="更多会话操作"
       >
         ...

@@ -136,7 +136,7 @@ export default function ChatWindow() {
         onReadWriteConfirmChange={setReadWriteConfirm}
         onReadWriteConfirmClose={() => setReadWriteConfirm(null)}
       />
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-ops-dark/20">
+    <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-ops-surface1/80 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
       <SessionToolsetBar
         catalog={toolCatalog}
         session={session}
@@ -197,7 +197,7 @@ export default function ChatWindow() {
         onStop={stopStreaming}
         onTraceActionRule={safetyPolicyActionRule.saveActionRule}
       />
-    </div>
+    </section>
     </>
   )
 }
