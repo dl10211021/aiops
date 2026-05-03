@@ -31,6 +31,7 @@ from core.agent_prompts import (
 )
 from core.agent_session_context import build_agent_session_context
 from core.agent_sse import sse_event, sse_raw
+from core.agent_streaming import AgentStreamState, stream_assistant_response
 from core.agent_task_dispatch import dispatch_group_tasks as run_group_tasks
 from core.agent_tool_events import (
     build_tool_end_event,
@@ -134,48 +135,21 @@ async def chat_stream_agent(
                 yield sse_event({"type": "done"})
                 break
 
-            from core.llm_execution import execute_chat_stream
-
-            assistant_content = ""
-            thinking_content = ""
-            tool_calls = []
-
             yield sse_event({"type": "status", "content": "💭 思考中..."})
 
-            is_thinking_stream = False
-            async for chunk in execute_chat_stream(
-                model_name, messages, thinking_mode, tools=tools
+            stream_state = AgentStreamState()
+            async for event in stream_assistant_response(
+                model_name=model_name,
+                messages=messages,
+                thinking_mode=thinking_mode,
+                tools=tools,
+                state=stream_state,
+                cancel_requested=lambda: cancel_flags.get(session_id) is True,
             ):
-                if cancel_flags.get(session_id) is True:
-                    break
-                if chunk["type"] == "thinking":
-                    if not is_thinking_stream:
-                        yield sse_event({"type": "chunk", "content": "<think>\n"})
-                        is_thinking_stream = True
-                    yield sse_event({"type": "chunk", "content": chunk["content"]})
-                    thinking_content += chunk["content"]
-                elif chunk["type"] == "content":
-                    if is_thinking_stream:
-                        yield sse_event({"type": "chunk", "content": "\n</think>\n"})
-                        is_thinking_stream = False
-                    yield sse_event({"type": "chunk", "content": chunk["content"]})
-                    assistant_content += chunk["content"]
-                elif chunk["type"] == "tool_calls":
-                    if is_thinking_stream:
-                        yield sse_event({"type": "chunk", "content": "\n</think>\n"})
-                        is_thinking_stream = False
-                    tool_calls = chunk["tool_calls"]
+                yield event
 
-            if is_thinking_stream:
-                yield sse_event({"type": "chunk", "content": "\n</think>\n"})
-                is_thinking_stream = False
-
-            safe_msg = {"role": "assistant", "content": assistant_content}
-            if thinking_content:
-                safe_msg["reasoning_content"] = thinking_content
-            if tool_calls:
-                safe_msg["tool_calls"] = tool_calls
-
+            tool_calls = stream_state.tool_calls
+            safe_msg = stream_state.assistant_message()
             messages.append(safe_msg)
             memory_db.append_message(session_id, safe_msg)
 
