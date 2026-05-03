@@ -6,6 +6,7 @@ from core.agent_approval import (
     record_headless_approval_block,
     record_tool_approval_request,
 )
+from core.agent_errors import build_agent_loop_error_payload
 from core.agent_interactions import (
     _build_interaction_payload,
     _normalize_interaction_options,
@@ -439,19 +440,8 @@ async def chat_stream_agent(
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Agent Loop Failed: {error_msg}")
-        if "timeout" in error_msg.lower() or "connect" in error_msg.lower():
-            timeout_payload = {
-                "type": "error",
-                "content": "❌ **超时** 无法连接到 AI 模型接口\n\n"
-                "**可能原因**\n1. 模型服务地址不可达\n2. API Key 或模型名称配置不正确",
-            }
-            yield f"data: {json.dumps(timeout_payload)}\n\n"
-        else:
-            error_payload = {
-                "type": "error",
-                "content": f"❌ AI 思考时发生异常，请稍后再试。详细信息：`{error_msg}`",
-            }
-            yield f"data: {json.dumps(error_payload)}\n\n"
+        error_payload = build_agent_loop_error_payload(error_msg)
+        yield f"data: {json.dumps(error_payload)}\n\n"
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
 
