@@ -24,6 +24,7 @@ from core.safety_action_decisions import (
 )
 from core.safety_network_boundary import check_network_boundary as _evaluate_network_boundary
 from core.safety_platform_actions import classify_platform_actions as _platform_actions
+from core.safety_tool_categories import TOOL_CATEGORY
 from core.safety_action_catalog import (
     ACTION_PRIORITY as _ACTION_PRIORITY,
     DEFAULT_ACTION_RULES,
@@ -503,40 +504,6 @@ DEFAULT_SAFETY_POLICY: dict[str, Any] = {
             "readonly_unknown_requires_approval": False,
         },
     },
-}
-
-
-TOOL_CATEGORY = {
-    "local_execute_script": "local",
-    "evolve_skill": "skill_change",
-    "linux_execute_command": "linux",
-    "container_execute_command": "linux",
-    "middleware_execute_command": "linux",
-    "storage_execute_command": "linux",
-    "network_cli_execute_command": "network",
-    "execute_on_scope": "linux",
-    "winrm_execute_command": "windows",
-    "db_execute_query": "sql",
-    "redis_execute_command": "redis",
-    "memcached_execute_command": "memcached",
-    "mongodb_find": "mongodb",
-    "http_api_request": "http",
-    "database_api_request": "http",
-    "bigdata_api_request": "http",
-    "middleware_api_request": "http",
-    "discovery_api_request": "http",
-    "container_api_request": "http",
-    "network_api_request": "http",
-    "security_api_request": "http",
-    "cicd_api_request": "http",
-    "ai_platform_api_request": "http",
-    "oob_api_request": "http",
-    "k8s_api_request": "http",
-    "monitoring_api_query": "http",
-    "virtualization_api_request": "http",
-    "storage_api_request": "http",
-    "service_probe_request": "http",
-    "snmp_get": "snmp",
 }
 
 
