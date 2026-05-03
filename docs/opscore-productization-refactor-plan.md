@@ -6,6 +6,69 @@
 
 产品化重构的目标不是重写业务功能，而是在保持现有行为 100% 一致的前提下，把系统重构为可测试、可扩展、可审计、可部署的生产级架构。
 
+## 0.1 当前已落地的重构边界（2026-05-03）
+
+本轮重构已经按“先拆巨型模块、保留兼容 API、每步全量门禁”的原则落地到以下边界。后续重构必须延续这些边界，禁止把新逻辑重新塞回巨型文件。
+
+### 0.1.1 `core/memory.py` 已降级为协调器
+
+`MemoryDB` 当前保留的职责：
+
+- SQLite 连接、schema 初始化和兼容迁移。
+- Fernet 加密/解密辅助。
+- LanceDB 长期记忆、RAG 相关初始化和检索协调。
+- 对旧调用方保持兼容的委托入口。
+
+已经提取出的领域存储：
+
+| 领域 | 新模块 | 职责 |
+| --- | --- | --- |
+| 会话消息 | `core/session_message_store.py` | 会话消息 CRUD、历史窗口、tool call 顺序修复、附件字段兼容 |
+| 资产目录 | `core/asset_store.py` | 资产 CRUD、标签、协议归一化、凭据加密回调、UPSERT |
+| 快捷命令 | `core/slash_command_store.py` | 内置/自定义快捷命令持久化和协议过滤 |
+| 资产画像 | `core/asset_profile_store.py` | 资产画像读写与兼容更新 |
+| Webhook 发送记录 | `core/webhook_delivery_store.py` | 会话 Webhook delivery 状态和查询 |
+
+维护规则：
+
+- 新增 SQLite 业务表时，优先创建对应领域 store，不允许继续扩张 `MemoryDB`。
+- `MemoryDB` 只做依赖组装、事务入口和旧接口委托。
+- 与会话、资产、配置、命令相关的测试应优先覆盖 store，而不是绕 API 层测试。
+
+### 0.1.2 `connections/db_manager.py` 已拆出执行边界
+
+`DatabaseExecutor` 当前保留的职责：
+
+- 驱动元数据、能力声明和高层路由。
+- 对历史静态方法保持兼容的薄包装。
+- 不同数据库执行器的统一入口。
+
+已经提取出的执行模块：
+
+| 领域 | 新模块 | 职责 |
+| --- | --- | --- |
+| SQL 结果格式化 | `connections/db_execution_result.py` | 语句类型判断、commit 语义、查询/非查询结果结构 |
+| Oracle 客户端发现 | `connections/oracle_client_discovery.py` | thick-mode client 目录发现、环境变量开关解析 |
+| 原生 SQL 执行 | `connections/native_sql_executor.py` | MySQL、PostgreSQL、MSSQL 的连接、执行和关闭 |
+| JDBC 执行 | `connections/jdbc_executor.py` | JDBC URL 构建、driver jar/class 校验、JayDeBeApi 执行 |
+
+维护规则：
+
+- 新增数据库方言、驱动参数或执行语义时，应落到 `connections/*executor.py` 或专门方言模块。
+- `DatabaseExecutor` 中只保留兼容包装和统一调度，不再新增大段驱动实现。
+- 连接执行结果必须通过 `db_execution_result` 统一格式化，保证前端和工具调用结果契约稳定。
+
+### 0.1.3 已完成的产品化切片
+
+| 切片 | 状态 | 验证方式 |
+| --- | --- | --- |
+| Dispatcher 技能进化、会话工具、通用工具拆分 | 已完成 | 目标测试 + 全量 preflight |
+| Session Inspector 模板运行和 profile 边界拆分 | 已完成 | 目标测试 + 全量 preflight |
+| `core/memory.py` 的命令、画像、Webhook、消息、资产存储拆分 | 已完成 | 新增 store 单测 + 相关历史/资产测试 + 全量 preflight |
+| `connections/db_manager.py` 的结果、Oracle、原生 SQL、JDBC 执行拆分 | 已完成 | 新增执行器单测 + DB manager 兼容测试 + 全量 preflight |
+
+最新完整门禁要求仍以仓库规则为准：提交前必须运行 `python scripts/worktree_audit.py --check-staged` 和 `python scripts/preflight.py --check-git`。本轮已按切片多次通过完整 preflight，最近一次覆盖 894 个后端 unittest、Python 编译、安全扫描、`pip check`、`npm audit` 和前端构建。
+
 ## 1. 分析范围与明确假设
 
 ### 1.1 已分析范围
