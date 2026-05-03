@@ -4,6 +4,8 @@ import type { Session } from '@/types'
 import { protocolLabel } from '@/utils/assetDisplay'
 import { normalizeSessionGroupName, sessionPrimaryGroup, uniqueSessionGroups } from './sessionGroups'
 
+const CUSTOM_GROUP_OPTION = '__custom_session_group__'
+
 export interface SessionEditValues {
   groupName: string
   remark: string
@@ -28,12 +30,14 @@ export default function SessionEditModal({
   const currentGroup = sessionPrimaryGroup(session)
   const [remark, setRemark] = useState(session.remark || '')
   const [groupName, setGroupName] = useState(currentGroup)
+  const [customGroupName, setCustomGroupName] = useState('')
   const [tagsText, setTagsText] = useState((session.tags || []).slice(1).join(', '))
   const [formError, setFormError] = useState('')
 
   useEffect(() => {
     setRemark(session.remark || '')
     setGroupName(sessionPrimaryGroup(session))
+    setCustomGroupName('')
     setTagsText((session.tags || []).slice(1).join(', '))
     setFormError('')
   }, [session])
@@ -45,7 +49,9 @@ export default function SessionEditModal({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const nextGroup = normalizeSessionGroupName(groupName)
+    const nextGroup = normalizeSessionGroupName(
+      groupName === CUSTOM_GROUP_OPTION ? customGroupName : groupName,
+    )
     if (!nextGroup) {
       setFormError('会话组不能为空')
       return
@@ -101,19 +107,37 @@ export default function SessionEditModal({
 
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-ops-subtext">会话组</span>
-            <input
-              list={`session-group-options-${session.id}`}
+            <select
               value={groupName}
-              onChange={(event) => setGroupName(event.target.value)}
+              onChange={(event) => {
+                setGroupName(event.target.value)
+                setFormError('')
+              }}
               className="w-full rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors focus:border-ops-accent"
-              placeholder="选择已有组或输入新组名"
-            />
-            <datalist id={`session-group-options-${session.id}`}>
+            >
               {selectableGroups.map((group) => (
                 <option key={group} value={group}>{group}</option>
               ))}
-            </datalist>
+              <option value={CUSTOM_GROUP_OPTION}>输入新的会话组...</option>
+            </select>
           </label>
+
+          {groupName === CUSTOM_GROUP_OPTION && (
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-ops-subtext">新会话组名称</span>
+              <input
+                autoFocus
+                value={customGroupName}
+                onChange={(event) => {
+                  setCustomGroupName(event.target.value)
+                  setFormError('')
+                }}
+                maxLength={80}
+                placeholder="例如：生产数据库、网络设备"
+                className="w-full rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
+              />
+            </label>
+          )}
 
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-ops-subtext">标签（不含会话组）</span>
