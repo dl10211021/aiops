@@ -11,6 +11,7 @@ from core.agent_interactions import (
     _normalize_interaction_options,
     _wait_for_user_interaction,
 )
+from core.agent_ltm import retrieve_ltm_context, schedule_ltm_compression
 from core.agent_runtime_config import (
     DEFAULT_AGENT_MAX_STEPS,
     DEFAULT_HEADLESS_AGENT_MAX_STEPS,
@@ -82,14 +83,14 @@ async def chat_stream_agent(
     # 从外部 Markdown 文件加载 Agent 的核心人格 (Soul)
     base_prompt = load_agent_profile_prompt(agent_profile)
 
-    # 从 LanceDB 获取长期记忆（与当前话题相关的历史摘要）
-    try:
-        ltm_context = await memory_db.retrieve_ltm(
-            session_id, user_message, emb_client, embedding_model
-        )
-    except Exception as e:
-        logger.error(f"LTM retrieve error: {e}")
-        ltm_context = ""
+    ltm_context = await retrieve_ltm_context(
+        memory_store=memory_db,
+        session_id=session_id,
+        user_message=user_message,
+        emb_client=emb_client,
+        embedding_model=embedding_model,
+        event_logger=logger,
+    )
 
     SYSTEM_PROMPT = render_chat_system_prompt(
         session_context=session_context,
@@ -428,9 +429,11 @@ async def chat_stream_agent(
             memory_db.append_message(session_id, safe_summary_msg)
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
-        # ÿֶԻ׽󣬴ڼ첽ѹ (̨ǰ)
-        asyncio.create_task(
-            memory_db.compress_and_store_ltm(session_id, emb_client, embedding_model)
+        schedule_ltm_compression(
+            memory_store=memory_db,
+            session_id=session_id,
+            emb_client=emb_client,
+            embedding_model=embedding_model,
         )
 
     except Exception as e:
