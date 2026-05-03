@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from api import (
     approval_routes,
+    chat_routes,
     connection_routes,
     routes,
     session_runtime_routes,
@@ -40,11 +41,22 @@ class TestInteractionApprovalSkillRoutes(unittest.TestCase):
         self.assertIn("/approvals/{approval_id}/decision", paths)
         self.assertIn("/approvals/{approval_id}/execute", paths)
 
+    def test_chat_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/chat", paths)
+        self.assertIn("/chat/attachments/preview", paths)
+
     def test_chat_attachment_preview_preserves_response_shape(self):
         attachment = {"filename": "runbook.txt", "text": "hello"}
 
-        with patch("api.routes._preview_attachment_content", return_value=attachment):
-            response = asyncio.run(routes.preview_chat_attachment(FakeUploadFile()))
+        with patch(
+            "api.chat_routes._preview_attachment_content",
+            return_value=attachment,
+        ):
+            response = asyncio.run(
+                chat_routes.preview_chat_attachment(FakeUploadFile())
+            )
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, {"attachment": attachment})

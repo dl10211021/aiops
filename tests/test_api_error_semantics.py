@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from api import (
     approval_routes,
     asset_routes,
+    chat_routes,
     config_routes,
     connection_routes,
     knowledge_routes,
@@ -27,6 +28,7 @@ from api.schemas import (
     SafetyPolicyUpdateRequest,
     TestNotificationRequest,
     UserInteractionResponseRequest,
+    ChatRequest,
 )
 
 
@@ -308,7 +310,7 @@ class TestApiErrorSemantics(unittest.TestCase):
         self.assertEqual(snmp.tool_args(), {"oid": "1.3.6.1.2.1.1.1.0"})
 
     def test_chat_attachment_preview_parses_text_and_xlsx_content(self):
-        text_preview = routes._preview_attachment_content(
+        text_preview = chat_routes._preview_attachment_content(
             "runbook.txt",
             "text/plain",
             "巡检步骤\n1. 查看服务状态".encode("utf-8"),
@@ -334,12 +336,12 @@ class TestApiErrorSemantics(unittest.TestCase):
                 </worksheet>""",
             )
 
-        xlsx_preview = routes._preview_attachment_content(
+        xlsx_preview = chat_routes._preview_attachment_content(
             "assets.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             xlsx_bytes.getvalue(),
         )
-        image_preview = routes._preview_attachment_content(
+        image_preview = chat_routes._preview_attachment_content(
             "screen.png",
             "image/png",
             b"\x89PNG\r\n\x1a\n",
@@ -352,7 +354,7 @@ class TestApiErrorSemantics(unittest.TestCase):
         self.assertIn("图片文件：screen.png", image_preview["text"])
 
     def test_chat_request_normalizes_attachment_metadata_and_rejects_bad_data_url(self):
-        req = routes.ChatRequest(
+        req = ChatRequest(
             session_id="sid",
             message="hello",
             attachments=[
@@ -379,7 +381,7 @@ class TestApiErrorSemantics(unittest.TestCase):
         self.assertNotIn("..", req.attachments[0]["filename"])
 
         with self.assertRaises(ValidationError):
-            routes.ChatRequest(
+            ChatRequest(
                 session_id="sid",
                 message="hello",
                 attachments=[
