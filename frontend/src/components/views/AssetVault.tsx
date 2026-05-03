@@ -1,10 +1,9 @@
 import InspectionReportModal from '@/components/inspection/InspectionReportModal'
 import PageHeader from '@/components/layout/PageHeader'
-import { AssetEmptyState } from './AssetVaultCards'
-import { DeleteAssetDialog, NormalizeAssetsDialog } from './AssetVaultDialogs'
+import { BatchImportAssetsDialog, DeleteAssetDialog, NormalizeAssetsDialog } from './AssetVaultDialogs'
 import { AssetVaultFilterPanel, AssetVaultHeaderActions } from './AssetVaultFilterPanel'
 import { VerificationPanel } from './AssetVerificationPanel'
-import { AssetGroupSections, AssetOverviewGrid } from './AssetVaultPageSections'
+import { AssetTablePanel } from './AssetVaultPageSections'
 import { buildAssetVaultViewModel } from './assetVaultViewModel'
 import { useAssetVaultActions } from './useAssetVaultActions'
 import { useAssetVaultData } from './useAssetVaultData'
@@ -18,7 +17,6 @@ export default function AssetVault() {
     catalogTypes,
     categoryLabels,
     loadAssets,
-    overview,
     refreshVerificationOverview,
     setAssets,
     verificationOverview,
@@ -39,21 +37,17 @@ export default function AssetVault() {
   } = useAssetVaultFilters()
 
   const {
-    assetGroups,
     assetTypeLabels,
     availableAssetTypes,
     availableCategoryOptions,
     availableConnectors,
-    categoryForAsset,
     categoryStats: catalogCategoryStats,
-    connectorForAsset,
     connectorForAssetTypeFilter,
     connectorLabels,
     displayForAsset,
     filtered,
     hasActiveFilters,
     matrixByAssetId,
-    protocolLabelForAsset,
   } = buildAssetVaultViewModel({
     assets,
     assetTypeFilter,
@@ -80,18 +74,24 @@ export default function AssetVault() {
   })
 
   const {
+    batchImportDraft,
+    batchImportOpen,
     deleteTarget,
     deletingAsset,
+    handleBatchImportConfirmed,
     handleConnect,
     handleDeleteConfirmed,
     handleNormalizeAssets,
     handleNormalizeConfirmed,
+    importingAssets,
     normalizeDialog,
     normalizingAssets,
     openCreateAsset,
     openVerification,
     reportRunId,
     runVerification,
+    setBatchImportDraft,
+    setBatchImportOpen,
     setDeleteTarget,
     setNormalizeDialog,
     setReportRunId,
@@ -106,24 +106,19 @@ export default function AssetVault() {
   })
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 lg:p-5">
-      <div className="w-full max-w-none">
+    <div className="h-full min-h-0 overflow-y-auto">
+      <div className="w-full max-w-none pb-4">
         <PageHeader
-          eyebrow="数据中心资产台账"
           title="资产中心"
-          description="统一管理资产凭据、连接方式、巡检入口和 AI 会话上下文"
+          description="资产、协议、凭据、标签、验证矩阵。"
           actions={(
             <AssetVaultHeaderActions
-              search={search}
+              onBatchImport={() => setBatchImportOpen(true)}
               onCreateAsset={openCreateAsset}
               onNormalize={handleNormalizeAssets}
-              onRefresh={loadAssets}
-              onSearchChange={setSearch}
             />
           )}
         />
-
-        <AssetOverviewGrid overview={overview} verificationOverview={verificationOverview} />
 
         <AssetVaultFilterPanel
           assetCount={assets.length}
@@ -144,28 +139,19 @@ export default function AssetVault() {
           onConnectorChange={setConnectorFilter}
         />
 
-        <AssetGroupSections
-          assetGroups={assetGroups}
-          assetTypeLabels={assetTypeLabels}
-          categoryForAsset={categoryForAsset}
-          categoryLabels={categoryLabels}
-          connectorForAsset={connectorForAsset}
-          connectorLabels={connectorLabels}
+        <AssetTablePanel
+          assets={filtered}
+          displayForAsset={displayForAsset}
+          hasActiveFilters={hasActiveFilters}
           matrixByAssetId={matrixByAssetId}
-          protocolLabelForAsset={protocolLabelForAsset}
+          onClearFilters={clearFilters}
           onConnect={handleConnect}
           onDelete={setDeleteTarget}
           onOpenVerification={(item) => void openVerification(item)}
+          onRefresh={() => void loadAssets()}
+          onSearchChange={setSearch}
+          search={search}
         />
-
-        {filtered.length === 0 && (
-          <AssetEmptyState
-            assetCount={assets.length}
-            hasActiveFilters={hasActiveFilters}
-            onClearFilters={clearFilters}
-            onCreateAsset={openCreateAsset}
-          />
-        )}
       </div>
       {verificationPanel && (
         <VerificationPanel
@@ -176,6 +162,15 @@ export default function AssetVault() {
         />
       )}
       {reportRunId && <InspectionReportModal runId={reportRunId} onClose={() => setReportRunId(null)} />}
+      {batchImportOpen && (
+        <BatchImportAssetsDialog
+          draft={batchImportDraft}
+          importing={importingAssets}
+          onCancel={() => setBatchImportOpen(false)}
+          onChange={setBatchImportDraft}
+          onConfirm={() => void handleBatchImportConfirmed()}
+        />
+      )}
       {deleteTarget && (
         <DeleteAssetDialog
           asset={deleteTarget}

@@ -106,3 +106,53 @@ export function NormalizeAssetsDialog({
     </div>
   )
 }
+
+export function BatchImportAssetsDialog({
+  draft,
+  importing,
+  onCancel,
+  onChange,
+  onConfirm,
+}: {
+  draft: string
+  importing: boolean
+  onCancel: () => void
+  onChange: (value: string) => void
+  onConfirm: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onClick={() => !importing && onCancel()}>
+      <section className="w-full max-w-3xl rounded-lg border border-ops-surface1 bg-ops-panel shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="border-b border-ops-surface0 px-5 py-4">
+          <div className="text-xs font-semibold text-ops-accent">批量导入资产</div>
+          <h2 className="mt-1 text-lg font-bold text-ops-text">导入 JSON 资产数组</h2>
+        </div>
+        <div className="p-5">
+          <textarea
+            value={draft}
+            onChange={(event) => onChange(event.target.value)}
+            rows={12}
+            spellCheck={false}
+            className="w-full resize-y rounded-lg border border-ops-surface1 bg-ops-dark/50 px-3 py-3 font-mono text-xs leading-5 text-ops-text outline-none focus:border-ops-accent"
+          />
+        </div>
+        <div className="flex justify-end gap-2 border-t border-ops-surface0 px-5 py-4">
+          <button
+            onClick={onCancel}
+            disabled={importing}
+            className="px-4 py-2 text-sm text-ops-subtext hover:text-ops-text disabled:opacity-50"
+          >
+            取消
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={importing}
+            className="rounded-lg bg-ops-accent px-4 py-2 text-sm font-semibold text-ops-dark disabled:opacity-50"
+          >
+            {importing ? '导入中...' : '确认导入'}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}

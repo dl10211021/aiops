@@ -15,6 +15,7 @@ export default function TopBar() {
     session,
     sessionAssetText,
     setTheme,
+    setView,
     theme,
     toggleHeartbeat,
     togglePermission,
@@ -62,10 +63,16 @@ export default function TopBar() {
           <div className="flex min-w-0 items-center justify-end gap-2">
             <ThemeSelector value={theme} onChange={setTheme} />
             <button
-              onClick={() => openModal('safety-policy')}
+              onClick={() => setView('approvals')}
               className="h-8 rounded-lg border border-ops-surface1/70 bg-ops-surface0/65 px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/55 hover:text-ops-text"
             >
-              安全
+              审计
+            </button>
+            <button
+              onClick={() => openModal('connect')}
+              className="h-8 rounded-lg border border-ops-surface1/70 bg-ops-surface0/65 px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/55 hover:text-ops-text"
+            >
+              新建资产
             </button>
             <button
               onClick={() => openModal('connect')}

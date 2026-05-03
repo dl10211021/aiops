@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   applyAssetNormalization,
+  batchImportAssets,
   deleteAsset,
   getAssetVerificationMatrix,
   getAssetVerificationRuns,
@@ -44,6 +45,9 @@ export function useAssetVaultActions({
   const [reportRunId, setReportRunId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null)
   const [deletingAsset, setDeletingAsset] = useState(false)
+  const [batchImportOpen, setBatchImportOpen] = useState(false)
+  const [batchImportDraft, setBatchImportDraft] = useState('[\n  {\n    "remark": "Oracle TEST",\n    "host": "172.17.1.207",\n    "port": 1561,\n    "username": "system",\n    "asset_type": "oracle",\n    "protocol": "oracle",\n    "tags": ["数据库"]\n  }\n]')
+  const [importingAssets, setImportingAssets] = useState(false)
   const [normalizeDialog, setNormalizeDialog] = useState<{ rowsToUpdate: number; duplicatesToRemove: number } | null>(null)
   const [normalizingAssets, setNormalizingAssets] = useState(false)
 
@@ -101,6 +105,25 @@ export function useAssetVaultActions({
     }
   }
 
+  const handleBatchImportConfirmed = async () => {
+    setImportingAssets(true)
+    try {
+      const parsed = JSON.parse(batchImportDraft) as unknown
+      if (!Array.isArray(parsed)) {
+        addToast('导入内容必须是 JSON 数组', 'error')
+        return
+      }
+      await batchImportAssets(parsed as Partial<Asset>[])
+      setBatchImportOpen(false)
+      addToast(`资产导入完成：${parsed.length} 条`, 'success')
+      await loadAssets()
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '资产导入失败', 'error')
+    } finally {
+      setImportingAssets(false)
+    }
+  }
+
   const openVerification = async (asset: Asset) => {
     const display = displayForAsset(asset)
     setVerificationPanel({ asset, display, matrix: null, runs: [], inspectionRuns: [], loading: true, running: false })
@@ -146,15 +169,21 @@ export function useAssetVaultActions({
   }
 
   return {
+    batchImportDraft,
+    batchImportOpen,
     deleteTarget,
     deletingAsset,
+    handleBatchImportConfirmed,
     handleConnect,
     handleDeleteConfirmed,
     handleNormalizeAssets,
     handleNormalizeConfirmed,
+    importingAssets,
     normalizeDialog,
     normalizingAssets,
     openCreateAsset,
+    setBatchImportDraft,
+    setBatchImportOpen,
     openVerification,
     reportRunId,
     runVerification,

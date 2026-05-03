@@ -7,6 +7,7 @@ import { readStoredTheme, type OpsTheme } from './topBarModel'
 export function useTopBarState() {
   const currentSessionId = useStore((s) => s.currentSessionId)
   const currentView = useStore((s) => s.currentView)
+  const setView = useStore((s) => s.setView)
   const sessions = useStore((s) => s.sessions)
   const updateSession = useStore((s) => s.updateSession)
   const openModal = useStore((s) => s.openModal)
@@ -59,6 +60,7 @@ export function useTopBarState() {
     session,
     sessionAssetText,
     setTheme,
+    setView,
     theme,
     toggleHeartbeat,
     togglePermission,
