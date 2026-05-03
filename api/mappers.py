@@ -4,21 +4,31 @@ from typing import Any
 
 from api.schemas import (
     AlertEventUpdateRequest,
-    CreateSkillRequest,
     CronAddRequest,
     HeartbeatUpdateRequest,
     InspectionTemplatePayload,
-    MigrateRequest,
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,
     SessionProfileGenerateRequest,
     SessionWebhookSendRequest,
-    SkillRollbackRequest,
 )
 from api.response_mappers.chat import (
     chat_attachment_preview_response_kwargs,
     chat_stop_response_kwargs,
     chat_stream_agent_kwargs,
+)
+from api.response_mappers.skills import (
+    custom_skill_create_kwargs,
+    custom_skill_migration_kwargs,
+    custom_skill_rollback_kwargs,
+    skill_created_response_kwargs,
+    skill_detail_response_kwargs,
+    skill_migration_response_kwargs,
+    skill_registry_response_kwargs,
+    skill_rollback_response_kwargs,
+    skill_scan_response_kwargs,
+    skill_validation_response_kwargs,
+    skill_versions_response_kwargs,
 )
 from api.response_mappers.assets import (
     asset_deleted_response_kwargs,
@@ -59,32 +69,6 @@ def session_heartbeat_update_kwargs(req: HeartbeatUpdateRequest) -> dict[str, An
 
 def session_group_update_kwargs(req: SessionGroupUpdateRequest) -> dict[str, Any]:
     return {"group_name": req.group_name}
-
-
-def custom_skill_create_kwargs(req: CreateSkillRequest) -> dict[str, Any]:
-    return {
-        "skill_id": req.skill_id,
-        "description": req.description,
-        "instructions": req.instructions,
-        "script_name": req.script_name,
-        "script_content": req.script_content,
-        "overwrite_existing": req.overwrite_existing,
-    }
-
-
-def custom_skill_rollback_kwargs(req: SkillRollbackRequest) -> dict[str, Any]:
-    return {
-        "file_name": req.file_name,
-        "version_id": req.version_id,
-        "approval_id": req.approval_id,
-    }
-
-
-def custom_skill_migration_kwargs(req: MigrateRequest) -> dict[str, Any]:
-    return {
-        "source_path": req.source_path,
-        "target_dir_name": req.target_dir_name,
-    }
 
 
 def inspection_template_save_payload(req: InspectionTemplatePayload) -> dict[str, Any]:
@@ -610,64 +594,6 @@ def legacy_command_response_kwargs(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "success",
         "data": data,
-    }
-
-
-def skill_scan_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": result["message"],
-    }
-
-
-def skill_registry_response_kwargs(registry: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": registry,
-    }
-
-
-def skill_detail_response_kwargs(detail: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": detail,
-    }
-
-
-def skill_created_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": result["message"],
-        "data": result["data"],
-    }
-
-
-def skill_validation_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": result,
-    }
-
-
-def skill_versions_response_kwargs(versions: list[dict[str, Any]]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "data": {"versions": versions},
-    }
-
-
-def skill_rollback_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": result["status"],
-        "message": result["message"],
-        "data": result["data"],
-    }
-
-
-def skill_migration_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "status": "success",
-        "message": result["message"],
     }
 
 
