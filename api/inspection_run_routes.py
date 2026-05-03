@@ -8,7 +8,7 @@ from api.response_mappers.inspection import (
     inspection_run_summary_response_kwargs,
     inspection_runs_response_kwargs,
 )
-from api.schemas import ResponseModel
+from api.schema_models.common import ResponseModel
 from core.inspection_run_service import (
     InspectionRunServiceError,
     export_inspection_run_report_content,

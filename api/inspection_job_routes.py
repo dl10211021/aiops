@@ -11,7 +11,8 @@ from api.response_mappers.inspection import (
     cron_job_run_trigger_response_kwargs,
     cron_jobs_response_kwargs,
 )
-from api.schemas import CronAddRequest, ResponseModel
+from api.schema_models.common import ResponseModel
+from api.schema_models.inspection import CronAddRequest
 from core.inspection_job_service import (
     InspectionJobServiceError,
     create_inspection_job_record,

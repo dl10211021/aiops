@@ -16,7 +16,8 @@ from api.response_mappers.assets import (
     batch_asset_import_response_kwargs,
     saved_assets_response_kwargs,
 )
-from api.schemas import AssetPayload, BatchAssetImportItem, ResponseModel
+from api.schema_models.assets import AssetPayload, BatchAssetImportItem
+from api.schema_models.common import ResponseModel
 from core.asset_catalog_response import build_asset_types_response
 from core.asset_cleanup_service import (
     apply_asset_cleanup_record,

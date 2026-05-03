@@ -15,11 +15,11 @@ from api.response_mappers.config import (
     safety_policy_saved_response_kwargs,
     safety_policy_test_response_kwargs,
 )
-from api.schemas import (
+from api.schema_models.common import ResponseModel
+from api.schema_models.config import (
     AgentRuntimeConfigRequest,
     EmbeddingConfigRequest,
     ProviderConfig,
-    ResponseModel,
     SafetyPolicyTestRequest,
     SafetyPolicyUpdateRequest,
 )

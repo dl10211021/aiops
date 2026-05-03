@@ -8,7 +8,8 @@ from api.response_mappers.chat import (
     chat_attachment_preview_response_kwargs,
     chat_stream_agent_kwargs,
 )
-from api.schemas import ChatRequest, ResponseModel
+from api.schema_models.chat import ChatRequest
+from api.schema_models.common import ResponseModel
 from connections.ssh_manager import ssh_manager
 from core.agent import chat_stream_agent
 from core.chat_attachments import (

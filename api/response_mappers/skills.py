@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from api.schemas import CreateSkillRequest, MigrateRequest, SkillRollbackRequest
+from api.schema_models.skills import CreateSkillRequest, MigrateRequest, SkillRollbackRequest
 
 
 def custom_skill_create_kwargs(req: CreateSkillRequest) -> dict[str, Any]:

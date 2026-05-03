@@ -9,7 +9,7 @@ from api.response_mappers.protocols import (
     asset_verification_runs_response_kwargs,
     protocol_verification_overview_response_kwargs,
 )
-from api.schemas import ResponseModel
+from api.schema_models.common import ResponseModel
 from core.protocol_verification_service import (
     ProtocolVerificationServiceError,
     build_protocol_verification_matrix,

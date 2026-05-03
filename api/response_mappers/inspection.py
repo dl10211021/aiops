@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from api.schemas import CronAddRequest, InspectionTemplatePayload
+from api.schema_models.inspection import CronAddRequest, InspectionTemplatePayload
 
 
 def inspection_template_save_payload(req: InspectionTemplatePayload) -> dict[str, Any]:

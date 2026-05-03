@@ -8,7 +8,8 @@ from api.response_mappers.notifications import (
     notification_config_response_kwargs,
     notification_config_saved_response_kwargs,
 )
-from api.schemas import NotificationConfigRequest, ResponseModel, TestNotificationRequest
+from api.schema_models.common import ResponseModel
+from api.schema_models.config import NotificationConfigRequest, TestNotificationRequest
 from core.notification_config import build_notification_config
 from core.notification_config_service import save_notification_config_record
 from core.notification_test import (

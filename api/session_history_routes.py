@@ -8,7 +8,8 @@ from api.response_mappers.session import (
     session_history_message_updated_response_kwargs,
     session_history_response_kwargs,
 )
-from api.schemas import ResponseModel, SessionMessageUpdateRequest
+from api.schema_models.common import ResponseModel
+from api.schema_models.sessions import SessionMessageUpdateRequest
 from connections.ssh_manager import ssh_manager
 from core.session_history_service import (
     SessionHistoryServiceError,

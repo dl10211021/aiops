@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from api.schemas import (
+from api.schema_models.sessions import (
     HeartbeatUpdateRequest,
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,

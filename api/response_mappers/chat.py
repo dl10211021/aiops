@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from api.schemas import ChatRequest
+from api.schema_models.chat import ChatRequest
 
 
 def chat_stream_agent_kwargs(req: ChatRequest) -> dict[str, Any]:

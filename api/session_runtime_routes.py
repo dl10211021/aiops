@@ -18,10 +18,10 @@ from api.response_mappers.session import (
     tool_catalog_response_kwargs,
 )
 from api.response_mappers.chat import chat_stop_response_kwargs
-from api.schemas import (
+from api.schema_models.common import ResponseModel
+from api.schema_models.sessions import (
     HeartbeatUpdateRequest,
     PermissionUpdateRequest,
-    ResponseModel,
     SessionGroupUpdateRequest,
     SkillsUpdateRequest,
 )

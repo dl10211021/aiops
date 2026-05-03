@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from api.schemas import AssetPayload, BatchAssetImportItem
+from api.schema_models.assets import AssetPayload, BatchAssetImportItem
 
 
 def asset_payload(req: AssetPayload) -> dict[str, Any]:

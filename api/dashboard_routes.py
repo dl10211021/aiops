@@ -4,7 +4,7 @@ from fastapi import APIRouter
 
 from connections.ssh_manager import ssh_manager
 from api.response_mappers.system import dashboard_response_kwargs
-from api.schemas import ResponseModel
+from api.schema_models.common import ResponseModel
 from core.dashboard_service import (
     build_dashboard_alert_trend_payload,
     build_dashboard_inspection_run_trend_payload,

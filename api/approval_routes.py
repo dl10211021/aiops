@@ -12,12 +12,12 @@ from api.response_mappers.approvals import (
     tool_approval_response_kwargs,
     user_interaction_submitted_response_kwargs,
 )
-from api.schemas import (
+from api.schema_models.approvals import (
     ApprovalDecisionRequest,
-    ResponseModel,
     ToolApprovalRequest,
     UserInteractionResponseRequest,
 )
+from api.schema_models.common import ResponseModel
 from core.approval_execution_service import (
     ApprovalExecutionServiceError,
     execute_custom_skill_rollback_approval,

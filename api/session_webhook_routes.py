@@ -7,7 +7,8 @@ from api.response_mappers.session import (
     session_webhook_preview_response_kwargs,
     session_webhook_sent_response_kwargs,
 )
-from api.schemas import ResponseModel, SessionWebhookSendRequest
+from api.schema_models.common import ResponseModel
+from api.schema_models.sessions import SessionWebhookSendRequest
 from connections.ssh_manager import ssh_manager
 from core.session_webhook_service import (
     SessionWebhookServiceError,

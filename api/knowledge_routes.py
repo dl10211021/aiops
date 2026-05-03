@@ -6,7 +6,7 @@ from api.response_mappers.knowledge import (
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
 )
-from api.schemas import ResponseModel
+from api.schema_models.common import ResponseModel
 from core.knowledge_base_service import (
     KnowledgeBaseServiceError,
     ingest_knowledge_document,

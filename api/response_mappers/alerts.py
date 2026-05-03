@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from api.schemas import AlertEventUpdateRequest
+from api.schema_models.alerts import AlertEventUpdateRequest
 
 
 def alert_event_list_query_kwargs(

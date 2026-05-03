@@ -6,7 +6,8 @@ from api.response_mappers.session import (
     session_profile_generated_response_kwargs,
     session_profile_response_kwargs,
 )
-from api.schemas import ResponseModel, SessionProfileGenerateRequest
+from api.schema_models.common import ResponseModel
+from api.schema_models.sessions import SessionProfileGenerateRequest
 from core.session_inspection_response import build_inspection_response_payload
 from core.session_inspection_service import inspect_active_session_record
 from core.session_profile_service import (

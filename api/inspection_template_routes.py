@@ -7,7 +7,8 @@ from api.response_mappers.inspection import (
     inspection_template_save_payload,
     inspection_template_saved_response_kwargs,
 )
-from api.schemas import InspectionTemplatePayload, ResponseModel
+from api.schema_models.common import ResponseModel
+from api.schema_models.inspection import InspectionTemplatePayload
 from core.inspection_template_service import (
     InspectionTemplateServiceError,
     list_inspection_template_records,

@@ -16,10 +16,10 @@ from api.response_mappers.skills import (
     skill_validation_response_kwargs,
     skill_versions_response_kwargs,
 )
-from api.schemas import (
+from api.schema_models.common import ResponseModel
+from api.schema_models.skills import (
     CreateSkillRequest,
     MigrateRequest,
-    ResponseModel,
     SkillRollbackRequest,
     SkillValidationRequest,
 )

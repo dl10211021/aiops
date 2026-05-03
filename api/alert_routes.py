@@ -9,7 +9,8 @@ from api.response_mappers.alerts import (
     alert_events_response_kwargs,
     alert_webhook_response_kwargs,
 )
-from api.schemas import AlertEventUpdateRequest, ResponseModel
+from api.schema_models.alerts import AlertEventUpdateRequest
+from api.schema_models.common import ResponseModel
 from core.alert_event_service import (
     AlertEventServiceError,
     get_alert_event_record,

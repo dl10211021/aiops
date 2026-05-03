@@ -8,11 +8,11 @@ from api.response_mappers.connections import (
     legacy_command_response_kwargs,
     session_closed_response_kwargs,
 )
-from api.schemas import (
+from api.schema_models.common import ResponseModel
+from api.schema_models.connections import (
     CommandRequest,
     ConnectionInspectionRequest,
     ConnectionRequest,
-    ResponseModel,
 )
 from connections.ssh_manager import ssh_manager
 from core.connection_inspection_service import inspect_connection_request

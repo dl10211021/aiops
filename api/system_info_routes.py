@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from api.response_mappers.system import system_info_response_kwargs
-from api.schemas import ResponseModel
+from api.schema_models.common import ResponseModel
 from core.database_capabilities_service import (
     get_database_driver_capabilities_record,
     get_oracle_client_config_record,

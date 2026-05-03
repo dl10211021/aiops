@@ -7,7 +7,8 @@ from api.response_mappers.session import (
     custom_slash_command_updated_response_kwargs,
     custom_slash_commands_response_kwargs,
 )
-from api.schemas import ResponseModel, SlashCommandPayload
+from api.schema_models.common import ResponseModel
+from api.schema_models.sessions import SlashCommandPayload
 from core.session_commands import (
     SessionCommandError,
     list_custom_slash_command_records,
