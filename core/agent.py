@@ -10,7 +10,6 @@ from core.agent_runtime_config import (
     MAX_AGENT_STEP_CAP,
     MIN_AGENT_STEP_CAP,
     agent_max_steps,
-    agent_step_limit_instruction,
     clamp_agent_max_steps,
     get_agent_runtime_config,
     update_agent_runtime_config,
@@ -22,6 +21,7 @@ from core.agent_prompts import (
 )
 from core.agent_session_context import build_agent_session_context
 from core.agent_sse import sse_event
+from core.agent_step_summary import stream_step_limit_summary
 from core.agent_streaming import AgentStreamState, stream_assistant_response
 from core.agent_tool_loop import process_chat_tool_calls
 from core.agent_task_dispatch import dispatch_group_tasks as run_group_tasks
@@ -154,44 +154,14 @@ async def chat_stream_agent(
                 yield event
 
         else:
-            limit_status_payload = {
-                "type": "status",
-                "content": f"已达到 {max_steps} 步执行保护上限，正在整理阶段性报告...",
-            }
-            yield sse_event(limit_status_payload, ensure_ascii=False)
-
-            summary_messages = messages + [
-                {"role": "system", "content": agent_step_limit_instruction(max_steps)}
-            ]
-            summary_content = ""
-            try:
-                from core.llm_execution import execute_chat_stream
-
-                async for chunk in execute_chat_stream(
-                    model_name, summary_messages, "off", tools=None
-                ):
-                    if chunk["type"] == "content":
-                        summary_content += chunk["content"]
-                        yield sse_event({"type": "chunk", "content": chunk["content"]}, ensure_ascii=False)
-                    elif chunk["type"] == "thinking":
-                        continue
-                if not summary_content.strip():
-                    summary_content = (
-                        f"已达到 {max_steps} 步执行保护上限，系统已停止继续调用工具。"
-                        "当前模型未能生成阶段性报告，请根据上方工具结果继续拆分任务。"
-                    )
-                    yield sse_event({"type": "chunk", "content": summary_content}, ensure_ascii=False)
-            except Exception as summary_error:
-                summary_content = (
-                    f"已达到 {max_steps} 步执行保护上限，且阶段性报告生成失败：{summary_error}。"
-                    "请将任务拆成更小范围后重试。"
-                )
-                yield sse_event({"type": "chunk", "content": summary_content}, ensure_ascii=False)
-
-            safe_summary_msg = {"role": "assistant", "content": summary_content}
-            messages.append(safe_summary_msg)
-            memory_db.append_message(session_id, safe_summary_msg)
-            yield sse_event({"type": "done"})
+            async for event in stream_step_limit_summary(
+                model_name=model_name,
+                messages=messages,
+                session_id=session_id,
+                max_steps=max_steps,
+                memory_store=memory_db,
+            ):
+                yield event
 
         schedule_ltm_compression(
             memory_store=memory_db,
