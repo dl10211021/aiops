@@ -3,6 +3,7 @@ import logging
 from core.dispatcher import dispatcher
 from core.agent_errors import build_agent_loop_error_payload
 from core.agent_headless_loop import run_headless_agent_loop
+from core.agent_headless_setup import prepare_headless_agent_run
 from core.agent_chat_setup import prepare_chat_agent_run
 from core.agent_ltm import schedule_ltm_compression
 from core.agent_runtime_config import (
@@ -15,14 +16,11 @@ from core.agent_runtime_config import (
     get_agent_runtime_config,
     update_agent_runtime_config,
 )
-from core.agent_prompts import render_headless_system_prompt
-from core.agent_session_context import build_agent_session_context
 from core.agent_sse import sse_event
 from core.agent_step_summary import stream_step_limit_summary
 from core.agent_streaming import AgentStreamState, stream_assistant_response
 from core.agent_tool_loop import process_chat_tool_calls
 from core.agent_task_dispatch import dispatch_group_tasks as run_group_tasks
-from core.agent_profiles import load_agent_profile_prompt
 from core.model_catalog import get_available_models, get_available_models_for_provider
 from core.embedding_config import (
     EMBEDDING_DIM,
@@ -177,56 +175,31 @@ async def headless_agent_chat(
     from connections.ssh_manager import ssh_manager
     from core.llm_factory import get_client_for_model, get_default_model_id
 
-    if not model_name:
-        model_name = get_default_model_id()
-    client, _ = get_client_for_model(model_name)
-
-    if session_id not in ssh_manager.active_sessions:
-        return f"目标会话 {session_id} 不在线或已过期。"
-
-    session_info = ssh_manager.active_sessions[session_id]["info"]
-    # 继承父级 allow_modifications 并结合当前会话的权限，两者必须同时为 True 才允许
-    session_context = build_agent_session_context(
-        session_id,
-        session_info,
-        skill_path_resolver=dispatcher.get_active_skill_paths,
-        allow_modifications=(
-            inherited_allow_mod and session_info.get("allow_modifications", False)
-        ),
-    )
-    agent_profile = session_context.agent_profile
-    host = session_context.host
-
-    base_prompt = load_agent_profile_prompt(agent_profile)
-
-    SYSTEM_PROMPT = render_headless_system_prompt(
-        session_context=session_context,
-        base_prompt=base_prompt,
+    run = prepare_headless_agent_run(
+        session_id=session_id,
         task_description=task_description,
+        inherited_allow_mod=inherited_allow_mod,
+        model_name=model_name,
+        active_sessions=ssh_manager.active_sessions,
+        dispatcher=dispatcher,
+        default_model_resolver=get_default_model_id,
+        model_client_resolver=get_client_for_model,
     )
 
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": "请开始执行任务。"},
-    ]
-
-    context = session_context.tool_context(
-        execution_mode="headless",
-        trigger_source="background_agent",
-    )
-    tools = dispatcher.get_available_tools(context)
+    if run is None:
+        return f"目标会话 {session_id} 不在线或已过期。"
 
     try:
         return await run_headless_agent_loop(
-            model_name=model_name,
-            messages=messages,
-            tools=tools,
-            context=context,
+            model_name=run.model_name,
+            messages=run.messages,
+            tools=run.tools,
+            context=run.context,
             session_id=session_id,
-            agent_profile=agent_profile,
-            host=host,
+            agent_profile=run.agent_profile,
+            host=run.host,
             dispatcher=dispatcher,
             event_logger=logger,
         )
     except Exception as e:
-        return f"协同任务执行失败。目标节点 {host} 执行报错: {e}"
+        return f"协同任务执行失败。目标节点 {run.host} 执行报错: {e}"
