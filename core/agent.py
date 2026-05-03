@@ -3,7 +3,8 @@ import logging
 from core.dispatcher import dispatcher
 from core.agent_errors import build_agent_loop_error_payload
 from core.agent_headless_loop import run_headless_agent_loop
-from core.agent_ltm import retrieve_ltm_context, schedule_ltm_compression
+from core.agent_chat_setup import prepare_chat_agent_run
+from core.agent_ltm import schedule_ltm_compression
 from core.agent_runtime_config import (
     DEFAULT_AGENT_MAX_STEPS,
     DEFAULT_HEADLESS_AGENT_MAX_STEPS,
@@ -14,11 +15,7 @@ from core.agent_runtime_config import (
     get_agent_runtime_config,
     update_agent_runtime_config,
 )
-from core.agent_message_history import build_chat_message_history
-from core.agent_prompts import (
-    render_chat_system_prompt,
-    render_headless_system_prompt,
-)
+from core.agent_prompts import render_headless_system_prompt
 from core.agent_session_context import build_agent_session_context
 from core.agent_sse import sse_event
 from core.agent_step_summary import stream_step_limit_summary
@@ -52,56 +49,27 @@ async def chat_stream_agent(
 ):
     cancel_flags[session_id] = False
     from connections.ssh_manager import ssh_manager
-    from core.llm_factory import get_client_for_model, get_default_model_id, get_embedding_client_and_model
+    from core.llm_factory import get_default_model_id, get_embedding_client_and_model
 
-    if not model_name:
-        model_name = get_default_model_id()
-
-    emb_client, embedding_model = get_embedding_client_and_model(model_name)
-
-    session_info = ssh_manager.active_sessions[session_id]["info"]
-    session_context = build_agent_session_context(
-        session_id,
-        session_info,
-        skill_path_resolver=dispatcher.get_active_skill_paths,
-    )
-    active_skills = session_context.active_skills
-    agent_profile = session_context.agent_profile
-
-    # 从外部 Markdown 文件加载 Agent 的核心人格 (Soul)
-    base_prompt = load_agent_profile_prompt(agent_profile)
-
-    ltm_context = await retrieve_ltm_context(
-        memory_store=memory_db,
+    run = await prepare_chat_agent_run(
         session_id=session_id,
-        user_message=user_message,
-        emb_client=emb_client,
-        embedding_model=embedding_model,
-        event_logger=logger,
-    )
-
-    SYSTEM_PROMPT = render_chat_system_prompt(
-        session_context=session_context,
-        base_prompt=base_prompt,
-        skill_instructions=dispatcher.get_skill_instructions(
-            active_skills,
-            allow_local_scripts=session_context.local_skill_scripts_allowed,
-        ),
-        ltm_context=ltm_context,
-    )
-
-    messages = build_chat_message_history(
-        memory_store=memory_db,
-        session_id=session_id,
-        system_prompt=SYSTEM_PROMPT,
         user_message=user_message,
         user_display_message=user_display_message,
-        user_attachments=user_attachments or [],
         model_name=model_name,
+        user_attachments=user_attachments,
+        active_sessions=ssh_manager.active_sessions,
+        dispatcher=dispatcher,
+        memory_store=memory_db,
+        event_logger=logger,
+        default_model_resolver=get_default_model_id,
+        embedding_resolver=get_embedding_client_and_model,
     )
-
-    context = session_context.tool_context()
-    tools = dispatcher.get_available_tools(context)
+    model_name = run.model_name
+    emb_client = run.embedding_client
+    embedding_model = run.embedding_model
+    messages = run.messages
+    context = run.context
+    tools = run.tools
 
     try:
         # Initial status
