@@ -2,16 +2,8 @@ import json
 import asyncio
 import logging
 from core.dispatcher import dispatcher
-from core.agent_approval import (
-    record_headless_approval_block,
-    record_tool_approval_request,
-)
+from core.agent_approval import record_headless_approval_block
 from core.agent_errors import build_agent_loop_error_payload
-from core.agent_interactions import (
-    _build_interaction_payload,
-    _normalize_interaction_options,
-    _wait_for_user_interaction,
-)
 from core.agent_ltm import retrieve_ltm_context, schedule_ltm_compression
 from core.agent_runtime_config import (
     DEFAULT_AGENT_MAX_STEPS,
@@ -30,15 +22,11 @@ from core.agent_prompts import (
     render_headless_system_prompt,
 )
 from core.agent_session_context import build_agent_session_context
-from core.agent_sse import sse_event, sse_raw
+from core.agent_sse import sse_event
 from core.agent_streaming import AgentStreamState, stream_assistant_response
+from core.agent_tool_loop import process_chat_tool_calls
 from core.agent_task_dispatch import dispatch_group_tasks as run_group_tasks
-from core.agent_tool_events import (
-    build_tool_end_event,
-    invalid_tool_arguments_result,
-    parse_tool_arguments,
-    prepare_tool_call,
-)
+from core.agent_tool_events import parse_tool_arguments
 from core.agent_profiles import load_agent_profile_prompt
 from core.model_catalog import get_available_models, get_available_models_for_provider
 from core.embedding_config import (
@@ -47,7 +35,6 @@ from core.embedding_config import (
     get_embedding_config,
     update_embedding_config,
 )
-from core.safety_policy import approval_timeout_seconds
 
 cancel_flags = {}
 
@@ -157,178 +144,16 @@ async def chat_stream_agent(
                 yield sse_event({"type": "done"})
                 break
 
-            for tc in tool_calls:
-                prepared_call = prepare_tool_call(tc)
-                func_name = prepared_call.name
-                func_args = prepared_call.args
-                display_cmd = prepared_call.display_cmd
-                tc_id = prepared_call.id
-
-                if prepared_call.parse_error:
-                    tool_res = invalid_tool_arguments_result(prepared_call.parse_error)
-                    msg_end, safe_tool_res = build_tool_end_event(tc_id, func_name, tool_res)
-                    yield sse_raw(msg_end)
-                    tool_msg = {"tool_call_id": tc_id, "role": "tool", "name": func_name, "content": safe_tool_res}
-                    messages.append(tool_msg)
-                    memory_db.append_message(session_id, tool_msg)
-                    continue
-
-                if func_name == "request_user_interaction":
-                    payload = _build_interaction_payload(tc_id, func_args)
-                    future = asyncio.Future()
-                    dispatcher.pending_interactions[tc_id] = {
-                        "future": future,
-                        "session_id": session_id,
-                    }
-                    yield sse_event(payload, ensure_ascii=False)
-                    tool_res, safe_tool_res = await _wait_for_user_interaction(tc_id, payload, future)
-                    tool_msg = {
-                        "tool_call_id": tc_id,
-                        "role": "tool",
-                        "name": func_name,
-                        "content": tool_res,
-                    }
-                    messages.append(tool_msg)
-                    try:
-                        interaction_result = json.loads(safe_tool_res)
-                    except Exception:
-                        interaction_result = {}
-                    interaction_done = json.dumps(
-                        {
-                            "type": "user_interaction_done",
-                            "request_id": tc_id,
-                            "status": interaction_result.get("status") or "submitted",
-                            "input_type": payload["input_type"],
-                            "value": interaction_result.get("value") or "",
-                            "label": interaction_result.get("label") or "",
-                        },
-                        ensure_ascii=False,
-                    )
-                    yield sse_raw(interaction_done)
-                    memory_db.append_message(
-                        session_id,
-                        {
-                            "tool_call_id": tc_id,
-                            "role": "tool",
-                            "name": func_name,
-                            "content": safe_tool_res,
-                        },
-                    )
-                    continue
-
-                # ======== NEW APPROVAL LOGIC ========
-                needs_approval, reason = dispatcher.check_approval_needed(func_name, func_args, context)
-                approval_required = False
-                
-                if needs_approval:
-                    approval_required = True
-                    approval_record = record_tool_approval_request(
-                        tool_call_id=tc_id,
-                        session_id=session_id,
-                        tool_name=func_name,
-                        args=func_args,
-                        reason=reason,
-                        context=context,
-                    )
-                    policy_metadata = (approval_record.get("metadata") or {}).get("policy") or {}
-                    msg_ask = json.dumps({
-                        "type": "tool_ask_approval", 
-                        "tool_call_id": tc_id, # for new React frontend
-                        "tool_name": func_name, # for new React frontend
-                        "args": display_cmd, # for new React frontend
-                        "reason": reason,
-                        "actions": policy_metadata.get("actions") or [],
-                        "primary_action": policy_metadata.get("primary_action"),
-                        "id": tc_id, 
-                        "tool": func_name, 
-                        "cmd": display_cmd
-                    })
-                    yield sse_raw(msg_ask)
-                    
-                    future = asyncio.Future()
-                    dispatcher.pending_approvals[tc_id] = future
-                    approval_timed_out = False
-                    try:
-                        approved = await asyncio.wait_for(future, timeout=float(approval_timeout_seconds()))
-                    except asyncio.TimeoutError:
-                        approved = False
-                        approval_timed_out = True
-                        try:
-                            from core.approval_queue import mark_approval_timeout
-
-                            mark_approval_timeout(tc_id)
-                        except KeyError:
-                            pass
-                    
-                    if tc_id in dispatcher.pending_approvals:
-                        del dispatcher.pending_approvals[tc_id]
-                        
-                    if not approved:
-                        tool_res = json.dumps(
-                            {
-                                "status": "BLOCKED",
-                                "error_type": "approval_timeout" if approval_timed_out else "approval_rejected",
-                                "error": "审批超时，工具调用已取消。" if approval_timed_out else "用户拒绝执行该工具调用。",
-                                "hint": "如仍需执行，请重新发送任务并完成审批。" if approval_timed_out else "如需再次执行，请重新发送任务并选择批准。",
-                            },
-                            ensure_ascii=False,
-                        )
-                        msg_end, safe_tool_res = build_tool_end_event(tc_id, func_name, tool_res)
-                        yield sse_raw(msg_end)
-                        
-                        tool_msg = {
-                            "tool_call_id": tc_id,
-                            "role": "tool",
-                            "name": func_name,
-                            "content": safe_tool_res,
-                        }
-                        messages.append(tool_msg)
-                        memory_db.append_message(session_id, tool_msg)
-                        continue
-                # ====================================
-
-                msg_start = json.dumps(
-                    {
-                        "type": "tool_start",
-                        "id": tc_id,
-                        "tool": func_name,
-                        "cmd": display_cmd,
-                    }
-                )
-                yield sse_raw(msg_start)
-                await asyncio.sleep(0.05)
-
-                tool_res = await dispatcher.route_and_execute(
-                    func_name, func_args, context
-                )
-                if approval_required:
-                    try:
-                        from core.approval_queue import record_approval_execution
-
-                        record_approval_execution(tc_id, tool_res)
-                    except KeyError:
-                        pass
-                msg_end, safe_tool_res = build_tool_end_event(tc.get("id", ""), func_name, tool_res)
-                yield sse_raw(msg_end)
-                await asyncio.sleep(0.05)
-
-                tool_msg = {
-                    "tool_call_id": tc.get("id", ""),
-                    "role": "tool",
-                    "name": func_name,
-                    "content": safe_tool_res,
-                }
-                messages.append(tool_msg)
-                memory_db.append_message(session_id, tool_msg)
-
-            msg_loop = json.dumps(
-                {
-                    "type": "status",
-                    "content": f"🔄 收集结果，执行第 {iteration + 2} 步...",
-                }
-            )
-            yield sse_raw(msg_loop)
-            await asyncio.sleep(0.05)
+            async for event in process_chat_tool_calls(
+                tool_calls=tool_calls,
+                session_id=session_id,
+                messages=messages,
+                memory_store=memory_db,
+                dispatcher=dispatcher,
+                context=context,
+                iteration=iteration,
+            ):
+                yield event
 
         else:
             limit_status_payload = {
