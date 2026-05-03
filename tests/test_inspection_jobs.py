@@ -12,7 +12,8 @@ warnings.filterwarnings(
     category=PendingDeprecationWarning,
 )
 
-from api import dashboard_routes, routes
+from api import dashboard_routes, inspection_job_routes, routes
+from api.schemas import CronAddRequest
 
 
 class TestInspectionJobs(unittest.TestCase):
@@ -32,6 +33,16 @@ class TestInspectionJobs(unittest.TestCase):
         root = Path.cwd() / "tests" / f"tmp_inspection_runs_{name}"
         root.mkdir(parents=True, exist_ok=True)
         return root / "runs.json"
+
+    def test_inspection_job_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/cron/add", paths)
+        self.assertIn("/cron/list", paths)
+        self.assertIn("/cron/{job_id}", paths)
+        self.assertIn("/cron/{job_id}/pause", paths)
+        self.assertIn("/cron/{job_id}/resume", paths)
+        self.assertIn("/cron/{job_id}/run", paths)
 
     def test_cron_manager_supports_crud_pause_resume_and_run_metadata(self):
         from core.cron_manager import CronManager
@@ -90,7 +101,7 @@ class TestInspectionJobs(unittest.TestCase):
         trigger.assert_awaited_once()
 
     def test_cron_routes_expose_update_pause_resume_and_run(self):
-        payload = routes.CronAddRequest(
+        payload = CronAddRequest(
             cron_expr="0 9 * * *",
             message="daily inspection",
             host="10.0.0.10",
@@ -104,11 +115,11 @@ class TestInspectionJobs(unittest.TestCase):
             active_skills=["linux-basic"],
         )
 
-        response = asyncio.run(routes.add_cron_job(payload))
+        response = asyncio.run(inspection_job_routes.add_cron_job(payload))
         self.assertEqual(response.status, "success")
         job_id = response.data["job_id"]
 
-        update_payload = routes.CronAddRequest(
+        update_payload = CronAddRequest(
             cron_expr="*/30 * * * *",
             message="half-hour inspection",
             host="10.0.0.10",
@@ -121,24 +132,26 @@ class TestInspectionJobs(unittest.TestCase):
             notification_channel="wechat",
             active_skills=["db-check"],
         )
-        updated = asyncio.run(routes.update_cron_job(job_id, update_payload))
+        updated = asyncio.run(
+            inspection_job_routes.update_cron_job(job_id, update_payload)
+        )
         self.assertEqual(updated.data["job"]["cron_expr"], "*/30 * * * *")
         self.assertEqual(updated.data["job"]["active_skills"], ["db-check"])
 
-        paused = asyncio.run(routes.pause_cron_job(job_id))
+        paused = asyncio.run(inspection_job_routes.pause_cron_job(job_id))
         self.assertEqual(paused.data["job"]["status"], "paused")
-        resumed = asyncio.run(routes.resume_cron_job(job_id))
+        resumed = asyncio.run(inspection_job_routes.resume_cron_job(job_id))
         self.assertEqual(resumed.data["job"]["status"], "scheduled")
 
         with patch("core.cron_manager._trigger_proactive_inspection", new_callable=AsyncMock):
-            run = asyncio.run(routes.run_cron_job_now(job_id))
+            run = asyncio.run(inspection_job_routes.run_cron_job_now(job_id))
         self.assertEqual(run.data["result"]["status"], "completed")
 
-        deleted = asyncio.run(routes.delete_cron_job(job_id))
+        deleted = asyncio.run(inspection_job_routes.delete_cron_job(job_id))
         self.assertEqual(deleted.status, "success")
 
     def test_scope_cron_route_does_not_require_single_host_or_username(self):
-        payload = routes.CronAddRequest(
+        payload = CronAddRequest(
             cron_expr="0 2 * * *",
             message="inspect prod linux assets",
             target_scope="tag",
@@ -147,14 +160,14 @@ class TestInspectionJobs(unittest.TestCase):
             notification_channel="auto",
         )
 
-        response = asyncio.run(routes.add_cron_job(payload))
+        response = asyncio.run(inspection_job_routes.add_cron_job(payload))
         job_id = response.data["job_id"]
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data["job"]["host"], "")
         self.assertEqual(response.data["job"]["username"], "")
         self.assertEqual(response.data["job"]["target_scope"], "tag")
-        asyncio.run(routes.delete_cron_job(job_id))
+        asyncio.run(inspection_job_routes.delete_cron_job(job_id))
 
     def test_trigger_uses_selected_skills_instead_of_entire_registry(self):
         from connections.ssh_manager import ssh_manager
@@ -332,7 +345,7 @@ class TestInspectionJobs(unittest.TestCase):
             patch.object(inspection_results, "INSPECTION_RUN_STORE_PATH", self._run_store_path("route")),
             patch("core.cron_manager._trigger_proactive_inspection", new_callable=AsyncMock, return_value="ok"),
         ):
-            run_response = asyncio.run(routes.run_cron_job_now(job_id))
+            run_response = asyncio.run(inspection_job_routes.run_cron_job_now(job_id))
             list_response = asyncio.run(routes.list_cron_job_runs(job_id))
             detail_response = asyncio.run(routes.get_cron_job_run(run_response.data["result"]["run_id"]))
 
