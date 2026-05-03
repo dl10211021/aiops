@@ -12,7 +12,7 @@ warnings.filterwarnings(
     category=PendingDeprecationWarning,
 )
 
-from api import dashboard_routes, inspection_job_routes, routes
+from api import dashboard_routes, inspection_job_routes, inspection_run_routes, routes
 from api.schemas import CronAddRequest
 
 
@@ -43,6 +43,16 @@ class TestInspectionJobs(unittest.TestCase):
         self.assertIn("/cron/{job_id}/pause", paths)
         self.assertIn("/cron/{job_id}/resume", paths)
         self.assertIn("/cron/{job_id}/run", paths)
+
+    def test_inspection_run_routes_are_included_in_api_router(self):
+        paths = {route.path for route in routes.router.routes}
+
+        self.assertIn("/cron/{job_id}/runs", paths)
+        self.assertIn("/inspection-runs", paths)
+        self.assertIn("/cron/runs/summary", paths)
+        self.assertIn("/cron/runs/{run_id}", paths)
+        self.assertIn("/inspection-runs/{run_id}/report", paths)
+        self.assertIn("/inspection-runs/{run_id}/export", paths)
 
     def test_cron_manager_supports_crud_pause_resume_and_run_metadata(self):
         from core.cron_manager import CronManager
@@ -346,8 +356,12 @@ class TestInspectionJobs(unittest.TestCase):
             patch("core.cron_manager._trigger_proactive_inspection", new_callable=AsyncMock, return_value="ok"),
         ):
             run_response = asyncio.run(inspection_job_routes.run_cron_job_now(job_id))
-            list_response = asyncio.run(routes.list_cron_job_runs(job_id))
-            detail_response = asyncio.run(routes.get_cron_job_run(run_response.data["result"]["run_id"]))
+            list_response = asyncio.run(inspection_run_routes.list_cron_job_runs(job_id))
+            detail_response = asyncio.run(
+                inspection_run_routes.get_cron_job_run(
+                    run_response.data["result"]["run_id"]
+                )
+            )
 
         self.assertEqual(run_response.data["result"]["status"], "completed")
         self.assertEqual(len(list_response.data["runs"]), 1)
@@ -374,7 +388,7 @@ class TestInspectionJobs(unittest.TestCase):
                 message="fail",
                 targets=[{"host": "10.0.0.11", "status": "error", "error": "timeout"}],
             )
-            summary_response = asyncio.run(routes.get_cron_run_summary())
+            summary_response = asyncio.run(inspection_run_routes.get_cron_run_summary())
 
         summary = summary_response.data["summary"]
         self.assertEqual(summary["total_runs"], 2)
@@ -416,9 +430,18 @@ class TestInspectionJobs(unittest.TestCase):
                     },
                 ],
             )
-            report_response = asyncio.run(routes.get_inspection_run_report(run["id"]))
-            export_response = asyncio.run(routes.export_inspection_run_report(run["id"], format="markdown"))
-            filtered_response = asyncio.run(routes.list_inspection_runs(asset_id=102))
+            report_response = asyncio.run(
+                inspection_run_routes.get_inspection_run_report(run["id"])
+            )
+            export_response = asyncio.run(
+                inspection_run_routes.export_inspection_run_report(
+                    run["id"],
+                    format="markdown",
+                )
+            )
+            filtered_response = asyncio.run(
+                inspection_run_routes.list_inspection_runs(asset_id=102)
+            )
 
         report = report_response.data["report"]
         self.assertEqual(report["run_id"], run["id"])

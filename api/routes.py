@@ -6,11 +6,6 @@ from api.errors import raise_http_error
 from api.mappers import (
     chat_stream_agent_kwargs,
     chat_attachment_preview_response_kwargs,
-    inspection_run_export_response_kwargs,
-    inspection_run_report_response_kwargs,
-    inspection_run_response_kwargs,
-    inspection_run_summary_response_kwargs,
-    inspection_runs_response_kwargs,
 )
 from api.system_info_routes import router as system_info_router
 from api.knowledge_routes import router as knowledge_router
@@ -30,6 +25,7 @@ from api.session_webhook_routes import router as session_webhook_router
 from api.custom_command_routes import router as custom_command_router
 from api.inspection_template_routes import router as inspection_template_router
 from api.inspection_job_routes import router as inspection_job_router
+from api.inspection_run_routes import router as inspection_run_router
 from core.chat_attachments import (
     CHAT_ATTACHMENT_MAX_SIZE,
     ChatAttachmentError,
@@ -38,14 +34,6 @@ from core.chat_attachments import (
 from core.chat_session_service import (
     ChatSessionServiceError,
     start_session_chat_run,
-)
-from core.inspection_run_service import (
-    InspectionRunServiceError,
-    export_inspection_run_report_content,
-    get_inspection_run_record,
-    get_inspection_run_report_record,
-    inspection_run_summary,
-    list_inspection_run_records,
 )
 from api.schemas import (
     ChatRequest,
@@ -75,6 +63,7 @@ router.include_router(session_webhook_router)
 router.include_router(custom_command_router)
 router.include_router(inspection_template_router)
 router.include_router(inspection_job_router)
+router.include_router(inspection_run_router)
 
 
 def _preview_attachment_content(filename: str, content_type: str, content: bytes) -> dict:
@@ -118,48 +107,4 @@ async def preview_chat_attachment(file: UploadFile = File(...)):
         content,
     )
     return ResponseModel(**chat_attachment_preview_response_kwargs(attachment))
-
-
-@router.get("/cron/{job_id}/runs", response_model=ResponseModel)
-async def list_cron_job_runs(job_id: str, limit: int = 50, asset_id: int | None = None):
-    runs = list_inspection_run_records(job_id=job_id, limit=limit, asset_id=asset_id)
-    return ResponseModel(**inspection_runs_response_kwargs(runs))
-
-
-@router.get("/inspection-runs", response_model=ResponseModel)
-async def list_inspection_runs(job_id: str | None = None, asset_id: int | None = None, limit: int = 50):
-    runs = list_inspection_run_records(job_id=job_id, asset_id=asset_id, limit=limit)
-    return ResponseModel(**inspection_runs_response_kwargs(runs))
-
-
-@router.get("/cron/runs/summary", response_model=ResponseModel)
-async def get_cron_run_summary():
-    return ResponseModel(**inspection_run_summary_response_kwargs(inspection_run_summary()))
-
-
-@router.get("/cron/runs/{run_id}", response_model=ResponseModel)
-async def get_cron_job_run(run_id: str):
-    try:
-        run = get_inspection_run_record(run_id)
-    except InspectionRunServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**inspection_run_response_kwargs(run))
-
-
-@router.get("/inspection-runs/{run_id}/report", response_model=ResponseModel)
-async def get_inspection_run_report(run_id: str):
-    try:
-        report = get_inspection_run_report_record(run_id)
-    except InspectionRunServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**inspection_run_report_response_kwargs(report))
-
-
-@router.get("/inspection-runs/{run_id}/export", response_model=ResponseModel)
-async def export_inspection_run_report(run_id: str, format: str = "markdown"):
-    try:
-        payload = export_inspection_run_report_content(run_id, format)
-    except InspectionRunServiceError as exc:
-        raise_http_error(exc)
-    return ResponseModel(**inspection_run_export_response_kwargs(payload))
 
