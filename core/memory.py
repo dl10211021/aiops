@@ -12,7 +12,7 @@ import lancedb
 from cryptography.fernet import Fernet
 
 from core.asset_profile_store import AssetProfileStore
-from core.asset_protocols import normalize_protocol, resolve_asset_identity
+from core.asset_store import AssetStore
 from core.lancedb_utils import ensure_lancedb_table, lancedb_table_names
 from core.session_message_store import SessionMessageStore, is_protocol_retry_noise
 from core.slash_command_store import SlashCommandStore, slash_command_row
@@ -80,6 +80,7 @@ class MemoryDB:
 
         self.sensitive_keys = list(DEFAULT_SENSITIVE_EXTRA_ARG_KEYS)
         self._encrypted_prefix = "fernet:"
+        self._asset_store = self._build_asset_store()
         self._session_message_store = SessionMessageStore(self._connect, self._db_lock)
         self._slash_command_store = SlashCommandStore(self._connect, self._db_lock)
         self._asset_profile_store = AssetProfileStore(self._connect, self._db_lock)
@@ -98,6 +99,24 @@ class MemoryDB:
             raise
         finally:
             conn.close()
+
+    def _build_asset_store(self):
+        return AssetStore(
+            self._connect,
+            self._db_lock,
+            self._ensure_assets_protocol_column,
+            self._encrypt_secret,
+            self._decrypt_secret,
+            self._encrypt_extra_args,
+            self._decrypt_extra_args,
+        )
+
+    def _get_asset_store(self):
+        store = getattr(self, "_asset_store", None)
+        if store is None:
+            store = self._build_asset_store()
+            self._asset_store = store
+        return store
 
     def _encrypt_secret(self, value, old_value=None):
         if value in (None, ""):
@@ -340,107 +359,7 @@ class MemoryDB:
 
     # -------- 资产持久化管理 --------
     def save_assets_batch(self, items: list[dict]):
-        try:
-            with self._db_lock, self._connect() as conn:
-                cursor = conn.cursor()
-                self._ensure_assets_protocol_column(conn)
-                for item in items:
-                    host = item["host"]
-                    identity = resolve_asset_identity(
-                        item.get("asset_type"),
-                        item.get("protocol") or item.get("login_protocol"),
-                        item.get("extra_args", {}),
-                        host,
-                        item.get("port"),
-                        item.get("remark"),
-                    )
-                    asset_type = identity["asset_type"]
-                    protocol = identity["protocol"]
-                    extra_args = identity["extra_args"]
-                    tags = item.get("tags") or ["未分组"]
-
-                    cursor.execute(
-                        "SELECT id, password, extra_args_json, asset_type, protocol, remark, port FROM assets WHERE host = ?",
-                        (host,),
-                    )
-                    rows = cursor.fetchall()
-                    row = None
-                    for candidate in rows:
-                        old_args = json.loads(candidate[2]) if candidate[2] else {}
-                        old_identity = resolve_asset_identity(
-                            candidate[3], candidate[4], old_args, host, candidate[6], candidate[5]
-                        )
-                        if old_identity["asset_type"] == asset_type and old_identity["protocol"] == protocol:
-                            row = candidate
-                            break
-                    if row:
-                        asset_id = row[0]
-                        old_password = row[1]
-                        old_extra_args = json.loads(row[2]) if row[2] else {}
-                        new_extra_args = self._encrypt_extra_args(
-                            extra_args, old_extra_args
-                        )
-                        new_password = self._encrypt_secret(
-                            item.get("password"), old_password
-                        )
-                        cursor.execute(
-                            """
-                            UPDATE assets SET remark=?, port=?, username=?, password=?, asset_type=?, protocol=?, agent_profile=?, extra_args_json=?, skills_json=? WHERE id=?
-                        """,
-                            (
-                                item["remark"],
-                                item["port"],
-                                item["username"],
-                                new_password,
-                                asset_type,
-                                protocol,
-                                item["agent_profile"],
-                                json.dumps(new_extra_args, ensure_ascii=False),
-                                json.dumps(item["skills"], ensure_ascii=False),
-                                asset_id,
-                            ),
-                        )
-                    else:
-                        new_extra_args = self._encrypt_extra_args(
-                            extra_args
-                        )
-                        new_password = self._encrypt_secret(item.get("password"))
-                        cursor.execute(
-                            """
-                            INSERT INTO assets (remark, host, port, username, password, asset_type, protocol, agent_profile, extra_args_json, skills_json)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                            (
-                                item["remark"],
-                                host,
-                                item["port"],
-                                item["username"],
-                                new_password,
-                                asset_type,
-                                protocol,
-                                item["agent_profile"],
-                                json.dumps(new_extra_args, ensure_ascii=False),
-                                json.dumps(item["skills"], ensure_ascii=False),
-                            ),
-                        )
-                        asset_id = cursor.lastrowid
-
-                    cursor.execute(
-                        "DELETE FROM asset_tags WHERE asset_id = ?", (asset_id,)
-                    )
-                    for tag in tags:
-                        cursor.execute(
-                            "INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,)
-                        )
-                        cursor.execute("SELECT id FROM tags WHERE name = ?", (tag,))
-                        tag_id = cursor.fetchone()[0]
-                        cursor.execute(
-                            "INSERT INTO asset_tags (asset_id, tag_id) VALUES (?, ?)",
-                            (asset_id, tag_id),
-                        )
-        except Exception as e:
-            logger.error(f"批量保存资产失败: {e}")
-            raise e
+        self._get_asset_store().save_assets_batch(items)
 
     def save_asset(
         self,
@@ -456,251 +375,31 @@ class MemoryDB:
         tags=None,
         protocol=None,
     ):
-        if tags is None:
-            tags = ["未分组"]
-        try:
-            with self._db_lock, self._connect() as conn:
-                cursor = conn.cursor()
-                self._ensure_assets_protocol_column(conn)
-                identity = resolve_asset_identity(
-                    asset_type, protocol, extra_args, host, port, remark
-                )
-                asset_type = identity["asset_type"]
-                protocol = identity["protocol"]
-                extra_args = identity["extra_args"]
-                cursor.execute(
-                    "SELECT id, password, extra_args_json, asset_type, protocol, remark, port FROM assets WHERE host = ?",
-                    (host,),
-                )
-                rows = cursor.fetchall()
-                row = None
-                for candidate in rows:
-                    old_args = json.loads(candidate[2]) if candidate[2] else {}
-                    old_identity = resolve_asset_identity(
-                        candidate[3], candidate[4], old_args, host, candidate[6], candidate[5]
-                    )
-                    if old_identity["asset_type"] == asset_type and old_identity["protocol"] == protocol:
-                        row = candidate
-                        break
-                if row:
-                    asset_id = row[0]
-                    old_password = row[1]
-                    old_extra_args = json.loads(row[2]) if row[2] else {}
-                    new_extra_args = self._encrypt_extra_args(
-                        extra_args, old_extra_args
-                    )
-                    new_password = self._encrypt_secret(password, old_password)
-                    cursor.execute(
-                        """
-                        UPDATE assets SET remark=?, port=?, username=?, password=?, asset_type=?, protocol=?, agent_profile=?, extra_args_json=?, skills_json=? WHERE id=?
-                    """,
-                        (
-                            remark,
-                            port,
-                            username,
-                            new_password,
-                            asset_type,
-                            protocol,
-                            agent_profile,
-                            json.dumps(new_extra_args, ensure_ascii=False),
-                            json.dumps(skills, ensure_ascii=False),
-                            asset_id,
-                        ),
-                    )
-                else:
-                    new_extra_args = self._encrypt_extra_args(extra_args)
-                    new_password = self._encrypt_secret(password)
-                    cursor.execute(
-                        """
-                        INSERT INTO assets (remark, host, port, username, password, asset_type, protocol, agent_profile, extra_args_json, skills_json)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                        (
-                            remark,
-                            host,
-                            port,
-                            username,
-                            new_password,
-                            asset_type,
-                            protocol,
-                            agent_profile,
-                            json.dumps(new_extra_args, ensure_ascii=False),
-                            json.dumps(skills, ensure_ascii=False),
-                        ),
-                    )
-                    asset_id = cursor.lastrowid
-
-                cursor.execute("DELETE FROM asset_tags WHERE asset_id = ?", (asset_id,))
-                for tag in tags:
-                    cursor.execute(
-                        "INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,)
-                    )
-                    cursor.execute("SELECT id FROM tags WHERE name = ?", (tag,))
-                    tag_id = cursor.fetchone()[0]
-                    cursor.execute(
-                        "INSERT INTO asset_tags (asset_id, tag_id) VALUES (?, ?)",
-                        (asset_id, tag_id),
-                    )
-        except Exception as e:
-            logger.error(f"保存资产失败: {e}")
-            raise
+        self._get_asset_store().save_asset(
+            remark,
+            host,
+            port,
+            username,
+            password,
+            asset_type,
+            agent_profile,
+            extra_args,
+            skills,
+            tags=tags,
+            protocol=protocol,
+        )
 
     def get_all_assets(self) -> list:
-        try:
-            with self._db_lock, self._connect() as conn:
-                self._ensure_assets_protocol_column(conn)
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT a.*, GROUP_CONCAT(t.name) as tags_concat
-                    FROM assets a
-                    LEFT JOIN asset_tags at ON a.id = at.asset_id
-                    LEFT JOIN tags t ON at.tag_id = t.id
-                    GROUP BY a.id
-                    ORDER BY a.created_at DESC
-                """)
-                rows = cursor.fetchall()
-                assets = []
-                for row in rows:
-                    r = dict(row)
-                    raw_extra_args = (
-                        json.loads(r["extra_args_json"]) if r["extra_args_json"] else {}
-                    )
-                    r["password"] = self._decrypt_secret(r.get("password"))
-                    r["extra_args"] = self._decrypt_extra_args(raw_extra_args)
-                    identity = resolve_asset_identity(
-                        r.get("asset_type"),
-                        r.get("protocol"),
-                        r["extra_args"],
-                        r.get("host"),
-                        r.get("port"),
-                        r.get("remark"),
-                    )
-                    r["raw_asset_type"] = r.get("asset_type")
-                    r["asset_type"] = identity["asset_type"]
-                    r["protocol"] = identity["protocol"]
-                    r["extra_args"] = identity["extra_args"]
-                    r["skills"] = (
-                        json.loads(r["skills_json"]) if r["skills_json"] else []
-                    )
-                    tags_str = r.pop("tags_concat", None)
-                    r["tags"] = tags_str.split(",") if tags_str else []
-                    if "group_name" in r:
-                        r.pop("group_name")
-                    assets.append(r)
-                return assets
-        except Exception as e:
-            logger.error(f"读取资产列表失败: {e}")
-            return []
+        return self._get_asset_store().get_all_assets()
 
     def get_asset(self, asset_id: int) -> dict | None:
-        try:
-            with self._db_lock, self._connect() as conn:
-                self._ensure_assets_protocol_column(conn)
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    SELECT a.*, GROUP_CONCAT(t.name) as tags_concat
-                    FROM assets a
-                    LEFT JOIN asset_tags at ON a.id = at.asset_id
-                    LEFT JOIN tags t ON at.tag_id = t.id
-                    WHERE a.id = ?
-                    GROUP BY a.id
-                    """,
-                    (asset_id,),
-                )
-                row = cursor.fetchone()
-                if not row:
-                    return None
-                r = dict(row)
-                raw_extra_args = json.loads(r["extra_args_json"]) if r["extra_args_json"] else {}
-                r["password"] = self._decrypt_secret(r.get("password"))
-                r["extra_args"] = self._decrypt_extra_args(raw_extra_args)
-                identity = resolve_asset_identity(
-                    r.get("asset_type"),
-                    r.get("protocol"),
-                    r["extra_args"],
-                    r.get("host"),
-                    r.get("port"),
-                    r.get("remark"),
-                )
-                r["raw_asset_type"] = r.get("asset_type")
-                r["asset_type"] = identity["asset_type"]
-                r["protocol"] = identity["protocol"]
-                r["extra_args"] = identity["extra_args"]
-                r["skills"] = json.loads(r["skills_json"]) if r["skills_json"] else []
-                tags_str = r.pop("tags_concat", None)
-                r["tags"] = tags_str.split(",") if tags_str else []
-                return r
-        except Exception as e:
-            logger.error(f"读取资产失败: {e}")
-            return None
+        return self._get_asset_store().get_asset(asset_id)
 
     def update_asset(self, asset_id: int, item: dict) -> dict | None:
-        try:
-            with self._db_lock, self._connect() as conn:
-                cursor = conn.cursor()
-                self._ensure_assets_protocol_column(conn)
-                cursor.execute("SELECT password, extra_args_json FROM assets WHERE id = ?", (asset_id,))
-                old = cursor.fetchone()
-                if not old:
-                    return None
-
-                identity = resolve_asset_identity(
-                    item.get("asset_type"),
-                    item.get("protocol") or item.get("login_protocol"),
-                    item.get("extra_args", {}),
-                    item.get("host"),
-                    item.get("port"),
-                    item.get("remark"),
-                )
-                extra_args = self._encrypt_extra_args(
-                    identity["extra_args"],
-                    json.loads(old[1]) if old[1] else {},
-                )
-                password = self._encrypt_secret(item.get("password"), old[0])
-                cursor.execute(
-                    """
-                    UPDATE assets
-                    SET remark=?, host=?, port=?, username=?, password=?, asset_type=?, protocol=?, agent_profile=?, extra_args_json=?, skills_json=?
-                    WHERE id=?
-                    """,
-                    (
-                        item.get("remark", ""),
-                        item.get("host", ""),
-                        int(item.get("port") or 22),
-                        item.get("username", ""),
-                        password,
-                        identity["asset_type"],
-                        identity["protocol"],
-                        item.get("agent_profile", "default"),
-                        json.dumps(extra_args, ensure_ascii=False),
-                        json.dumps(item.get("skills", []), ensure_ascii=False),
-                        asset_id,
-                    ),
-                )
-
-                cursor.execute("DELETE FROM asset_tags WHERE asset_id = ?", (asset_id,))
-                for tag in item.get("tags") or ["未分组"]:
-                    cursor.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
-                    cursor.execute("SELECT id FROM tags WHERE name = ?", (tag,))
-                    tag_id = cursor.fetchone()[0]
-                    cursor.execute(
-                        "INSERT INTO asset_tags (asset_id, tag_id) VALUES (?, ?)",
-                        (asset_id, tag_id),
-                    )
-            return self.get_asset(asset_id)
-        except Exception as e:
-            logger.error(f"更新资产失败: {e}")
-            raise
+        return self._get_asset_store().update_asset(asset_id, item)
 
     def delete_asset(self, asset_id: int):
-        try:
-            with self._db_lock, self._connect() as conn:
-                conn.execute("DELETE FROM assets WHERE id = ?", (asset_id,))
-        except Exception as e:
-            logger.error(f"删除资产失败: {e}")
+        self._get_asset_store().delete_asset(asset_id)
 
     # -------- 对话记忆管理 (STM + LTM) --------
 
