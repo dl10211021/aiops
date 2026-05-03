@@ -12,6 +12,7 @@ import pyarrow as pa
 import lancedb
 from cryptography.fernet import Fernet
 
+from core.asset_profile_store import AssetProfileStore
 from core.asset_protocols import normalize_protocol, resolve_asset_identity
 from core.lancedb_utils import ensure_lancedb_table, lancedb_table_names
 from core.slash_command_store import SlashCommandStore, slash_command_row
@@ -79,6 +80,7 @@ class MemoryDB:
         self.sensitive_keys = list(DEFAULT_SENSITIVE_EXTRA_ARG_KEYS)
         self._encrypted_prefix = "fernet:"
         self._slash_command_store = SlashCommandStore(self._connect, self._db_lock)
+        self._asset_profile_store = AssetProfileStore(self._connect, self._db_lock)
 
         self.init_db()
 
@@ -963,56 +965,17 @@ class MemoryDB:
         protocol: str,
         profile: dict,
     ) -> dict:
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        payload = json.dumps(profile, ensure_ascii=False)
-        try:
-            with self._db_lock, self._connect() as conn:
-                conn.execute(
-                    """
-                    INSERT INTO asset_profiles
-                        (session_id, asset_key, host, asset_type, protocol, profile_json, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(session_id) DO UPDATE SET
-                        asset_key=excluded.asset_key,
-                        host=excluded.host,
-                        asset_type=excluded.asset_type,
-                        protocol=excluded.protocol,
-                        profile_json=excluded.profile_json,
-                        updated_at=excluded.updated_at
-                    """,
-                    (session_id, asset_key, host, asset_type, protocol, payload, now, now),
-                )
-            return profile
-        except Exception as e:
-            logger.error(f"保存资产画像失败: {e}")
-            raise
+        return self._asset_profile_store.save_asset_profile(
+            session_id,
+            asset_key,
+            host,
+            asset_type,
+            protocol,
+            profile,
+        )
 
     def get_asset_profile(self, session_id: str) -> dict | None:
-        try:
-            with self._db_lock, self._connect() as conn:
-                conn.row_factory = sqlite3.Row
-                row = conn.execute(
-                    """
-                    SELECT session_id, asset_key, host, asset_type, protocol, profile_json, updated_at
-                    FROM asset_profiles
-                    WHERE session_id = ?
-                    """,
-                    (session_id,),
-                ).fetchone()
-            if not row:
-                return None
-            profile = json.loads(row["profile_json"])
-            if isinstance(profile, dict):
-                profile.setdefault("session_id", row["session_id"])
-                profile.setdefault("asset_key", row["asset_key"])
-                profile.setdefault("host", row["host"])
-                profile.setdefault("asset_type", row["asset_type"])
-                profile.setdefault("protocol", row["protocol"])
-                profile.setdefault("updated_at", row["updated_at"])
-                return profile
-        except Exception as e:
-            logger.error(f"读取资产画像失败: {e}")
-        return None
+        return self._asset_profile_store.get_asset_profile(session_id)
 
     # -------- Webhook 发送审计 --------
     def append_webhook_delivery(self, record: dict) -> dict:
