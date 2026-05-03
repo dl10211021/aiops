@@ -6,7 +6,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from core.llm_execution import _convert_openai_messages_to_anthropic, execute_chat_stream
-from core.agent import _safe_user_message_for_memory
+from core.agent_attachments import _safe_user_message_for_memory
 
 
 class TestLLMExecution(unittest.IsolatedAsyncioTestCase):
