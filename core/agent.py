@@ -30,6 +30,7 @@ from core.agent_prompts import (
     render_headless_system_prompt,
 )
 from core.agent_session_context import build_agent_session_context
+from core.agent_sse import sse_event, sse_raw
 from core.agent_task_dispatch import dispatch_group_tasks as run_group_tasks
 from core.agent_tool_events import (
     build_tool_end_event,
@@ -118,7 +119,7 @@ async def chat_stream_agent(
 
     try:
         # Initial status
-        yield f"data: {json.dumps({'type': 'status', 'content': '🤖 AI 正在分析并规划执行路径...'})}\n\n"
+        yield sse_event({"type": "status", "content": "🤖 AI 正在分析并规划执行路径..."})
         await asyncio.sleep(0.05)
 
         max_steps = agent_max_steps("chat")
@@ -129,8 +130,8 @@ async def chat_stream_agent(
             if cancel_flags.get(session_id) is True:
                 cancel_flags[session_id] = False
                 cancel_payload = {"type": "error", "content": "任务已被手动中止。"}
-                yield f"data: {json.dumps(cancel_payload)}\n\n"
-                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                yield sse_event(cancel_payload)
+                yield sse_event({"type": "done"})
                 break
 
             from core.llm_execution import execute_chat_stream
@@ -139,8 +140,7 @@ async def chat_stream_agent(
             thinking_content = ""
             tool_calls = []
 
-            msg_status = json.dumps({"type": "status", "content": "💭 思考中..."})
-            yield f"data: {msg_status}\n\n"
+            yield sse_event({"type": "status", "content": "💭 思考中..."})
 
             is_thinking_stream = False
             async for chunk in execute_chat_stream(
@@ -150,40 +150,24 @@ async def chat_stream_agent(
                     break
                 if chunk["type"] == "thinking":
                     if not is_thinking_stream:
-                        think_start = json.dumps(
-                            {"type": "chunk", "content": "<think>\n"}
-                        )
-                        yield f"data: {think_start}\n\n"
+                        yield sse_event({"type": "chunk", "content": "<think>\n"})
                         is_thinking_stream = True
-                    msg_chunk = json.dumps(
-                        {"type": "chunk", "content": chunk["content"]}
-                    )
-                    yield f"data: {msg_chunk}\n\n"
+                    yield sse_event({"type": "chunk", "content": chunk["content"]})
                     thinking_content += chunk["content"]
                 elif chunk["type"] == "content":
                     if is_thinking_stream:
-                        think_end = json.dumps(
-                            {"type": "chunk", "content": "\n</think>\n"}
-                        )
-                        yield f"data: {think_end}\n\n"
+                        yield sse_event({"type": "chunk", "content": "\n</think>\n"})
                         is_thinking_stream = False
-                    msg_chunk = json.dumps(
-                        {"type": "chunk", "content": chunk["content"]}
-                    )
-                    yield f"data: {msg_chunk}\n\n"
+                    yield sse_event({"type": "chunk", "content": chunk["content"]})
                     assistant_content += chunk["content"]
                 elif chunk["type"] == "tool_calls":
                     if is_thinking_stream:
-                        think_end = json.dumps(
-                            {"type": "chunk", "content": "\n</think>\n"}
-                        )
-                        yield f"data: {think_end}\n\n"
+                        yield sse_event({"type": "chunk", "content": "\n</think>\n"})
                         is_thinking_stream = False
                     tool_calls = chunk["tool_calls"]
 
             if is_thinking_stream:
-                think_end = json.dumps({"type": "chunk", "content": "\n</think>\n"})
-                yield f"data: {think_end}\n\n"
+                yield sse_event({"type": "chunk", "content": "\n</think>\n"})
                 is_thinking_stream = False
 
             safe_msg = {"role": "assistant", "content": assistant_content}
@@ -196,8 +180,7 @@ async def chat_stream_agent(
             memory_db.append_message(session_id, safe_msg)
 
             if not tool_calls:
-                msg_done = json.dumps({"type": "done"})
-                yield f"data: {msg_done}\n\n"
+                yield sse_event({"type": "done"})
                 break
 
             for tc in tool_calls:
@@ -227,7 +210,7 @@ async def chat_stream_agent(
                         ensure_ascii=False,
                     )
                     msg_end, safe_tool_res = build_tool_end_event(tc_id, func_name, tool_res)
-                    yield f"data: {msg_end}\n\n"
+                    yield sse_raw(msg_end)
                     tool_msg = {"tool_call_id": tc_id, "role": "tool", "name": func_name, "content": safe_tool_res}
                     messages.append(tool_msg)
                     memory_db.append_message(session_id, tool_msg)
@@ -240,7 +223,7 @@ async def chat_stream_agent(
                         "future": future,
                         "session_id": session_id,
                     }
-                    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                    yield sse_event(payload, ensure_ascii=False)
                     tool_res, safe_tool_res = await _wait_for_user_interaction(tc_id, payload, future)
                     tool_msg = {
                         "tool_call_id": tc_id,
@@ -264,7 +247,7 @@ async def chat_stream_agent(
                         },
                         ensure_ascii=False,
                     )
-                    yield f"data: {interaction_done}\n\n"
+                    yield sse_raw(interaction_done)
                     memory_db.append_message(
                         session_id,
                         {
@@ -303,7 +286,7 @@ async def chat_stream_agent(
                         "tool": func_name, 
                         "cmd": display_cmd
                     })
-                    yield f"data: {msg_ask}\n\n"
+                    yield sse_raw(msg_ask)
                     
                     future = asyncio.Future()
                     dispatcher.pending_approvals[tc_id] = future
@@ -334,7 +317,7 @@ async def chat_stream_agent(
                             ensure_ascii=False,
                         )
                         msg_end, safe_tool_res = build_tool_end_event(tc_id, func_name, tool_res)
-                        yield f"data: {msg_end}\n\n"
+                        yield sse_raw(msg_end)
                         
                         tool_msg = {
                             "tool_call_id": tc_id,
@@ -355,7 +338,7 @@ async def chat_stream_agent(
                         "cmd": display_cmd,
                     }
                 )
-                yield f"data: {msg_start}\n\n"
+                yield sse_raw(msg_start)
                 await asyncio.sleep(0.05)
 
                 tool_res = await dispatcher.route_and_execute(
@@ -369,7 +352,7 @@ async def chat_stream_agent(
                     except KeyError:
                         pass
                 msg_end, safe_tool_res = build_tool_end_event(tc.get("id", ""), func_name, tool_res)
-                yield f"data: {msg_end}\n\n"
+                yield sse_raw(msg_end)
                 await asyncio.sleep(0.05)
 
                 tool_msg = {
@@ -387,7 +370,7 @@ async def chat_stream_agent(
                     "content": f"🔄 收集结果，执行第 {iteration + 2} 步...",
                 }
             )
-            yield f"data: {msg_loop}\n\n"
+            yield sse_raw(msg_loop)
             await asyncio.sleep(0.05)
 
         else:
@@ -395,7 +378,7 @@ async def chat_stream_agent(
                 "type": "status",
                 "content": f"已达到 {max_steps} 步执行保护上限，正在整理阶段性报告...",
             }
-            yield f"data: {json.dumps(limit_status_payload, ensure_ascii=False)}\n\n"
+            yield sse_event(limit_status_payload, ensure_ascii=False)
 
             summary_messages = messages + [
                 {"role": "system", "content": agent_step_limit_instruction(max_steps)}
@@ -409,7 +392,7 @@ async def chat_stream_agent(
                 ):
                     if chunk["type"] == "content":
                         summary_content += chunk["content"]
-                        yield f"data: {json.dumps({'type': 'chunk', 'content': chunk['content']}, ensure_ascii=False)}\n\n"
+                        yield sse_event({"type": "chunk", "content": chunk["content"]}, ensure_ascii=False)
                     elif chunk["type"] == "thinking":
                         continue
                 if not summary_content.strip():
@@ -417,18 +400,18 @@ async def chat_stream_agent(
                         f"已达到 {max_steps} 步执行保护上限，系统已停止继续调用工具。"
                         "当前模型未能生成阶段性报告，请根据上方工具结果继续拆分任务。"
                     )
-                    yield f"data: {json.dumps({'type': 'chunk', 'content': summary_content}, ensure_ascii=False)}\n\n"
+                    yield sse_event({"type": "chunk", "content": summary_content}, ensure_ascii=False)
             except Exception as summary_error:
                 summary_content = (
                     f"已达到 {max_steps} 步执行保护上限，且阶段性报告生成失败：{summary_error}。"
                     "请将任务拆成更小范围后重试。"
                 )
-                yield f"data: {json.dumps({'type': 'chunk', 'content': summary_content}, ensure_ascii=False)}\n\n"
+                yield sse_event({"type": "chunk", "content": summary_content}, ensure_ascii=False)
 
             safe_summary_msg = {"role": "assistant", "content": summary_content}
             messages.append(safe_summary_msg)
             memory_db.append_message(session_id, safe_summary_msg)
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            yield sse_event({"type": "done"})
 
         schedule_ltm_compression(
             memory_store=memory_db,
@@ -441,8 +424,8 @@ async def chat_stream_agent(
         error_msg = str(e)
         logger.error(f"Agent Loop Failed: {error_msg}")
         error_payload = build_agent_loop_error_payload(error_msg)
-        yield f"data: {json.dumps(error_payload)}\n\n"
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        yield sse_event(error_payload)
+        yield sse_event({"type": "done"})
 
 
 async def dispatch_group_tasks(tasks: list[dict], allow_mod: bool) -> list[dict]:
