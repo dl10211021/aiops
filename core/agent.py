@@ -35,8 +35,9 @@ from core.agent_streaming import AgentStreamState, stream_assistant_response
 from core.agent_task_dispatch import dispatch_group_tasks as run_group_tasks
 from core.agent_tool_events import (
     build_tool_end_event,
+    invalid_tool_arguments_result,
     parse_tool_arguments,
-    summarize_tool_result_for_sse,
+    prepare_tool_call,
 )
 from core.agent_profiles import load_agent_profile_prompt
 from core.model_catalog import get_available_models, get_available_models_for_provider
@@ -46,7 +47,6 @@ from core.embedding_config import (
     get_embedding_config,
     update_embedding_config,
 )
-from core.redaction import redact_text
 from core.safety_policy import approval_timeout_seconds
 
 cancel_flags = {}
@@ -158,31 +158,14 @@ async def chat_stream_agent(
                 break
 
             for tc in tool_calls:
-                func_name = tc.get("function", {}).get("name", "")
-                parse_error = None
-                try:
-                    func_args = parse_tool_arguments(
-                        tc.get("function", {}).get("arguments", "{}")
-                    )
-                except Exception as e:
-                    func_args = {}
-                    parse_error = str(e)
+                prepared_call = prepare_tool_call(tc)
+                func_name = prepared_call.name
+                func_args = prepared_call.args
+                display_cmd = prepared_call.display_cmd
+                tc_id = prepared_call.id
 
-                display_cmd = redact_text(str(func_args.get("command", str(func_args))))
-                if parse_error:
-                    display_cmd = "JSON解析失败: " + parse_error
-                tc_id = tc.get("id", "")
-
-                if parse_error:
-                    tool_res = json.dumps(
-                        {
-                            "status": "ERROR",
-                            "error_type": "tool_arguments_invalid",
-                            "error": f"参数 JSON 格式无效，请检查是否包含未转义字符或格式错误: {parse_error}",
-                            "hint": "请重新生成工具参数，复杂 PowerShell/SQL 片段需要正确转义。",
-                        },
-                        ensure_ascii=False,
-                    )
+                if prepared_call.parse_error:
+                    tool_res = invalid_tool_arguments_result(prepared_call.parse_error)
                     msg_end, safe_tool_res = build_tool_end_event(tc_id, func_name, tool_res)
                     yield sse_raw(msg_end)
                     tool_msg = {"tool_call_id": tc_id, "role": "tool", "name": func_name, "content": safe_tool_res}

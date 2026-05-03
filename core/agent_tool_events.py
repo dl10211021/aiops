@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 
-from core.redaction import redact_json_text
+from core.redaction import redact_json_text, redact_text
+
+
+@dataclass(frozen=True)
+class PreparedToolCall:
+    id: str
+    name: str
+    args: dict
+    parse_error: str | None
+    display_cmd: str
 
 
 def summarize_tool_result_for_sse(tool_result, preview_limit: int = 300) -> dict:
@@ -122,3 +132,39 @@ def parse_tool_arguments(raw_arguments) -> dict:
     if isinstance(parsed, dict):
         return parsed
     return {}
+
+
+def prepare_tool_call(tool_call: dict) -> PreparedToolCall:
+    tool_name = tool_call.get("function", {}).get("name", "")
+    parse_error = None
+    try:
+        tool_args = parse_tool_arguments(
+            tool_call.get("function", {}).get("arguments", "{}")
+        )
+    except Exception as e:
+        tool_args = {}
+        parse_error = str(e)
+
+    display_cmd = redact_text(str(tool_args.get("command", str(tool_args))))
+    if parse_error:
+        display_cmd = "JSON解析失败: " + parse_error
+
+    return PreparedToolCall(
+        id=tool_call.get("id", ""),
+        name=tool_name,
+        args=tool_args,
+        parse_error=parse_error,
+        display_cmd=display_cmd,
+    )
+
+
+def invalid_tool_arguments_result(parse_error: str) -> str:
+    return json.dumps(
+        {
+            "status": "ERROR",
+            "error_type": "tool_arguments_invalid",
+            "error": f"参数 JSON 格式无效，请检查是否包含未转义字符或格式错误: {parse_error}",
+            "hint": "请重新生成工具参数，复杂 PowerShell/SQL 片段需要正确转义。",
+        },
+        ensure_ascii=False,
+    )
