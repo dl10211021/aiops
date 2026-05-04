@@ -279,6 +279,9 @@ class FileMemoryStore:
     def delete_memory(self, path: str, *, actor: str = "user") -> dict[str, Any]:
         self.initialize()
         relative_path = self._safe_relative_path(path)
+        store = self._store_for_path(relative_path.as_posix())
+        if store.get("access") == "read_only":
+            raise PermissionError("memory_store_read_only")
         target = self._resolve_memory_path(relative_path)
         if not target.exists() or not target.is_file():
             raise FileNotFoundError(path)

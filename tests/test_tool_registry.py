@@ -137,6 +137,22 @@ class TestToolRegistry(unittest.TestCase):
 
         self.assertIn("request_user_interaction", names)
 
+    def test_memory_tools_are_available_in_all_sessions(self):
+        names = enabled_tool_names(
+            {
+                "target_scope": "asset",
+                "asset_type": "linux",
+                "protocol": "ssh",
+                "extra_args": {},
+            }
+        )
+
+        self.assertIn("memory_list", names)
+        self.assertIn("memory_read", names)
+        self.assertIn("memory_write", names)
+        self.assertIn("memory_edit", names)
+        self.assertIn("memory_delete", names)
+
     def test_s3_session_enables_storage_api_tool(self):
         names = enabled_tool_names(
             {

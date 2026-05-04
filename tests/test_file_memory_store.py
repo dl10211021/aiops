@@ -128,6 +128,17 @@ class FileMemoryStoreTests(unittest.TestCase):
                 content_sha256="stale",
             )
 
+    def test_delete_memory_rejects_read_only_store(self):
+        self.store.initialize()
+        global_path = self.tmp_path / "global" / "memory.md"
+        global_path.parent.mkdir(parents=True, exist_ok=True)
+        global_path.write_text("# 全局只读记忆\n\n【核心记忆】平台级规则。", encoding="utf-8")
+
+        with self.assertRaisesRegex(PermissionError, "memory_store_read_only"):
+            self.store.delete_memory("global/memory.md", actor="tester")
+
+        self.assertTrue(global_path.exists())
+
     def test_memory_paths_are_scoped_and_sanitized(self):
         self.assertEqual(safe_memory_segment("../evil host"), "evil_host")
         self.assertEqual(

@@ -7,6 +7,7 @@ from typing import Dict, Any, List
 
 from core.dispatcher_api_tools import API_TOOL_NAMES, execute_api_tool
 from core.dispatcher_database_tools import DATABASE_TOOL_NAMES, execute_database_tool
+from core.dispatcher_memory_tools import MEMORY_TOOL_NAMES, execute_memory_tool
 from core.dispatcher_scope_tools import execute_on_scope_tool
 from core.dispatcher_session_tools import SESSION_TOOL_NAMES, execute_session_tool
 from core.dispatcher_skill_evolution import (
@@ -258,6 +259,9 @@ class SkillDispatcher:
 
         elif tool_call_name in UTILITY_TOOL_NAMES:
             return await execute_utility_tool(tool_call_name, args, logger)
+
+        elif tool_call_name in MEMORY_TOOL_NAMES:
+            return await execute_memory_tool(tool_call_name, args, context, logger)
 
         elif tool_call_name in DATABASE_TOOL_NAMES:
             return await execute_database_tool(tool_call_name, args, context)
