@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import io
 import json
+import math
 import re
 import shutil
 import asyncio
@@ -711,11 +712,15 @@ def build_vault_knowledge_graph(
             "id": str(rel_path),
             "title": str(title),
             "kind": kind,
+            "kind_label": "正式知识" if kind == "article" else "候选草稿",
             "path": str(rel_path),
             "source_session_id": record.get("source_session_id") or record.get("id"),
             "compile_stage": record.get("compile_stage"),
             "review_status": record.get("review_status"),
             "updated_at": record.get("approved_at") or record.get("compiled_at") or record.get("created_at"),
+            "degree": 0,
+            "links_in": 0,
+            "links_out": 0,
         }
         nodes.append(node)
         by_path[str(rel_path).lower()] = node
@@ -723,6 +728,25 @@ def build_vault_knowledge_graph(
         by_title[Path(str(rel_path)).stem.lower()] = node
 
     seen_edges: set[tuple[str, str, str]] = set()
+
+    def add_edge(source: dict[str, Any], target: dict[str, Any], kind: str, label: str) -> None:
+        if source["id"] == target["id"]:
+            return
+        edge_key = (source["id"], target["id"], kind)
+        if edge_key in seen_edges:
+            return
+        edges.append(
+            {
+                "source": source["id"],
+                "target": target["id"],
+                "kind": kind,
+                "label": label,
+            }
+        )
+        seen_edges.add(edge_key)
+        source["links_out"] = int(source.get("links_out") or 0) + 1
+        target["links_in"] = int(target.get("links_in") or 0) + 1
+
     for node in nodes:
         content = _read_vault_text_file(root, node["path"])
         if not content:
@@ -730,21 +754,37 @@ def build_vault_knowledge_graph(
         for link in re.findall(r"\[\[([^\]\|#]+)(?:[^\]]*)\]\]", content):
             target_key = link.strip().lower()
             target = by_title.get(target_key) or by_path.get(target_key) or by_path.get(f"wiki/articles/{target_key}.md")
-            if target and target["id"] != node["id"]:
-                edge_key = (node["id"], target["id"], "wikilink")
-                if edge_key not in seen_edges:
-                    edges.append({"source": node["id"], "target": target["id"], "kind": "wikilink", "label": "[[]] 双链"})
-                    seen_edges.add(edge_key)
+            if target:
+                add_edge(node, target, "wikilink", "[[]] 双链")
         lower_content = content.lower()
         for target in nodes:
             if target["id"] == node["id"]:
                 continue
             title = str(target["title"]).lower()
             if title and title in lower_content:
-                edge_key = (node["id"], target["id"], "mention")
-                if edge_key not in seen_edges:
-                    edges.append({"source": node["id"], "target": target["id"], "kind": "mention", "label": "内容提及"})
-                    seen_edges.add(edge_key)
+                add_edge(node, target, "mention", "内容提及")
+
+    relation_counts: dict[str, int] = {}
+    for edge in edges:
+        kind = str(edge.get("kind") or "unknown")
+        relation_counts[kind] = relation_counts.get(kind, 0) + 1
+
+    ranked_nodes = sorted(nodes, key=lambda item: (int(item.get("links_in") or 0) + int(item.get("links_out") or 0), str(item.get("title") or "")), reverse=True)
+    total = len(ranked_nodes)
+    for index, node in enumerate(ranked_nodes):
+        degree = int(node.get("links_in") or 0) + int(node.get("links_out") or 0)
+        node["degree"] = degree
+        if total <= 1:
+            node["x"] = 50
+            node["y"] = 32
+        elif index == 0 and degree > 0:
+            node["x"] = 50
+            node["y"] = 32
+        else:
+            angle = (2 * 3.141592653589793 * index) / total
+            node["x"] = round(50 + 34 * math.cos(angle), 2)
+            node["y"] = round(32 + 22 * math.sin(angle), 2)
+        node["size"] = min(18, 7 + degree * 2 + (2 if node.get("kind") == "article" else 0))
 
     return {
         "nodes": nodes,
@@ -754,6 +794,10 @@ def build_vault_knowledge_graph(
             "edge_count": len(edges),
             "article_count": len([node for node in nodes if node["kind"] == "article"]),
             "candidate_count": len([node for node in nodes if node["kind"] == "candidate"]),
+            "linked_node_count": len([node for node in nodes if int(node.get("degree") or 0) > 0]),
+            "isolated_node_count": len([node for node in nodes if int(node.get("degree") or 0) == 0]),
+            "relation_counts": relation_counts,
+            "generated_at": _utc_now_iso(),
         },
     }
 

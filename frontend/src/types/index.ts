@@ -663,11 +663,18 @@ export interface KnowledgeVaultGraphNode {
   id: string
   title: string
   kind: 'article' | 'candidate' | string
+  kind_label?: string
   path: string
   source_session_id?: string
   compile_stage?: string
   review_status?: string
   updated_at?: string
+  degree?: number
+  links_in?: number
+  links_out?: number
+  x?: number
+  y?: number
+  size?: number
 }
 
 export interface KnowledgeVaultGraphEdge {
@@ -685,6 +692,10 @@ export interface KnowledgeVaultGraph {
     edge_count: number
     article_count: number
     candidate_count: number
+    linked_node_count?: number
+    isolated_node_count?: number
+    relation_counts?: Record<string, number>
+    generated_at?: string
   }
 }
 

@@ -231,9 +231,37 @@ class TestKnowledgeBaseService(unittest.TestCase):
         search_results = search_vault_knowledge("CPU", vault_dir=self.vault_dir)
         self.assertTrue(any(item["kind"] == "articles" for item in search_results))
         self.assertTrue(any("CPU" in item["snippet"] or "人工补充" in item["snippet"] for item in search_results))
+
+        related_upload = FakeUpload("网络拓扑.txt", "网关和 Linux 巡检有关联\n".encode("utf-8"))
+        with patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")):
+            asyncio.run(ingest_knowledge_document(kb, related_upload))
+        related_record = [
+            item for item in list_vault_source_records(self.vault_dir)
+            if item["original_filename"] == "网络拓扑.txt"
+        ][0]
+        asyncio.run(
+            compile_vault_source_candidate(
+                related_record["source_session_id"],
+                use_ai=False,
+                vault_dir=self.vault_dir,
+            )
+        )
+        related_detail = read_vault_candidate(related_record["source_session_id"], vault_dir=self.vault_dir)
+        update_vault_candidate(
+            related_record["source_session_id"],
+            content=related_detail["content"] + "\n\n## 关联知识\n\n- [[巡检记录.txt]]\n",
+            content_sha256=related_detail["content_sha256"],
+            vault_dir=self.vault_dir,
+        )
+        approve_vault_candidate(related_record["source_session_id"], vault_dir=self.vault_dir)
+
         graph = build_vault_knowledge_graph(vault_dir=self.vault_dir)
-        self.assertGreaterEqual(graph["summary"]["article_count"], 1)
-        self.assertGreaterEqual(graph["summary"]["node_count"], 1)
+        self.assertGreaterEqual(graph["summary"]["article_count"], 2)
+        self.assertGreaterEqual(graph["summary"]["node_count"], 2)
+        self.assertGreaterEqual(graph["summary"]["edge_count"], 1)
+        self.assertGreaterEqual(graph["summary"]["linked_node_count"], 2)
+        self.assertEqual(graph["summary"]["relation_counts"]["wikilink"], 1)
+        self.assertTrue(all("x" in node and "y" in node and "degree" in node for node in graph["nodes"]))
         archive_path = create_vault_export_zip(vault_dir=self.vault_dir)
         self.assertTrue(archive_path.exists())
         with zipfile.ZipFile(archive_path) as archive:

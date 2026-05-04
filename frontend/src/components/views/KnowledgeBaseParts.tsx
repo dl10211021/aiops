@@ -313,41 +313,49 @@ export function KnowledgeVaultGraphPanel({
   onIncludeCandidatesChange: (value: boolean) => void
   onLoad: () => void
 }) {
-  const topNodes = graph?.nodes.slice(0, 8) || []
-  const topEdges = graph?.edges.slice(0, 8) || []
+  const topNodes = graph?.nodes
+    .slice()
+    .sort((a, b) => (b.degree || 0) - (a.degree || 0))
+    .slice(0, 8) || []
+  const topEdges = graph?.edges.slice(0, 10) || []
+  const nodeById = new Map((graph?.nodes || []).map((node) => [node.id, node]))
+  const relationCounts = graph?.summary.relation_counts || {}
+  const hasGraphLinks = Boolean(graph && graph.nodes.length > 0)
 
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">Vault 关系图</div>
+          <div className="text-sm font-semibold text-ops-text">Obsidian 知识图谱</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            根据 Obsidian `[[双链]]` 和内容提及生成知识连接，后续辅助模型检索时可沿关系追溯证据。
+            固定只展示正式 Wiki、候选 Wiki、`[[双链]]` 和内容提及关系，用来判断知识是否真正连接起来。
           </p>
         </div>
         <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
-          {graph?.summary.node_count || 0}/{graph?.summary.edge_count || 0}
+          {graph?.summary.node_count || 0} 节点 / {graph?.summary.edge_count || 0} 关系
         </span>
       </div>
-      <label className="mt-3 flex items-center gap-2 text-xs text-ops-subtext">
-        <input
-          type="checkbox"
-          checked={includeCandidates}
-          onChange={(event) => onIncludeCandidatesChange(event.target.checked)}
-          className="accent-ops-accent"
-        />
-        包含候选 Wiki，便于审查未入库草稿之间的关系
-      </label>
-      <button
-        onClick={onLoad}
-        disabled={loading}
-        className="mt-2 w-full rounded-md border border-ops-success/40 px-3 py-1.5 text-xs font-semibold text-ops-success transition-colors hover:bg-ops-success/10 disabled:cursor-not-allowed disabled:opacity-45"
-      >
-        {loading ? '生成中...' : '生成关系图'}
-      </button>
+      <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+        <label className="flex items-center gap-2 rounded-md border border-ops-surface0 bg-ops-dark/30 px-3 py-2 text-xs text-ops-subtext">
+          <input
+            type="checkbox"
+            checked={includeCandidates}
+            onChange={(event) => onIncludeCandidatesChange(event.target.checked)}
+            className="accent-ops-accent"
+          />
+          包含候选 Wiki
+        </label>
+        <button
+          onClick={onLoad}
+          disabled={loading}
+          className="rounded-md border border-ops-success/40 px-4 py-2 text-xs font-semibold text-ops-success transition-colors hover:bg-ops-success/10 disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {loading ? '生成中...' : '生成图谱'}
+        </button>
+      </div>
       {graph ? (
         <div className="mt-3 space-y-3">
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-2 gap-2 text-xs lg:grid-cols-4">
             <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-2">
               <div className="text-ops-overlay">正式文章</div>
               <div className="mt-1 text-lg font-semibold text-ops-text">{graph.summary.article_count}</div>
@@ -356,25 +364,100 @@ export function KnowledgeVaultGraphPanel({
               <div className="text-ops-overlay">候选草稿</div>
               <div className="mt-1 text-lg font-semibold text-ops-text">{graph.summary.candidate_count}</div>
             </div>
+            <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-2">
+              <div className="text-ops-overlay">已连接</div>
+              <div className="mt-1 text-lg font-semibold text-ops-text">{graph.summary.linked_node_count || 0}</div>
+            </div>
+            <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-2">
+              <div className="text-ops-overlay">孤立知识</div>
+              <div className="mt-1 text-lg font-semibold text-ops-text">{graph.summary.isolated_node_count || 0}</div>
+            </div>
           </div>
+
+          <div className="rounded-xl border border-ops-accent/20 bg-[radial-gradient(circle_at_20%_20%,rgba(45,212,191,0.18),transparent_32%),linear-gradient(135deg,rgba(8,13,28,0.96),rgba(10,31,45,0.72))] p-3">
+            <div className="mb-2 flex items-center justify-between text-xs">
+              <span className="font-semibold text-ops-text">Vault Graph</span>
+              <span className="text-ops-subtext">
+                双链 {relationCounts.wikilink || 0} / 提及 {relationCounts.mention || 0}
+              </span>
+            </div>
+            {hasGraphLinks ? (
+              <svg viewBox="0 0 100 64" role="img" aria-label="Obsidian 风格知识图谱" className="h-72 w-full overflow-visible rounded-lg border border-ops-surface0 bg-ops-dark/45">
+                <defs>
+                  <filter id="knowledgeGraphGlow" x="-40%" y="-40%" width="180%" height="180%">
+                    <feGaussianBlur stdDeviation="1.8" result="coloredBlur" />
+                    <feMerge>
+                      <feMergeNode in="coloredBlur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+                {graph.edges.map((edge, index) => {
+                  const source = nodeById.get(edge.source)
+                  const target = nodeById.get(edge.target)
+                  if (!source || !target) return null
+                  return (
+                    <line
+                      key={`${edge.source}-${edge.target}-${edge.kind}-${index}`}
+                      x1={source.x || 50}
+                      y1={source.y || 32}
+                      x2={target.x || 50}
+                      y2={target.y || 32}
+                      stroke={edge.kind === 'wikilink' ? 'rgba(45,212,191,0.72)' : 'rgba(148,163,184,0.36)'}
+                      strokeWidth={edge.kind === 'wikilink' ? 0.55 : 0.35}
+                    />
+                  )
+                })}
+                {graph.nodes.map((node) => (
+                  <g key={node.id} filter={(node.degree || 0) > 0 ? 'url(#knowledgeGraphGlow)' : undefined}>
+                    <circle
+                      cx={node.x || 50}
+                      cy={node.y || 32}
+                      r={Math.max(2.3, (node.size || 8) / 2.6)}
+                      fill={node.kind === 'article' ? 'rgba(45,212,191,0.88)' : 'rgba(251,191,36,0.78)'}
+                      stroke="rgba(226,232,240,0.75)"
+                      strokeWidth="0.25"
+                    />
+                    <text
+                      x={(node.x || 50) + 3}
+                      y={(node.y || 32) + 1}
+                      fill="rgba(226,232,240,0.88)"
+                      fontSize="2.6"
+                    >
+                      {node.title.slice(0, 18)}
+                    </text>
+                  </g>
+                ))}
+              </svg>
+            ) : (
+              <div className="rounded-lg border border-dashed border-ops-surface1 p-6 text-center text-xs leading-6 text-ops-subtext">
+                暂无可绘制节点。批准 Wiki 文章后，或在文章中加入 `[[文章标题]]`，这里会形成关系图。
+              </div>
+            )}
+          </div>
+
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-3">
-            <div className="text-xs font-semibold text-ops-text">节点预览</div>
+            <div className="text-xs font-semibold text-ops-text">核心节点</div>
             <div className="mt-2 flex flex-wrap gap-2">
               {topNodes.length > 0 ? topNodes.map((node) => (
                 <span key={node.id} className="max-w-full truncate rounded-full border border-ops-accent/25 px-2 py-1 text-[11px] text-ops-accent" title={node.path}>
-                  {node.kind === 'article' ? '文章' : '候选'} · {node.title}
+                  {node.kind === 'article' ? '文章' : '候选'} · {node.title} · {node.degree || 0} 连接
                 </span>
               )) : <span className="text-xs text-ops-subtext">暂无节点</span>}
             </div>
           </div>
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-3">
-            <div className="text-xs font-semibold text-ops-text">关系预览</div>
+            <div className="text-xs font-semibold text-ops-text">关系明细</div>
             <div className="mt-2 space-y-1">
-              {topEdges.length > 0 ? topEdges.map((edge, index) => (
-                <div key={`${edge.source}-${edge.target}-${index}`} className="truncate font-mono text-[11px] text-ops-subtext" title={`${edge.source} -> ${edge.target}`}>
-                  {edge.label}: {edge.source} {'->'} {edge.target}
-                </div>
-              )) : <div className="text-xs text-ops-subtext">暂无关系，建议在 Wiki 中使用 `[[文章标题]]` 建立双链。</div>}
+              {topEdges.length > 0 ? topEdges.map((edge, index) => {
+                const source = nodeById.get(edge.source)
+                const target = nodeById.get(edge.target)
+                return (
+                  <div key={`${edge.source}-${edge.target}-${index}`} className="truncate font-mono text-[11px] text-ops-subtext" title={`${edge.source} -> ${edge.target}`}>
+                    {edge.label}: {source?.title || edge.source} {'->'} {target?.title || edge.target}
+                  </div>
+                )
+              }) : <div className="text-xs text-ops-subtext">暂无关系，建议在 Wiki 中使用 `[[文章标题]]` 建立双链。</div>}
             </div>
           </div>
         </div>

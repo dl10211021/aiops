@@ -201,9 +201,17 @@ class TestKnowledgeRoutes(unittest.TestCase):
         with patch(
             "api.knowledge_routes.build_vault_knowledge_graph",
             return_value={
-                "nodes": [{"id": "wiki/articles/linux.md", "title": "Linux", "kind": "article"}],
+                "nodes": [{"id": "wiki/articles/linux.md", "title": "Linux", "kind": "article", "x": 50, "y": 50, "degree": 0}],
                 "edges": [],
-                "summary": {"node_count": 1, "edge_count": 0, "article_count": 1, "candidate_count": 0},
+                "summary": {
+                    "node_count": 1,
+                    "edge_count": 0,
+                    "article_count": 1,
+                    "candidate_count": 0,
+                    "linked_node_count": 0,
+                    "isolated_node_count": 1,
+                    "relation_counts": {},
+                },
             },
         ):
             response = asyncio.run(
@@ -214,7 +222,9 @@ class TestKnowledgeRoutes(unittest.TestCase):
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data["summary"]["article_count"], 1)
+        self.assertEqual(response.data["summary"]["isolated_node_count"], 1)
         self.assertEqual(response.data["nodes"][0]["title"], "Linux")
+        self.assertEqual(response.data["nodes"][0]["x"], 50)
 
     def test_delete_knowledge_document_preserves_response_shape(self):
         with patch(
