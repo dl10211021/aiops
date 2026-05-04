@@ -212,6 +212,54 @@ class FileMemoryStore:
             )
         return memories
 
+    def list_review_items(self, *, stale_days: int) -> list[dict[str, Any]]:
+        self.initialize()
+        if stale_days <= 0:
+            return []
+        now = datetime.datetime.now()
+        review_items = []
+        for item in self.list_memories():
+            try:
+                updated_at = datetime.datetime.strptime(
+                    str(item.get("updated_at") or ""),
+                    "%Y-%m-%d %H:%M:%S",
+                )
+            except Exception:
+                continue
+            age_days = (now - updated_at).days
+            if age_days <= stale_days:
+                continue
+            review_items.append(
+                {
+                    **item,
+                    "age_days": age_days,
+                    "stale_days": stale_days,
+                    "reason": f"该记忆已 {age_days} 天未复核，超过 {stale_days} 天阈值。",
+                    "recommended_action": "结合当前资产状态重新验证，确认仍适用后标记已复核；不再适用则编辑或删除。",
+                }
+            )
+        return review_items
+
+    def mark_reviewed(self, path: str, *, actor: str = "user") -> dict[str, Any]:
+        detail = self.read_memory(path)
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        review_entry = (
+            f"\n\n## {now}\n"
+            f"- scope_id: {detail.get('scope_id') or 'global'}\n"
+            f"- source_session_id: memory_review:{actor}\n"
+            '- metadata: {"source": "memory_review", "review_status": "confirmed"}\n\n'
+            "【记忆类型】复核记录\n"
+            "【复核状态】已复核\n"
+            "【核心记忆】人工确认该记忆文件仍可作为历史经验保留。\n"
+            "【使用提醒】后续使用前仍需结合当前资产实时工具结果验证。\n"
+        )
+        return self.update_memory(
+            path,
+            content=str(detail.get("content") or "").rstrip() + review_entry,
+            content_sha256=str(detail.get("content_sha256") or ""),
+            actor=f"memory_review:{actor}",
+        )
+
     def list_stores(self) -> list[dict[str, Any]]:
         self.initialize()
         return self._load_store_registry()

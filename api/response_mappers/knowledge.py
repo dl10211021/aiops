@@ -60,6 +60,21 @@ def memory_pending_conflict_resolved_response_kwargs(version: dict[str, Any]) ->
     }
 
 
+def memory_review_items_response_kwargs(items: list[Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"items": items},
+    }
+
+
+def memory_review_confirmed_response_kwargs(version: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "记忆已标记为复核通过",
+        "data": {"version": version},
+    }
+
+
 def memory_stores_response_kwargs(stores: list[Any]) -> dict[str, Any]:
     return {
         "status": "success",

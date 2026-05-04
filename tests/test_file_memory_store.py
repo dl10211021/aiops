@@ -2,6 +2,8 @@ import json
 import shutil
 import unittest
 import uuid
+import os
+import time
 from pathlib import Path
 
 from core.file_memory_store import FileMemoryStore, memory_scope_path, safe_memory_segment
@@ -127,6 +129,25 @@ class FileMemoryStoreTests(unittest.TestCase):
                 content="new",
                 content_sha256="stale",
             )
+
+    def test_review_items_and_mark_reviewed_support_stale_memory_workflow(self):
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary="【核心记忆】需要定期复核。",
+            source_session_id="sid-1",
+        )
+        item = self.store.list_memories()[0]
+        target = self.tmp_path / item["path"]
+        old_time = time.time() - 200 * 24 * 60 * 60
+        os.utime(target, (old_time, old_time))
+
+        review_items = self.store.list_review_items(stale_days=180)
+        version = self.store.mark_reviewed(item["path"], actor="tester")
+
+        self.assertEqual(len(review_items), 1)
+        self.assertGreaterEqual(review_items[0]["age_days"], 199)
+        self.assertEqual(version["operation"], "modified")
+        self.assertIn("【复核状态】已复核", self.store.read_memory(item["path"])["content"])
 
     def test_delete_memory_rejects_read_only_store(self):
         self.store.initialize()

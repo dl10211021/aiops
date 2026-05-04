@@ -4,9 +4,11 @@ import {
   deleteKnowledgeDocument,
   deleteMemoryItem,
   exportMemoryStore,
+  confirmMemoryReview,
   listKnowledgeDocuments,
   listMemoryItems,
   listMemoryPendingConflicts,
+  listMemoryReviewItems,
   listMemoryStores,
   listMemoryVersions,
   readMemoryItem,
@@ -16,7 +18,7 @@ import {
   uploadKnowledgeDocument,
 } from '@/api/knowledge'
 import { useStore } from '@/store'
-import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { isAcceptedKnowledgeFile } from './knowledgeBaseModel'
 
 export function useKnowledgeBaseData() {
@@ -26,6 +28,7 @@ export function useKnowledgeBaseData() {
   const [memoryStores, setMemoryStores] = useState<MemoryStoreInfo[]>([])
   const [memoryVersions, setMemoryVersions] = useState<MemoryVersion[]>([])
   const [memoryPendingConflicts, setMemoryPendingConflicts] = useState<MemoryPendingConflict[]>([])
+  const [memoryReviewItems, setMemoryReviewItems] = useState<MemoryReviewItem[]>([])
   const [selectedMemory, setSelectedMemory] = useState<MemoryDetail | null>(null)
   const [memoryDraft, setMemoryDraft] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -36,6 +39,7 @@ export function useKnowledgeBaseData() {
   const [savingMemory, setSavingMemory] = useState(false)
   const [exportingMemory, setExportingMemory] = useState(false)
   const [resolvingMemoryConflict, setResolvingMemoryConflict] = useState<string | null>(null)
+  const [reviewingMemoryPath, setReviewingMemoryPath] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [memoryLoading, setMemoryLoading] = useState(true)
   const [error, setError] = useState('')
@@ -64,9 +68,11 @@ export function useKnowledgeBaseData() {
         listMemoryVersions(30),
         listMemoryPendingConflicts(50),
       ])
+      const reviewRes = await listMemoryReviewItems(180, 50)
       setMemoryItems(itemsRes.data.items || [])
       setMemoryVersions(versionsRes.data.versions || [])
       setMemoryPendingConflicts(pendingRes.data.items || [])
+      setMemoryReviewItems(reviewRes.data.items || [])
       setSelectedMemory((current) => {
         if (!current) return current
         const stillExists = (itemsRes.data.items || []).some((item) => item.path === current.path)
@@ -208,6 +214,19 @@ export function useKnowledgeBaseData() {
     }
   }
 
+  const handleConfirmMemoryReview = async (item: MemoryReviewItem) => {
+    setReviewingMemoryPath(item.path)
+    try {
+      await confirmMemoryReview(item.path)
+      await loadMemories()
+      addToast('记忆已标记为复核通过', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '标记复核失败', 'error')
+    } finally {
+      setReviewingMemoryPath(null)
+    }
+  }
+
   const handleExportMemory = async () => {
     setExportingMemory(true)
     try {
@@ -237,6 +256,7 @@ export function useKnowledgeBaseData() {
     handleDelete,
     handleDeleteMemory,
     handleExportMemory,
+    handleConfirmMemoryReview,
     handleOpenMemory,
     handleRestoreMemoryVersion,
     handleResolveMemoryConflict,
@@ -251,11 +271,13 @@ export function useKnowledgeBaseData() {
     memoryItems,
     memoryLoading,
     memoryPendingConflicts,
+    memoryReviewItems,
     memoryStores,
     memoryVersions,
     savingMemory,
     selectedMemory,
     resolvingMemoryConflict,
+    reviewingMemoryPath,
     setDeleteTarget,
     setMemoryDraft,
     setMemoryDeleteTarget,

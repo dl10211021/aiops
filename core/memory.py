@@ -784,6 +784,19 @@ class MemoryDB:
                 break
         return items
 
+    def list_memory_review_items(
+        self,
+        *,
+        stale_days: int | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        days = LTM_STALE_DAYS if stale_days is None else stale_days
+        items = self.file_memory_store.list_review_items(stale_days=days)
+        return items[: max(1, min(limit, 200))]
+
+    def mark_memory_reviewed(self, path: str) -> dict:
+        return self.file_memory_store.mark_reviewed(path, actor="user")
+
     def resolve_pending_memory_conflict(self, version_id: str, action: str) -> dict:
         normalized_action = str(action or "").strip()
         if normalized_action not in {"accept_new", "keep_old", "merged"}:

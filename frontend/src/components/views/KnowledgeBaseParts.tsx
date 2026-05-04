@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react'
-import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryVersion } from '@/types'
+import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemoryVersion } from '@/types'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
 export type KnowledgeTab = 'documents' | 'memory'
@@ -373,6 +373,69 @@ export function MemoryPendingConflictsPanel({
         )) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-4 text-center text-xs text-ops-overlay">
             暂无待确认冲突
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+export function MemoryReviewPanel({
+  items,
+  reviewingPath,
+  onOpen,
+  onReview,
+}: {
+  items: MemoryReviewItem[]
+  reviewingPath: string | null
+  onOpen: (path: string) => void
+  onReview: (item: MemoryReviewItem) => void
+}) {
+  return (
+    <section className="rounded-lg border border-amber-400/30 bg-amber-400/5 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-ops-text">需要复核的记忆</div>
+          <p className="mt-1 text-xs text-ops-subtext">长期未更新的记忆会进入这里，避免旧经验静默影响新会话。</p>
+        </div>
+        <span className="rounded-full border border-amber-300/35 px-2 py-0.5 text-xs text-amber-200">
+          {items.length}
+        </span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {items.length > 0 ? items.map((item) => (
+          <article key={item.path} className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+            <div className="flex items-start justify-between gap-2">
+              <button
+                onClick={() => onOpen(item.path)}
+                className="min-w-0 truncate text-left text-xs font-semibold text-amber-200 hover:text-ops-text"
+                title={item.path}
+              >
+                {item.path}
+              </button>
+              <span className="shrink-0 font-mono text-[11px] text-ops-overlay">{item.age_days} 天</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-ops-subtext">{item.reason}</p>
+            <p className="mt-1 text-[11px] leading-5 text-ops-overlay">{item.recommended_action}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                onClick={() => onOpen(item.path)}
+                className="rounded border border-ops-surface0 px-2 py-1 text-[11px] text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
+              >
+                打开查看
+              </button>
+              <button
+                onClick={() => onReview(item)}
+                disabled={Boolean(reviewingPath)}
+                className="rounded border border-amber-300/35 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-300/10 disabled:opacity-50"
+              >
+                {reviewingPath === item.path ? '标记中...' : '标记已复核'}
+              </button>
+            </div>
+          </article>
+        )) : (
+          <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-4 text-center text-xs text-ops-overlay">
+            暂无过期待复核记忆
           </div>
         )}
       </div>

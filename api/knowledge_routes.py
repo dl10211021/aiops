@@ -14,6 +14,8 @@ from api.response_mappers.knowledge import (
     memory_items_response_kwargs,
     memory_pending_conflict_resolved_response_kwargs,
     memory_pending_conflicts_response_kwargs,
+    memory_review_confirmed_response_kwargs,
+    memory_review_items_response_kwargs,
     memory_stores_response_kwargs,
     memory_versions_response_kwargs,
 )
@@ -41,6 +43,10 @@ class MemoryRestoreRequest(BaseModel):
 class MemoryConflictResolveRequest(BaseModel):
     version_id: str = Field(..., min_length=1)
     action: str = Field(..., pattern="^(accept_new|keep_old|merged)$")
+
+
+class MemoryReviewConfirmRequest(BaseModel):
+    path: str = Field(..., min_length=1)
 
 
 @router.get("/knowledge/memory/stores", response_model=ResponseModel)
@@ -101,6 +107,17 @@ async def list_memory_pending_conflicts(limit: int = Query(50, ge=1, le=200)):
     return ResponseModel(**memory_pending_conflicts_response_kwargs(items))
 
 
+@router.get("/knowledge/memory/review", response_model=ResponseModel)
+async def list_memory_review_items(
+    stale_days: int = Query(180, ge=1, le=3650),
+    limit: int = Query(50, ge=1, le=200),
+):
+    from core.memory import memory_db
+
+    items = memory_db.list_memory_review_items(stale_days=stale_days, limit=limit)
+    return ResponseModel(**memory_review_items_response_kwargs(items))
+
+
 @router.put("/knowledge/memory", response_model=ResponseModel)
 async def update_memory_item(req: MemoryUpdateRequest, path: str = Query(..., min_length=1)):
     from core.memory import memory_db
@@ -136,6 +153,21 @@ async def resolve_memory_pending_conflict(req: MemoryConflictResolveRequest):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc) or "待确认记忆处理参数无效")
     return ResponseModel(**memory_pending_conflict_resolved_response_kwargs(version))
+
+
+@router.post("/knowledge/memory/review/confirm", response_model=ResponseModel)
+async def confirm_memory_review(req: MemoryReviewConfirmRequest):
+    from core.memory import memory_db
+
+    try:
+        version = memory_db.mark_memory_reviewed(req.path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="记忆不存在")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="该记忆库为只读，不能标记复核")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="记忆路径非法")
+    return ResponseModel(**memory_review_confirmed_response_kwargs(version))
 
 
 @router.post("/knowledge/memory/restore", response_model=ResponseModel)

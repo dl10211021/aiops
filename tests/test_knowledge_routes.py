@@ -26,6 +26,8 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/memory/versions", paths)
         self.assertIn("/knowledge/memory/pending", paths)
         self.assertIn("/knowledge/memory/pending/resolve", paths)
+        self.assertIn("/knowledge/memory/review", paths)
+        self.assertIn("/knowledge/memory/review/confirm", paths)
         self.assertIn("/knowledge/memory/stores", paths)
         self.assertIn("/knowledge/memory/restore", paths)
         self.assertIn("/knowledge/memory/export", paths)
@@ -85,6 +87,10 @@ class TestKnowledgeRoutes(unittest.TestCase):
             def restore_version(self, version_id):
                 return {"version_id": version_id, "operation": "restored"}
 
+            def mark_reviewed(self, path, actor="user"):
+                self.reviewed = (path, actor)
+                return {"version_id": "review-v1", "operation": "modified"}
+
             def export_store(self):
                 return {"stores": [{"id": "sessions"}], "memories": [], "versions": []}
 
@@ -99,9 +105,16 @@ class TestKnowledgeRoutes(unittest.TestCase):
                 self.pending_limit = limit
                 return [{"version_id": "v-pending", "path": "sessions/sid-1/memory.md"}]
 
+            def list_memory_review_items(self, stale_days=180, limit=50):
+                self.review_limit = (stale_days, limit)
+                return [{"path": "sessions/sid-1/memory.md", "age_days": 181}]
+
             def resolve_pending_memory_conflict(self, version_id, action):
                 self.resolved = (version_id, action)
                 return {"version_id": version_id, "operation": "modified"}
+
+            def mark_memory_reviewed(self, path):
+                return self.file_memory_store.mark_reviewed(path, actor="user")
 
         fake_db = FakeMemoryDB()
         with patch("core.memory.memory_db", fake_db):
@@ -110,6 +123,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
             read_response = asyncio.run(knowledge_routes.read_memory_item("sessions/sid-1/memory.md"))
             versions_response = asyncio.run(knowledge_routes.list_memory_versions(10))
             pending_response = asyncio.run(knowledge_routes.list_memory_pending_conflicts(20))
+            review_response = asyncio.run(knowledge_routes.list_memory_review_items(180, 20))
             update_response = asyncio.run(
                 knowledge_routes.update_memory_item(
                     knowledge_routes.MemoryUpdateRequest(content="# changed", content_sha256="sha"),
@@ -127,6 +141,11 @@ class TestKnowledgeRoutes(unittest.TestCase):
                     knowledge_routes.MemoryConflictResolveRequest(version_id="v-pending", action="accept_new")
                 )
             )
+            review_confirm_response = asyncio.run(
+                knowledge_routes.confirm_memory_review(
+                    knowledge_routes.MemoryReviewConfirmRequest(path="sessions/sid-1/memory.md")
+                )
+            )
             delete_response = asyncio.run(knowledge_routes.delete_memory_item("sessions/sid-1/memory.md"))
 
         self.assertEqual(stores_response.data, {"stores": [{"id": "sessions", "access": "read_write"}]})
@@ -134,9 +153,11 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(read_response.data, {"item": {"path": "sessions/sid-1/memory.md", "content": "# memory", "content_sha256": "sha"}})
         self.assertEqual(versions_response.data, {"versions": [{"version_id": "v1", "operation": "created", "path": "sessions/sid-1/memory.md"}]})
         self.assertEqual(pending_response.data, {"items": [{"version_id": "v-pending", "path": "sessions/sid-1/memory.md"}]})
+        self.assertEqual(review_response.data, {"items": [{"path": "sessions/sid-1/memory.md", "age_days": 181}]})
         self.assertEqual(update_response.message, "记忆已更新")
         self.assertEqual(restore_response.message, "记忆版本已恢复")
         self.assertEqual(resolve_response.message, "待确认记忆已处理")
+        self.assertEqual(review_confirm_response.message, "记忆已标记为复核通过")
         self.assertEqual(fake_db.resolved, ("v-pending", "accept_new"))
         self.assertEqual(export_response.data, {"export": {"stores": [{"id": "sessions"}], "memories": [], "versions": []}})
         self.assertEqual(delete_response.message, "记忆已删除: sessions/sid-1/memory.md")

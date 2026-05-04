@@ -653,6 +653,13 @@ export interface MemoryPendingConflict {
   source_session_id?: string
 }
 
+export interface MemoryReviewItem extends MemoryItem {
+  age_days: number
+  stale_days: number
+  reason: string
+  recommended_action: string
+}
+
 export interface MemoryStoreInfo {
   id: string
   name: string

@@ -10,6 +10,7 @@ import {
   MemoryDetailPanel,
   MemoryItemCard,
   MemoryPendingConflictsPanel,
+  MemoryReviewPanel,
   MemoryStoresPanel,
   MemoryVersionsPanel,
   type KnowledgeTab,
@@ -28,6 +29,7 @@ export default function KnowledgeBase() {
     handleDelete,
     handleDeleteMemory,
     handleExportMemory,
+    handleConfirmMemoryReview,
     handleOpenMemory,
     handleRestoreMemoryVersion,
     handleResolveMemoryConflict,
@@ -42,11 +44,13 @@ export default function KnowledgeBase() {
     memoryItems,
     memoryLoading,
     memoryPendingConflicts,
+    memoryReviewItems,
     memoryStores,
     memoryVersions,
     savingMemory,
     selectedMemory,
     resolvingMemoryConflict,
+    reviewingMemoryPath,
     setDeleteTarget,
     setMemoryDraft,
     setMemoryDeleteTarget,
@@ -157,6 +161,12 @@ export default function KnowledgeBase() {
                 resolvingKey={resolvingMemoryConflict}
                 onOpen={handleOpenMemoryPath}
                 onResolve={(item, action) => void handleResolveMemoryConflict(item, action)}
+              />
+              <MemoryReviewPanel
+                items={memoryReviewItems}
+                reviewingPath={reviewingMemoryPath}
+                onOpen={handleOpenMemoryPath}
+                onReview={(item) => void handleConfirmMemoryReview(item)}
               />
               <MemoryStoresPanel stores={memoryStores} />
               <MemoryVersionsPanel
