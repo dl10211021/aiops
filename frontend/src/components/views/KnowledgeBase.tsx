@@ -657,4 +657,3 @@ export default function KnowledgeBase() {
     </div>
   )
 }
-
