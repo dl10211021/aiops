@@ -173,6 +173,18 @@ export default function KnowledgeBase() {
     },
   }[memoryStep]
   const activeStepGuide = activeTab === 'documents' ? documentStepGuide : memoryStepGuide
+  const knowledgeHealth = [
+    ['原始资料', `${files.length}`, '只读留底，不被 AI 改写'],
+    ['待编译', `${compileQueueItems.length}`, '等待辅助模型生成候选 Wiki'],
+    ['待审核', `${candidateItems.length}`, '人工确认后才能进入正式知识'],
+    ['正式知识', `${articleItems.length}`, '可被检索、图谱、会话引用'],
+  ]
+  const memoryHealth = [
+    ['记忆库', `${memoryStores.length}`, '全局、会话、资产、主机、类型'],
+    ['文件记忆', `${memoryItems.length}`, '成功经验和用户确认事实'],
+    ['待治理', `${memoryPendingConflicts.length + memoryReviewItems.length}`, '冲突、过期、反馈待处理'],
+    ['历史版本', `${memoryVersions.length}`, '可审计、可恢复、可脱敏'],
+  ]
 
   return (
     <div className="flex-1 overflow-y-auto p-4 lg:p-5">
@@ -252,6 +264,52 @@ export default function KnowledgeBase() {
             }
           }}
         />
+
+        <section className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-ops-accent/80">Knowledge Vault</div>
+                <h3 className="mt-1 text-base font-semibold text-ops-text">知识库负责“可信资料”</h3>
+                <p className="mt-1 text-sm leading-6 text-ops-subtext">
+                  只沉淀文档、巡检报告、Runbook、故障案例、资产画像和可追溯证据。必须先审核，再进入正式知识。
+                </p>
+              </div>
+              <span className="rounded-full border border-ops-accent/30 px-2 py-1 text-xs text-ops-accent">固定四步</span>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-4">
+              {knowledgeHealth.map(([label, value, hint]) => (
+                <div key={label} className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-3">
+                  <div className="text-[11px] text-ops-overlay">{label}</div>
+                  <div className="mt-1 text-xl font-semibold text-ops-text">{value}</div>
+                  <div className="mt-1 text-[11px] leading-4 text-ops-subtext">{hint}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-ops-success/80">Agent Memory</div>
+                <h3 className="mt-1 text-base font-semibold text-ops-text">记忆负责“成功经验”</h3>
+                <p className="mt-1 text-sm leading-6 text-ops-subtext">
+                  只保存用户点赞、人工确认、资产复盘和可复用经验；差评、冲突、过期内容进入治理，不进入长期记忆。
+                </p>
+              </div>
+              <span className="rounded-full border border-ops-success/30 px-2 py-1 text-xs text-ops-success">文件记忆</span>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-4">
+              {memoryHealth.map(([label, value, hint]) => (
+                <div key={label} className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-3">
+                  <div className="text-[11px] text-ops-overlay">{label}</div>
+                  <div className="mt-1 text-xl font-semibold text-ops-text">{value}</div>
+                  <div className="mt-1 text-[11px] leading-4 text-ops-subtext">{hint}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
         <section className="mb-4 rounded-lg border border-ops-accent/20 bg-gradient-to-r from-ops-accent/10 via-ops-panel/70 to-ops-dark/30 p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
