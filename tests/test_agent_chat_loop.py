@@ -11,7 +11,14 @@ class FakeMemoryStore:
     def append_message(self, session_id, message):
         self.appended.append((session_id, message))
 
-    async def compress_and_store_ltm(self, session_id, emb_client, embedding_model):
+    async def compress_and_store_ltm(
+        self,
+        session_id,
+        emb_client,
+        embedding_model,
+        primary_model_id=None,
+        memory_scope_ids=None,
+    ):
         return None
 
 
@@ -40,7 +47,7 @@ async def collect_chat_loop_events(**overrides):
         "model_name": "model-a",
         "thinking_mode": "off",
         "messages": [],
-        "context": {"session_id": "sid-1"},
+        "context": {"session_id": "sid-1", "memory_scope_ids": ["sid-1", "asset:ssh:10.0.0.1:22"]},
         "tools": [{"name": "tool"}],
         "memory_store": memory_store,
         "dispatcher": object(),
@@ -81,6 +88,10 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(memory_store.appended, [("sid-1", kwargs["messages"][0])])
         self.assertEqual(scheduler_calls[0]["session_id"], "sid-1")
         self.assertEqual(scheduler_calls[0]["emb_client"], "emb-client")
+        self.assertEqual(
+            scheduler_calls[0]["memory_scope_ids"],
+            ["sid-1", "asset:ssh:10.0.0.1:22"],
+        )
 
     async def test_cancel_before_streaming_resets_flag_and_schedules_ltm(self):
         async def streamer(**_kwargs):

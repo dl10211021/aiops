@@ -5,6 +5,7 @@ export interface SessionHistoryMessage {
   content: string
   _memory_id?: number
   attachments?: ChatMessage['attachments']
+  feedback?: ChatMessage['feedback']
   exec_trace?: ChatMessage['execTrace']
   execTrace?: ChatMessage['execTrace']
   timestamp?: number | string
@@ -33,6 +34,7 @@ export function normalizeHistoryMessages(sessionId: string, messages: SessionHis
       role: message.role as 'user' | 'assistant',
       content: message.content,
       attachments: message.attachments,
+      feedback: message.feedback,
       execTrace: message.execTrace || message.exec_trace,
       timestamp: Number.isFinite(parsedTimestamp)
         ? parsedTimestamp

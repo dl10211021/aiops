@@ -6,6 +6,7 @@ from core.session_history import (
     delete_session_message,
     get_user_visible_session_history,
     session_history_export_title,
+    update_session_message_feedback,
     update_session_message_content,
 )
 
@@ -14,6 +15,7 @@ class FakeMemoryDB:
     def __init__(self):
         self.cleared = []
         self.deleted = []
+        self.feedback = []
         self.updated = []
 
     def get_messages(self, session_id, for_ui=False):
@@ -35,6 +37,10 @@ class FakeMemoryDB:
 
     def delete_message(self, session_id, message_id):
         self.deleted.append((session_id, message_id))
+
+    def update_message_feedback(self, session_id, message_id, rating, note=None):
+        self.feedback.append((session_id, message_id, rating, note))
+        return {"id": message_id, "feedback": {"rating": rating, "note": note or ""}}
 
 
 class TestSessionHistory(unittest.TestCase):
@@ -58,11 +64,20 @@ class TestSessionHistory(unittest.TestCase):
 
         clear_session_history(memory_db, "sid-1")
         updated = update_session_message_content(memory_db, "sid-1", 7, "new")
+        feedback = update_session_message_feedback(
+            memory_db,
+            "sid-1",
+            8,
+            "up",
+            note="很好",
+        )
         delete_session_message(memory_db, "sid-1", 7)
 
         self.assertEqual(memory_db.cleared, ["sid-1"])
         self.assertEqual(memory_db.updated, [("sid-1", 7, "new")])
         self.assertEqual(updated, {"id": 7, "content": "new"})
+        self.assertEqual(memory_db.feedback, [("sid-1", 8, "up", "很好")])
+        self.assertEqual(feedback, {"id": 8, "feedback": {"rating": "up", "note": "很好"}})
         self.assertEqual(memory_db.deleted, [("sid-1", 7)])
 
     def test_session_history_export_title_prefers_active_session_remark(self):

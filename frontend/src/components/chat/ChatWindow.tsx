@@ -297,6 +297,7 @@ export default function ChatWindow() {
             policyRuleBusy={safetyPolicyActionRule.busyKey}
             onEdit={messageHistoryActions.startEditMessage}
             onDelete={messageHistoryActions.deleteMessage}
+            onFeedback={messageHistoryActions.feedbackMessage}
             showInlineTrace={false}
           />
 

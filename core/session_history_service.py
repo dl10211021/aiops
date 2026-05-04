@@ -9,6 +9,7 @@ from core.session_history import (
     delete_session_message,
     get_user_visible_session_history,
     update_session_message_content,
+    update_session_message_feedback,
 )
 
 
@@ -55,6 +56,27 @@ def update_session_history_message_record(
             session_id,
             message_id,
             content,
+        )
+    except ValueError as exc:
+        raise SessionHistoryServiceError(404, str(exc)) from exc
+    except Exception as exc:
+        raise SessionHistoryServiceError(500, str(exc)) from exc
+
+
+def update_session_history_message_feedback_record(
+    session_id: str,
+    message_id: int,
+    rating: str,
+    note: str | None = None,
+    memory_db: Any | None = None,
+) -> dict:
+    try:
+        return update_session_message_feedback(
+            _resolve_memory_db(memory_db),
+            session_id,
+            message_id,
+            rating,
+            note,
         )
     except ValueError as exc:
         raise SessionHistoryServiceError(404, str(exc)) from exc

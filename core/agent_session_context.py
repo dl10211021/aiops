@@ -55,12 +55,34 @@ class AgentSessionContext:
             "extra_args": self.extra_args,
             "target_scope": self.target_scope,
             "scope_value": self.scope_value,
+            "memory_scope_ids": self.memory_scope_ids(),
         }
         if execution_mode is not None:
             context["execution_mode"] = execution_mode
         if trigger_source is not None:
             context["trigger_source"] = trigger_source
         return context
+
+    def memory_scope_ids(self) -> list[str]:
+        """Return Hermes-style isolated and reusable memory scopes.
+
+        The raw session id preserves strict conversation isolation. Additional
+        asset scopes allow the same managed asset to benefit from previous
+        sessions without leaking secrets or unrelated host context.
+        """
+        scopes: list[str] = []
+
+        def add(value: Any) -> None:
+            raw = str(value or "").strip().lower()
+            if raw and raw not in scopes:
+                scopes.append(raw)
+
+        add(self.session_id)
+        if self.host:
+            add(f"asset:{self.protocol or self.asset_type}:{self.host}:{self.port or ''}")
+            add(f"asset-host:{self.host}")
+        add(f"asset-kind:{self.asset_type}:{self.protocol}")
+        return scopes
 
 
 def build_agent_session_context(

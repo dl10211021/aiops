@@ -118,6 +118,14 @@ def session_history_message_updated_response_kwargs(message: dict[str, Any]) -> 
     }
 
 
+def session_history_message_feedback_response_kwargs(message: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"message": message},
+        "message": "反馈已记录",
+    }
+
+
 def session_history_message_deleted_response_kwargs() -> dict[str, Any]:
     return {
         "status": "success",

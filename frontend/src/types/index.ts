@@ -143,6 +143,12 @@ export interface ChatMessage {
   content: string
   timestamp: number
   attachments?: ChatMessageAttachment[]
+  feedback?: {
+    rating: 'up' | 'down'
+    note?: string
+    created_at?: string
+    memory_policy?: string
+  }
   // For tool execution traces
   execTrace?: ExecTraceItem[]
   // For tool approval requests

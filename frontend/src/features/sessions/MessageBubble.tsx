@@ -20,6 +20,7 @@ interface MessageBubbleProps {
   policyRuleBusy?: string | null
   onEdit?: (message: ChatMessage) => void
   onDelete?: (message: ChatMessage) => void
+  onFeedback?: (message: ChatMessage, rating: 'up' | 'down') => void
   showInlineTrace?: boolean
 }
 
@@ -32,6 +33,7 @@ export default function MessageBubble({
   policyRuleBusy,
   onEdit,
   onDelete,
+  onFeedback,
   showInlineTrace = true,
 }: MessageBubbleProps) {
   const [traceOpen, setTraceOpen] = useState(false)
@@ -93,7 +95,12 @@ export default function MessageBubble({
         )}
 
         {hasContent ? (
-          <AssistantReportBubble message={message} onEdit={onEdit} onDelete={onDelete} />
+          <AssistantReportBubble
+            message={message}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onFeedback={onFeedback}
+          />
         ) : shouldShowEmptyBubble ? (
           <TypingIndicatorBubble />
         ) : null}

@@ -6,6 +6,7 @@ import json
 import logging
 import sqlite3
 import time
+import datetime
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from threading import Lock
@@ -107,6 +108,70 @@ class SessionMessageStore:
             message["_memory_id"] = message_id
             return message
 
+    def update_message_feedback(
+        self,
+        session_id: str,
+        message_id: int,
+        rating: str,
+        note: str | None = None,
+    ) -> dict:
+        """Record user feedback for an assistant answer and append feedback memory."""
+        normalized_rating = str(rating or "").strip().lower()
+        if normalized_rating not in {"up", "down"}:
+            raise ValueError("反馈类型无效。")
+        with self._lock, self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT message_json FROM memory WHERE id = ? AND session_id = ?",
+                (message_id, session_id),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError("消息不存在或不属于当前会话")
+            message = json.loads(row[0])
+            if message.get("role") != "assistant":
+                raise ValueError("只能反馈 AI 输出")
+            now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            feedback = {
+                "rating": normalized_rating,
+                "note": str(note or "").strip(),
+                "created_at": now,
+                "memory_policy": "promote" if normalized_rating == "up" else "do_not_promote_answer",
+            }
+            message["feedback"] = feedback
+            cursor.execute(
+                "UPDATE memory SET message_json = ? WHERE id = ? AND session_id = ?",
+                (json.dumps(message, ensure_ascii=False), message_id, session_id),
+            )
+            label = "好评" if normalized_rating == "up" else "差评"
+            policy = (
+                "用户认为这条 AI 回答很好，可作为后续同类任务的表达和排查参考，但仍需基于实时工具结果验证。"
+                if normalized_rating == "up"
+                else "用户认为这条 AI 回答较差或错误，禁止把该回答当事实、建议或成功经验沉淀；后续遇到同类问题要主动规避。"
+            )
+            feedback_memory = {
+                "role": "system",
+                "content": "\n".join(
+                    [
+                        "【用户反馈记忆】",
+                        f"反馈对象：消息 {message_id}",
+                        f"反馈结果：{label}",
+                        f"处理策略：{policy}",
+                        f"用户备注：{feedback['note'] or '-'}",
+                    ]
+                ),
+                "memory_type": "answer_feedback",
+                "feedback_target_message_id": message_id,
+                "feedback_rating": normalized_rating,
+            }
+            cursor.execute(
+                "INSERT INTO memory (session_id, message_json) VALUES (?, ?)",
+                (session_id, json.dumps(feedback_memory, ensure_ascii=False)),
+            )
+            conn.commit()
+            message["_memory_id"] = message_id
+            return message
+
     def delete_message(self, session_id: str, message_id: int) -> None:
         """删除单条用户可见消息。"""
         with self._lock, self._connect() as conn:
@@ -154,6 +219,8 @@ def message_rows_to_dicts(rows: list[tuple], for_ui: bool = False) -> list[dict]
         try:
             msg = json.loads(row[1])
             if isinstance(msg, dict) and "role" in msg:
+                if for_ui and msg.get("memory_type") == "answer_feedback":
+                    continue
                 if for_ui:
                     msg["_memory_id"] = row[0]
                     if len(row) > 2:

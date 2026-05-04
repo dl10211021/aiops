@@ -6,6 +6,7 @@ from core.session_history_service import (
     delete_session_history_message_record,
     export_session_history_markdown_record,
     list_session_history_messages,
+    update_session_history_message_feedback_record,
     update_session_history_message_record,
 )
 
@@ -14,6 +15,7 @@ class FakeMemoryDB:
     def __init__(self, messages=None):
         self.cleared = []
         self.deleted = []
+        self.feedback = []
         self.updated = []
         self.messages = messages if messages is not None else [
             {"role": "system", "content": "hidden"},
@@ -36,6 +38,10 @@ class FakeMemoryDB:
     def delete_message(self, session_id, message_id):
         self.deleted.append((session_id, message_id))
 
+    def update_message_feedback(self, session_id, message_id, rating, note=None):
+        self.feedback.append((session_id, message_id, rating, note))
+        return {"id": message_id, "feedback": {"rating": rating, "note": note or ""}}
+
 
 class FailingMemoryDB:
     def __init__(self, exc):
@@ -53,6 +59,9 @@ class FailingMemoryDB:
     def delete_message(self, *_args, **_kwargs):
         raise self.exc
 
+    def update_message_feedback(self, *_args, **_kwargs):
+        raise self.exc
+
 
 class TestSessionHistoryService(unittest.TestCase):
     def test_session_history_operations_delegate_to_memory_db(self):
@@ -66,12 +75,24 @@ class TestSessionHistoryService(unittest.TestCase):
             "new",
             memory_db=memory_db,
         )
+        feedback = update_session_history_message_feedback_record(
+            "sid-1",
+            8,
+            "down",
+            note="不准确",
+            memory_db=memory_db,
+        )
         delete_session_history_message_record("sid-1", 7, memory_db=memory_db)
 
         self.assertEqual([item["role"] for item in messages], ["user", "assistant"])
         self.assertEqual(memory_db.cleared, ["sid-1"])
         self.assertEqual(memory_db.updated, [("sid-1", 7, "new")])
         self.assertEqual(updated, {"id": 7, "content": "new"})
+        self.assertEqual(memory_db.feedback, [("sid-1", 8, "down", "不准确")])
+        self.assertEqual(
+            feedback,
+            {"id": 8, "feedback": {"rating": "down", "note": "不准确"}},
+        )
         self.assertEqual(memory_db.deleted, [("sid-1", 7)])
 
     def test_value_errors_map_to_not_found(self):
@@ -81,9 +102,17 @@ class TestSessionHistoryService(unittest.TestCase):
             update_session_history_message_record("sid-1", 7, "new", memory_db=memory_db)
         with self.assertRaises(SessionHistoryServiceError) as delete_ctx:
             delete_session_history_message_record("sid-1", 7, memory_db=memory_db)
+        with self.assertRaises(SessionHistoryServiceError) as feedback_ctx:
+            update_session_history_message_feedback_record(
+                "sid-1",
+                7,
+                "up",
+                memory_db=memory_db,
+            )
 
         self.assertEqual(update_ctx.exception.status_code, 404)
         self.assertEqual(delete_ctx.exception.status_code, 404)
+        self.assertEqual(feedback_ctx.exception.status_code, 404)
 
     def test_internal_errors_map_to_500(self):
         memory_db = FailingMemoryDB(RuntimeError("db unavailable"))

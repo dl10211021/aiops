@@ -10,6 +10,7 @@ interface ChatMessageListProps {
   onApproval: (approval: ToolApproval, approved: boolean, autoAll?: boolean) => void
   onDelete: (message: ChatMessage) => void
   onEdit: (message: ChatMessage) => void
+  onFeedback: (message: ChatMessage, rating: 'up' | 'down') => void
   onInteraction: (requestId: string, value: string, label?: string) => void
   onTraceActionRule: (action: SafetyPolicyAction, decision: SafetyPolicyDecision) => void
   policyRuleBusy: string | null
@@ -23,6 +24,7 @@ export default function ChatMessageList({
   onApproval,
   onDelete,
   onEdit,
+  onFeedback,
   onInteraction,
   onTraceActionRule,
   policyRuleBusy,
@@ -73,6 +75,7 @@ export default function ChatMessageList({
             policyRuleBusy={policyRuleBusy}
             onEdit={onEdit}
             onDelete={onDelete}
+            onFeedback={onFeedback}
             showInlineTrace={showInlineTrace}
           />
         </div>

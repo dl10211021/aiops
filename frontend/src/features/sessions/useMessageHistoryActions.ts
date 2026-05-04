@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   deleteSessionHistoryMessage,
+  feedbackSessionHistoryMessage,
   updateSessionHistoryMessage,
 } from '@/api/client'
 import { useStore } from '@/store'
@@ -68,6 +69,32 @@ export function useMessageHistoryActions(currentSessionId: string | null) {
     }
   }
 
+  const feedbackMessage = async (message: ChatMessage, rating: 'up' | 'down') => {
+    const sessionId = currentSessionId
+    const memoryId = messageMemoryId(message)
+    if (!sessionId || !memoryId) {
+      addToast('这条 AI 输出还没有写入历史，稍后再试', 'info')
+      return
+    }
+    try {
+      const res = await feedbackSessionHistoryMessage(sessionId, memoryId, rating)
+      updateMessage(sessionId, message.id, (current) => ({
+        ...current,
+        feedback: res.data.message.feedback,
+        memoryId: res.data.message._memory_id || memoryId,
+        _memory_id: res.data.message._memory_id || memoryId,
+      }))
+      addToast(
+        rating === 'up'
+          ? '已记录好评：这条回答可沉淀为记忆'
+          : '已记录差评：这条回答不会作为成功经验沉淀',
+        'success',
+      )
+    } catch (err: unknown) {
+      addToast(err instanceof Error ? err.message : '反馈记录失败', 'error')
+    }
+  }
+
   return {
     closeEditMessage,
     deleteMessage,
@@ -77,5 +104,6 @@ export function useMessageHistoryActions(currentSessionId: string | null) {
     saveEditedMessage,
     setEditingContent,
     startEditMessage,
+    feedbackMessage,
   }
 }

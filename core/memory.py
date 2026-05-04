@@ -431,6 +431,20 @@ class MemoryDB:
             content,
         )
 
+    def update_message_feedback(
+        self,
+        session_id: str,
+        message_id: int,
+        rating: str,
+        note: str | None = None,
+    ) -> dict:
+        return self._session_message_store.update_message_feedback(
+            session_id,
+            message_id,
+            rating,
+            note,
+        )
+
     def delete_message(self, session_id: str, message_id: int):
         self._session_message_store.delete_message(session_id, message_id)
 
@@ -496,8 +510,31 @@ class MemoryDB:
         return self._webhook_delivery_store.list_webhook_deliveries(session_id, limit)
 
     # -------- 长期记忆压缩与检索 (LanceDB) --------
+    def _normalize_ltm_scope_ids(
+        self,
+        session_id: str,
+        memory_scope_ids: list[str] | None = None,
+    ) -> list[str]:
+        scopes: list[str] = []
+
+        def add(value) -> None:
+            raw = str(value or "").strip().lower()
+            if raw and raw not in scopes:
+                scopes.append(raw)
+
+        add(session_id)
+        for scope_id in memory_scope_ids or []:
+            add(scope_id)
+        return scopes
+
     async def retrieve_ltm(
-        self, session_id: str, query: str, client, embedding_model: str | None = None, limit: int = 3
+        self,
+        session_id: str,
+        query: str,
+        client,
+        embedding_model: str | None = None,
+        limit: int = 3,
+        memory_scope_ids: list[str] | None = None,
     ) -> str:
         """根据用户查询检索相关的长期记忆节点"""
         if not self.ltm_enabled or not self.ldb:
@@ -514,24 +551,44 @@ class MemoryDB:
             query_vector = res.data[0].embedding
 
             # 搜索 LanceDB (使用线程池防止阻塞 event_loop)
-            safe_session_id = session_id.replace("'", "''")
+            scope_ids = self._normalize_ltm_scope_ids(session_id, memory_scope_ids)
 
             def _do_search():
-                return (
-                    table.search(query_vector)
-                    .where(f"session_id = '{safe_session_id}'")
-                    .limit(limit)
-                    .to_list()
-                )
+                merged: list[dict] = []
+                for scope_id in scope_ids[:8]:
+                    safe_scope_id = scope_id.replace("'", "''")
+                    rows = (
+                        table.search(query_vector)
+                        .where(f"session_id = '{safe_scope_id}'")
+                        .limit(max(1, limit))
+                        .to_list()
+                    )
+                    for row in rows:
+                        row = dict(row)
+                        row["_memory_scope_id"] = scope_id
+                        merged.append(row)
+                merged.sort(key=lambda item: float(item.get("_distance", 0)))
+                deduped: list[dict] = []
+                seen = set()
+                for row in merged:
+                    key = str(row.get("summary") or "").strip()
+                    if not key or key in seen:
+                        continue
+                    seen.add(key)
+                    deduped.append(row)
+                    if len(deduped) >= max(limit, 6):
+                        break
+                return deduped
 
             results = await asyncio.to_thread(_do_search)
 
             if not results:
                 return ""
 
-            context = "【长期记忆检索结果 (与当前请求相关的过往事实)】\n"
+            context = "【长期记忆检索结果 (当前会话 + 同资产经验，均需用实时工具验证)】\n"
             for row in results:
-                context += f"- {row['timestamp']}: {row['summary']}\n"
+                scope = row.get("_memory_scope_id") or row.get("session_id") or "unknown"
+                context += f"- [{scope}] {row['timestamp']}: {row['summary']}\n"
             return context
         except Exception as e:
             logger.error(f"长期记忆检索失败: {e}")
@@ -543,6 +600,7 @@ class MemoryDB:
         client,
         embedding_model: str | None = None,
         primary_model_id: str | None = None,
+        memory_scope_ids: list[str] | None = None,
     ):
         """将超出短期窗口的历史对话进行总结并存入 LanceDB，然后从 SQLite 释放"""
         if not self.ltm_enabled or not self.ldb:
@@ -560,24 +618,41 @@ class MemoryDB:
             COMPRESS_THRESHOLD = 40
             EXTRACT_COUNT = 20
 
-            if len(rows) < COMPRESS_THRESHOLD:
+            success_rows = []
+            for row in rows:
+                try:
+                    msg = json.loads(row[1])
+                except Exception:
+                    continue
+                content = str(msg.get("content") or "")
+                if (
+                    msg.get("memory_type") in {"successful_execution", "answer_feedback"}
+                    or "【成功执行经验】" in content
+                    or "【用户反馈记忆】" in content
+                ):
+                    success_rows.append(row)
+
+            if len(rows) < COMPRESS_THRESHOLD and not success_rows:
                 return  # 还没达到压缩条件
 
-            # 获取要压缩的候选消息
-            candidate_rows = rows[:EXTRACT_COUNT]
+            if success_rows:
+                compress_rows = success_rows[:EXTRACT_COUNT]
+            else:
+                # 获取要压缩的候选消息
+                candidate_rows = rows[:EXTRACT_COUNT]
 
-            # 安全截断：找到最后一条干净的用户消息作为分割点，防止把未完成的 Tool 截断
-            safe_split_idx = -1
-            for i in range(len(candidate_rows) - 1, -1, -1):
-                msg = json.loads(candidate_rows[i][1])
-                if msg.get("role") == "user":
-                    safe_split_idx = i
-                    break
+                # 安全截断：找到最后一条干净的用户消息作为分割点，防止把未完成的 Tool 截断
+                safe_split_idx = -1
+                for i in range(len(candidate_rows) - 1, -1, -1):
+                    msg = json.loads(candidate_rows[i][1])
+                    if msg.get("role") == "user":
+                        safe_split_idx = i
+                        break
 
-            if safe_split_idx <= 0:
-                return  # 找不到安全的截断点
+                if safe_split_idx <= 0:
+                    return  # 找不到安全的截断点
 
-            compress_rows = candidate_rows[:safe_split_idx]
+                compress_rows = candidate_rows[:safe_split_idx]
             if not compress_rows:
                 return
 
@@ -587,6 +662,12 @@ class MemoryDB:
                 msg = json.loads(r[1])
                 role = msg.get("role", "unknown")
                 content = msg.get("content", "")
+                feedback = msg.get("feedback") if isinstance(msg.get("feedback"), dict) else {}
+                if role == "assistant" and feedback.get("rating") == "down":
+                    text_to_summarize += "[feedback]: 用户点踩了上一条 AI 输出，该回答不得作为事实、建议或成功经验沉淀。\n"
+                    continue
+                if role == "assistant" and feedback.get("rating") == "up":
+                    text_to_summarize += "[feedback]: 用户点赞了上一条 AI 输出，可优先沉淀其中已验证的排查路径和表达方式。\n"
                 if content:
                     text_to_summarize += f"[{role}]: {content}\n"
 
@@ -652,16 +733,18 @@ class MemoryDB:
                 # 存入 LanceDB (使用线程池)
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 table = self.ldb.open_table("long_term_memory")
+                scope_ids = self._normalize_ltm_scope_ids(session_id, memory_scope_ids)
 
                 def _do_add():
                     table.add(
                         [
                             {
-                                "session_id": session_id,
+                                "session_id": scope_id,
                                 "timestamp": timestamp,
                                 "summary": summary,
                                 "vector": vector,
                             }
+                            for scope_id in scope_ids
                         ]
                     )
 

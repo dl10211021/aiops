@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch
 
 from api import routes, session_history_routes
-from api.schemas import SessionMessageUpdateRequest
+from api.schemas import SessionMessageFeedbackRequest, SessionMessageUpdateRequest
 
 
 class FakeMemoryDB:
@@ -15,6 +15,7 @@ class FakeMemoryDB:
         self.cleared = []
         self.updated = []
         self.deleted = []
+        self.feedback = []
 
     def get_messages(self, session_id, for_ui=False):
         return self.messages
@@ -30,6 +31,16 @@ class FakeMemoryDB:
     def delete_message(self, session_id, message_id):
         self.deleted.append((session_id, message_id))
 
+    def update_message_feedback(self, session_id, message_id, rating, note=None):
+        message = {
+            "id": message_id,
+            "role": "assistant",
+            "content": "hi",
+            "feedback": {"rating": rating, "note": note or ""},
+        }
+        self.feedback.append((session_id, message_id, rating, note))
+        return message
+
 
 class TestSessionHistoryRoutes(unittest.TestCase):
     def test_session_history_routes_are_included_in_api_router(self):
@@ -37,6 +48,7 @@ class TestSessionHistoryRoutes(unittest.TestCase):
 
         self.assertIn("/session/{session_id}/history", paths)
         self.assertIn("/session/{session_id}/history/{message_id}", paths)
+        self.assertIn("/session/{session_id}/history/{message_id}/feedback", paths)
         self.assertIn("/session/{session_id}/export", paths)
 
     def test_session_history_routes_preserve_response_shapes(self):
@@ -55,6 +67,13 @@ class TestSessionHistoryRoutes(unittest.TestCase):
             delete_response = asyncio.run(
                 session_history_routes.delete_session_history_message("sid-1", 1)
             )
+            feedback_response = asyncio.run(
+                session_history_routes.feedback_session_history_message(
+                    "sid-1",
+                    2,
+                    SessionMessageFeedbackRequest(rating="up"),
+                )
+            )
 
         self.assertEqual(list_response.status, "success")
         self.assertEqual(list_response.data, {"messages": memory_db.messages})
@@ -68,9 +87,23 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         )
         self.assertEqual(delete_response.status, "success")
         self.assertEqual(delete_response.message, "消息已删除")
+        self.assertEqual(feedback_response.status, "success")
+        self.assertEqual(feedback_response.message, "反馈已记录")
+        self.assertEqual(
+            feedback_response.data,
+            {
+                "message": {
+                    "id": 2,
+                    "role": "assistant",
+                    "content": "hi",
+                    "feedback": {"rating": "up", "note": ""},
+                }
+            },
+        )
         self.assertEqual(memory_db.cleared, ["sid-1"])
         self.assertEqual(memory_db.updated, [("sid-1", 1, "updated")])
         self.assertEqual(memory_db.deleted, [("sid-1", 1)])
+        self.assertEqual(memory_db.feedback, [("sid-1", 2, "up", None)])
 
     def test_session_history_export_preserves_response_shape(self):
         with patch(

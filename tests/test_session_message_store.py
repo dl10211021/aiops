@@ -155,6 +155,55 @@ class SessionMessageStoreTest(unittest.TestCase):
         self.store.clear_history("sid-1")
         self.assertEqual(self.store.get_messages("sid-1", for_ui=True), [])
 
+    def test_update_message_feedback_marks_assistant_answer_and_adds_feedback_memory(self):
+        assistant_id = self._insert_message(
+            "sid-1",
+            {"role": "assistant", "content": "建议开启防火墙"},
+        )
+
+        updated = self.store.update_message_feedback(
+            "sid-1",
+            assistant_id,
+            "down",
+            note="这条不适合当前环境",
+        )
+
+        self.assertEqual(updated["_memory_id"], assistant_id)
+        self.assertEqual(updated["feedback"]["rating"], "down")
+        self.assertEqual(updated["feedback"]["memory_policy"], "do_not_promote_answer")
+        self.assertIn("created_at", updated["feedback"])
+
+        ui_messages = self.store.get_messages("sid-1", for_ui=True)
+        self.assertEqual(len(ui_messages), 1)
+        self.assertEqual(ui_messages[0]["feedback"]["rating"], "down")
+
+        conn = sqlite3.connect(str(self.db_path))
+        try:
+            rows = conn.execute(
+                "SELECT message_json FROM memory WHERE session_id = ? ORDER BY id",
+                ("sid-1",),
+            ).fetchall()
+        finally:
+            conn.close()
+
+        raw_messages = [json.loads(row[0]) for row in rows]
+        feedback_records = [
+            message
+            for message in raw_messages
+            if message.get("memory_type") == "answer_feedback"
+        ]
+        self.assertEqual(len(feedback_records), 1)
+        self.assertEqual(feedback_records[0]["feedback_rating"], "down")
+        self.assertEqual(feedback_records[0]["feedback_target_message_id"], assistant_id)
+        self.assertIn("用户反馈记忆", feedback_records[0]["content"])
+        self.assertIn("禁止把该回答当事实、建议或成功经验沉淀", feedback_records[0]["content"])
+
+    def test_update_message_feedback_rejects_user_messages(self):
+        user_id = self._insert_message("sid-1", {"role": "user", "content": "hi"})
+
+        with self.assertRaisesRegex(ValueError, "只能反馈 AI 输出"):
+            self.store.update_message_feedback("sid-1", user_id, "up")
+
 
 if __name__ == "__main__":
     unittest.main()

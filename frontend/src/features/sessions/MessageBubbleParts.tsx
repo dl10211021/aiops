@@ -56,12 +56,15 @@ export function AssistantReportBubble({
   message,
   onEdit,
   onDelete,
+  onFeedback,
 }: {
   message: ChatMessage
   onEdit?: (message: ChatMessage) => void
   onDelete?: (message: ChatMessage) => void
+  onFeedback?: (message: ChatMessage, rating: 'up' | 'down') => void
 }) {
   const assistantTime = formatMessageTime(message.timestamp)
+  const feedbackRating = message.feedback?.rating
   const handleCodeCopy = async (event: MouseEvent<HTMLDivElement>) => {
     const target = event.target
     if (!(target instanceof HTMLButtonElement) || !target.dataset.copyCode) return
@@ -103,11 +106,42 @@ export function AssistantReportBubble({
           <span className="text-xs font-semibold text-ops-text">AI 输出报告</span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => onFeedback?.(message, 'up')}
+            title="回答很好，允许沉淀为记忆"
+            className={`rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
+              feedbackRating === 'up'
+                ? 'border-ops-success/70 bg-ops-success/15 text-ops-success'
+                : 'border-ops-surface1 text-ops-subtext hover:border-ops-success/55 hover:text-ops-success'
+            }`}
+          >
+            👍
+          </button>
+          <button
+            onClick={() => onFeedback?.(message, 'down')}
+            title="回答较差，标记为错误并禁止作为成功经验"
+            className={`rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
+              feedbackRating === 'down'
+                ? 'border-ops-alert/70 bg-ops-alert/15 text-ops-alert'
+                : 'border-ops-surface1 text-ops-subtext hover:border-ops-alert/55 hover:text-ops-alert'
+            }`}
+          >
+            👎
+          </button>
           <button onClick={() => onEdit?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-subtext opacity-0 transition-opacity hover:bg-ops-dark/50 hover:text-ops-text group-hover:opacity-100">编辑</button>
           <button onClick={() => onDelete?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-alert opacity-0 transition-opacity hover:bg-ops-alert/10 group-hover:opacity-100">删除</button>
           <span className="font-mono text-[11px] text-ops-overlay">{assistantTime}</span>
         </div>
       </div>
+      {feedbackRating && (
+        <div className={`border-b border-ops-surface0/70 px-4 py-1.5 text-[11px] ${
+          feedbackRating === 'up' ? 'text-ops-success' : 'text-ops-alert'
+        }`}>
+          {feedbackRating === 'up'
+            ? '已标记：回答很好，可沉淀为个人记忆'
+            : '已标记：回答较差，AI 后续会规避这条错误经验'}
+        </div>
+      )}
       <div
         className="markdown-body ai-report-body w-full px-5 py-4"
         onClick={handleCodeCopy}

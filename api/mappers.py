@@ -99,6 +99,7 @@ from api.response_mappers.session import (
     session_history_cleared_response_kwargs,
     session_history_export_response_kwargs,
     session_history_message_deleted_response_kwargs,
+    session_history_message_feedback_response_kwargs,
     session_history_message_updated_response_kwargs,
     session_history_response_kwargs,
     session_permission_update_kwargs,

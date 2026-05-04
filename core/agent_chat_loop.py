@@ -92,6 +92,7 @@ async def run_chat_agent_loop(
             emb_client=emb_client,
             embedding_model=embedding_model,
             primary_model_id=model_name,
+            memory_scope_ids=context.get("memory_scope_ids"),
         )
         return
 
@@ -214,6 +215,7 @@ async def run_chat_agent_loop(
         emb_client=emb_client,
         embedding_model=embedding_model,
         primary_model_id=model_name,
+        memory_scope_ids=context.get("memory_scope_ids"),
     )
 
 

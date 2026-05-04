@@ -9,6 +9,11 @@ class SessionMessageUpdateRequest(BaseModel):
     content: str = Field(..., min_length=0, max_length=200000)
 
 
+class SessionMessageFeedbackRequest(BaseModel):
+    rating: str = Field(..., pattern="^(up|down)$")
+    note: str | None = Field(default=None, max_length=1000)
+
+
 class SessionProfileGenerateRequest(BaseModel):
     model_name: str | None = None
     include_inspection: bool = True

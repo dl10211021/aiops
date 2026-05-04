@@ -36,6 +36,7 @@ from api.schema_models.sessions import (
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,
     SessionMetadataUpdateRequest,
+    SessionMessageFeedbackRequest,
     SessionMessageUpdateRequest,
     SessionProfileGenerateRequest,
     SessionWebhookSendRequest,

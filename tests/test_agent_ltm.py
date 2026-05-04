@@ -18,8 +18,17 @@ class FakeMemoryStore:
         self.retrieve_calls = []
         self.compress_calls = []
 
-    async def retrieve_ltm(self, session_id, user_message, emb_client, embedding_model):
-        self.retrieve_calls.append((session_id, user_message, emb_client, embedding_model))
+    async def retrieve_ltm(
+        self,
+        session_id,
+        user_message,
+        emb_client,
+        embedding_model,
+        memory_scope_ids=None,
+    ):
+        self.retrieve_calls.append(
+            (session_id, user_message, emb_client, embedding_model, memory_scope_ids)
+        )
         if self.retrieve_error:
             raise self.retrieve_error
         return "历史摘要"
@@ -30,8 +39,11 @@ class FakeMemoryStore:
         emb_client,
         embedding_model,
         primary_model_id=None,
+        memory_scope_ids=None,
     ):
-        self.compress_calls.append((session_id, emb_client, embedding_model, primary_model_id))
+        self.compress_calls.append(
+            (session_id, emb_client, embedding_model, primary_model_id, memory_scope_ids)
+        )
 
 
 class AgentLongTermMemoryTests(unittest.TestCase):
@@ -46,6 +58,7 @@ class AgentLongTermMemoryTests(unittest.TestCase):
                 user_message="检查数据库",
                 emb_client="emb-client",
                 embedding_model="emb-model",
+                memory_scope_ids=["sid-ltm", "asset:ssh:10.0.0.1:22"],
                 event_logger=logger,
             )
         )
@@ -53,7 +66,13 @@ class AgentLongTermMemoryTests(unittest.TestCase):
         self.assertEqual(result, "历史摘要")
         self.assertEqual(
             memory_store.retrieve_calls,
-            [("sid-ltm", "检查数据库", "emb-client", "emb-model")],
+            [(
+                "sid-ltm",
+                "检查数据库",
+                "emb-client",
+                "emb-model",
+                ["sid-ltm", "asset:ssh:10.0.0.1:22"],
+            )],
         )
         self.assertEqual(logger.errors, [])
 
@@ -89,7 +108,7 @@ class AgentLongTermMemoryTests(unittest.TestCase):
 
         self.assertEqual(
             asyncio.run(run_case()),
-            [("sid-ltm", "emb-client", "emb-model", None)],
+            [("sid-ltm", "emb-client", "emb-model", None, None)],
         )
 
 

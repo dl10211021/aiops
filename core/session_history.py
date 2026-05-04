@@ -26,6 +26,16 @@ def update_session_message_content(
     return memory_db.update_message_content(session_id, message_id, content)
 
 
+def update_session_message_feedback(
+    memory_db,
+    session_id: str,
+    message_id: int,
+    rating: str,
+    note: str | None = None,
+) -> dict:
+    return memory_db.update_message_feedback(session_id, message_id, rating, note)
+
+
 def delete_session_message(memory_db, session_id: str, message_id: int) -> None:
     memory_db.delete_message(session_id, message_id)
 

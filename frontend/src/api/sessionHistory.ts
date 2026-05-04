@@ -5,6 +5,12 @@ interface SessionHistoryApiMessage {
   role: string
   content: string
   _memory_id?: number
+  feedback?: {
+    rating: 'up' | 'down'
+    note?: string
+    created_at?: string
+    memory_policy?: string
+  }
   exec_trace?: ExecTraceItem[]
   execTrace?: ExecTraceItem[]
   timestamp?: number | string
@@ -28,11 +34,26 @@ export async function getSessionHistory(sessionId: string) {
 }
 
 export async function updateSessionHistoryMessage(sessionId: string, messageId: number, content: string) {
-  return request<{ message: { role: string; content: string; _memory_id?: number } }>(
+  return request<{ message: { role: string; content: string; _memory_id?: number; feedback?: SessionHistoryApiMessage['feedback'] } }>(
     `/session/${sessionId}/history/${messageId}`,
     {
       method: 'PATCH',
       body: JSON.stringify({ content }),
+    },
+  )
+}
+
+export async function feedbackSessionHistoryMessage(
+  sessionId: string,
+  messageId: number,
+  rating: 'up' | 'down',
+  note?: string,
+) {
+  return request<{ message: { role: string; content: string; _memory_id?: number; feedback?: SessionHistoryApiMessage['feedback'] } }>(
+    `/session/${sessionId}/history/${messageId}/feedback`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ rating, note: note || null }),
     },
   )
 }

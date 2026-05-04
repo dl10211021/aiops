@@ -27,6 +27,7 @@ class ChatAgentMemoryStore(Protocol):
         user_message: str,
         emb_client: Any,
         embedding_model: str,
+        memory_scope_ids: list[str] | None = None,
     ) -> str:
         ...
 
@@ -92,6 +93,7 @@ async def prepare_chat_agent_run(
         user_message=user_message,
         emb_client=emb_client,
         embedding_model=embedding_model,
+        memory_scope_ids=session_context.memory_scope_ids(),
         event_logger=event_logger,
     )
 

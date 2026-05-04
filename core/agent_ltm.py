@@ -12,6 +12,7 @@ class AgentLongTermMemoryStore(Protocol):
         user_message: str,
         emb_client: Any,
         embedding_model: str,
+        memory_scope_ids: list[str] | None = None,
     ) -> str:
         ...
 
@@ -21,6 +22,7 @@ class AgentLongTermMemoryStore(Protocol):
         emb_client: Any,
         embedding_model: str,
         primary_model_id: str | None = None,
+        memory_scope_ids: list[str] | None = None,
     ) -> None:
         ...
 
@@ -32,6 +34,7 @@ async def retrieve_ltm_context(
     user_message: str,
     emb_client: Any,
     embedding_model: str,
+    memory_scope_ids: list[str] | None = None,
     event_logger: logging.Logger,
 ) -> str:
     try:
@@ -40,6 +43,7 @@ async def retrieve_ltm_context(
             user_message,
             emb_client,
             embedding_model,
+            memory_scope_ids=memory_scope_ids,
         )
     except Exception as e:
         event_logger.error(f"LTM retrieve error: {e}")
@@ -53,12 +57,14 @@ def schedule_ltm_compression(
     emb_client: Any,
     embedding_model: str,
     primary_model_id: str | None = None,
+    memory_scope_ids: list[str] | None = None,
 ) -> asyncio.Task:
     return asyncio.create_task(
         memory_store.compress_and_store_ltm(
             session_id,
             emb_client,
             embedding_model,
-            primary_model_id,
+            primary_model_id=primary_model_id,
+            memory_scope_ids=memory_scope_ids,
         )
     )

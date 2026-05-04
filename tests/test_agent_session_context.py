@@ -50,6 +50,12 @@ class AgentSessionContextTests(unittest.TestCase):
                 "extra_args": {},
                 "target_scope": "tag",
                 "scope_value": "prod",
+                "memory_scope_ids": [
+                    "sid-1",
+                    "asset:ssh:10.0.0.5:22",
+                    "asset-host:10.0.0.5",
+                    "asset-kind:ssh:ssh",
+                ],
             },
         )
 
@@ -92,6 +98,12 @@ class AgentSessionContextTests(unittest.TestCase):
                 "extra_args": {"login_protocol": "virtual"},
                 "target_scope": "asset",
                 "scope_value": None,
+                "memory_scope_ids": [
+                    "sid-2",
+                    "asset:virtual:workspace:",
+                    "asset-host:workspace",
+                    "asset-kind:virtual:virtual",
+                ],
                 "execution_mode": "headless",
                 "trigger_source": "background_agent",
             },

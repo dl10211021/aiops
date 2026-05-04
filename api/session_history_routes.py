@@ -5,11 +5,12 @@ from api.response_mappers.session import (
     session_history_cleared_response_kwargs,
     session_history_export_response_kwargs,
     session_history_message_deleted_response_kwargs,
+    session_history_message_feedback_response_kwargs,
     session_history_message_updated_response_kwargs,
     session_history_response_kwargs,
 )
 from api.schema_models.common import ResponseModel
-from api.schema_models.sessions import SessionMessageUpdateRequest
+from api.schema_models.sessions import SessionMessageFeedbackRequest, SessionMessageUpdateRequest
 from connections.ssh_manager import ssh_manager
 from core.session_history_service import (
     SessionHistoryServiceError,
@@ -17,6 +18,7 @@ from core.session_history_service import (
     delete_session_history_message_record,
     export_session_history_markdown_record,
     list_session_history_messages,
+    update_session_history_message_feedback_record,
     update_session_history_message_record,
 )
 
@@ -60,6 +62,25 @@ async def update_session_history_message(
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_history_message_updated_response_kwargs(message))
+
+
+@router.post("/session/{session_id}/history/{message_id}/feedback", response_model=ResponseModel)
+async def feedback_session_history_message(
+    session_id: str,
+    message_id: int,
+    req: SessionMessageFeedbackRequest,
+):
+    """记录 AI 输出的用户反馈，并写入单独反馈记忆。"""
+    try:
+        message = update_session_history_message_feedback_record(
+            session_id,
+            message_id,
+            req.rating,
+            req.note,
+        )
+    except SessionHistoryServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**session_history_message_feedback_response_kwargs(message))
 
 
 @router.delete("/session/{session_id}/history/{message_id}", response_model=ResponseModel)

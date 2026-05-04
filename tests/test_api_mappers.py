@@ -80,6 +80,7 @@ from api.mappers import (
     session_history_cleared_response_kwargs,
     session_history_export_response_kwargs,
     session_history_message_deleted_response_kwargs,
+    session_history_message_feedback_response_kwargs,
     session_history_message_updated_response_kwargs,
     session_history_response_kwargs,
     session_poll_response_kwargs,
@@ -804,6 +805,14 @@ class TestApiMappers(unittest.TestCase):
                 "status": "success",
                 "data": {"message": message},
                 "message": "消息已更新",
+            },
+        )
+        self.assertEqual(
+            session_history_message_feedback_response_kwargs(message),
+            {
+                "status": "success",
+                "data": {"message": message},
+                "message": "反馈已记录",
             },
         )
         self.assertEqual(

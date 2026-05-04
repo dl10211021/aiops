@@ -16,8 +16,17 @@ class FakeMemoryStore:
     def append_message(self, session_id, message):
         self.appended.append((session_id, message))
 
-    async def retrieve_ltm(self, session_id, user_message, emb_client, embedding_model):
-        self.ltm_calls.append((session_id, user_message, emb_client, embedding_model))
+    async def retrieve_ltm(
+        self,
+        session_id,
+        user_message,
+        emb_client,
+        embedding_model,
+        memory_scope_ids=None,
+    ):
+        self.ltm_calls.append(
+            (session_id, user_message, emb_client, embedding_model, memory_scope_ids)
+        )
         return "LTM-CONTEXT"
 
 
@@ -86,7 +95,18 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(run.session_context.host, "workspace")
         self.assertEqual(
             memory_store.ltm_calls,
-            [("sid-1", "检查技能", "emb:default-model", "embedding-model")],
+            [(
+                "sid-1",
+                "检查技能",
+                "emb:default-model",
+                "embedding-model",
+                [
+                    "sid-1",
+                    "asset:virtual:workspace:",
+                    "asset-host:workspace",
+                    "asset-kind:virtual:virtual",
+                ],
+            )],
         )
         self.assertIn("BASE:default", run.messages[0]["content"])
         self.assertIn("SKILL-INSTRUCTIONS", run.messages[0]["content"])
