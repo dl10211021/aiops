@@ -133,6 +133,46 @@ export default function KnowledgeBase() {
   const friendlyError = visibleError === 'Not Found'
     ? '后台接口返回 Not Found，通常是服务未加载最新路由或需要重启。页面功能已保留，可先刷新或重启服务后再试。'
     : visibleError
+  const documentStepGuide = {
+    source: {
+      title: '当前在做：资料入库',
+      body: '先把原始文件安全保存下来，不让 AI 直接改原文。这里关注来源、格式和留底。',
+      next: '下一步让辅助模型编译候选 Wiki。',
+    },
+    compile: {
+      title: '当前在做：AI 编译',
+      body: '辅助模型把原始资料压缩成候选知识页，只生成候选，不直接写入正式知识。',
+      next: '下一步人工审核候选内容。',
+    },
+    review: {
+      title: '当前在做：审核入库',
+      body: '人在这里确认事实、来源和可复用性，只有通过审核的内容才进入正式 Vault。',
+      next: '下一步通过检索和图谱追溯知识。',
+    },
+    discover: {
+      title: '当前在做：检索追溯',
+      body: '正式知识、来源证据和双链关系集中在这里，用于会话引用、审计和复盘。',
+      next: '需要新增资料时回到资料入库。',
+    },
+  }[documentStep]
+  const memoryStepGuide = {
+    browse: {
+      title: '当前在做：浏览记忆',
+      body: '这里查看已经沉淀的文件记忆，包括成功经验、用户偏好、资产画像和规则。',
+      next: '没有合适记忆时进入写入与检索。',
+    },
+    write: {
+      title: '当前在做：写入与检索',
+      body: '把新的可靠经验写成文件记忆，或检索已有记忆验证 AI 是否能找到正确上下文。',
+      next: '下一步处理冲突、复核和版本。',
+    },
+    govern: {
+      title: '当前在做：审计治理',
+      body: '错误反馈、冲突记忆、过期经验和版本记录都在这里处理，避免记忆污染。',
+      next: '治理完成后回到浏览记忆。',
+    },
+  }[memoryStep]
+  const activeStepGuide = activeTab === 'documents' ? documentStepGuide : memoryStepGuide
 
   return (
     <div className="flex-1 overflow-y-auto p-4 lg:p-5">
@@ -180,6 +220,21 @@ export default function KnowledgeBase() {
           memoryCount={memoryItems.length}
           onChange={setActiveTab}
         />
+
+        <section className="mb-4 rounded-lg border border-ops-accent/20 bg-gradient-to-r from-ops-accent/10 via-ops-panel/70 to-ops-dark/30 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-ops-accent/80">
+                {activeTab === 'documents' ? 'Vault 工作流' : 'AI 记忆工作流'}
+              </div>
+              <h3 className="mt-1 text-base font-semibold text-ops-text">{activeStepGuide.title}</h3>
+              <p className="mt-1 max-w-4xl text-sm leading-6 text-ops-subtext">{activeStepGuide.body}</p>
+            </div>
+            <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2 text-xs leading-5 text-ops-subtext lg:max-w-xs">
+              {activeStepGuide.next}
+            </div>
+          </div>
+        </section>
 
         {visibleError && (
           <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-300/25 bg-amber-300/5 px-4 py-3 text-sm text-amber-100 sm:flex-row sm:items-center sm:justify-between">
