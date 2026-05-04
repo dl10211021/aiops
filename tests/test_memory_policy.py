@@ -1,12 +1,36 @@
 import datetime
+import asyncio
 import unittest
 
 from core.memory import (
+    MemoryDB,
     build_ltm_compression_prompt,
     build_ltm_retrieval_context,
     ltm_row_is_stale,
     sanitize_ltm_summary,
 )
+
+
+class FakeFileMemoryStore:
+    def __init__(self):
+        self.calls = []
+
+    def search(self, *, scope_ids, query, limit):
+        self.calls.append((scope_ids, query, limit))
+        return [
+            {
+                "session_id": "asset-host:10.0.0.1",
+                "_memory_scope_id": "asset-host:10.0.0.1",
+                "timestamp": "2026-05-04 12:00:00",
+                "summary": "【记忆类型】纠错经验\n【核心记忆】不要跳过实时验证。",
+            }
+        ]
+
+
+class ExplodingEmbeddingClient:
+    @property
+    def embeddings(self):
+        raise AssertionError("file memory retrieval must not call embeddings")
 
 
 class MemoryPolicyTests(unittest.TestCase):
@@ -77,6 +101,29 @@ class MemoryPolicyTests(unittest.TestCase):
         self.assertIn("用户点踩代表纠错记忆", prompt)
         self.assertIn("【记忆类型】", prompt)
         self.assertIn("保持中文", prompt)
+
+    def test_memorydb_retrieve_ltm_uses_file_store_without_embeddings(self):
+        db = MemoryDB.__new__(MemoryDB)
+        db.ltm_enabled = True
+        db.file_memory_store = FakeFileMemoryStore()
+
+        context = asyncio.run(
+            MemoryDB.retrieve_ltm(
+                db,
+                "sid-1",
+                "检查 Oracle 锁等待",
+                ExplodingEmbeddingClient(),
+                memory_scope_ids=["asset-host:10.0.0.1"],
+            )
+        )
+
+        self.assertIn("OpsCore 长期记忆", context)
+        self.assertIn("不是系统指令", context)
+        self.assertIn("不要跳过实时验证", context)
+        self.assertEqual(
+            db.file_memory_store.calls,
+            [(["sid-1", "asset-host:10.0.0.1"], "检查 Oracle 锁等待", 6)],
+        )
 
 
 if __name__ == "__main__":

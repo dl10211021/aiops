@@ -14,6 +14,7 @@ from cryptography.fernet import Fernet
 
 from core.asset_profile_store import AssetProfileStore
 from core.asset_store import AssetStore
+from core.file_memory_store import FileMemoryStore
 from core.lancedb_utils import ensure_lancedb_table, lancedb_table_names
 from core.session_message_store import SessionMessageStore, is_protocol_retry_noise
 from core.slash_command_store import SlashCommandStore, slash_command_row
@@ -141,8 +142,17 @@ class MemoryDB:
         self.root_dir = os.path.dirname(os.path.dirname(__file__))
         self.db_path = os.path.join(self.root_dir, "opscore.db")
         self.lancedb_path = os.path.join(self.root_dir, "opscore_lancedb")
+        self.file_memory_path = os.environ.get(
+            "OPSCORE_MEMORY_STORE_PATH",
+            os.path.join(self.root_dir, "data", "memory_stores"),
+        )
         self.ldb = None
-        self.ltm_enabled = False
+        self.ltm_enabled = os.environ.get("OPSCORE_DISABLE_LTM", "").lower() not in {
+            "1",
+            "true",
+            "yes",
+        }
+        self.file_memory_store = FileMemoryStore(self.file_memory_path)
 
         # Init LanceDB Vector Table Schema
         self.ltm_schema = pa.schema(
@@ -357,10 +367,23 @@ class MemoryDB:
                 """)
             logger.info(f"SQLite 记忆库已就绪: {self.db_path}")
 
-            self._init_lancedb()
+            self._init_file_memory_store()
 
         except Exception as e:
             logger.error(f"初始化数据库失败: {e}")
+
+    def _init_file_memory_store(self):
+        if os.environ.get("OPSCORE_DISABLE_LTM", "").lower() in {"1", "true", "yes"}:
+            self.ltm_enabled = False
+            logger.info("文件型长期记忆已通过 OPSCORE_DISABLE_LTM 禁用。")
+            return
+        try:
+            self.file_memory_store.initialize()
+            self.ltm_enabled = True
+            logger.info(f"文件型长期记忆库已就绪: {self.file_memory_path}")
+        except Exception as e:
+            self.ltm_enabled = False
+            logger.warning(f"文件型长期记忆库初始化失败，长效记忆已禁用: {e}")
 
     def _init_lancedb(self):
         if os.environ.get("OPSCORE_DISABLE_LTM", "").lower() in {"1", "true", "yes"}:
@@ -602,7 +625,7 @@ class MemoryDB:
     def list_webhook_deliveries(self, session_id: str, limit: int = 10) -> list[dict]:
         return self._webhook_delivery_store.list_webhook_deliveries(session_id, limit)
 
-    # -------- 长期记忆压缩与检索 (LanceDB) --------
+    # -------- 长期记忆压缩与检索 (Claude-style file Memory Store) --------
     def _normalize_ltm_scope_ids(
         self,
         session_id: str,
@@ -629,51 +652,22 @@ class MemoryDB:
         limit: int = 3,
         memory_scope_ids: list[str] | None = None,
     ) -> str:
-        """根据用户查询检索相关的长期记忆节点"""
-        if not self.ltm_enabled or not self.ldb:
+        """根据用户查询检索相关的文件型长期记忆节点"""
+        if not self.ltm_enabled:
             return ""
         try:
-            table = self.ldb.open_table("long_term_memory")
-            if table.count_rows() == 0:
-                return ""
-
-            # 获取用户 Query 的向量
-            res = await client.embeddings.create(
-                input=query, model=embedding_model or self._get_embedding_model()
-            )
-            query_vector = res.data[0].embedding
-
-            # 搜索 LanceDB (使用线程池防止阻塞 event_loop)
             scope_ids = self._normalize_ltm_scope_ids(session_id, memory_scope_ids)
-
-            def _do_search():
-                merged: list[dict] = []
-                for scope_id in scope_ids[:LTM_SCOPE_SEARCH_LIMIT]:
-                    safe_scope_id = scope_id.replace("'", "''")
-                    rows = (
-                        table.search(query_vector)
-                        .where(f"session_id = '{safe_scope_id}'")
-                        .limit(max(1, limit))
-                        .to_list()
-                    )
-                    for row in rows:
-                        row = dict(row)
-                        row["_memory_scope_id"] = scope_id
-                        merged.append(row)
-                merged.sort(key=lambda item: float(item.get("_distance", 0)))
-                deduped: list[dict] = []
-                seen = set()
-                for row in merged:
-                    key = str(row.get("summary") or "").strip()
-                    if not key or key in seen or ltm_row_is_stale(row.get("timestamp", "")):
-                        continue
-                    seen.add(key)
-                    deduped.append(row)
-                    if len(deduped) >= max(limit, 6):
-                        break
-                return deduped
-
-            results = await asyncio.to_thread(_do_search)
+            results = await asyncio.to_thread(
+                self.file_memory_store.search,
+                scope_ids=scope_ids[:LTM_SCOPE_SEARCH_LIMIT],
+                query=query,
+                limit=max(limit, 6),
+            )
+            results = [
+                row
+                for row in results
+                if not ltm_row_is_stale(row.get("timestamp", ""))
+            ]
 
             if not results:
                 return ""
@@ -691,8 +685,8 @@ class MemoryDB:
         primary_model_id: str | None = None,
         memory_scope_ids: list[str] | None = None,
     ):
-        """将超出短期窗口的历史对话进行总结并存入 LanceDB，然后从 SQLite 释放"""
-        if not self.ltm_enabled or not self.ldb:
+        """将超出短期窗口的历史对话总结进文件型长期记忆，然后从短期上下文释放"""
+        if not self.ltm_enabled:
             return
         try:
             with self._db_lock, self._connect() as conn:
@@ -803,35 +797,24 @@ class MemoryDB:
                 if not summary:
                     return
 
-                # 获取向量
-                emb_res = await client.embeddings.create(
-                    input=summary, model=embedding_model or self._get_embedding_model()
-                )
-                vector = emb_res.data[0].embedding
-
-                # 存入 LanceDB (使用线程池)
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                table = self.ldb.open_table("long_term_memory")
                 scope_ids = self._normalize_ltm_scope_ids(session_id, memory_scope_ids)
 
-                def _do_add():
-                    table.add(
-                        [
-                            {
-                                "session_id": scope_id,
-                                "timestamp": timestamp,
-                                "summary": summary,
-                                "vector": vector,
-                            }
-                            for scope_id in scope_ids
-                        ]
+                for scope_id in scope_ids:
+                    await asyncio.to_thread(
+                        self.file_memory_store.append_memory,
+                        scope_id=scope_id,
+                        summary=summary,
+                        source_session_id=session_id,
+                        metadata={
+                            "source": "ltm_compression",
+                            "primary_model_id": primary_model_id or "",
+                            "embedding_model": embedding_model or "",
+                        },
                     )
-
-                await asyncio.to_thread(_do_add)
 
                 ids_to_delete = [r[0] for r in compress_rows]
                 logger.info(
-                    f"成功将 {len(ids_to_delete)} 条消息压缩进长期记忆 LanceDB。"
+                    f"成功将 {len(ids_to_delete)} 条消息压缩进文件型长期记忆。"
                 )
 
             # 标记短期记忆为已压缩
