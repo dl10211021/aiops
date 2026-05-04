@@ -20,7 +20,7 @@ interface MessageBubbleProps {
   policyRuleBusy?: string | null
   onEdit?: (message: ChatMessage) => void
   onDelete?: (message: ChatMessage) => void
-  onFeedback?: (message: ChatMessage, rating: 'up' | 'down') => void
+  onFeedback?: (message: ChatMessage, rating: 'up' | 'down', note?: string) => void
   showInlineTrace?: boolean
 }
 

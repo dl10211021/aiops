@@ -69,7 +69,7 @@ export function useMessageHistoryActions(currentSessionId: string | null) {
     }
   }
 
-  const feedbackMessage = async (message: ChatMessage, rating: 'up' | 'down') => {
+  const feedbackMessage = async (message: ChatMessage, rating: 'up' | 'down', note?: string) => {
     const sessionId = currentSessionId
     const memoryId = messageMemoryId(message)
     if (!sessionId || !memoryId) {
@@ -77,7 +77,7 @@ export function useMessageHistoryActions(currentSessionId: string | null) {
       return
     }
     try {
-      const res = await feedbackSessionHistoryMessage(sessionId, memoryId, rating)
+      const res = await feedbackSessionHistoryMessage(sessionId, memoryId, rating, note)
       updateMessage(sessionId, message.id, (current) => ({
         ...current,
         feedback: res.data.message.feedback,

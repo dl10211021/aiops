@@ -62,7 +62,7 @@ export function AssistantReportBubble({
   message: ChatMessage
   onEdit?: (message: ChatMessage) => void
   onDelete?: (message: ChatMessage) => void
-  onFeedback?: (message: ChatMessage, rating: 'up' | 'down') => void
+  onFeedback?: (message: ChatMessage, rating: 'up' | 'down', note?: string) => void
 }) {
   const setView = useStore((state) => state.setView)
   const bubbleRef = useRef<HTMLElement | null>(null)
@@ -70,6 +70,15 @@ export function AssistantReportBubble({
   const assistantTime = formatMessageTime(message.timestamp)
   const feedbackRating = message.feedback?.rating
   const ownMessageId = String(message.memoryId || message._memory_id || message.id || '')
+  const feedbackNote = message.feedback?.note?.trim()
+  const recordFeedback = (rating: 'up' | 'down') => {
+    const defaultNote = rating === 'up'
+      ? '这条回答好在哪里？可不填，例如：巡检结论准确、建议可执行。'
+      : '这条回答哪里不对？可不填，例如：误判风险、建议不适合当前环境。'
+    const note = window.prompt(defaultNote, feedbackNote || '')?.trim()
+    if (note === undefined) return
+    onFeedback?.(message, rating, note)
+  }
   const openMemoryActivity = () => {
     setView('knowledge')
     window.setTimeout(() => {
@@ -142,7 +151,7 @@ export function AssistantReportBubble({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => onFeedback?.(message, 'up')}
+            onClick={() => recordFeedback('up')}
             title="回答很好，写入会话成功经验记忆"
             className={`rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
               feedbackRating === 'up'
@@ -153,7 +162,7 @@ export function AssistantReportBubble({
             👍
           </button>
           <button
-            onClick={() => onFeedback?.(message, 'down')}
+            onClick={() => recordFeedback('down')}
             title="回答较差，只做纠错审计，不作为成功经验"
             className={`rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
               feedbackRating === 'down'
@@ -176,6 +185,7 @@ export function AssistantReportBubble({
             {feedbackRating === 'up'
               ? '已记录好评：进入会话记忆，后续可复用但必须实时验证'
               : '已记录差评：只用于纠错审计，不作为成功经验沉淀'}
+            {feedbackNote ? `；备注：${feedbackNote}` : ''}
           </span>
           <button
             type="button"
