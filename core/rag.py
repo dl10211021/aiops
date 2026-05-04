@@ -41,14 +41,21 @@ class KnowledgeBaseManager:
         else:
             loader = TextLoader(file_path, encoding="utf-8")
             
-        docs = loader.load()
+        try:
+            docs = loader.load()
+        except Exception as e:
+            logger.error("文档内容提取失败: %s", e)
+            return {"status": "error", "message": f"文档内容提取失败：{e}"}
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=4000, chunk_overlap=500)
         splits = text_splitter.split_documents(docs)
+        if not splits:
+            return {"status": "error", "message": "未提取到可用于检索索引的文本内容"}
         
         table_name = "knowledge_base"
         
         # 准备数据插入
         data = []
+        embedding_errors = []
         for i, split in enumerate(splits):
             try:
                 emb_res = await client.embeddings.create(
@@ -63,10 +70,13 @@ class KnowledgeBaseManager:
                     "vector": vector
                 })
             except Exception as e:
+                embedding_errors.append(str(e))
                 logger.error(f"Embedding failed for chunk {i}: {e}")
                 
         if not data:
-             return {"status": "error", "message": "文档内容提取或向量化失败"}
+            if embedding_errors:
+                return {"status": "error", "message": f"向量模型调用失败：{embedding_errors[-1]}"}
+            return {"status": "error", "message": "文档内容提取或向量化失败"}
 
         # 创建或打开表
         if table_name not in lancedb_table_names(self.ldb):

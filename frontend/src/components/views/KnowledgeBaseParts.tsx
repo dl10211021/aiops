@@ -13,9 +13,9 @@ function knowledgeStatusLabel(file: KnowledgeFile) {
 
 function vectorStatusLabel(file: KnowledgeFile) {
   if (file.vector_status === 'indexed') return '向量已注入'
-  if (file.vector_status === 'skipped') return '向量已跳过'
-  if (file.vector_status === 'failed') return '向量失败'
-  if (file.vector_status === 'pending') return '待向量注入'
+  if (file.vector_status === 'skipped') return '检索索引已跳过'
+  if (file.vector_status === 'failed') return '检索索引未完成'
+  if (file.vector_status === 'pending') return '等待检索索引'
   return file.chunks !== undefined ? `${file.chunks} 个向量块` : '资料原文'
 }
 
@@ -121,7 +121,7 @@ export function KnowledgeFileCard({
         <div className="mt-2 space-y-1 text-[11px] leading-5 text-ops-overlay">
           {file.source_path && <div className="truncate" title={file.source_path}>原文：{file.source_path}</div>}
           {file.note_path && <div className="truncate" title={file.note_path}>来源卡片：{file.note_path}</div>}
-          {file.vector_error && <div className="line-clamp-2 text-ops-alert">向量提示：{file.vector_error}</div>}
+          {file.vector_error && <div className="line-clamp-2 text-ops-muted">检索索引提示：{file.vector_error}</div>}
         </div>
       </div>
       <button

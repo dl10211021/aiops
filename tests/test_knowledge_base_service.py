@@ -79,7 +79,10 @@ class TestKnowledgeBaseService(unittest.TestCase):
         kb = FakeKnowledgeBase("success", message="注入成功")
         upload = FakeUpload("运维 runbook.md", b"# hello")
 
-        with patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")):
+        with (
+            patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)),
+            patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
+        ):
             message = asyncio.run(ingest_knowledge_document(kb, upload))
 
         self.assertEqual(message, "注入成功")
@@ -112,14 +115,31 @@ class TestKnowledgeBaseService(unittest.TestCase):
         kb = FakeKnowledgeBase("ingest_error", ingest_status="error", message="文档内容提取或向量化失败")
         upload = FakeUpload("runbook.txt", b"hello")
 
-        with patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")):
+        with (
+            patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)),
+            patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
+        ):
             message = asyncio.run(ingest_knowledge_document(kb, upload))
 
-        self.assertIn("已保存到 Obsidian Vault", message)
-        self.assertIn("向量注入失败", message)
+        self.assertIn("已保存到资料库", message)
+        self.assertIn("检索索引未完成", message)
         vault_records = list_vault_source_records(self.vault_dir)
         self.assertEqual(vault_records[0]["vector_status"], "failed")
-        self.assertEqual(vault_records[0]["vector_error"], "文档内容提取或向量化失败")
+        self.assertIn("向量模型没有返回可用结果", vault_records[0]["vector_error"])
+
+    def test_ingest_without_embedding_model_skips_vector_index(self):
+        kb = FakeKnowledgeBase("no_embedding", message="should not ingest")
+        upload = FakeUpload("runbook.txt", b"hello")
+
+        with patch("core.embedding_config.get_embedding_config", return_value=("", 3072)):
+            message = asyncio.run(ingest_knowledge_document(kb, upload))
+
+        self.assertIn("已保存到资料库", message)
+        self.assertIn("未配置向量模型", message)
+        self.assertIsNone(kb.ingested_path)
+        vault_records = list_vault_source_records(self.vault_dir)
+        self.assertEqual(vault_records[0]["vector_status"], "skipped")
+        self.assertIn("未配置向量模型", vault_records[0]["vector_error"])
 
     def test_list_and_delete_documents_wrap_kb_manager(self):
         kb = FakeKnowledgeBase("records")
@@ -157,7 +177,10 @@ class TestKnowledgeBaseService(unittest.TestCase):
         kb = FakeKnowledgeBase("remove_vault", message="注入成功")
         upload = FakeUpload("Oracle 故障.docx", b"doc")
 
-        with patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")):
+        with (
+            patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)),
+            patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
+        ):
             asyncio.run(ingest_knowledge_document(kb, upload))
 
         record = list_vault_source_records(self.vault_dir)[0]
@@ -170,7 +193,10 @@ class TestKnowledgeBaseService(unittest.TestCase):
         kb = FakeKnowledgeBase("compile_candidate", message="注入成功")
         upload = FakeUpload("巡检记录.txt", "CPU 正常\n内存正常\n".encode("utf-8"))
 
-        with patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")):
+        with (
+            patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)),
+            patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
+        ):
             asyncio.run(ingest_knowledge_document(kb, upload))
 
         record = list_vault_source_records(self.vault_dir)[0]
@@ -233,7 +259,10 @@ class TestKnowledgeBaseService(unittest.TestCase):
         self.assertTrue(any("CPU" in item["snippet"] or "人工补充" in item["snippet"] for item in search_results))
 
         related_upload = FakeUpload("网络拓扑.txt", "网关和 Linux 巡检有关联\n".encode("utf-8"))
-        with patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")):
+        with (
+            patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)),
+            patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
+        ):
             asyncio.run(ingest_knowledge_document(kb, related_upload))
         related_record = [
             item for item in list_vault_source_records(self.vault_dir)

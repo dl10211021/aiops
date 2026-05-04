@@ -1073,6 +1073,29 @@ def _resolve_kb_manager(kb_manager=None):
     return default_kb_manager
 
 
+def _resolve_knowledge_embedding_client_and_model():
+    from core.embedding_config import get_embedding_config
+
+    configured_model, _ = get_embedding_config()
+    model_id = os.environ.get("EMBEDDING_MODEL_ID") or configured_model
+    model_id = str(model_id or "").strip()
+    if not model_id:
+        return None
+
+    from core.llm_factory import get_embedding_client_and_model
+
+    return get_embedding_client_and_model(model_id)
+
+
+def _friendly_vector_message(message: str) -> str:
+    detail = str(message or "").strip()
+    if not detail:
+        return "检索索引未完成；资料已保存，Wiki 可正常生成。"
+    if detail == "文档内容提取或向量化失败":
+        return "向量模型没有返回可用结果，请检查向量模型配置；资料已保存，Wiki 可正常生成。"
+    return detail
+
+
 async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None) -> str:
     if upload_file is None:
         kb_manager = _resolve_kb_manager()
@@ -1088,25 +1111,28 @@ async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None)
             original_filename=upload_file.filename,
             safe_filename=safe_filename,
         )
-        from core.llm_factory import get_embedding_client_and_model
-
-        client, embedding_model = get_embedding_client_and_model()
+        embedding_config = _resolve_knowledge_embedding_client_and_model()
+        if embedding_config is None:
+            message = "未配置向量模型，已跳过检索索引；资料已保存，Wiki 可正常生成。"
+            _update_vault_record(safe_filename, vector_status="skipped", vector_error=message)
+            return f"已保存到资料库，等待 AI 生成 Wiki；{message}"
+        client, embedding_model = embedding_config
         result = await kb_manager.ingest_document(file_path, client, embedding_model)
     except KnowledgeBaseServiceError:
         raise
     except Exception as exc:
-        detail = str(exc)
+        detail = _friendly_vector_message(str(exc))
         if "vault_record" in locals():
             _update_vault_record(safe_filename, vector_status="skipped", vector_error=detail)
-            return f"已保存到 Obsidian Vault，等待 AI 编译；向量注入跳过：{detail}"
+            return f"已保存到资料库，等待 AI 生成 Wiki；检索索引跳过：{detail}"
         raise KnowledgeBaseServiceError(500, detail) from exc
 
     if result.get("status") == "success":
         _update_vault_record(safe_filename, vector_status="indexed")
         return str(result.get("message") or "")
-    message = str(result.get("message") or "文档内容提取或向量化失败")
+    message = _friendly_vector_message(str(result.get("message") or "文档内容提取或向量化失败"))
     _update_vault_record(safe_filename, vector_status="failed", vector_error=message)
-    return f"已保存到 Obsidian Vault，等待 AI 编译；向量注入失败：{message}"
+    return f"已保存到资料库，等待 AI 生成 Wiki；检索索引未完成：{message}"
 
 
 async def list_knowledge_document_records(kb_manager=None) -> list[Any]:

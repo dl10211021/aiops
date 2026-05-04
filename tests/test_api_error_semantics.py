@@ -85,13 +85,14 @@ class TestApiErrorSemantics(unittest.TestCase):
             with (
                 patch.dict("os.environ", {"OPSCORE_KNOWLEDGE_VAULT_DIR": str(Path(tmp) / "vault")}),
                 patch("core.rag.kb_manager", FakeKnowledgeBase(tmp)),
+                patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)),
                 patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
             ):
                 response = asyncio.run(knowledge_routes.upload_knowledge_document(upload))
 
         self.assertEqual(response.status, "success")
-        self.assertIn("已保存到 Obsidian Vault", response.message)
-        self.assertIn("向量注入失败", response.message)
+        self.assertIn("已保存到资料库", response.message)
+        self.assertIn("检索索引未完成", response.message)
 
     def test_knowledge_list_and_delete_errors_use_http_status(self):
         class FakeKnowledgeBase:
