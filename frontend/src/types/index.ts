@@ -581,6 +581,9 @@ export interface KnowledgeFile {
 export interface MemoryItem {
   path: string
   scope_id: string
+  store_id?: string
+  store_name?: string
+  access?: 'read_only' | 'read_write' | string
   size: number
   entries: number
   updated_at: string
@@ -589,17 +592,28 @@ export interface MemoryItem {
 
 export interface MemoryDetail extends MemoryItem {
   content: string
+  content_sha256: string
 }
 
 export interface MemoryVersion {
+  version_id?: string
   timestamp: string
-  operation: 'created' | 'modified' | 'deleted' | string
+  operation: 'created' | 'modified' | 'deleted' | 'restored' | string
   path: string
   scope_id: string
   source_session_id?: string
   content_sha256?: string
   summary_sha256?: string
   metadata?: Record<string, unknown>
+}
+
+export interface MemoryStoreInfo {
+  id: string
+  name: string
+  description: string
+  path_prefix: string
+  access: 'read_only' | 'read_write' | string
+  lifecycle: string
 }
 
 export interface ApiResponse<T = Record<string, unknown>> {

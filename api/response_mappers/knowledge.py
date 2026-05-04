@@ -45,6 +45,36 @@ def memory_versions_response_kwargs(versions: list[Any]) -> dict[str, Any]:
     }
 
 
+def memory_stores_response_kwargs(stores: list[Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"stores": stores},
+    }
+
+
+def memory_item_updated_response_kwargs(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "记忆已更新",
+        "data": {"item": item},
+    }
+
+
+def memory_item_restored_response_kwargs(version: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "记忆版本已恢复",
+        "data": {"version": version},
+    }
+
+
+def memory_export_response_kwargs(export_payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"export": export_payload},
+    }
+
+
 def memory_item_deleted_response_kwargs(path: str) -> dict[str, Any]:
     return {
         "status": "success",

@@ -1,4 +1,4 @@
-import type { ApiResponse, KnowledgeFile, MemoryDetail, MemoryItem, MemoryVersion } from '@/types'
+import type { ApiResponse, KnowledgeFile, MemoryDetail, MemoryItem, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { apiUrl, authHeaders, request } from './http'
 
 export async function listKnowledgeDocuments() {
@@ -24,12 +24,34 @@ export async function listMemoryItems() {
   return request<{ items: MemoryItem[] }>('/knowledge/memory/list')
 }
 
+export async function listMemoryStores() {
+  return request<{ stores: MemoryStoreInfo[] }>('/knowledge/memory/stores')
+}
+
 export async function readMemoryItem(path: string) {
   return request<{ item: MemoryDetail }>(`/knowledge/memory/read?path=${encodeURIComponent(path)}`)
 }
 
 export async function deleteMemoryItem(path: string) {
   return request(`/knowledge/memory?path=${encodeURIComponent(path)}`, { method: 'DELETE' })
+}
+
+export async function updateMemoryItem(path: string, content: string, contentSha256?: string) {
+  return request<{ item: MemoryDetail }>(`/knowledge/memory?path=${encodeURIComponent(path)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ content, content_sha256: contentSha256 }),
+  })
+}
+
+export async function restoreMemoryVersion(versionId: string) {
+  return request<{ version: MemoryVersion }>('/knowledge/memory/restore', {
+    method: 'POST',
+    body: JSON.stringify({ version_id: versionId }),
+  })
+}
+
+export async function exportMemoryStore() {
+  return request<{ export: Record<string, unknown> }>('/knowledge/memory/export')
 }
 
 export async function listMemoryVersions(limit = 50) {

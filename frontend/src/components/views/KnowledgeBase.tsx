@@ -9,6 +9,7 @@ import {
   MemoryDeleteDialog,
   MemoryDetailPanel,
   MemoryItemCard,
+  MemoryStoresPanel,
   MemoryVersionsPanel,
   type KnowledgeTab,
 } from './KnowledgeBaseParts'
@@ -21,21 +22,29 @@ export default function KnowledgeBase() {
     deletingMemory,
     deleting,
     error,
+    exportingMemory,
     files,
     handleDelete,
     handleDeleteMemory,
+    handleExportMemory,
     handleOpenMemory,
+    handleRestoreMemoryVersion,
+    handleSaveMemory,
     handleUpload,
     loadFiles,
     loadMemories,
     loading,
     memoryDeleteTarget,
+    memoryDraft,
     memoryError,
     memoryItems,
     memoryLoading,
+    memoryStores,
     memoryVersions,
+    savingMemory,
     selectedMemory,
     setDeleteTarget,
+    setMemoryDraft,
     setMemoryDeleteTarget,
     uploading,
   } = useKnowledgeBaseData()
@@ -125,8 +134,20 @@ export default function KnowledgeBase() {
               )}
             </section>
             <aside className="space-y-4">
-              <MemoryDetailPanel memory={selectedMemory} />
-              <MemoryVersionsPanel versions={memoryVersions} />
+              <MemoryDetailPanel
+                draft={memoryDraft}
+                exporting={exportingMemory}
+                memory={selectedMemory}
+                saving={savingMemory}
+                onDraftChange={setMemoryDraft}
+                onExport={() => void handleExportMemory()}
+                onSave={() => void handleSaveMemory()}
+              />
+              <MemoryStoresPanel stores={memoryStores} />
+              <MemoryVersionsPanel
+                versions={memoryVersions}
+                onRestore={(version) => void handleRestoreMemoryVersion(version)}
+              />
             </aside>
           </div>
         )}

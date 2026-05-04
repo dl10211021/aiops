@@ -237,7 +237,23 @@ export function MemoryItemCard({
   )
 }
 
-export function MemoryDetailPanel({ memory }: { memory: MemoryDetail | null }) {
+export function MemoryDetailPanel({
+  draft,
+  exporting,
+  memory,
+  saving,
+  onDraftChange,
+  onExport,
+  onSave,
+}: {
+  draft: string
+  exporting: boolean
+  memory: MemoryDetail | null
+  saving: boolean
+  onDraftChange: (value: string) => void
+  onExport: () => void
+  onSave: () => void
+}) {
   if (!memory) {
     return (
       <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-5">
@@ -251,20 +267,72 @@ export function MemoryDetailPanel({ memory }: { memory: MemoryDetail | null }) {
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60">
       <div className="border-b border-ops-surface0 px-4 py-3">
-        <div className="text-xs font-semibold text-ops-accent">记忆详情</div>
-        <h2 className="mt-1 break-all text-sm font-bold text-ops-text">{memory.path}</h2>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold text-ops-accent">记忆详情</div>
+            <h2 className="mt-1 break-all text-sm font-bold text-ops-text">{memory.path}</h2>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              onClick={onExport}
+              disabled={exporting}
+              className="rounded-lg border border-ops-surface0 px-3 py-1.5 text-xs text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent disabled:opacity-50"
+            >
+              {exporting ? '导出中...' : '导出全部'}
+            </button>
+            <button
+              onClick={onSave}
+              disabled={saving || memory.access === 'read_only'}
+              className="rounded-lg bg-ops-accent px-3 py-1.5 text-xs font-semibold text-ops-dark disabled:opacity-50"
+              title={memory.access === 'read_only' ? '只读记忆库不能编辑' : '保存记忆'}
+            >
+              {saving ? '保存中...' : '保存'}
+            </button>
+          </div>
+        </div>
         <div className="mt-1 text-xs text-ops-overlay">
-          {memory.scope_id} · {(memory.size / 1024).toFixed(1)} KB · {memory.updated_at}
+          {memory.store_name || memory.scope_id} · {memory.access === 'read_only' ? '只读' : '可写'} · {(memory.size / 1024).toFixed(1)} KB · {memory.updated_at}
         </div>
       </div>
-      <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap break-words p-4 text-xs leading-5 text-ops-subtext">
-        {memory.content}
-      </pre>
+      <textarea
+        value={draft}
+        onChange={(event) => onDraftChange(event.target.value)}
+        readOnly={memory.access === 'read_only'}
+        className="min-h-[420px] w-full resize-y bg-transparent p-4 font-mono text-xs leading-5 text-ops-subtext outline-none read-only:opacity-80"
+      />
     </section>
   )
 }
 
-export function MemoryVersionsPanel({ versions }: { versions: MemoryVersion[] }) {
+export function MemoryStoresPanel({ stores }: { stores: Array<{ id: string; name: string; description: string; access: string }> }) {
+  return (
+    <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+      <div className="text-sm font-semibold text-ops-text">Memory Stores</div>
+      <p className="mt-1 text-xs text-ops-subtext">按 Claude 风格划分的记忆库权限和生命周期。</p>
+      <div className="mt-3 space-y-2">
+        {stores.map((store) => (
+          <div key={store.id} className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-ops-text">{store.name}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] ${store.access === 'read_only' ? 'bg-ops-alert/10 text-ops-alert' : 'bg-ops-success/10 text-ops-success'}`}>
+                {store.access === 'read_only' ? '只读' : '可写'}
+              </span>
+            </div>
+            <div className="mt-1 text-xs leading-5 text-ops-subtext">{store.description}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+export function MemoryVersionsPanel({
+  versions,
+  onRestore,
+}: {
+  versions: MemoryVersion[]
+  onRestore: (version: MemoryVersion) => void
+}) {
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="text-sm font-semibold text-ops-text">版本审计</div>
@@ -276,7 +344,16 @@ export function MemoryVersionsPanel({ versions }: { versions: MemoryVersion[] })
               <span className="text-xs font-semibold text-ops-text">{version.operation}</span>
               <span className="text-[11px] text-ops-overlay">{version.timestamp}</span>
             </div>
-            <div className="mt-1 truncate text-xs text-ops-subtext" title={version.path}>{version.path}</div>
+            <div className="mt-1 flex items-center gap-2">
+              <div className="min-w-0 flex-1 truncate text-xs text-ops-subtext" title={version.path}>{version.path}</div>
+              <button
+                onClick={() => onRestore(version)}
+                disabled={!version.version_id}
+                className="rounded border border-ops-surface0 px-2 py-0.5 text-[11px] text-ops-overlay hover:border-ops-accent/45 hover:text-ops-accent disabled:opacity-40"
+              >
+                恢复
+              </button>
+            </div>
           </div>
         )) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-4 text-center text-xs text-ops-overlay">

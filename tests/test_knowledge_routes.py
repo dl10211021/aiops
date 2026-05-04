@@ -24,6 +24,9 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/memory/read", paths)
         self.assertIn("/knowledge/memory", paths)
         self.assertIn("/knowledge/memory/versions", paths)
+        self.assertIn("/knowledge/memory/stores", paths)
+        self.assertIn("/knowledge/memory/restore", paths)
+        self.assertIn("/knowledge/memory/export", paths)
         self.assertIn("/knowledge/upload", paths)
         self.assertIn("/knowledge/list", paths)
         self.assertIn("/knowledge/{filename}", paths)
@@ -65,28 +68,57 @@ class TestKnowledgeRoutes(unittest.TestCase):
             def list_memories(self):
                 return [{"path": "sessions/sid-1/memory.md"}]
 
+            def list_stores(self):
+                return [{"id": "sessions", "access": "read_write"}]
+
             def read_memory(self, path):
-                return {"path": path, "content": "# memory"}
+                return {"path": path, "content": "# memory", "content_sha256": "sha"}
+
+            def update_memory(self, path, content, content_sha256=None):
+                self.updated = (path, content, content_sha256)
 
             def delete_memory(self, path):
                 self.deleted = path
 
+            def restore_version(self, version_id):
+                return {"version_id": version_id, "operation": "restored"}
+
+            def export_store(self):
+                return {"stores": [{"id": "sessions"}], "memories": [], "versions": []}
+
             def list_versions(self, limit=50):
                 self.limit = limit
-                return [{"operation": "created", "path": "sessions/sid-1/memory.md"}]
+                return [{"version_id": "v1", "operation": "created", "path": "sessions/sid-1/memory.md"}]
 
         class FakeMemoryDB:
             file_memory_store = FakeFileMemoryStore()
 
         with patch("core.memory.memory_db", FakeMemoryDB()):
+            stores_response = asyncio.run(knowledge_routes.list_memory_stores())
             list_response = asyncio.run(knowledge_routes.list_memory_items())
             read_response = asyncio.run(knowledge_routes.read_memory_item("sessions/sid-1/memory.md"))
             versions_response = asyncio.run(knowledge_routes.list_memory_versions(10))
+            update_response = asyncio.run(
+                knowledge_routes.update_memory_item(
+                    knowledge_routes.MemoryUpdateRequest(content="# changed", content_sha256="sha"),
+                    "sessions/sid-1/memory.md",
+                )
+            )
+            restore_response = asyncio.run(
+                knowledge_routes.restore_memory_version(
+                    knowledge_routes.MemoryRestoreRequest(version_id="v1")
+                )
+            )
+            export_response = asyncio.run(knowledge_routes.export_memory_store())
             delete_response = asyncio.run(knowledge_routes.delete_memory_item("sessions/sid-1/memory.md"))
 
+        self.assertEqual(stores_response.data, {"stores": [{"id": "sessions", "access": "read_write"}]})
         self.assertEqual(list_response.data, {"items": [{"path": "sessions/sid-1/memory.md"}]})
-        self.assertEqual(read_response.data, {"item": {"path": "sessions/sid-1/memory.md", "content": "# memory"}})
-        self.assertEqual(versions_response.data, {"versions": [{"operation": "created", "path": "sessions/sid-1/memory.md"}]})
+        self.assertEqual(read_response.data, {"item": {"path": "sessions/sid-1/memory.md", "content": "# memory", "content_sha256": "sha"}})
+        self.assertEqual(versions_response.data, {"versions": [{"version_id": "v1", "operation": "created", "path": "sessions/sid-1/memory.md"}]})
+        self.assertEqual(update_response.message, "记忆已更新")
+        self.assertEqual(restore_response.message, "记忆版本已恢复")
+        self.assertEqual(export_response.data, {"export": {"stores": [{"id": "sessions"}], "memories": [], "versions": []}})
         self.assertEqual(delete_response.message, "记忆已删除: sessions/sid-1/memory.md")
 
     def test_knowledge_route_errors_keep_http_semantics(self):

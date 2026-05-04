@@ -86,6 +86,48 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertEqual(deleted_versions[0]["metadata"]["actor"], "tester")
         self.assertEqual(self.store.list_memories(), [])
 
+    def test_update_restore_export_and_store_registry(self):
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary="【核心记忆】原始内容。",
+            source_session_id="sid-1",
+        )
+        item = self.store.list_memories()[0]
+        detail = self.store.read_memory(item["path"])
+
+        updated = self.store.update_memory(
+            item["path"],
+            content=detail["content"] + "\n追加纠错。",
+            content_sha256=detail["content_sha256"],
+            actor="tester",
+        )
+        exported = self.store.export_store()
+        restored = self.store.restore_version(updated["version_id"], actor="tester")
+
+        self.assertEqual(item["store_id"], "sessions")
+        self.assertEqual(item["access"], "read_write")
+        self.assertEqual(updated["operation"], "modified")
+        self.assertIn("追加纠错", self.store.read_memory(item["path"])["content"])
+        self.assertEqual(restored["operation"], "restored")
+        self.assertEqual(exported["stores"][0]["id"], "global")
+        self.assertTrue(exported["memories"])
+        self.assertTrue(exported["versions"])
+
+    def test_update_memory_rejects_stale_content_hash(self):
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary="【核心记忆】原始内容。",
+            source_session_id="sid-1",
+        )
+        item = self.store.list_memories()[0]
+
+        with self.assertRaisesRegex(RuntimeError, "memory_precondition_failed"):
+            self.store.update_memory(
+                item["path"],
+                content="new",
+                content_sha256="stale",
+            )
+
     def test_memory_paths_are_scoped_and_sanitized(self):
         self.assertEqual(safe_memory_segment("../evil host"), "evil_host")
         self.assertEqual(

@@ -8,6 +8,50 @@ from pathlib import Path
 from typing import Any
 
 
+DEFAULT_MEMORY_STORES = [
+    {
+        "id": "global",
+        "name": "全局只读记忆",
+        "description": "平台规则、组织规范和长期参考资料。默认只读，避免被会话污染。",
+        "path_prefix": "global/",
+        "access": "read_only",
+        "lifecycle": "long_term",
+    },
+    {
+        "id": "sessions",
+        "name": "会话记忆",
+        "description": "单次会话产生的上下文、阶段性经验和反馈。",
+        "path_prefix": "sessions/",
+        "access": "read_write",
+        "lifecycle": "session_scoped",
+    },
+    {
+        "id": "assets",
+        "name": "资产记忆",
+        "description": "同一资产的画像、巡检经验、风险和纠错记录。",
+        "path_prefix": "assets/",
+        "access": "read_write",
+        "lifecycle": "asset_scoped",
+    },
+    {
+        "id": "hosts",
+        "name": "主机记忆",
+        "description": "同一主机地址复用的运维经验。",
+        "path_prefix": "hosts/",
+        "access": "read_write",
+        "lifecycle": "host_scoped",
+    },
+    {
+        "id": "asset_kinds",
+        "name": "资产类型记忆",
+        "description": "同类协议或资产类型共享的通用经验。",
+        "path_prefix": "asset_kinds/",
+        "access": "read_write",
+        "lifecycle": "type_scoped",
+    },
+]
+
+
 def safe_memory_segment(value: str) -> str:
     segment = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value or "").strip())
     segment = segment.strip("._-")
@@ -38,6 +82,12 @@ class FileMemoryStore:
     def initialize(self) -> None:
         self.root_path.mkdir(parents=True, exist_ok=True)
         (self.root_path / "versions").mkdir(parents=True, exist_ok=True)
+        registry_path = self.root_path / "stores.json"
+        if not registry_path.exists():
+            registry_path.write_text(
+                json.dumps(DEFAULT_MEMORY_STORES, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
 
     def append_memory(
         self,
@@ -74,6 +124,7 @@ class FileMemoryStore:
         target_path.write_text(new_content, encoding="utf-8")
 
         version = {
+            "version_id": self._version_id(now, relative_path.as_posix(), "modified" if existed else "created", new_content),
             "timestamp": now,
             "operation": "modified" if existed else "created",
             "path": relative_path.as_posix(),
@@ -82,6 +133,8 @@ class FileMemoryStore:
             "content_sha256": memory_content_sha256(new_content),
             "summary_sha256": memory_content_sha256(summary),
             "metadata": metadata,
+            "content": new_content,
+            "previous_content": old_content,
         }
         self._append_version(version)
         return version
@@ -140,11 +193,15 @@ class FileMemoryStore:
                 continue
             content = path.read_text(encoding="utf-8")
             relative_path = path.relative_to(self.root_path).as_posix()
+            store = self._store_for_path(relative_path)
             entries = self._parse_entries(self._scope_from_path(relative_path), path)
             memories.append(
                 {
                     "path": relative_path,
                     "scope_id": self._scope_from_path(relative_path),
+                    "store_id": store["id"],
+                    "store_name": store["name"],
+                    "access": store["access"],
                     "size": path.stat().st_size,
                     "entries": len(entries),
                     "updated_at": datetime.datetime.fromtimestamp(
@@ -154,6 +211,10 @@ class FileMemoryStore:
                 }
             )
         return memories
+
+    def list_stores(self) -> list[dict[str, Any]]:
+        self.initialize()
+        return self._load_store_registry()
 
     def read_memory(self, path: str) -> dict[str, Any]:
         self.initialize()
@@ -165,12 +226,55 @@ class FileMemoryStore:
         return {
             "path": relative_path.as_posix(),
             "scope_id": self._scope_from_path(relative_path.as_posix()),
+            "store_id": self._store_for_path(relative_path.as_posix())["id"],
+            "store_name": self._store_for_path(relative_path.as_posix())["name"],
+            "access": self._store_for_path(relative_path.as_posix())["access"],
             "content": content,
+            "content_sha256": memory_content_sha256(content),
             "size": target.stat().st_size,
             "updated_at": datetime.datetime.fromtimestamp(target.stat().st_mtime).strftime(
                 "%Y-%m-%d %H:%M:%S"
             ),
         }
+
+    def update_memory(
+        self,
+        path: str,
+        *,
+        content: str,
+        content_sha256: str | None = None,
+        actor: str = "user",
+    ) -> dict[str, Any]:
+        self.initialize()
+        relative_path = self._safe_relative_path(path)
+        store = self._store_for_path(relative_path.as_posix())
+        if store.get("access") == "read_only":
+            raise PermissionError("memory store is read-only")
+        target = self._resolve_memory_path(relative_path)
+        if not target.exists() or not target.is_file():
+            raise FileNotFoundError(path)
+        previous_content = target.read_text(encoding="utf-8")
+        previous_sha = memory_content_sha256(previous_content)
+        if content_sha256 and content_sha256 != previous_sha:
+            raise RuntimeError("memory_precondition_failed")
+        new_content = str(content or "")
+        target.write_text(new_content, encoding="utf-8")
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        version = {
+            "version_id": self._version_id(now, relative_path.as_posix(), "modified", new_content),
+            "timestamp": now,
+            "operation": "modified",
+            "path": relative_path.as_posix(),
+            "scope_id": self._scope_from_path(relative_path.as_posix()),
+            "source_session_id": actor,
+            "content_sha256": memory_content_sha256(new_content),
+            "summary_sha256": "",
+            "metadata": {"actor": actor},
+            "content": new_content,
+            "previous_content": previous_content,
+        }
+        self._append_version(version)
+        return version
 
     def delete_memory(self, path: str, *, actor: str = "user") -> dict[str, Any]:
         self.initialize()
@@ -181,6 +285,7 @@ class FileMemoryStore:
         content = target.read_text(encoding="utf-8")
         target.unlink()
         version = {
+            "version_id": self._version_id(datetime.datetime.now().isoformat(), relative_path.as_posix(), "deleted", content),
             "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "operation": "deleted",
             "path": relative_path.as_posix(),
@@ -189,6 +294,8 @@ class FileMemoryStore:
             "content_sha256": memory_content_sha256(content),
             "summary_sha256": "",
             "metadata": {"actor": actor},
+            "content": content,
+            "previous_content": content,
         }
         self._append_version(version)
         return version
@@ -204,6 +311,57 @@ class FileMemoryStore:
                     continue
         events.sort(key=lambda item: str(item.get("timestamp") or ""), reverse=True)
         return events[: max(1, min(limit, 200))]
+
+    def restore_version(self, version_id: str, *, actor: str = "user") -> dict[str, Any]:
+        self.initialize()
+        target_version = None
+        for version in self.list_versions(limit=200):
+            if version.get("version_id") == version_id:
+                target_version = version
+                break
+        if not target_version:
+            raise FileNotFoundError(version_id)
+        content = target_version.get("content") or target_version.get("previous_content")
+        if content is None:
+            raise ValueError("version content is unavailable")
+        path = str(target_version.get("path") or "")
+        relative_path = self._safe_relative_path(path)
+        store = self._store_for_path(relative_path.as_posix())
+        if store.get("access") == "read_only":
+            raise PermissionError("memory store is read-only")
+        target = self._resolve_memory_path(relative_path)
+        previous_content = target.read_text(encoding="utf-8") if target.exists() else ""
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(str(content), encoding="utf-8")
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        version = {
+            "version_id": self._version_id(now, relative_path.as_posix(), "restored", str(content)),
+            "timestamp": now,
+            "operation": "restored",
+            "path": relative_path.as_posix(),
+            "scope_id": self._scope_from_path(relative_path.as_posix()),
+            "source_session_id": actor,
+            "content_sha256": memory_content_sha256(str(content)),
+            "summary_sha256": "",
+            "metadata": {"actor": actor, "restored_from": version_id},
+            "content": str(content),
+            "previous_content": previous_content,
+        }
+        self._append_version(version)
+        return version
+
+    def export_store(self) -> dict[str, Any]:
+        self.initialize()
+        memories = []
+        for item in self.list_memories():
+            detail = self.read_memory(item["path"])
+            memories.append(detail)
+        return {
+            "exported_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "stores": self.list_stores(),
+            "memories": memories,
+            "versions": self.list_versions(limit=200),
+        }
 
     def _resolve_memory_path(self, relative_path: Path) -> Path:
         target = (self.root_path / relative_path).resolve()
@@ -222,6 +380,27 @@ class FileMemoryStore:
         if path.is_absolute() or path.suffix.lower() != ".md":
             raise ValueError("invalid memory path")
         return path
+
+    def _load_store_registry(self) -> list[dict[str, Any]]:
+        registry_path = self.root_path / "stores.json"
+        try:
+            stores = json.loads(registry_path.read_text(encoding="utf-8"))
+        except Exception:
+            stores = DEFAULT_MEMORY_STORES
+        return stores if isinstance(stores, list) else DEFAULT_MEMORY_STORES
+
+    def _store_for_path(self, relative_path: str) -> dict[str, Any]:
+        normalized = str(relative_path or "").replace("\\", "/").lstrip("/")
+        stores = self._load_store_registry()
+        for store in stores:
+            prefix = str(store.get("path_prefix") or "").lstrip("/")
+            if prefix and normalized.startswith(prefix):
+                return store
+        return stores[0] if stores else DEFAULT_MEMORY_STORES[0]
+
+    def _version_id(self, timestamp: str, path: str, operation: str, content: str) -> str:
+        digest = memory_content_sha256(f"{timestamp}\n{path}\n{operation}\n{content}")[:16]
+        return f"memver_{digest}"
 
     def _initial_header(self, scope_id: str) -> str:
         return (

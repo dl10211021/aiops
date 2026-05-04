@@ -59,8 +59,12 @@ from api.mappers import (
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
     memory_item_deleted_response_kwargs,
+    memory_export_response_kwargs,
     memory_item_response_kwargs,
+    memory_item_restored_response_kwargs,
+    memory_item_updated_response_kwargs,
     memory_items_response_kwargs,
+    memory_stores_response_kwargs,
     memory_versions_response_kwargs,
     legacy_command_response_kwargs,
     llm_config_response_kwargs,
@@ -746,6 +750,7 @@ class TestApiMappers(unittest.TestCase):
         files = ["runbook.md", "network.log"]
         memory_item = {"path": "sessions/sid-1/memory.md"}
         versions = [{"operation": "created"}]
+        stores = [{"id": "sessions"}]
 
         self.assertEqual(
             knowledge_document_uploaded_response_kwargs("文档已注入知识库"),
@@ -770,6 +775,22 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             memory_versions_response_kwargs(versions),
             {"status": "success", "data": {"versions": versions}},
+        )
+        self.assertEqual(
+            memory_stores_response_kwargs(stores),
+            {"status": "success", "data": {"stores": stores}},
+        )
+        self.assertEqual(
+            memory_item_updated_response_kwargs(memory_item),
+            {"status": "success", "message": "记忆已更新", "data": {"item": memory_item}},
+        )
+        self.assertEqual(
+            memory_item_restored_response_kwargs({"version_id": "v1"}),
+            {"status": "success", "message": "记忆版本已恢复", "data": {"version": {"version_id": "v1"}}},
+        )
+        self.assertEqual(
+            memory_export_response_kwargs({"stores": stores}),
+            {"status": "success", "data": {"export": {"stores": stores}}},
         )
         self.assertEqual(
             memory_item_deleted_response_kwargs("sessions/sid-1/memory.md"),

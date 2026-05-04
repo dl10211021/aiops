@@ -3,27 +3,35 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   deleteKnowledgeDocument,
   deleteMemoryItem,
+  exportMemoryStore,
   listKnowledgeDocuments,
   listMemoryItems,
+  listMemoryStores,
   listMemoryVersions,
   readMemoryItem,
+  restoreMemoryVersion,
+  updateMemoryItem,
   uploadKnowledgeDocument,
 } from '@/api/knowledge'
 import { useStore } from '@/store'
-import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryVersion } from '@/types'
+import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { isAcceptedKnowledgeFile } from './knowledgeBaseModel'
 
 export function useKnowledgeBaseData() {
   const addToast = useStore((s) => s.addToast)
   const [files, setFiles] = useState<KnowledgeFile[]>([])
   const [memoryItems, setMemoryItems] = useState<MemoryItem[]>([])
+  const [memoryStores, setMemoryStores] = useState<MemoryStoreInfo[]>([])
   const [memoryVersions, setMemoryVersions] = useState<MemoryVersion[]>([])
   const [selectedMemory, setSelectedMemory] = useState<MemoryDetail | null>(null)
+  const [memoryDraft, setMemoryDraft] = useState('')
   const [uploading, setUploading] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeFile | null>(null)
   const [memoryDeleteTarget, setMemoryDeleteTarget] = useState<MemoryItem | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deletingMemory, setDeletingMemory] = useState(false)
+  const [savingMemory, setSavingMemory] = useState(false)
+  const [exportingMemory, setExportingMemory] = useState(false)
   const [loading, setLoading] = useState(true)
   const [memoryLoading, setMemoryLoading] = useState(true)
   const [error, setError] = useState('')
@@ -58,6 +66,7 @@ export function useKnowledgeBaseData() {
         const stillExists = (itemsRes.data.items || []).some((item) => item.path === current.path)
         return stillExists ? current : null
       })
+      void listMemoryStores().then((storesRes) => setMemoryStores(storesRes.data.stores || []))
     } catch (e: unknown) {
       setMemoryError(e instanceof Error ? e.message : '加载 AI 记忆失败')
       addToast('加载 AI 记忆失败', 'error')
@@ -122,6 +131,7 @@ export function useKnowledgeBaseData() {
     try {
       const res = await readMemoryItem(item.path)
       setSelectedMemory(res.data.item)
+      setMemoryDraft(res.data.item.content)
     } catch (e: unknown) {
       setMemoryError(e instanceof Error ? e.message : '读取 AI 记忆失败')
       addToast('读取 AI 记忆失败', 'error')
@@ -146,26 +156,83 @@ export function useKnowledgeBaseData() {
     }
   }
 
+  const handleSaveMemory = async () => {
+    if (!selectedMemory) return
+    setSavingMemory(true)
+    try {
+      const res = await updateMemoryItem(selectedMemory.path, memoryDraft, selectedMemory.content_sha256)
+      setSelectedMemory(res.data.item)
+      setMemoryDraft(res.data.item.content)
+      await loadMemories()
+      addToast('AI 记忆已更新', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '保存 AI 记忆失败', 'error')
+    } finally {
+      setSavingMemory(false)
+    }
+  }
+
+  const handleRestoreMemoryVersion = async (version: MemoryVersion) => {
+    if (!version.version_id) {
+      addToast('该版本缺少恢复标识，无法恢复', 'error')
+      return
+    }
+    try {
+      await restoreMemoryVersion(version.version_id)
+      await loadMemories()
+      addToast('AI 记忆版本已恢复', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '恢复 AI 记忆失败', 'error')
+    }
+  }
+
+  const handleExportMemory = async () => {
+    setExportingMemory(true)
+    try {
+      const res = await exportMemoryStore()
+      const blob = new Blob([JSON.stringify(res.data.export, null, 2)], { type: 'application/json;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `opscore-memory-${Date.now()}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      addToast('AI 记忆已导出', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '导出 AI 记忆失败', 'error')
+    } finally {
+      setExportingMemory(false)
+    }
+  }
+
   return {
     deleteTarget,
     deletingMemory,
     deleting,
     error,
+    exportingMemory,
     files,
     handleDelete,
     handleDeleteMemory,
+    handleExportMemory,
     handleOpenMemory,
+    handleRestoreMemoryVersion,
+    handleSaveMemory,
     handleUpload,
     loadFiles,
     loadMemories,
     loading,
     memoryDeleteTarget,
+    memoryDraft,
     memoryError,
     memoryItems,
     memoryLoading,
+    memoryStores,
     memoryVersions,
+    savingMemory,
     selectedMemory,
     setDeleteTarget,
+    setMemoryDraft,
     setMemoryDeleteTarget,
     uploading,
   }
