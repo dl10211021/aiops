@@ -28,6 +28,8 @@ import { useKnowledgeBaseData } from './useKnowledgeBaseData'
 
 export default function KnowledgeBase() {
   const [activeTab, setActiveTab] = useState<KnowledgeTab>('documents')
+  const [documentStep, setDocumentStep] = useState<'source' | 'compile' | 'review' | 'discover'>('source')
+  const [memoryStep, setMemoryStep] = useState<'browse' | 'write' | 'govern'>('browse')
   const {
     deleteTarget,
     deletingMemory,
@@ -127,6 +129,11 @@ export default function KnowledgeBase() {
     if (item) void handleOpenMemory(item)
   }
 
+  const visibleError = activeTab === 'documents' ? error : memoryError
+  const friendlyError = visibleError === 'Not Found'
+    ? '后台接口返回 Not Found，通常是服务未加载最新路由或需要重启。页面功能已保留，可先刷新或重启服务后再试。'
+    : visibleError
+
   return (
     <div className="flex-1 overflow-y-auto p-4 lg:p-5">
       <div className="w-full max-w-none">
@@ -174,9 +181,20 @@ export default function KnowledgeBase() {
           onChange={setActiveTab}
         />
 
-        {(activeTab === 'documents' ? error : memoryError) && (
-          <div className="mb-4 rounded-lg border border-ops-alert/35 bg-ops-alert/10 px-4 py-3 text-sm text-ops-alert">
-            {activeTab === 'documents' ? error : memoryError}
+        {visibleError && (
+          <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-300/25 bg-amber-300/5 px-4 py-3 text-sm text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200/80">
+                {activeTab === 'documents' ? '知识库接口提示' : '记忆接口提示'}
+              </div>
+              <div className="mt-1 text-sm leading-6 text-ops-subtext">{friendlyError}</div>
+            </div>
+            <button
+              onClick={handleRefresh}
+              className="shrink-0 rounded-md border border-amber-300/35 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-300/10"
+            >
+              重新加载
+            </button>
           </div>
         )}
 
@@ -186,20 +204,112 @@ export default function KnowledgeBase() {
           </section>
         )}
 
-        {activeTab === 'documents' && !loading && files.length > 0 ? (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.75fr)]">
-            <section className="grid gap-2 2xl:grid-cols-2">
-              {files.map((file) => (
-                <KnowledgeFileCard key={file.filename} file={file} onDelete={setDeleteTarget} />
-              ))}
+        {activeTab === 'documents' && !loading ? (
+          <div className="space-y-4">
+            <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-3">
+              <div className="grid gap-2 md:grid-cols-4">
+                {([
+                  ['source', '1. 资料入库', `${files.length} 份原始资料`, '上传、导入、留底'],
+                  ['compile', '2. AI 编译', `${compileQueueItems.length} 个待处理`, '生成候选 Wiki'],
+                  ['review', '3. 审核入库', `${candidateItems.length} 个候选 / ${articleItems.length} 篇正式`, '人工确认可信知识'],
+                  ['discover', '4. 检索追溯', `${vaultSearchResults.length} 条命中`, '搜索、图谱、证据链'],
+                ] as const).map(([id, label, count, desc]) => (
+                  <button
+                    key={id}
+                    onClick={() => setDocumentStep(id)}
+                    className={`rounded-md border px-4 py-3 text-left transition-colors ${
+                      documentStep === id
+                        ? 'border-ops-accent bg-ops-accent text-ops-dark'
+                        : 'border-ops-surface0 bg-ops-dark/25 text-ops-subtext hover:border-ops-accent/40 hover:text-ops-text'
+                    }`}
+                  >
+                    <span className="block text-sm font-bold">{label}</span>
+                    <span className="mt-1 block text-xs opacity-85">{count}</span>
+                    <span className="mt-1 block text-[11px] opacity-75">{desc}</span>
+                  </button>
+                ))}
+              </div>
             </section>
-            <aside>
-              <KnowledgeCompileQueuePanel
-                compilingSourceSession={compilingSourceSession}
-                items={compileQueueItems}
-                onCompile={handleCompileKnowledgeSource}
-              />
-              <div className="mt-4">
+
+            {documentStep === 'source' && (
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+                <section className="space-y-3">
+                  {files.length > 0 ? (
+                    <div className="grid gap-2 2xl:grid-cols-2">
+                      {files.map((file) => (
+                        <KnowledgeFileCard key={file.filename} file={file} onDelete={setDeleteTarget} />
+                      ))}
+                    </div>
+                  ) : (
+                    <KnowledgeEmptyState uploading={uploading} onUpload={handleUpload} />
+                  )}
+                </section>
+                <aside className="space-y-3">
+                  <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+                    <div className="text-sm font-semibold text-ops-text">资料入库只做三件事</div>
+                    <div className="mt-3 space-y-2 text-xs leading-5 text-ops-subtext">
+                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">保存原始资料，不让 AI 改原文。</div>
+                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">生成 source session，记录来源路径和状态。</div>
+                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">后续再进入 AI 编译，不在这里混杂审核和检索。</div>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            )}
+
+            {documentStep === 'compile' && (
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+                <KnowledgeCompileQueuePanel
+                  compilingSourceSession={compilingSourceSession}
+                  items={compileQueueItems}
+                  onCompile={handleCompileKnowledgeSource}
+                />
+                <aside className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+                  <div className="text-sm font-semibold text-ops-text">这一阶段只负责生成候选</div>
+                  <p className="mt-2 text-xs leading-5 text-ops-subtext">
+                    辅助模型把原始资料整理成候选 Wiki。候选不会直接进入长期知识，必须到下一步人工审核。
+                  </p>
+                  <button
+                    onClick={() => setDocumentStep('review')}
+                    className="mt-4 rounded-md border border-ops-accent/45 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
+                  >
+                    去审核入库
+                  </button>
+                </aside>
+              </div>
+            )}
+
+            {documentStep === 'review' && (
+              <div className="grid gap-4 xl:grid-cols-[minmax(340px,0.55fr)_minmax(0,1fr)]">
+                <section className="space-y-4">
+                  <KnowledgeCandidatePanel
+                    approvingSourceSession={approvingSourceSession}
+                    items={candidateItems}
+                    openingCandidate={openingCandidate}
+                    onApprove={handleApproveKnowledgeCandidate}
+                    onOpen={handleOpenKnowledgeCandidate}
+                  />
+                  <KnowledgeArticlePanel
+                    items={articleItems}
+                    openingArticle={openingArticle}
+                    onOpen={handleOpenKnowledgeArticle}
+                  />
+                </section>
+                <section className="space-y-4">
+                  <KnowledgeCandidateEditor
+                    draft={candidateDraft}
+                    candidate={selectedCandidate}
+                    saving={savingCandidate}
+                    onDraftChange={setCandidateDraft}
+                    onSave={handleSaveKnowledgeCandidate}
+                  />
+                  <KnowledgeArticleViewer article={selectedArticle} />
+                </section>
+              </div>
+            )}
+
+            {documentStep === 'discover' && (
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
                 <KnowledgeVaultSearchPanel
                   query={vaultSearchQuery}
                   results={vaultSearchResults}
@@ -209,8 +319,6 @@ export default function KnowledgeBase() {
                   onScopeChange={setVaultSearchScope}
                   onSearch={handleSearchKnowledgeVault}
                 />
-              </div>
-              <div className="mt-4">
                 <KnowledgeVaultGraphPanel
                   graph={vaultGraph}
                   includeCandidates={vaultGraphIncludeCandidates}
@@ -219,80 +327,7 @@ export default function KnowledgeBase() {
                   onLoad={handleLoadKnowledgeVaultGraph}
                 />
               </div>
-              <div className="mt-4">
-                <KnowledgeCandidatePanel
-                  approvingSourceSession={approvingSourceSession}
-                  items={candidateItems}
-                  openingCandidate={openingCandidate}
-                  onApprove={handleApproveKnowledgeCandidate}
-                  onOpen={handleOpenKnowledgeCandidate}
-                />
-              </div>
-              <div className="mt-4">
-                <KnowledgeCandidateEditor
-                  draft={candidateDraft}
-                  candidate={selectedCandidate}
-                  saving={savingCandidate}
-                  onDraftChange={setCandidateDraft}
-                  onSave={handleSaveKnowledgeCandidate}
-                />
-              </div>
-              <div className="mt-4">
-                <KnowledgeArticlePanel
-                  items={articleItems}
-                  openingArticle={openingArticle}
-                  onOpen={handleOpenKnowledgeArticle}
-                />
-              </div>
-              <div className="mt-4">
-                <KnowledgeArticleViewer article={selectedArticle} />
-              </div>
-            </aside>
-          </div>
-        ) : activeTab === 'documents' && !loading ? (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.75fr)]">
-            <KnowledgeEmptyState uploading={uploading} onUpload={handleUpload} />
-            <KnowledgeCompileQueuePanel
-              compilingSourceSession={compilingSourceSession}
-              items={compileQueueItems}
-              onCompile={handleCompileKnowledgeSource}
-            />
-            <KnowledgeVaultSearchPanel
-              query={vaultSearchQuery}
-              results={vaultSearchResults}
-              scope={vaultSearchScope}
-              searching={searchingVault}
-              onQueryChange={setVaultSearchQuery}
-              onScopeChange={setVaultSearchScope}
-              onSearch={handleSearchKnowledgeVault}
-            />
-            <KnowledgeVaultGraphPanel
-              graph={vaultGraph}
-              includeCandidates={vaultGraphIncludeCandidates}
-              loading={loadingVaultGraph}
-              onIncludeCandidatesChange={setVaultGraphIncludeCandidates}
-              onLoad={handleLoadKnowledgeVaultGraph}
-            />
-            <KnowledgeCandidatePanel
-              approvingSourceSession={approvingSourceSession}
-              items={candidateItems}
-              openingCandidate={openingCandidate}
-              onApprove={handleApproveKnowledgeCandidate}
-              onOpen={handleOpenKnowledgeCandidate}
-            />
-            <KnowledgeCandidateEditor
-              draft={candidateDraft}
-              candidate={selectedCandidate}
-              saving={savingCandidate}
-              onDraftChange={setCandidateDraft}
-              onSave={handleSaveKnowledgeCandidate}
-            />
-            <KnowledgeArticlePanel
-              items={articleItems}
-              openingArticle={openingArticle}
-              onOpen={handleOpenKnowledgeArticle}
-            />
-            <KnowledgeArticleViewer article={selectedArticle} />
+            )}
           </div>
         ) : null}
 
@@ -303,72 +338,112 @@ export default function KnowledgeBase() {
         )}
 
         {activeTab === 'memory' && !memoryLoading && (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
-            <section className="space-y-2">
-              {memoryItems.length > 0 ? memoryItems.map((item) => (
-                <MemoryItemCard
-                  key={item.path}
-                  item={item}
-                  selected={selectedMemory?.path === item.path}
-                  onOpen={handleOpenMemory}
-                  onDelete={setMemoryDeleteTarget}
-                />
-              )) : (
-                <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-6">
-                  <div className="text-sm font-semibold text-ops-text">暂无 AI 记忆</div>
-                  <p className="mt-2 text-sm leading-6 text-ops-subtext">
-                    当会话产生可复用经验、用户点赞/点踩反馈或资产画像沉淀后，这里会出现 Claude 风格文件记忆。
-                  </p>
-                </div>
-              )}
+          <div className="space-y-4">
+            <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-3">
+              <div className="grid gap-2 md:grid-cols-3">
+                {([
+                  ['browse', '1. 浏览记忆', `${memoryItems.length} 条文件记忆`, '查看、编辑、删除'],
+                  ['write', '2. 写入与检索', `${memorySearchResults.length} 条检索命中`, '新建、搜索、验证'],
+                  ['govern', '3. 审计治理', `${memoryPendingConflicts.length + memoryReviewItems.length} 项待处理`, '冲突、复核、版本'],
+                ] as const).map(([id, label, count, desc]) => (
+                  <button
+                    key={id}
+                    onClick={() => setMemoryStep(id)}
+                    className={`rounded-md border px-4 py-3 text-left transition-colors ${
+                      memoryStep === id
+                        ? 'border-ops-accent bg-ops-accent text-ops-dark'
+                        : 'border-ops-surface0 bg-ops-dark/25 text-ops-subtext hover:border-ops-accent/40 hover:text-ops-text'
+                    }`}
+                  >
+                    <span className="block text-sm font-bold">{label}</span>
+                    <span className="mt-1 block text-xs opacity-85">{count}</span>
+                    <span className="mt-1 block text-[11px] opacity-75">{desc}</span>
+                  </button>
+                ))}
+              </div>
             </section>
-            <aside className="space-y-4">
-              <MemoryCreatePanel
-                creating={creatingMemory}
-                scope={memoryCreateScope}
-                summary={memoryCreateSummary}
-                onCreate={() => void handleCreateMemory()}
-                onScopeChange={setMemoryCreateScope}
-                onSummaryChange={setMemoryCreateSummary}
-              />
-              <MemorySearchPanel
-                query={memorySearchQuery}
-                results={memorySearchResults}
-                scopes={memorySearchScopes}
-                searching={searchingMemory}
-                onQueryChange={setMemorySearchQuery}
-                onScopesChange={setMemorySearchScopes}
-                onSearch={() => void handleSearchMemory()}
-              />
-              <MemoryDetailPanel
-                draft={memoryDraft}
-                exporting={exportingMemory}
-                memory={selectedMemory}
-                saving={savingMemory}
-                onDraftChange={setMemoryDraft}
-                onExport={() => void handleExportMemory()}
-                onSave={() => void handleSaveMemory()}
-              />
-              <MemoryPendingConflictsPanel
-                items={memoryPendingConflicts}
-                resolvingKey={resolvingMemoryConflict}
-                onOpen={handleOpenMemoryPath}
-                onResolve={(item, action) => void handleResolveMemoryConflict(item, action)}
-              />
-              <MemoryReviewPanel
-                items={memoryReviewItems}
-                reviewingPath={reviewingMemoryPath}
-                onOpen={handleOpenMemoryPath}
-                onReview={(item) => void handleConfirmMemoryReview(item)}
-              />
-              <MemoryStoresPanel stores={memoryStores} />
-              <MemoryVersionsPanel
-                versions={memoryVersions}
-                redactingVersionId={redactingMemoryVersion}
-                onRedact={(version) => void handleRedactMemoryVersion(version)}
-                onRestore={(version) => void handleRestoreMemoryVersion(version)}
-              />
-            </aside>
+
+            {memoryStep === 'browse' && (
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1fr)]">
+                <section className="space-y-2">
+                  {memoryItems.length > 0 ? memoryItems.map((item) => (
+                    <MemoryItemCard
+                      key={item.path}
+                      item={item}
+                      selected={selectedMemory?.path === item.path}
+                      onOpen={handleOpenMemory}
+                      onDelete={setMemoryDeleteTarget}
+                    />
+                  )) : (
+                    <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-6">
+                      <div className="text-sm font-semibold text-ops-text">暂无 AI 记忆</div>
+                      <p className="mt-2 text-sm leading-6 text-ops-subtext">
+                        会话点赞、资产画像和人工确认经验沉淀后，会在这里形成 Claude 风格文件记忆。
+                      </p>
+                    </div>
+                  )}
+                </section>
+                <MemoryDetailPanel
+                  draft={memoryDraft}
+                  exporting={exportingMemory}
+                  memory={selectedMemory}
+                  saving={savingMemory}
+                  onDraftChange={setMemoryDraft}
+                  onExport={() => void handleExportMemory()}
+                  onSave={() => void handleSaveMemory()}
+                />
+              </div>
+            )}
+
+            {memoryStep === 'write' && (
+              <div className="grid gap-4 xl:grid-cols-[minmax(360px,0.7fr)_minmax(0,1fr)]">
+                <MemoryCreatePanel
+                  creating={creatingMemory}
+                  scope={memoryCreateScope}
+                  summary={memoryCreateSummary}
+                  onCreate={() => void handleCreateMemory()}
+                  onScopeChange={setMemoryCreateScope}
+                  onSummaryChange={setMemoryCreateSummary}
+                />
+                <MemorySearchPanel
+                  query={memorySearchQuery}
+                  results={memorySearchResults}
+                  scopes={memorySearchScopes}
+                  searching={searchingMemory}
+                  onQueryChange={setMemorySearchQuery}
+                  onScopesChange={setMemorySearchScopes}
+                  onSearch={() => void handleSearchMemory()}
+                />
+              </div>
+            )}
+
+            {memoryStep === 'govern' && (
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.75fr)]">
+                <section className="space-y-4">
+                  <MemoryPendingConflictsPanel
+                    items={memoryPendingConflicts}
+                    resolvingKey={resolvingMemoryConflict}
+                    onOpen={handleOpenMemoryPath}
+                    onResolve={(item, action) => void handleResolveMemoryConflict(item, action)}
+                  />
+                  <MemoryReviewPanel
+                    items={memoryReviewItems}
+                    reviewingPath={reviewingMemoryPath}
+                    onOpen={handleOpenMemoryPath}
+                    onReview={(item) => void handleConfirmMemoryReview(item)}
+                  />
+                </section>
+                <aside className="space-y-4">
+                  <MemoryStoresPanel stores={memoryStores} />
+                  <MemoryVersionsPanel
+                    versions={memoryVersions}
+                    redactingVersionId={redactingMemoryVersion}
+                    onRedact={(version) => void handleRedactMemoryVersion(version)}
+                    onRestore={(version) => void handleRestoreMemoryVersion(version)}
+                  />
+                </aside>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -104,7 +104,6 @@ export function useKnowledgeBaseData() {
       setArticleItems(articlesRes.data.items || [])
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '加载知识库失败')
-      addToast('加载知识库失败', 'error')
     } finally {
       setLoading(false)
     }
@@ -132,7 +131,6 @@ export function useKnowledgeBaseData() {
       void listMemoryStores().then((storesRes) => setMemoryStores(storesRes.data.stores || []))
     } catch (e: unknown) {
       setMemoryError(e instanceof Error ? e.message : '加载 AI 记忆失败')
-      addToast('加载 AI 记忆失败', 'error')
     } finally {
       setMemoryLoading(false)
     }
