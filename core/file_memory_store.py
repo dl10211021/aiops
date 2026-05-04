@@ -16,6 +16,7 @@ DEFAULT_MEMORY_STORES = [
         "path_prefix": "global/",
         "access": "read_only",
         "lifecycle": "long_term",
+        "instructions": "仅作为高可信参考资料读取；不得由普通会话写入。遇到冲突时，以当前资产实时证据和用户最新确认优先。",
     },
     {
         "id": "sessions",
@@ -24,6 +25,7 @@ DEFAULT_MEMORY_STORES = [
         "path_prefix": "sessions/",
         "access": "read_write",
         "lifecycle": "session_scoped",
+        "instructions": "用于保存本会话被验证过的偏好、纠错和阶段结论；写入前必须压缩为小而准的中文记忆，避免流水账。",
     },
     {
         "id": "assets",
@@ -32,6 +34,7 @@ DEFAULT_MEMORY_STORES = [
         "path_prefix": "assets/",
         "access": "read_write",
         "lifecycle": "asset_scoped",
+        "instructions": "用于同一资产跨会话复用；只保存经过原生协议工具验证的资产画像、风险例外、巡检经验和用户纠错。",
     },
     {
         "id": "hosts",
@@ -40,6 +43,7 @@ DEFAULT_MEMORY_STORES = [
         "path_prefix": "hosts/",
         "access": "read_write",
         "lifecycle": "host_scoped",
+        "instructions": "用于同一 IP/主机的长期经验；读取后必须结合当前时间、当前会话和实时巡检结果复核，不能直接当作事实执行。",
     },
     {
         "id": "asset_kinds",
@@ -48,6 +52,7 @@ DEFAULT_MEMORY_STORES = [
         "path_prefix": "asset_kinds/",
         "access": "read_write",
         "lifecycle": "type_scoped",
+        "instructions": "用于 Linux、Windows、Oracle、交换机等同类资产的通用方法；仅提供操作思路，不覆盖具体资产证据。",
     },
 ]
 

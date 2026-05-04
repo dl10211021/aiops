@@ -91,6 +91,76 @@ def build_ltm_retrieval_context(rows: list[dict], max_chars: int = LTM_CONTEXT_M
     return "\n".join(lines) + "\n"
 
 
+def build_ltm_store_mount_context(stores: list[dict], max_chars: int = 4096) -> str:
+    if not stores:
+        return ""
+    lines = [
+        "【OpsCore Memory Stores / Claude-style 挂载说明】",
+        "这些记忆库等价于已挂载的文件型 memory store。读取记忆时先看用途、权限和使用说明；写入记忆时必须遵守对应 store 的 access 与 instructions。",
+    ]
+    current_size = sum(len(line) + 1 for line in lines)
+    for store in stores:
+        access = "只读" if store.get("access") == "read_only" else "可读写"
+        item = (
+            "- "
+            f"{store.get('name') or store.get('id')} "
+            f"({store.get('id')}, {access}, {store.get('path_prefix') or '/'})："
+            f"{store.get('description') or '无描述'} "
+            f"使用说明：{store.get('instructions') or '按最小必要原则读取，写入前先验证。'}"
+        )
+        if current_size + len(item) + 1 > max_chars:
+            lines.append("- 其余 memory store 因上下文预算已省略。")
+            break
+        lines.append(item)
+        current_size += len(item) + 1
+    return "\n".join(lines) + "\n"
+
+
+def build_asset_profile_memory_summary(
+    profile: dict,
+    *,
+    host: str,
+    asset_key: str,
+    asset_type: str,
+    protocol: str,
+    max_chars: int = 2400,
+) -> str:
+    role = str(profile.get("role_label") or profile.get("role_category") or "未知资产").strip()
+    purpose = str(profile.get("purpose") or profile.get("source_summary") or "").strip()
+    risk_level = str(profile.get("risk_level") or "unknown").strip()
+    confidence = profile.get("confidence", 0)
+    profile_prompt = str(profile.get("profile_prompt") or "").strip()
+    focus_items = []
+    for item in profile.get("focus_areas") or []:
+        if isinstance(item, dict):
+            title = str(item.get("title") or "").strip()
+            reason = str(item.get("reason") or "").strip()
+            priority = str(item.get("priority") or "").strip()
+            if title:
+                focus_items.append(f"{priority} {title}：{reason}".strip())
+    evidence_items = []
+    for item in profile.get("evidence") or []:
+        if isinstance(item, dict):
+            label = str(item.get("label") or "").strip()
+            value = str(item.get("value") or "").strip()
+            if label or value:
+                evidence_items.append(f"{label}={value}".strip("="))
+    lines = [
+        "【记忆类型】资产画像",
+        f"【核心记忆】{host or asset_key or '当前资产'} 被识别为 {role}，协议 {protocol or '-'}，资产类型 {asset_type or '-'}，风险等级 {risk_level}，置信度 {confidence}%。",
+    ]
+    if purpose:
+        lines.append(f"【业务用途】{purpose}")
+    if focus_items:
+        lines.append("【排查重点】" + "；".join(focus_items[:6]))
+    if evidence_items:
+        lines.append("【证据摘要】" + "；".join(evidence_items[:6]))
+    if profile_prompt:
+        lines.append(f"【画像提示词】{profile_prompt}")
+    lines.append("【使用边界】画像是历史汇聚提示词，后续会话必须结合当前资产实时工具结果验证，不得盲目信任。")
+    return sanitize_ltm_summary("\n".join(lines), max_chars=max_chars)
+
+
 def build_ltm_references(rows: list[dict], max_summary_chars: int = 180) -> list[dict]:
     references = []
     for row in rows:
@@ -656,7 +726,7 @@ class MemoryDB:
         protocol: str,
         profile: dict,
     ) -> dict:
-        return self._asset_profile_store.save_asset_profile(
+        saved = self._asset_profile_store.save_asset_profile(
             session_id,
             asset_key,
             host,
@@ -664,6 +734,28 @@ class MemoryDB:
             protocol,
             profile,
         )
+        try:
+            scope_id = f"asset-host:{host}" if host else f"asset:{asset_key or session_id}"
+            self.file_memory_store.append_memory(
+                scope_id=scope_id,
+                summary=build_asset_profile_memory_summary(
+                    saved,
+                    host=host,
+                    asset_key=asset_key,
+                    asset_type=asset_type,
+                    protocol=protocol,
+                ),
+                source_session_id=session_id,
+                metadata={
+                    "source": "asset_profile",
+                    "asset_key": asset_key,
+                    "asset_type": asset_type,
+                    "protocol": protocol,
+                },
+            )
+        except Exception as exc:
+            logger.warning(f"资产画像写入文件型长期记忆失败: {exc}")
+        return saved
 
     def get_asset_profile(self, session_id: str) -> dict | None:
         return self._asset_profile_store.get_asset_profile(session_id)
@@ -727,6 +819,12 @@ class MemoryDB:
             return "", []
         try:
             scope_ids = self._normalize_ltm_scope_ids(session_id, memory_scope_ids)
+            try:
+                store_context = build_ltm_store_mount_context(
+                    self.file_memory_store.list_stores()
+                )
+            except Exception:
+                store_context = ""
             results = await asyncio.to_thread(
                 self.file_memory_store.search,
                 scope_ids=scope_ids[:LTM_SCOPE_SEARCH_LIMIT],
@@ -740,9 +838,12 @@ class MemoryDB:
             ]
 
             if not results:
-                return "", []
+                return store_context, []
 
-            return build_ltm_retrieval_context(results), build_ltm_references(results)
+            retrieval_context = build_ltm_retrieval_context(results)
+            if store_context:
+                retrieval_context = f"{store_context}\n{retrieval_context}"
+            return retrieval_context, build_ltm_references(results)
         except Exception as e:
             logger.error(f"长期记忆检索失败: {e}")
             return "", []

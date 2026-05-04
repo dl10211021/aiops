@@ -676,6 +676,7 @@ export interface MemoryStoreInfo {
   path_prefix: string
   access: 'read_only' | 'read_write' | string
   lifecycle: string
+  instructions?: string
 }
 
 export interface ApiResponse<T = Record<string, unknown>> {

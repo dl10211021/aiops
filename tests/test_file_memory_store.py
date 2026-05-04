@@ -108,6 +108,7 @@ class FileMemoryStoreTests(unittest.TestCase):
 
         self.assertEqual(item["store_id"], "sessions")
         self.assertEqual(item["access"], "read_write")
+        self.assertIn("instructions", exported["stores"][0])
         self.assertEqual(updated["operation"], "modified")
         self.assertIn("追加纠错", self.store.read_memory(item["path"])["content"])
         self.assertEqual(restored["operation"], "restored")

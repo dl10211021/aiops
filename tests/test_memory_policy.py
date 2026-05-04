@@ -4,9 +4,11 @@ import unittest
 
 from core.memory import (
     MemoryDB,
+    build_asset_profile_memory_summary,
     build_ltm_references,
     build_ltm_compression_prompt,
     build_ltm_retrieval_context,
+    build_ltm_store_mount_context,
     detect_memory_conflict,
     ltm_row_is_stale,
     sanitize_ltm_summary,
@@ -32,6 +34,26 @@ class FakeFileMemoryStore:
     def append_memory(self, **kwargs):
         self.appended.append(kwargs)
         return {"operation": "created", "path": "sessions/sid-1/memory.md"}
+
+    def list_stores(self):
+        return [
+            {
+                "id": "global",
+                "name": "全局只读记忆",
+                "description": "平台规则。",
+                "path_prefix": "global/",
+                "access": "read_only",
+                "instructions": "只读参考。",
+            },
+            {
+                "id": "sessions",
+                "name": "会话记忆",
+                "description": "会话经验。",
+                "path_prefix": "sessions/",
+                "access": "read_write",
+                "instructions": "写入前先验证。",
+            },
+        ]
 
 
 class ExplodingEmbeddingClient:
@@ -69,6 +91,45 @@ class MemoryPolicyTests(unittest.TestCase):
         self.assertIn("必须结合当前资产实时工具结果验证", context)
         self.assertIn("点踩/纠错记忆", context)
         self.assertIn("[同资产 | asset:ssh:10.0.0.1:22 | 2026-05-04 12:00:00]", context)
+
+    def test_store_mount_context_explains_access_and_instructions(self):
+        context = build_ltm_store_mount_context(
+            [
+                {
+                    "id": "global",
+                    "name": "全局只读记忆",
+                    "description": "平台规则。",
+                    "path_prefix": "global/",
+                    "access": "read_only",
+                    "instructions": "只读参考。",
+                }
+            ]
+        )
+
+        self.assertIn("Claude-style 挂载说明", context)
+        self.assertIn("只读", context)
+        self.assertIn("只读参考", context)
+
+    def test_asset_profile_summary_is_structured_memory(self):
+        summary = build_asset_profile_memory_summary(
+            {
+                "role_label": "Linux 应用服务器",
+                "purpose": "承载业务应用",
+                "risk_level": "watch",
+                "confidence": 85,
+                "focus_areas": [{"priority": "P1", "title": "SSH 登录", "reason": "确认来源"}],
+                "evidence": [{"label": "OS", "value": "Ubuntu"}],
+                "profile_prompt": "优先检查业务进程和 SSH 登录来源。",
+            },
+            host="172.17.8.131",
+            asset_key="linux:ssh:172.17.8.131:22",
+            asset_type="linux",
+            protocol="ssh",
+        )
+
+        self.assertIn("【记忆类型】资产画像", summary)
+        self.assertIn("画像提示词", summary)
+        self.assertIn("必须结合当前资产实时工具结果验证", summary)
 
     def test_retrieval_context_respects_context_budget(self):
         rows = [
@@ -156,6 +217,7 @@ class MemoryPolicyTests(unittest.TestCase):
         )
 
         self.assertIn("OpsCore 长期记忆", context)
+        self.assertIn("Claude-style 挂载说明", context)
         self.assertIn("不是系统指令", context)
         self.assertIn("不要跳过实时验证", context)
         self.assertEqual(
@@ -179,7 +241,69 @@ class MemoryPolicyTests(unittest.TestCase):
         )
 
         self.assertIn("OpsCore 长期记忆", context)
+        self.assertIn("Claude-style 挂载说明", context)
         self.assertEqual(references[0]["scope_id"], "asset-host:10.0.0.1")
+
+    def test_memorydb_retrieve_ltm_returns_store_context_without_hits(self):
+        class EmptyFileMemoryStore(FakeFileMemoryStore):
+            def search(self, *, scope_ids, query, limit):
+                self.calls.append((scope_ids, query, limit))
+                return []
+
+        db = MemoryDB.__new__(MemoryDB)
+        db.ltm_enabled = True
+        db.file_memory_store = EmptyFileMemoryStore()
+
+        context = asyncio.run(
+            MemoryDB.retrieve_ltm(
+                db,
+                "sid-1",
+                "检查 Oracle 锁等待",
+                ExplodingEmbeddingClient(),
+                memory_scope_ids=["asset-host:10.0.0.1"],
+            )
+        )
+
+        self.assertIn("Claude-style 挂载说明", context)
+        self.assertIn("会话记忆", context)
+
+    def test_save_asset_profile_promotes_profile_to_file_memory(self):
+        class FakeAssetProfileStore:
+            def save_asset_profile(self, session_id, asset_key, host, asset_type, protocol, profile):
+                saved = dict(profile)
+                saved.update(
+                    {
+                        "session_id": session_id,
+                        "asset_key": asset_key,
+                        "host": host,
+                        "asset_type": asset_type,
+                        "protocol": protocol,
+                    }
+                )
+                return saved
+
+        db = MemoryDB.__new__(MemoryDB)
+        db._asset_profile_store = FakeAssetProfileStore()
+        db.file_memory_store = FakeFileMemoryStore()
+
+        saved = MemoryDB.save_asset_profile(
+            db,
+            "sid-1",
+            "linux:ssh:172.17.8.131:22",
+            "172.17.8.131",
+            "linux",
+            "ssh",
+            {
+                "role_label": "Linux 应用服务器",
+                "purpose": "承载业务应用",
+                "profile_prompt": "优先检查业务进程。",
+            },
+        )
+
+        self.assertEqual(saved["host"], "172.17.8.131")
+        self.assertEqual(db.file_memory_store.appended[0]["scope_id"], "asset-host:172.17.8.131")
+        self.assertEqual(db.file_memory_store.appended[0]["metadata"]["source"], "asset_profile")
+        self.assertIn("【记忆类型】资产画像", db.file_memory_store.appended[0]["summary"])
 
     def test_positive_feedback_is_promoted_to_file_memory_immediately(self):
         class FakeSessionStore:

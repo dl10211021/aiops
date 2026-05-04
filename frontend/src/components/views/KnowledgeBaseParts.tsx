@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react'
-import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryVersion } from '@/types'
+import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
 export type KnowledgeTab = 'documents' | 'memory'
@@ -551,7 +551,7 @@ export function MemoryReviewPanel({
   )
 }
 
-export function MemoryStoresPanel({ stores }: { stores: Array<{ id: string; name: string; description: string; access: string }> }) {
+export function MemoryStoresPanel({ stores }: { stores: MemoryStoreInfo[] }) {
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="text-sm font-semibold text-ops-text">Memory Stores</div>
@@ -566,6 +566,11 @@ export function MemoryStoresPanel({ stores }: { stores: Array<{ id: string; name
               </span>
             </div>
             <div className="mt-1 text-xs leading-5 text-ops-subtext">{store.description}</div>
+            <div className="mt-2 rounded border border-ops-surface1/70 bg-ops-dark/30 px-2 py-1 text-[11px] leading-5 text-ops-overlay">
+              <div>路径：{store.path_prefix || '/'}</div>
+              <div>生命周期：{store.lifecycle || '未配置'}</div>
+              <div>说明：{store.instructions || '按最小必要原则读取，写入前先验证。'}</div>
+            </div>
           </div>
         ))}
       </div>
