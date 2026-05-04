@@ -12,6 +12,7 @@ import {
   listMemoryReviewItems,
   listMemoryStores,
   listMemoryVersions,
+  redactMemoryVersion,
   readMemoryItem,
   restoreMemoryVersion,
   resolveMemoryPendingConflict,
@@ -48,6 +49,7 @@ export function useKnowledgeBaseData() {
   const [searchingMemory, setSearchingMemory] = useState(false)
   const [exportingMemory, setExportingMemory] = useState(false)
   const [resolvingMemoryConflict, setResolvingMemoryConflict] = useState<string | null>(null)
+  const [redactingMemoryVersion, setRedactingMemoryVersion] = useState<string | null>(null)
   const [reviewingMemoryPath, setReviewingMemoryPath] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [memoryLoading, setMemoryLoading] = useState(true)
@@ -250,6 +252,23 @@ export function useKnowledgeBaseData() {
     }
   }
 
+  const handleRedactMemoryVersion = async (version: MemoryVersion) => {
+    if (!version.version_id) {
+      addToast('该版本缺少脱敏标识，无法脱敏', 'error')
+      return
+    }
+    setRedactingMemoryVersion(version.version_id)
+    try {
+      await redactMemoryVersion(version.version_id)
+      await loadMemories()
+      addToast('记忆版本已脱敏', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '记忆版本脱敏失败', 'error')
+    } finally {
+      setRedactingMemoryVersion(null)
+    }
+  }
+
   const handleResolveMemoryConflict = async (
     item: MemoryPendingConflict,
     action: 'accept_new' | 'keep_old' | 'merged',
@@ -312,6 +331,7 @@ export function useKnowledgeBaseData() {
     handleExportMemory,
     handleConfirmMemoryReview,
     handleOpenMemory,
+    handleRedactMemoryVersion,
     handleRestoreMemoryVersion,
     handleResolveMemoryConflict,
     handleSaveMemory,
@@ -336,6 +356,7 @@ export function useKnowledgeBaseData() {
     memoryVersions,
     savingMemory,
     selectedMemory,
+    redactingMemoryVersion,
     resolvingMemoryConflict,
     reviewingMemoryPath,
     setDeleteTarget,

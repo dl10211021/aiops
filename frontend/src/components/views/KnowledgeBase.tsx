@@ -35,6 +35,7 @@ export default function KnowledgeBase() {
     handleExportMemory,
     handleConfirmMemoryReview,
     handleOpenMemory,
+    handleRedactMemoryVersion,
     handleRestoreMemoryVersion,
     handleResolveMemoryConflict,
     handleSaveMemory,
@@ -59,6 +60,7 @@ export default function KnowledgeBase() {
     memoryVersions,
     savingMemory,
     selectedMemory,
+    redactingMemoryVersion,
     resolvingMemoryConflict,
     reviewingMemoryPath,
     setDeleteTarget,
@@ -203,6 +205,8 @@ export default function KnowledgeBase() {
               <MemoryStoresPanel stores={memoryStores} />
               <MemoryVersionsPanel
                 versions={memoryVersions}
+                redactingVersionId={redactingMemoryVersion}
+                onRedact={(version) => void handleRedactMemoryVersion(version)}
                 onRestore={(version) => void handleRestoreMemoryVersion(version)}
               />
             </aside>

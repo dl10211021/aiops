@@ -72,6 +72,13 @@ export async function restoreMemoryVersion(versionId: string) {
   })
 }
 
+export async function redactMemoryVersion(versionId: string) {
+  return request<{ version: MemoryVersion }>('/knowledge/memory/versions/redact', {
+    method: 'POST',
+    body: JSON.stringify({ version_id: versionId }),
+  })
+}
+
 export async function listMemoryPendingConflicts(limit = 50) {
   return request<{ items: MemoryPendingConflict[] }>(`/knowledge/memory/pending?limit=${limit}`)
 }

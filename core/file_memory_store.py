@@ -406,6 +406,64 @@ class FileMemoryStore:
         self._append_version(version)
         return version
 
+    def redact_version(self, version_id: str, *, actor: str = "user") -> dict[str, Any]:
+        self.initialize()
+        version_path = None
+        target_index = -1
+        target_version = None
+        for path in sorted((self.root_path / "versions").glob("*.jsonl"), reverse=True):
+            events = []
+            for line in path.read_text(encoding="utf-8").splitlines():
+                try:
+                    events.append(json.loads(line))
+                except json.JSONDecodeError:
+                    events.append(None)
+            for index, version in enumerate(events):
+                if isinstance(version, dict) and version.get("version_id") == version_id:
+                    version_path = path
+                    target_index = index
+                    target_version = version
+                    break
+            if target_version:
+                break
+        if not version_path or target_index < 0 or not target_version:
+            raise FileNotFoundError(version_id)
+        if target_version.get("redacted"):
+            return target_version
+
+        relative_path = self._safe_relative_path(str(target_version.get("path") or ""))
+        target = self._resolve_memory_path(relative_path)
+        if target.exists() and target.is_file():
+            current_content = target.read_text(encoding="utf-8")
+            if target_version.get("content_sha256") == memory_content_sha256(current_content):
+                raise RuntimeError("memory_version_is_current")
+
+        redacted = dict(target_version)
+        metadata = dict(redacted.get("metadata") or {})
+        metadata.update(
+            {
+                "redacted_by": actor,
+                "redacted_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "redaction_reason": "manual_memory_version_redaction",
+            }
+        )
+        redacted["redacted"] = True
+        redacted["metadata"] = metadata
+        redacted["content"] = "[redacted]"
+        redacted["previous_content"] = "[redacted]"
+        redacted["content_sha256"] = memory_content_sha256("[redacted]")
+        redacted["summary_sha256"] = ""
+
+        rewritten = []
+        for index, line in enumerate(version_path.read_text(encoding="utf-8").splitlines()):
+            rewritten.append(
+                json.dumps(redacted, ensure_ascii=False, sort_keys=True)
+                if index == target_index
+                else line
+            )
+        version_path.write_text("\n".join(rewritten) + "\n", encoding="utf-8")
+        return redacted
+
     def export_store(self) -> dict[str, Any]:
         self.initialize()
         memories = []

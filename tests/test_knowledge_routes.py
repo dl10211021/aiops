@@ -31,6 +31,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/memory/review/confirm", paths)
         self.assertIn("/knowledge/memory/stores", paths)
         self.assertIn("/knowledge/memory/restore", paths)
+        self.assertIn("/knowledge/memory/versions/redact", paths)
         self.assertIn("/knowledge/memory/export", paths)
         self.assertIn("/knowledge/upload", paths)
         self.assertIn("/knowledge/list", paths)
@@ -95,6 +96,10 @@ class TestKnowledgeRoutes(unittest.TestCase):
 
             def restore_version(self, version_id):
                 return {"version_id": version_id, "operation": "restored"}
+
+            def redact_version(self, version_id):
+                self.redacted = version_id
+                return {"version_id": version_id, "operation": "created", "redacted": True}
 
             def mark_reviewed(self, path, actor="user"):
                 self.reviewed = (path, actor)
@@ -161,6 +166,11 @@ class TestKnowledgeRoutes(unittest.TestCase):
                     knowledge_routes.MemoryRestoreRequest(version_id="v1")
                 )
             )
+            redact_response = asyncio.run(
+                knowledge_routes.redact_memory_version(
+                    knowledge_routes.MemoryVersionRedactRequest(version_id="v1")
+                )
+            )
             export_response = asyncio.run(knowledge_routes.export_memory_store())
             resolve_response = asyncio.run(
                 knowledge_routes.resolve_memory_pending_conflict(
@@ -186,6 +196,8 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(review_response.data, {"items": [{"path": "sessions/sid-1/memory.md", "age_days": 181}]})
         self.assertEqual(update_response.message, "记忆已更新")
         self.assertEqual(restore_response.message, "记忆版本已恢复")
+        self.assertEqual(redact_response.message, "记忆版本已脱敏")
+        self.assertEqual(fake_db.file_memory_store.redacted, "v1")
         self.assertEqual(resolve_response.message, "待确认记忆已处理")
         self.assertEqual(review_confirm_response.message, "记忆已标记为复核通过")
         self.assertEqual(fake_db.resolved, ("v-pending", "accept_new"))

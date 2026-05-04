@@ -19,6 +19,7 @@ from api.response_mappers.knowledge import (
     memory_review_items_response_kwargs,
     memory_search_response_kwargs,
     memory_stores_response_kwargs,
+    memory_version_redacted_response_kwargs,
     memory_versions_response_kwargs,
 )
 from api.schema_models.common import ResponseModel
@@ -51,6 +52,10 @@ class MemorySearchRequest(BaseModel):
 
 
 class MemoryRestoreRequest(BaseModel):
+    version_id: str = Field(..., min_length=1)
+
+
+class MemoryVersionRedactRequest(BaseModel):
     version_id: str = Field(..., min_length=1)
 
 
@@ -228,6 +233,23 @@ async def restore_memory_version(req: MemoryRestoreRequest):
     except ValueError:
         raise HTTPException(status_code=400, detail="该版本缺少可恢复内容")
     return ResponseModel(**memory_item_restored_response_kwargs(version))
+
+
+@router.post("/knowledge/memory/versions/redact", response_model=ResponseModel)
+async def redact_memory_version(req: MemoryVersionRedactRequest):
+    from core.memory import memory_db
+
+    try:
+        version = memory_db.file_memory_store.redact_version(req.version_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="记忆版本不存在")
+    except RuntimeError as exc:
+        if str(exc) == "memory_version_is_current":
+            raise HTTPException(status_code=409, detail="当前最新记忆版本不能直接脱敏，请先写入新版本或删除当前记忆")
+        raise HTTPException(status_code=400, detail=str(exc) or "记忆版本脱敏失败")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="记忆版本数据不完整")
+    return ResponseModel(**memory_version_redacted_response_kwargs(version))
 
 
 @router.get("/knowledge/memory/export", response_model=ResponseModel)

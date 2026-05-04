@@ -113,6 +113,14 @@ def memory_item_restored_response_kwargs(version: dict[str, Any]) -> dict[str, A
     }
 
 
+def memory_version_redacted_response_kwargs(version: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "记忆版本已脱敏",
+        "data": {"version": version},
+    }
+
+
 def memory_export_response_kwargs(export_payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "success",

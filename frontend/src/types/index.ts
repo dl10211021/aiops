@@ -640,6 +640,7 @@ export interface MemoryVersion {
   content_sha256?: string
   summary_sha256?: string
   metadata?: Record<string, unknown>
+  redacted?: boolean
 }
 
 export interface MemoryPendingConflict {

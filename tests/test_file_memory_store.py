@@ -131,6 +131,30 @@ class FileMemoryStoreTests(unittest.TestCase):
                 content_sha256="stale",
             )
 
+    def test_redact_version_scrubs_historical_content_but_not_current(self):
+        created = self.store.append_memory(
+            scope_id="sid-1",
+            summary="【核心记忆】包含 token=secret 的旧内容。",
+            source_session_id="sid-1",
+        )
+        detail = self.store.read_memory(created["path"])
+        updated = self.store.update_memory(
+            created["path"],
+            content=detail["content"] + "\n【核心记忆】新版本。",
+            content_sha256=detail["content_sha256"],
+            actor="tester",
+        )
+
+        redacted = self.store.redact_version(created["version_id"], actor="auditor")
+        versions = self.store.list_versions()
+
+        self.assertTrue(redacted["redacted"])
+        self.assertEqual(redacted["content"], "[redacted]")
+        self.assertEqual(redacted["metadata"]["redacted_by"], "auditor")
+        self.assertTrue(any(version.get("redacted") for version in versions))
+        with self.assertRaisesRegex(RuntimeError, "memory_version_is_current"):
+            self.store.redact_version(updated["version_id"], actor="auditor")
+
     def test_review_items_and_mark_reviewed_support_stale_memory_workflow(self):
         self.store.append_memory(
             scope_id="sid-1",

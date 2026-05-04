@@ -580,9 +580,13 @@ export function MemoryStoresPanel({ stores }: { stores: MemoryStoreInfo[] }) {
 
 export function MemoryVersionsPanel({
   versions,
+  redactingVersionId,
+  onRedact,
   onRestore,
 }: {
   versions: MemoryVersion[]
+  redactingVersionId: string | null
+  onRedact: (version: MemoryVersion) => void
   onRestore: (version: MemoryVersion) => void
 }) {
   return (
@@ -594,13 +598,21 @@ export function MemoryVersionsPanel({
           <div key={`${version.timestamp}-${version.path}-${index}`} className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-ops-text">{version.operation}</span>
-              <span className="text-[11px] text-ops-overlay">{version.timestamp}</span>
+              <span className="text-[11px] text-ops-overlay">{version.timestamp}{version.redacted ? ' · 已脱敏' : ''}</span>
             </div>
             <div className="mt-1 flex items-center gap-2">
               <div className="min-w-0 flex-1 truncate text-xs text-ops-subtext" title={version.path}>{version.path}</div>
               <button
+                onClick={() => onRedact(version)}
+                disabled={!version.version_id || Boolean(redactingVersionId) || version.redacted}
+                className="rounded border border-ops-alert/40 px-2 py-0.5 text-[11px] text-ops-alert hover:bg-ops-alert/10 disabled:opacity-40"
+                title="脱敏历史版本中的内容，保留版本审计元数据"
+              >
+                {redactingVersionId === version.version_id ? '脱敏中...' : '脱敏'}
+              </button>
+              <button
                 onClick={() => onRestore(version)}
-                disabled={!version.version_id}
+                disabled={!version.version_id || version.redacted}
                 className="rounded border border-ops-surface0 px-2 py-0.5 text-[11px] text-ops-overlay hover:border-ops-accent/45 hover:text-ops-accent disabled:opacity-40"
               >
                 恢复
