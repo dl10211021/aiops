@@ -204,6 +204,31 @@ export default function KnowledgeBase() {
                 <KnowledgeUploadButton uploading={uploading} onUpload={handleUpload} />
               </>
             )}
+            {activeTab === 'memory' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setMemoryStep('write')}
+                  className="bg-ops-accent text-ops-dark text-sm px-3 py-1.5 rounded-lg font-semibold hover:bg-ops-accent/90 transition-colors"
+                >
+                  新建记忆
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMemoryStep('write')}
+                  className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors"
+                >
+                  搜索记忆
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMemoryStep('govern')}
+                  className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors"
+                >
+                  审计治理
+                </button>
+              </>
+            )}
             <button
               onClick={handleRefresh}
               className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors"
@@ -218,7 +243,14 @@ export default function KnowledgeBase() {
           activeTab={activeTab}
           documentCount={files.length}
           memoryCount={memoryItems.length}
-          onChange={setActiveTab}
+          onChange={(tab) => {
+            setActiveTab(tab)
+            if (tab === 'documents') {
+              setDocumentStep('source')
+            } else {
+              setMemoryStep('browse')
+            }
+          }}
         />
 
         <section className="mb-4 rounded-lg border border-ops-accent/20 bg-gradient-to-r from-ops-accent/10 via-ops-panel/70 to-ops-dark/30 p-4">
