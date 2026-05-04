@@ -17,6 +17,13 @@ def knowledge_documents_response_kwargs(files: list[Any]) -> dict[str, Any]:
     }
 
 
+def knowledge_vault_queue_response_kwargs(items: list[Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"items": items},
+    }
+
+
 def knowledge_document_deleted_response_kwargs(message: str) -> dict[str, Any]:
     return {
         "status": "success",

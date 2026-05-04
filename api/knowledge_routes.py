@@ -6,6 +6,7 @@ from api.response_mappers.knowledge import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    knowledge_vault_queue_response_kwargs,
     memory_item_created_response_kwargs,
     memory_item_deleted_response_kwargs,
     memory_export_response_kwargs,
@@ -27,6 +28,7 @@ from core.knowledge_base_service import (
     KnowledgeBaseServiceError,
     ingest_knowledge_document,
     list_knowledge_document_records,
+    list_vault_compile_queue,
     remove_knowledge_document_record,
 )
 
@@ -278,6 +280,12 @@ async def list_knowledge_documents():
     except KnowledgeBaseServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**knowledge_documents_response_kwargs(files))
+
+
+@router.get("/knowledge/vault/queue", response_model=ResponseModel)
+async def list_knowledge_vault_queue():
+    """列出 Obsidian/LLM Wiki Vault 中等待辅助模型编译的 source session。"""
+    return ResponseModel(**knowledge_vault_queue_response_kwargs(list_vault_compile_queue()))
 
 
 @router.delete("/knowledge/{filename}", response_model=ResponseModel)

@@ -11,6 +11,7 @@ from unittest.mock import patch
 from core.knowledge_base_service import (
     KnowledgeBaseServiceError,
     ingest_knowledge_document,
+    list_vault_compile_queue,
     list_vault_source_records,
     list_knowledge_document_records,
     remove_knowledge_document_record,
@@ -89,6 +90,11 @@ class TestKnowledgeBaseService(unittest.TestCase):
         self.assertTrue((self.vault_dir / "purpose.md").exists())
         self.assertTrue((self.vault_dir / "schema.md").exists())
         self.assertTrue((self.vault_dir / "state" / "compile_queue.json").exists())
+        queue = list_vault_compile_queue(self.vault_dir)
+        self.assertEqual(len(queue), 1)
+        self.assertEqual(queue[0]["original_filename"], "运维 runbook.md")
+        self.assertEqual(queue[0]["compile_stage"], "uploaded")
+        self.assertEqual(queue[0]["status_label"], "等待辅助模型编译")
 
     def test_ingest_failure_keeps_vault_copy_for_offline_compile(self):
         kb = FakeKnowledgeBase("ingest_error", ingest_status="error", message="文档内容提取或向量化失败")

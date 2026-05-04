@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react'
-import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
 export type KnowledgeTab = 'documents' | 'memory'
@@ -125,6 +125,60 @@ export function KnowledgeFileCard({
         删除
       </button>
     </div>
+  )
+}
+
+export function KnowledgeCompileQueuePanel({ items }: { items: KnowledgeCompileQueueItem[] }) {
+  return (
+    <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-ops-text">AI 编译队列</div>
+          <p className="mt-1 text-xs leading-5 text-ops-subtext">
+            上传后的原始资料会先进入 source session，等待辅助模型做两阶段编译：分析证据，再生成候选 Wiki 页面。
+          </p>
+        </div>
+        <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-xs text-ops-accent">
+          {items.length}
+        </span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {items.length > 0 ? items.map((item) => (
+          <article key={item.id || item.filename} className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="truncate text-xs font-semibold text-ops-text" title={item.original_filename || item.filename}>
+                  {item.original_filename || item.filename}
+                </div>
+                <div className="mt-1 font-mono text-[11px] text-ops-overlay">
+                  {item.source_session_id || item.id}
+                </div>
+              </div>
+              <span className="shrink-0 rounded-full border border-ops-accent/30 px-2 py-0.5 text-[10px] text-ops-accent">
+                {item.compile_stage || 'queued'}
+              </span>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-ops-subtext">
+              {item.status_label || knowledgeStatusLabel(item)}
+            </p>
+            {item.source_path && (
+              <div className="mt-2 truncate rounded border border-ops-surface1/70 bg-ops-panel/40 px-2 py-1 font-mono text-[11px] text-ops-overlay" title={item.source_path}>
+                raw: {item.source_path}
+              </div>
+            )}
+            {item.note_path && (
+              <div className="mt-1 truncate rounded border border-ops-surface1/70 bg-ops-panel/40 px-2 py-1 font-mono text-[11px] text-ops-overlay" title={item.note_path}>
+                wiki: {item.note_path}
+              </div>
+            )}
+          </article>
+        )) : (
+          <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
+            暂无待编译资料。上传文档后，这里会显示等待辅助模型处理的 source session。
+          </div>
+        )}
+      </div>
+    </section>
   )
 }
 

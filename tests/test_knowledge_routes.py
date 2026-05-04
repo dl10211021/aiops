@@ -35,6 +35,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/memory/export", paths)
         self.assertIn("/knowledge/upload", paths)
         self.assertIn("/knowledge/list", paths)
+        self.assertIn("/knowledge/vault/queue", paths)
         self.assertIn("/knowledge/{filename}", paths)
 
     def test_upload_knowledge_document_preserves_response_shape(self):
@@ -58,6 +59,16 @@ class TestKnowledgeRoutes(unittest.TestCase):
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, {"files": ["runbook.txt"]})
+
+    def test_list_knowledge_vault_queue_preserves_response_shape(self):
+        with patch(
+            "api.knowledge_routes.list_vault_compile_queue",
+            return_value=[{"id": "src-1", "source_session_id": "source-session-1"}],
+        ):
+            response = asyncio.run(knowledge_routes.list_knowledge_vault_queue())
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data, {"items": [{"id": "src-1", "source_session_id": "source-session-1"}]})
 
     def test_delete_knowledge_document_preserves_response_shape(self):
         with patch(

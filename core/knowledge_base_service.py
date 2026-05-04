@@ -295,6 +295,36 @@ def list_vault_source_records(vault_dir: str | os.PathLike[str] | None = None) -
     return _read_manifest(root)
 
 
+def list_vault_compile_queue(vault_dir: str | os.PathLike[str] | None = None) -> list[dict[str, Any]]:
+    root = Path(vault_dir) if vault_dir is not None else _vault_root()
+    queue_path = root / "state" / "compile_queue.json"
+    if not queue_path.exists():
+        return []
+    try:
+        queue_data = json.loads(queue_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(queue_data, list):
+        return []
+
+    sources_by_id = {
+        str(item.get("id")): item
+        for item in _read_manifest(root)
+        if item.get("id")
+    }
+    items: list[dict[str, Any]] = []
+    for entry in queue_data:
+        if not isinstance(entry, dict):
+            continue
+        source = sources_by_id.get(str(entry.get("id")), {})
+        merged = {**source, **entry}
+        merged.setdefault("compile_status", "pending_ai_compile")
+        merged.setdefault("compile_stage", source.get("compile_stage") or "queued")
+        merged.setdefault("status_label", "等待辅助模型编译")
+        items.append(merged)
+    return sorted(items, key=lambda item: str(item.get("created_at") or ""), reverse=True)
+
+
 def remove_vault_source_record(filename: str, vault_dir: str | os.PathLike[str] | None = None) -> bool:
     root = Path(vault_dir) if vault_dir is not None else _vault_root()
     records = _read_manifest(root)

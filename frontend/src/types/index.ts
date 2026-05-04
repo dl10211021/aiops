@@ -625,6 +625,13 @@ export interface KnowledgeFile {
   tags?: string[]
 }
 
+export interface KnowledgeCompileQueueItem extends KnowledgeFile {
+  id: string
+  source_session_id?: string
+  compile_stage?: string
+  status_label?: string
+}
+
 export interface MemoryItem {
   path: string
   scope_id: string

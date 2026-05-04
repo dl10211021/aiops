@@ -15,6 +15,7 @@ import {
   MemorySearchPanel,
   MemoryStoresPanel,
   MemoryVersionsPanel,
+  KnowledgeCompileQueuePanel,
   type KnowledgeTab,
 } from './KnowledgeBaseParts'
 import { useKnowledgeBaseData } from './useKnowledgeBaseData'
@@ -29,6 +30,7 @@ export default function KnowledgeBase() {
     error,
     exportingMemory,
     files,
+    compileQueueItems,
     handleDelete,
     handleDeleteMemory,
     handleCreateMemory,
@@ -128,13 +130,21 @@ export default function KnowledgeBase() {
         )}
 
         {activeTab === 'documents' && !loading && files.length > 0 ? (
-          <div className="grid gap-2 xl:grid-cols-2 2xl:grid-cols-3">
-            {files.map((file) => (
-              <KnowledgeFileCard key={file.filename} file={file} onDelete={setDeleteTarget} />
-            ))}
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.75fr)]">
+            <section className="grid gap-2 2xl:grid-cols-2">
+              {files.map((file) => (
+                <KnowledgeFileCard key={file.filename} file={file} onDelete={setDeleteTarget} />
+              ))}
+            </section>
+            <aside>
+              <KnowledgeCompileQueuePanel items={compileQueueItems} />
+            </aside>
           </div>
         ) : activeTab === 'documents' && !loading ? (
-          <KnowledgeEmptyState uploading={uploading} onUpload={handleUpload} />
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.75fr)]">
+            <KnowledgeEmptyState uploading={uploading} onUpload={handleUpload} />
+            <KnowledgeCompileQueuePanel items={compileQueueItems} />
+          </div>
         ) : null}
 
         {activeTab === 'memory' && memoryLoading && (

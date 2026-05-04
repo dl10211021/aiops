@@ -7,6 +7,7 @@ import {
   exportMemoryStore,
   confirmMemoryReview,
   listKnowledgeDocuments,
+  listKnowledgeVaultQueue,
   listMemoryItems,
   listMemoryPendingConflicts,
   listMemoryReviewItems,
@@ -21,12 +22,13 @@ import {
   uploadKnowledgeDocument,
 } from '@/api/knowledge'
 import { useStore } from '@/store'
-import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { isAcceptedKnowledgeFile } from './knowledgeBaseModel'
 
 export function useKnowledgeBaseData() {
   const addToast = useStore((s) => s.addToast)
   const [files, setFiles] = useState<KnowledgeFile[]>([])
+  const [compileQueueItems, setCompileQueueItems] = useState<KnowledgeCompileQueueItem[]>([])
   const [memoryItems, setMemoryItems] = useState<MemoryItem[]>([])
   const [memoryStores, setMemoryStores] = useState<MemoryStoreInfo[]>([])
   const [memoryVersions, setMemoryVersions] = useState<MemoryVersion[]>([])
@@ -61,7 +63,9 @@ export function useKnowledgeBaseData() {
     setError('')
     try {
       const res = await listKnowledgeDocuments()
+      const queueRes = await listKnowledgeVaultQueue()
       setFiles(res.data.files || [])
+      setCompileQueueItems(queueRes.data.items || [])
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '加载知识库失败')
       addToast('加载知识库失败', 'error')
@@ -325,6 +329,7 @@ export function useKnowledgeBaseData() {
     error,
     exportingMemory,
     files,
+    compileQueueItems,
     handleDelete,
     handleDeleteMemory,
     handleCreateMemory,
