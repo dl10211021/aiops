@@ -32,6 +32,17 @@ export async function readMemoryItem(path: string) {
   return request<{ item: MemoryDetail }>(`/knowledge/memory/read?path=${encodeURIComponent(path)}`)
 }
 
+export async function createMemoryItem(scopeId: string, summary: string) {
+  return request<{ version: MemoryVersion }>('/knowledge/memory', {
+    method: 'POST',
+    body: JSON.stringify({
+      scope_id: scopeId,
+      summary,
+      source_session_id: 'manual',
+    }),
+  })
+}
+
 export async function deleteMemoryItem(path: string) {
   return request(`/knowledge/memory?path=${encodeURIComponent(path)}`, { method: 'DELETE' })
 }

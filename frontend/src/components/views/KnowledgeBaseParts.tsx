@@ -304,6 +304,50 @@ export function MemoryDetailPanel({
   )
 }
 
+export function MemoryCreatePanel({
+  creating,
+  scope,
+  summary,
+  onCreate,
+  onScopeChange,
+  onSummaryChange,
+}: {
+  creating: boolean
+  scope: string
+  summary: string
+  onCreate: () => void
+  onScopeChange: (value: string) => void
+  onSummaryChange: (value: string) => void
+}) {
+  return (
+    <section className="rounded-lg border border-ops-accent/30 bg-ops-accent/5 p-4">
+      <div className="text-sm font-semibold text-ops-text">新建 AI 记忆</div>
+      <p className="mt-1 text-xs leading-5 text-ops-subtext">
+        手工写入明确规则、用户偏好或已验证经验。建议作用域使用 manual、asset-host:IP、asset-kind:oracle 这类稳定标识。
+      </p>
+      <input
+        value={scope}
+        onChange={(event) => onScopeChange(event.target.value)}
+        className="mt-3 h-9 w-full rounded-md border border-ops-surface1 bg-ops-panel/70 px-3 text-xs text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent/60"
+        placeholder="作用域，例如 manual / asset-host:172.17.8.131"
+      />
+      <textarea
+        value={summary}
+        onChange={(event) => onSummaryChange(event.target.value)}
+        className="mt-2 min-h-28 w-full resize-y rounded-md border border-ops-surface1 bg-ops-panel/70 px-3 py-2 text-xs leading-5 text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent/60"
+        placeholder="写入要长期保留的核心记忆，最好包含：记忆类型、可信度、适用范围、使用提醒。"
+      />
+      <button
+        onClick={onCreate}
+        disabled={creating || !scope.trim() || !summary.trim()}
+        className="mt-2 rounded-lg bg-ops-accent px-3 py-1.5 text-xs font-semibold text-ops-dark disabled:opacity-50"
+      >
+        {creating ? '创建中...' : '创建记忆'}
+      </button>
+    </section>
+  )
+}
+
 export function MemoryPendingConflictsPanel({
   items,
   resolvingKey,

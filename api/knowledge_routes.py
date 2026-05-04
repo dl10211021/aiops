@@ -6,6 +6,7 @@ from api.response_mappers.knowledge import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    memory_item_created_response_kwargs,
     memory_item_deleted_response_kwargs,
     memory_export_response_kwargs,
     memory_item_response_kwargs,
@@ -34,6 +35,12 @@ router = APIRouter()
 class MemoryUpdateRequest(BaseModel):
     content: str = Field(..., min_length=1)
     content_sha256: str | None = None
+
+
+class MemoryCreateRequest(BaseModel):
+    scope_id: str = Field(..., min_length=1, max_length=160)
+    summary: str = Field(..., min_length=1, max_length=8000)
+    source_session_id: str = Field("manual", max_length=160)
 
 
 class MemoryRestoreRequest(BaseModel):
@@ -76,6 +83,22 @@ async def read_memory_item(path: str = Query(..., min_length=1)):
     except ValueError:
         raise HTTPException(status_code=400, detail="记忆路径非法")
     return ResponseModel(**memory_item_response_kwargs(item))
+
+
+@router.post("/knowledge/memory", response_model=ResponseModel)
+async def create_memory_item(req: MemoryCreateRequest):
+    from core.memory import memory_db
+
+    try:
+        version = memory_db.file_memory_store.append_memory(
+            scope_id=req.scope_id,
+            summary=req.summary,
+            source_session_id=req.source_session_id or "manual",
+            metadata={"source": "manual_memory_create"},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "记忆内容不能为空")
+    return ResponseModel(**memory_item_created_response_kwargs(version))
 
 
 @router.delete("/knowledge/memory", response_model=ResponseModel)

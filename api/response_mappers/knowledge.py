@@ -38,6 +38,14 @@ def memory_item_response_kwargs(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def memory_item_created_response_kwargs(version: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "记忆已创建",
+        "data": {"version": version},
+    }
+
+
 def memory_versions_response_kwargs(versions: list[Any]) -> dict[str, Any]:
     return {
         "status": "success",

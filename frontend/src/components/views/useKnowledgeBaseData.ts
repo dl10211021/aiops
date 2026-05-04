@@ -1,6 +1,7 @@
 import type { ChangeEvent } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import {
+  createMemoryItem,
   deleteKnowledgeDocument,
   deleteMemoryItem,
   exportMemoryStore,
@@ -31,12 +32,15 @@ export function useKnowledgeBaseData() {
   const [memoryReviewItems, setMemoryReviewItems] = useState<MemoryReviewItem[]>([])
   const [selectedMemory, setSelectedMemory] = useState<MemoryDetail | null>(null)
   const [memoryDraft, setMemoryDraft] = useState('')
+  const [memoryCreateScope, setMemoryCreateScope] = useState('manual')
+  const [memoryCreateSummary, setMemoryCreateSummary] = useState('')
   const [uploading, setUploading] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeFile | null>(null)
   const [memoryDeleteTarget, setMemoryDeleteTarget] = useState<MemoryItem | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deletingMemory, setDeletingMemory] = useState(false)
   const [savingMemory, setSavingMemory] = useState(false)
+  const [creatingMemory, setCreatingMemory] = useState(false)
   const [exportingMemory, setExportingMemory] = useState(false)
   const [resolvingMemoryConflict, setResolvingMemoryConflict] = useState<string | null>(null)
   const [reviewingMemoryPath, setReviewingMemoryPath] = useState<string | null>(null)
@@ -150,6 +154,26 @@ export function useKnowledgeBaseData() {
     }
   }
 
+  const handleCreateMemory = async () => {
+    const scope = memoryCreateScope.trim()
+    const summary = memoryCreateSummary.trim()
+    if (!scope || !summary) {
+      addToast('请填写记忆作用域和内容', 'error')
+      return
+    }
+    setCreatingMemory(true)
+    try {
+      await createMemoryItem(scope, summary)
+      setMemoryCreateSummary('')
+      await loadMemories()
+      addToast('AI 记忆已创建', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '创建 AI 记忆失败', 'error')
+    } finally {
+      setCreatingMemory(false)
+    }
+  }
+
   const handleDeleteMemory = async () => {
     if (!memoryDeleteTarget) return
     const path = memoryDeleteTarget.path
@@ -249,12 +273,14 @@ export function useKnowledgeBaseData() {
   return {
     deleteTarget,
     deletingMemory,
+    creatingMemory,
     deleting,
     error,
     exportingMemory,
     files,
     handleDelete,
     handleDeleteMemory,
+    handleCreateMemory,
     handleExportMemory,
     handleConfirmMemoryReview,
     handleOpenMemory,
@@ -268,6 +294,8 @@ export function useKnowledgeBaseData() {
     memoryDeleteTarget,
     memoryDraft,
     memoryError,
+    memoryCreateScope,
+    memoryCreateSummary,
     memoryItems,
     memoryLoading,
     memoryPendingConflicts,
@@ -279,6 +307,8 @@ export function useKnowledgeBaseData() {
     resolvingMemoryConflict,
     reviewingMemoryPath,
     setDeleteTarget,
+    setMemoryCreateScope,
+    setMemoryCreateSummary,
     setMemoryDraft,
     setMemoryDeleteTarget,
     uploading,

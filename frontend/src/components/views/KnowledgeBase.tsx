@@ -6,6 +6,7 @@ import {
   KnowledgeFileCard,
   KnowledgeTabs,
   KnowledgeUploadButton,
+  MemoryCreatePanel,
   MemoryDeleteDialog,
   MemoryDetailPanel,
   MemoryItemCard,
@@ -22,12 +23,14 @@ export default function KnowledgeBase() {
   const {
     deleteTarget,
     deletingMemory,
+    creatingMemory,
     deleting,
     error,
     exportingMemory,
     files,
     handleDelete,
     handleDeleteMemory,
+    handleCreateMemory,
     handleExportMemory,
     handleConfirmMemoryReview,
     handleOpenMemory,
@@ -41,6 +44,8 @@ export default function KnowledgeBase() {
     memoryDeleteTarget,
     memoryDraft,
     memoryError,
+    memoryCreateScope,
+    memoryCreateSummary,
     memoryItems,
     memoryLoading,
     memoryPendingConflicts,
@@ -52,6 +57,8 @@ export default function KnowledgeBase() {
     resolvingMemoryConflict,
     reviewingMemoryPath,
     setDeleteTarget,
+    setMemoryCreateScope,
+    setMemoryCreateSummary,
     setMemoryDraft,
     setMemoryDeleteTarget,
     uploading,
@@ -147,6 +154,14 @@ export default function KnowledgeBase() {
               )}
             </section>
             <aside className="space-y-4">
+              <MemoryCreatePanel
+                creating={creatingMemory}
+                scope={memoryCreateScope}
+                summary={memoryCreateSummary}
+                onCreate={() => void handleCreateMemory()}
+                onScopeChange={setMemoryCreateScope}
+                onSummaryChange={setMemoryCreateSummary}
+              />
               <MemoryDetailPanel
                 draft={memoryDraft}
                 exporting={exportingMemory}

@@ -78,6 +78,10 @@ class TestKnowledgeRoutes(unittest.TestCase):
             def read_memory(self, path):
                 return {"path": path, "content": "# memory", "content_sha256": "sha"}
 
+            def append_memory(self, scope_id, summary, source_session_id, metadata=None):
+                self.created = (scope_id, summary, source_session_id, metadata)
+                return {"version_id": "created-v1", "operation": "created", "path": "sessions/manual/memory.md"}
+
             def update_memory(self, path, content, content_sha256=None):
                 self.updated = (path, content, content_sha256)
 
@@ -121,6 +125,14 @@ class TestKnowledgeRoutes(unittest.TestCase):
             stores_response = asyncio.run(knowledge_routes.list_memory_stores())
             list_response = asyncio.run(knowledge_routes.list_memory_items())
             read_response = asyncio.run(knowledge_routes.read_memory_item("sessions/sid-1/memory.md"))
+            create_response = asyncio.run(
+                knowledge_routes.create_memory_item(
+                    knowledge_routes.MemoryCreateRequest(
+                        scope_id="manual",
+                        summary="【核心记忆】手工写入。",
+                    )
+                )
+            )
             versions_response = asyncio.run(knowledge_routes.list_memory_versions(10))
             pending_response = asyncio.run(knowledge_routes.list_memory_pending_conflicts(20))
             review_response = asyncio.run(knowledge_routes.list_memory_review_items(180, 20))
@@ -151,6 +163,8 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(stores_response.data, {"stores": [{"id": "sessions", "access": "read_write"}]})
         self.assertEqual(list_response.data, {"items": [{"path": "sessions/sid-1/memory.md"}]})
         self.assertEqual(read_response.data, {"item": {"path": "sessions/sid-1/memory.md", "content": "# memory", "content_sha256": "sha"}})
+        self.assertEqual(create_response.message, "记忆已创建")
+        self.assertEqual(fake_db.file_memory_store.created[0], "manual")
         self.assertEqual(versions_response.data, {"versions": [{"version_id": "v1", "operation": "created", "path": "sessions/sid-1/memory.md"}]})
         self.assertEqual(pending_response.data, {"items": [{"version_id": "v-pending", "path": "sessions/sid-1/memory.md"}]})
         self.assertEqual(review_response.data, {"items": [{"path": "sessions/sid-1/memory.md", "age_days": 181}]})
