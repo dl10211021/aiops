@@ -190,18 +190,18 @@ export default function KnowledgeBase() {
       next: '下一步让辅助模型编译候选 Wiki。',
     },
     compile: {
-      title: '当前在做：AI 编译',
-      body: '辅助模型把原始资料压缩成候选知识页，只生成候选，不直接写入正式知识。',
-      next: '下一步人工审核候选内容。',
+      title: '当前在做：生成 Wiki',
+      body: '辅助模型把原始资料压缩成候选知识页，只生成候选，不直接写入Wiki 知识。',
+      next: '下一步整理知识候选内容。',
     },
     review: {
-      title: '当前在做：审核入库',
-      body: '人在这里确认事实、来源和可复用性，只有通过审核的内容才进入正式 Vault。',
-      next: '下一步通过检索和图谱追溯知识。',
+      title: '当前在做：整理知识',
+      body: '把 AI 生成的 Wiki 草稿整理成可用知识，重点看事实、来源和适用范围。',
+      next: '整理完成后就可以搜索和查看图谱。',
     },
     discover: {
       title: '当前在做：检索追溯',
-      body: '正式知识、来源证据和双链关系集中在这里，用于会话引用、审计和复盘。',
+      body: 'Wiki 知识、来源证据和双链关系集中在这里，用于会话引用、审计和复盘。',
       next: '需要新增资料时回到资料入库。',
     },
   }[documentStep]
@@ -217,24 +217,24 @@ export default function KnowledgeBase() {
       next: '下一步处理冲突、复核和版本。',
     },
     govern: {
-      title: '当前在做：审计治理',
+      title: '当前在做：管理记忆',
       body: '错误反馈、冲突记忆、过期经验和版本记录都在这里处理，避免记忆污染。',
       next: '治理完成后回到浏览记忆。',
     },
   }[memoryStep]
   const activeStepGuide = activeTab === 'documents' ? documentStepGuide : memoryStepGuide
   const knowledgeHealth = [
-    ['原始资料', `${files.length}`, '只读留底，不被 AI 改写'],
-    ['待编译', `${compileQueueItems.length}`, '等待辅助模型生成候选 Wiki'],
-    ['待审核', `${candidateItems.length}`, '人工确认后才能进入正式知识'],
-    ['正式知识', `${articleItems.length}`, '可被检索、图谱、会话引用'],
+    ['原始资料', `${files.length}`, '保存原文，不被 AI 改写'],
+    ['待编译', `${compileQueueItems.length}`, '等待生成 Wiki 草稿'],
+    ['待整理', `${candidateItems.length}`, '人工确认后才能进入Wiki 知识'],
+    ['Wiki 知识', `${articleItems.length}`, '可搜索、可关联、可引用'],
   ]
   const memoryHealth = [
-    ['记忆库', `${memoryStores.length}`, '全局、会话、资产、主机、类型'],
+    ['记忆库', `${memoryStores.length}`, '按会话、资产、主机分类'],
     ['文件记忆', `${memoryItems.length}`, '成功经验和用户确认事实'],
     ['本会话反馈', `${sessionMemoryActivity?.summary.promoted_count || 0}/${sessionMemoryActivity?.summary.rejected_count || 0}`, '好评 / 差评，能追溯到输出'],
     ['待治理', `${memoryPendingConflicts.length + memoryReviewItems.length}`, '冲突、过期、反馈待处理'],
-    ['历史版本', `${memoryVersions.length}`, '可审计、可恢复、可脱敏'],
+    ['历史版本', `${memoryVersions.length}`, '可恢复、可脱敏、可追溯'],
   ]
 
   return (
@@ -242,7 +242,7 @@ export default function KnowledgeBase() {
       <div className="w-full max-w-none">
         <PageHeader
           title="知识库"
-          description="统一管理 Obsidian 兼容 Vault、原始资料、AI 编译队列与长期记忆，支持离线部署、审计和追溯。"
+          description="统一管理资料、Wiki 知识和 AI 记忆，支持离线部署、检索和追溯。"
           actions={(
             <>
             {activeTab === 'documents' && (
@@ -252,10 +252,10 @@ export default function KnowledgeBase() {
                   disabled={exportingVault}
                   className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {exportingVault ? '导出中...' : '导出 Vault'}
+                  {exportingVault ? '导出中...' : '导出资料库'}
                 </button>
                 <label className={`cursor-pointer bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors ${importingVault ? 'pointer-events-none opacity-50' : ''}`}>
-                  {importingVault ? '导入中...' : '导入 Vault'}
+                  {importingVault ? '导入中...' : '导入资料库'}
                   <input
                     type="file"
                     accept=".zip,application/zip"
@@ -288,7 +288,7 @@ export default function KnowledgeBase() {
                   onClick={() => setMemoryStep('govern')}
                   className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors"
                 >
-                  审计治理
+                  管理记忆
                 </button>
               </>
             )}
@@ -342,7 +342,7 @@ export default function KnowledgeBase() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.22em] text-ops-accent/80">
-                {activeTab === 'documents' ? 'Vault 工作流' : 'AI 记忆工作流'}
+                {activeTab === 'documents' ? '资料流程' : '记忆流程'}
               </div>
               <h3 className="mt-1 text-base font-semibold text-ops-text">{activeStepGuide.title}</h3>
               <p className="mt-1 max-w-4xl text-sm leading-6 text-ops-subtext">{activeStepGuide.body}</p>
@@ -382,8 +382,8 @@ export default function KnowledgeBase() {
               <div className="grid gap-2 md:grid-cols-4">
                 {([
                   ['source', '1. 资料入库', `${files.length} 份原始资料`, '上传、导入、留底'],
-                  ['compile', '2. AI 编译', `${compileQueueItems.length} 个待处理`, '生成候选 Wiki'],
-                  ['review', '3. 审核入库', `${candidateItems.length} 个候选 / ${articleItems.length} 篇正式`, '人工确认可信知识'],
+                  ['compile', '2. 生成 Wiki', `${compileQueueItems.length} 个待处理`, '生成候选 Wiki'],
+                  ['review', '3. 整理知识', `${candidateItems.length} 个草稿 / ${articleItems.length} 篇 Wiki`, '整理成可用知识'],
                   ['discover', '4. 检索追溯', `${vaultSearchResults.length} 条命中`, '搜索、图谱、证据链'],
                 ] as const).map(([id, label, count, desc]) => (
                   <button
@@ -422,14 +422,14 @@ export default function KnowledgeBase() {
                     <div className="mt-3 space-y-2 text-xs leading-5 text-ops-subtext">
                       <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">保存原始资料，不让 AI 改原文。</div>
                       <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">生成 source session，记录来源路径和状态。</div>
-                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">后续再进入 AI 编译，不在这里混杂审核和检索。</div>
+                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">后续再进入生成 Wiki，这里只负责保存资料。</div>
                     </div>
                     <button
                       type="button"
                       onClick={() => setDocumentStep('compile')}
                       className="mt-4 w-full rounded-md border border-ops-accent/45 px-3 py-2 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
                     >
-                      下一步：AI 编译
+                      下一步：生成 Wiki
                     </button>
                   </div>
                 </aside>
@@ -446,7 +446,7 @@ export default function KnowledgeBase() {
                 <aside className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
                   <div className="text-sm font-semibold text-ops-text">这一阶段只负责生成候选</div>
                   <p className="mt-2 text-xs leading-5 text-ops-subtext">
-                    辅助模型把原始资料整理成候选 Wiki。候选不会直接进入长期知识，必须到下一步人工审核。
+                    辅助模型把原始资料整理成候选 Wiki。候选不会直接进入长期知识，必须到下一步整理知识。
                   </p>
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <button
@@ -461,7 +461,7 @@ export default function KnowledgeBase() {
                       onClick={() => setDocumentStep('review')}
                       className="rounded-md border border-ops-accent/45 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
                     >
-                      去审核入库
+                      去整理知识
                     </button>
                   </div>
                 </aside>
@@ -494,9 +494,9 @@ export default function KnowledgeBase() {
                   />
                   <KnowledgeArticleViewer article={selectedArticle} />
                   <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
-                    <div className="text-sm font-semibold text-ops-text">审核完成后做什么？</div>
+                    <div className="text-sm font-semibold text-ops-text">整理完成后做什么？</div>
                     <p className="mt-2 text-xs leading-5 text-ops-subtext">
-                      正式文章会进入检索和图谱，后续会话、记忆和审计都从这里追溯证据。
+                      Wiki 页面会进入检索和图谱，后续会话和记忆都能从这里追溯来源。
                     </p>
                     <button
                       type="button"
@@ -546,7 +546,7 @@ export default function KnowledgeBase() {
                 {([
                   ['browse', '1. 浏览记忆', `${memoryItems.length} 条文件记忆`, '查看、编辑、删除'],
                   ['write', '2. 写入与检索', `${memorySearchResults.length} 条检索命中`, '新建、搜索、验证'],
-                  ['govern', '3. 审计治理', `${memoryPendingConflicts.length + memoryReviewItems.length} 项待处理`, '冲突、复核、版本'],
+                  ['govern', '3. 管理记忆', `${memoryPendingConflicts.length + memoryReviewItems.length} 项待处理`, '冲突、复核、版本'],
                 ] as const).map(([id, label, count, desc]) => (
                   <button
                     key={id}
@@ -639,14 +639,14 @@ export default function KnowledgeBase() {
                 <aside className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
                   <div className="text-sm font-semibold text-ops-text">记忆写完后要治理</div>
                   <p className="mt-2 text-xs leading-5 text-ops-subtext">
-                    冲突、过期、失败反馈都集中到审计治理，避免错误经验长期污染 AI。
+                    冲突、过期、失败反馈都集中到管理记忆，避免错误经验长期污染 AI。
                   </p>
                   <button
                     type="button"
                     onClick={() => setMemoryStep('govern')}
                     className="mt-4 rounded-md border border-ops-accent/45 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
                   >
-                    下一步：审计治理
+                    下一步：管理记忆
                   </button>
                 </aside>
               </div>

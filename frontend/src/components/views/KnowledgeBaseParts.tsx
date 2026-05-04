@@ -5,7 +5,7 @@ import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseMode
 export type KnowledgeTab = 'documents' | 'memory'
 
 function knowledgeStatusLabel(file: KnowledgeFile) {
-  if (file.compile_status === 'pending_ai_compile') return '待 AI 编译'
+  if (file.compile_status === 'pending_ai_compile') return '待 生成 Wiki'
   if (file.compile_status) return file.compile_status
   if (file.status === 'legacy_vector') return '旧向量文档'
   return file.status || '已保存'
@@ -16,7 +16,7 @@ function vectorStatusLabel(file: KnowledgeFile) {
   if (file.vector_status === 'skipped') return '向量已跳过'
   if (file.vector_status === 'failed') return '向量失败'
   if (file.vector_status === 'pending') return '待向量注入'
-  return file.chunks !== undefined ? `${file.chunks} 个向量块` : 'Vault 原文'
+  return file.chunks !== undefined ? `${file.chunks} 个向量块` : '资料原文'
 }
 
 function formatMemorySize(size: number) {
@@ -38,7 +38,7 @@ export function KnowledgeTabs({
   onChange: (tab: KnowledgeTab) => void
 }) {
   const tabs: Array<[KnowledgeTab, string, string]> = [
-    ['documents', 'Vault 文档', `${documentCount} 个原始资料`],
+    ['documents', '资料库', `${documentCount} 个原始资料`],
     ['memory', 'AI 记忆', `${memoryCount} 条记忆文件`],
   ]
   return (
@@ -91,15 +91,15 @@ export function KnowledgeMemoryBridgePanel({
   onMemoryStep: (step: 'browse' | 'write' | 'govern') => void
 }) {
   const documentFlow = [
-    { id: 'source' as const, label: '资料留底', value: fileCount, hint: '上传原文、巡检报告、Runbook，保持只读证据' },
-    { id: 'compile' as const, label: 'AI 编译', value: compileQueueCount, hint: '辅助模型生成候选 Wiki，不直接入库' },
-    { id: 'review' as const, label: '人工审核', value: candidateCount, hint: '确认事实、来源、适用范围后再入正式知识' },
-    { id: 'discover' as const, label: '图谱追溯', value: articleCount, hint: '正式知识可检索、可引用、可看双链关系' },
+    { id: 'source' as const, label: '上传资料', value: fileCount, hint: '保存原文、巡检报告、Runbook' },
+    { id: 'compile' as const, label: '生成 Wiki', value: compileQueueCount, hint: 'AI 根据资料生成 Wiki 草稿' },
+    { id: 'review' as const, label: '整理知识', value: candidateCount, hint: '整理内容、来源和适用范围' },
+    { id: 'discover' as const, label: '查找图谱', value: articleCount, hint: 'Wiki 可检索、可引用、可看关联' },
   ]
   const memoryFlow = [
-    { id: 'browse' as const, label: '记忆浏览', value: memoryCount, hint: '成功经验、用户偏好、资产画像按文件留存' },
-    { id: 'write' as const, label: '写入验证', value: promotedCount, hint: '点赞和人工确认才沉淀为成功经验' },
-    { id: 'govern' as const, label: '审计治理', value: pendingGovernanceCount + rejectedCount, hint: '差评、冲突、过期记忆进入治理，不污染长期记忆' },
+    { id: 'browse' as const, label: '查看记忆', value: memoryCount, hint: '成功经验、用户偏好、资产画像按文件留存' },
+    { id: 'write' as const, label: '新增记忆', value: promotedCount, hint: '点赞和人工确认才沉淀为成功经验' },
+    { id: 'govern' as const, label: '管理记忆', value: pendingGovernanceCount + rejectedCount, hint: '差评、冲突、过期记忆集中管理' },
   ]
 
   return (
@@ -108,14 +108,14 @@ export function KnowledgeMemoryBridgePanel({
         <div className="border-b border-ops-surface0 p-4 xl:border-b-0 xl:border-r">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-ops-accent">Knowledge Flow</div>
-              <h3 className="mt-2 text-lg font-black text-ops-text">知识负责“可信资料”</h3>
+              <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-ops-accent">资料流程</div>
+              <h3 className="mt-2 text-lg font-black text-ops-text">资料库：保存原始内容</h3>
               <p className="mt-1 text-xs leading-5 text-ops-subtext">
-                原始资料先留底，AI 只生成候选，人工审核后才进入 Vault。这样后续会话引用知识时，可以追溯来源和审核状态。
+                资料先保存原文，再让 AI 生成 Wiki 草稿；整理后就能被搜索、引用和追溯来源。
               </p>
             </div>
             <span className={`rounded-full border px-3 py-1 text-[11px] ${activeTab === 'documents' ? 'border-ops-accent bg-ops-accent/10 text-ops-accent' : 'border-ops-surface1 text-ops-overlay'}`}>
-              {activeTab === 'documents' ? '当前正在管理资料' : '可切回 Vault 文档'}
+              {activeTab === 'documents' ? '正在看资料库' : '可切回 资料库'}
             </span>
           </div>
           <div className="mt-4 grid gap-2 md:grid-cols-4">
@@ -142,14 +142,14 @@ export function KnowledgeMemoryBridgePanel({
         <div className="p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-ops-success">Memory Loop</div>
-              <h3 className="mt-2 text-lg font-black text-ops-text">记忆负责“成功经验”</h3>
+              <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-ops-success">记忆流程</div>
+              <h3 className="mt-2 text-lg font-black text-ops-text">AI 记忆：保存有效经验</h3>
               <p className="mt-1 text-xs leading-5 text-ops-subtext">
-                记忆不是知识库复制品。它只保存被验证过的经验、偏好和画像；失败回答进入纠错审计，帮助 AI 下次避坑。
+                记忆只保存真正有用的经验、偏好和画像；不好的回答只做纠错记录，避免污染长期记忆。
               </p>
             </div>
             <span className={`rounded-full border px-3 py-1 text-[11px] ${activeTab === 'memory' ? 'border-ops-success bg-ops-success/10 text-ops-success' : 'border-ops-surface1 text-ops-overlay'}`}>
-              {activeTab === 'memory' ? '当前正在管理记忆' : '可切回 AI 记忆'}
+              {activeTab === 'memory' ? '正在看记忆' : '可切回记忆'}
             </span>
           </div>
           <div className="mt-4 grid gap-2 md:grid-cols-3">
@@ -265,7 +265,7 @@ export function KnowledgeCompileQueuePanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">AI 编译队列</div>
+          <div className="text-sm font-semibold text-ops-text">生成 Wiki队列</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
             上传后的原始资料会先进入 source session，等待辅助模型做两阶段编译：分析证据，再生成候选 Wiki 页面。
           </p>
@@ -359,9 +359,9 @@ export function KnowledgeVaultSearchPanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">Vault 离线搜索</div>
+          <div className="text-sm font-semibold text-ops-text">资料库搜索</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            在正式 Wiki、候选稿、source session 和原始资料中查找证据，方便从 Obsidian Vault 快速追溯来源。
+            在 Wiki、草稿、来源会话和原始资料中查找证据，方便快速追溯来源。
           </p>
         </div>
         <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-xs text-ops-accent">
@@ -393,7 +393,7 @@ export function KnowledgeVaultSearchPanel({
         disabled={searching}
         className="mt-2 w-full rounded-md border border-ops-accent/40 px-3 py-1.5 text-xs font-semibold text-ops-accent transition-colors hover:bg-ops-accent/10 disabled:cursor-not-allowed disabled:opacity-45"
       >
-        {searching ? '搜索中...' : '搜索 Vault'}
+        {searching ? '搜索中...' : '搜索资料库'}
       </button>
       <div className="mt-3 space-y-2">
         {results.length > 0 ? results.map((item, index) => (
@@ -416,7 +416,7 @@ export function KnowledgeVaultSearchPanel({
           </article>
         )) : (
           <div className="rounded-md border border-dashed border-ops-surface1 p-3 text-xs leading-5 text-ops-subtext">
-            输入关键词后即可离线搜索 Vault。正式知识优先来自人工批准后的 `wiki/articles/`。
+            输入关键词后即可离线搜索资料库。Wiki 知识来自整理后的资料内容。
           </div>
         )}
       </div>
@@ -500,7 +500,7 @@ export function KnowledgeVaultGraphPanel({
 
           <div className="rounded-xl border border-ops-accent/20 bg-[radial-gradient(circle_at_20%_20%,rgba(45,212,191,0.18),transparent_32%),linear-gradient(135deg,rgba(8,13,28,0.96),rgba(10,31,45,0.72))] p-3">
             <div className="mb-2 flex items-center justify-between text-xs">
-              <span className="font-semibold text-ops-text">Vault Graph</span>
+              <span className="font-semibold text-ops-text">知识图谱</span>
               <span className="text-ops-subtext">
                 双链 {relationCounts.wikilink || 0} / 提及 {relationCounts.mention || 0}
               </span>
@@ -587,7 +587,7 @@ export function KnowledgeVaultGraphPanel({
         </div>
       ) : (
         <div className="mt-3 rounded-md border border-dashed border-ops-surface1 p-3 text-xs leading-5 text-ops-subtext">
-          点击生成后会扫描 Vault，不依赖外部数据库，适合离线部署和审计留痕。
+          点击生成后会扫描资料库，不依赖外部数据库，适合离线部署和来源追溯。
         </div>
       )}
     </section>
@@ -673,7 +673,7 @@ export function KnowledgeCandidatePanel({
           )
         }) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
-            暂无候选 Wiki。先在 AI 编译队列里生成候选页。
+            暂无候选 Wiki。先在 生成 Wiki队列里生成候选页。
           </div>
         )}
       </div>
@@ -699,7 +699,7 @@ export function KnowledgeCandidateEditor({
       <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
         <div className="text-sm font-semibold text-ops-text">候选正文</div>
         <p className="mt-1 text-xs leading-5 text-ops-subtext">
-          点击候选 Wiki 的“预览/编辑”，这里会显示 Markdown 正文。确认内容无误后再批准入正式知识库。
+          点击候选 Wiki 的“预览/编辑”，这里会显示 Markdown 正文。确认内容无误后再批准入Wiki 知识库。
         </p>
       </section>
     )
@@ -750,7 +750,7 @@ export function KnowledgeArticlePanel({
         <div>
           <div className="text-sm font-semibold text-ops-text">正式 Wiki</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            已批准的知识会进入 `wiki/articles/`，作为后续会话、画像和检索可引用的正式知识。
+            已批准的知识会进入 `wiki/articles/`，作为后续会话、画像和检索可引用的Wiki 知识。
           </p>
         </div>
         <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
@@ -848,8 +848,8 @@ export function KnowledgeEmptyState({
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
         {[
           ['支持格式', 'PDF、Markdown、TXT、Word、Excel、CSV、HTML、日志、图片'],
-          ['Vault 留底', '原始文件不被 AI 修改，来源卡片记录路径、状态和审计日志'],
-          ['AI 编译', '辅助模型后续生成 Runbook、资产画像、故障案例和双链索引'],
+          ['资料留底', '原始文件不被 AI 修改，来源卡片记录路径和状态'],
+          ['生成 Wiki', '辅助模型后续生成 Runbook、资产画像、故障案例和双链索引'],
         ].map(([title, desc]) => (
           <div key={title} className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-4">
             <div className="text-sm font-semibold text-ops-text">{title}</div>
