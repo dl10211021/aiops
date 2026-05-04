@@ -1137,7 +1137,11 @@ async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None)
 
 async def list_knowledge_document_records(kb_manager=None) -> list[Any]:
     kb_manager = _resolve_kb_manager(kb_manager)
-    vault_records = list_vault_source_records()
+    vault_records = []
+    for item in list_vault_source_records():
+        if isinstance(item, dict) and item.get("vector_error"):
+            item = {**item, "vector_error": _friendly_vector_message(str(item.get("vector_error") or ""))}
+        vault_records.append(item)
     try:
         kb_records = await kb_manager.list_documents()
     except Exception as exc:

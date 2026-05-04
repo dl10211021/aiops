@@ -126,6 +126,8 @@ class TestKnowledgeBaseService(unittest.TestCase):
         vault_records = list_vault_source_records(self.vault_dir)
         self.assertEqual(vault_records[0]["vector_status"], "failed")
         self.assertIn("向量模型没有返回可用结果", vault_records[0]["vector_error"])
+        records = asyncio.run(list_knowledge_document_records(kb))
+        self.assertIn("向量模型没有返回可用结果", records[0]["vector_error"])
 
     def test_ingest_without_embedding_model_skips_vector_index(self):
         kb = FakeKnowledgeBase("no_embedding", message="should not ingest")
