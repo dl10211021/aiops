@@ -6,6 +6,7 @@ import {
   createMemoryItem,
   deleteKnowledgeDocument,
   deleteMemoryItem,
+  exportKnowledgeVault,
   exportMemoryStore,
   graphKnowledgeVault,
   confirmMemoryReview,
@@ -69,6 +70,7 @@ export function useKnowledgeBaseData() {
   const [creatingMemory, setCreatingMemory] = useState(false)
   const [searchingMemory, setSearchingMemory] = useState(false)
   const [exportingMemory, setExportingMemory] = useState(false)
+  const [exportingVault, setExportingVault] = useState(false)
   const [resolvingMemoryConflict, setResolvingMemoryConflict] = useState<string | null>(null)
   const [redactingMemoryVersion, setRedactingMemoryVersion] = useState<string | null>(null)
   const [reviewingMemoryPath, setReviewingMemoryPath] = useState<string | null>(null)
@@ -314,6 +316,24 @@ export function useKnowledgeBaseData() {
     }
   }
 
+  const handleExportKnowledgeVault = async () => {
+    setExportingVault(true)
+    try {
+      const blob = await exportKnowledgeVault()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `opscore-knowledge-vault-${Date.now()}.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+      addToast('Vault 已导出为 ZIP', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '导出 Vault 失败', 'error')
+    } finally {
+      setExportingVault(false)
+    }
+  }
+
   const handleOpenMemory = async (item: MemoryItem) => {
     setMemoryError('')
     try {
@@ -489,6 +509,7 @@ export function useKnowledgeBaseData() {
     deleting,
     error,
     exportingMemory,
+    exportingVault,
     files,
     compileQueueItems,
     candidateItems,
@@ -513,6 +534,7 @@ export function useKnowledgeBaseData() {
     handleDeleteMemory,
     handleCreateMemory,
     handleExportMemory,
+    handleExportKnowledgeVault,
     handleConfirmMemoryReview,
     handleOpenMemory,
     handleRedactMemoryVersion,

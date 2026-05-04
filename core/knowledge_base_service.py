@@ -7,6 +7,7 @@ import shutil
 import asyncio
 import hashlib
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -754,6 +755,30 @@ def build_vault_knowledge_graph(
             "candidate_count": len([node for node in nodes if node["kind"] == "candidate"]),
         },
     }
+
+
+def create_vault_export_zip(
+    *,
+    vault_dir: str | os.PathLike[str] | None = None,
+) -> Path:
+    root = Path(vault_dir) if vault_dir is not None else _vault_root()
+    _ensure_vault_skeleton(root)
+    export_dir = root / "state" / "exports"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    archive_path = export_dir / f"opscore-knowledge-vault-{timestamp}.zip"
+    export_dir_resolved = export_dir.resolve()
+
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            resolved = path.resolve()
+            if export_dir_resolved in resolved.parents or resolved == export_dir_resolved:
+                continue
+            archive.write(path, path.relative_to(root).as_posix())
+
+    return archive_path
 
 
 def read_vault_candidate(

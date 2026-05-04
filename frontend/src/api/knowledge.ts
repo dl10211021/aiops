@@ -58,6 +58,15 @@ export async function graphKnowledgeVault(includeCandidates = true) {
   })
 }
 
+export async function exportKnowledgeVault() {
+  const res = await fetch(apiUrl('/knowledge/vault/export'), { headers: authHeaders() })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || res.statusText)
+  }
+  return res.blob()
+}
+
 export async function updateKnowledgeVaultCandidate(sourceSessionId: string, content: string, contentSha256?: string) {
   return request<{ item: KnowledgeCompileQueueItem }>('/knowledge/vault/candidate', {
     method: 'PUT',

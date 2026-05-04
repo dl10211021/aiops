@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 
 from api.errors import raise_http_error
 from api.response_mappers.knowledge import (
@@ -38,6 +39,7 @@ from core.knowledge_base_service import (
     approve_vault_candidate,
     build_vault_knowledge_graph,
     compile_vault_source_candidate,
+    create_vault_export_zip,
     ingest_knowledge_document,
     list_knowledge_document_records,
     list_vault_articles,
@@ -408,6 +410,20 @@ async def graph_knowledge_vault(req: KnowledgeVaultGraphRequest):
     except KnowledgeBaseServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**knowledge_vault_graph_response_kwargs(graph))
+
+
+@router.get("/knowledge/vault/export")
+async def export_knowledge_vault():
+    """打包导出 Obsidian 兼容 Vault，便于离线审计、备份和迁移。"""
+    try:
+        archive_path = create_vault_export_zip()
+    except KnowledgeBaseServiceError as exc:
+        raise_http_error(exc)
+    return FileResponse(
+        archive_path,
+        media_type="application/zip",
+        filename=archive_path.name,
+    )
 
 
 @router.post("/knowledge/vault/approve", response_model=ResponseModel)

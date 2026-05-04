@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import unittest
+import zipfile
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import patch
@@ -13,6 +14,7 @@ from core.knowledge_base_service import (
     approve_vault_candidate,
     build_vault_knowledge_graph,
     compile_vault_source_candidate,
+    create_vault_export_zip,
     ingest_knowledge_document,
     list_vault_compile_queue,
     list_vault_candidates,
@@ -231,3 +233,9 @@ class TestKnowledgeBaseService(unittest.TestCase):
         graph = build_vault_knowledge_graph(vault_dir=self.vault_dir)
         self.assertGreaterEqual(graph["summary"]["article_count"], 1)
         self.assertGreaterEqual(graph["summary"]["node_count"], 1)
+        archive_path = create_vault_export_zip(vault_dir=self.vault_dir)
+        self.assertTrue(archive_path.exists())
+        with zipfile.ZipFile(archive_path) as archive:
+            names = set(archive.namelist())
+        self.assertIn("index.md", names)
+        self.assertTrue(any(name.startswith("wiki/articles/") for name in names))

@@ -35,6 +35,7 @@ export default function KnowledgeBase() {
     deleting,
     error,
     exportingMemory,
+    exportingVault,
     files,
     compileQueueItems,
     candidateItems,
@@ -60,6 +61,7 @@ export default function KnowledgeBase() {
     handleDeleteMemory,
     handleCreateMemory,
     handleExportMemory,
+    handleExportKnowledgeVault,
     handleConfirmMemoryReview,
     handleOpenMemory,
     handleRedactMemoryVersion,
@@ -132,7 +134,16 @@ export default function KnowledgeBase() {
           actions={(
             <>
             {activeTab === 'documents' && (
-              <KnowledgeUploadButton uploading={uploading} onUpload={handleUpload} />
+              <>
+                <button
+                  onClick={handleExportKnowledgeVault}
+                  disabled={exportingVault}
+                  className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {exportingVault ? '导出中...' : '导出 Vault'}
+                </button>
+                <KnowledgeUploadButton uploading={uploading} onUpload={handleUpload} />
+              </>
             )}
             <button
               onClick={handleRefresh}
