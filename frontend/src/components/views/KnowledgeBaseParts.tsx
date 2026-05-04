@@ -1215,11 +1215,32 @@ export function SessionMemoryActivityPanel({
             <div className="text-xs font-semibold text-ops-text">引用过的记忆</div>
             <div className="mt-2 space-y-2">
               {referencedRows.length > 0 ? referencedRows.map((row, index) => (
-                <article key={`${row.message_id || 'ref'}-${index}`} className="rounded border border-ops-surface0 bg-ops-panel/55 px-3 py-2">
+                <article
+                  key={`${row.message_id || 'ref'}-${index}`}
+                  className={`rounded border px-3 py-2 ${
+                    focusKey && String(row.message_id || '') === focusKey
+                      ? 'border-ops-accent bg-ops-accent/10 shadow-[0_0_0_1px_rgba(45,212,191,0.22)]'
+                      : 'border-ops-surface0 bg-ops-panel/55'
+                  }`}
+                >
                   <div className="flex flex-wrap items-center gap-2 text-[11px] text-ops-overlay">
                     <span>消息 {row.message_id || '-'}</span>
+                    {focusKey && String(row.message_id || '') === focusKey && (
+                      <span className="rounded-full border border-ops-accent/45 px-2 py-0.5 text-ops-accent">
+                        当前定位
+                      </span>
+                    )}
                     <span>{row.created_at || '无时间'}</span>
                     <span>{row.refs.length} 条引用</span>
+                    {row.message_id !== undefined && (
+                      <button
+                        type="button"
+                        onClick={() => onFocusMessage?.(row.message_id as string | number)}
+                        className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-ops-accent hover:bg-ops-accent/10"
+                      >
+                        回到会话
+                      </button>
+                    )}
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-ops-subtext">{row.message_preview}</p>
                 </article>
