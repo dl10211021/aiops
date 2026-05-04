@@ -31,7 +31,9 @@ export default function KnowledgeBase() {
     exportingMemory,
     files,
     compileQueueItems,
+    compilingSourceSession,
     handleDelete,
+    handleCompileKnowledgeSource,
     handleDeleteMemory,
     handleCreateMemory,
     handleExportMemory,
@@ -137,13 +139,21 @@ export default function KnowledgeBase() {
               ))}
             </section>
             <aside>
-              <KnowledgeCompileQueuePanel items={compileQueueItems} />
+              <KnowledgeCompileQueuePanel
+                compilingSourceSession={compilingSourceSession}
+                items={compileQueueItems}
+                onCompile={handleCompileKnowledgeSource}
+              />
             </aside>
           </div>
         ) : activeTab === 'documents' && !loading ? (
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.75fr)]">
             <KnowledgeEmptyState uploading={uploading} onUpload={handleUpload} />
-            <KnowledgeCompileQueuePanel items={compileQueueItems} />
+            <KnowledgeCompileQueuePanel
+              compilingSourceSession={compilingSourceSession}
+              items={compileQueueItems}
+              onCompile={handleCompileKnowledgeSource}
+            />
           </div>
         ) : null}
 

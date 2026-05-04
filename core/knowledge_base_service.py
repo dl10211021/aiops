@@ -4,6 +4,7 @@ import os
 import json
 import re
 import shutil
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +36,7 @@ ALLOWED_KNOWLEDGE_EXTENSIONS = {
 }
 MAX_KNOWLEDGE_UPLOAD_BYTES = 50 * 1024 * 1024
 UPLOAD_CHUNK_BYTES = 1024 * 1024
+MAX_SOURCE_PREVIEW_CHARS = 12000
 DEFAULT_KNOWLEDGE_VAULT_DIR = Path("data") / "knowledge_vault"
 
 
@@ -288,6 +290,183 @@ def _update_vault_record(filename: str, **updates: Any) -> None:
     if changed:
         _write_manifest(root, records)
         _write_vault_index(root, records)
+
+
+def _find_vault_record(identifier: str, vault_dir: str | os.PathLike[str] | None = None) -> tuple[Path, dict[str, Any]]:
+    root = Path(vault_dir) if vault_dir is not None else _vault_root()
+    for item in _read_manifest(root):
+        if identifier in {
+            str(item.get("id") or ""),
+            str(item.get("source_session_id") or ""),
+            str(item.get("filename") or ""),
+        }:
+            return root, item
+    raise KnowledgeBaseServiceError(404, "待编译资料不存在")
+
+
+def _read_source_preview(root: Path, record: dict[str, Any]) -> str:
+    rel = record.get("source_path")
+    if not rel:
+        return ""
+    path = root / str(rel)
+    if path.suffix.lower() not in {".txt", ".md", ".log", ".csv", ".html", ".htm"}:
+        return f"二进制或复杂格式文件：{record.get('original_filename') or record.get('filename')}，请辅助模型结合文件解析器或人工摘要继续编译。"
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return ""
+    return text[:MAX_SOURCE_PREVIEW_CHARS]
+
+
+def _candidate_note_path(root: Path, record: dict[str, Any]) -> Path:
+    base = _markdown_note_name(str(record.get("filename") or record.get("id") or "candidate"))
+    return root / "wiki" / "candidates" / f"{base}.md"
+
+
+async def _generate_candidate_with_model(record: dict[str, Any], source_preview: str) -> str:
+    from core.assistant_model_config import assistant_thinking_mode, resolve_assistant_model_id
+    from core.llm_execution import execute_chat_stream
+
+    model_id = resolve_assistant_model_id()
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "你是 OpsCore 的辅助模型知识管家，负责把原始运维资料编译成 Obsidian 兼容 Markdown。"
+                "必须使用中文，必须保留来源、置信度、证据、风险、建议动作和待确认事项。"
+                "不确定内容标记为 ambiguous，不要伪造没有来源的数据。"
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "请把下面 source session 编译成一个候选 Wiki 页面，只输出 Markdown 正文。\n\n"
+                f"source_session_id: {record.get('source_session_id')}\n"
+                f"original_filename: {record.get('original_filename')}\n"
+                f"source_path: {record.get('source_path')}\n"
+                f"note_path: {record.get('note_path')}\n\n"
+                "原始资料预览：\n"
+                f"{source_preview or '暂无可读文本预览'}"
+            ),
+        },
+    ]
+    chunks: list[str] = []
+    async def collect() -> str:
+        async for chunk in execute_chat_stream(model_id, messages, assistant_thinking_mode(), tools=None):
+            if chunk.get("type") == "content":
+                chunks.append(str(chunk.get("content") or ""))
+        return "".join(chunks).strip()
+
+    return await asyncio.wait_for(collect(), timeout=45)
+
+
+def _fallback_candidate_markdown(record: dict[str, Any], source_preview: str, reason: str = "") -> str:
+    now = _utc_now_iso()
+    title = record.get("original_filename") or record.get("filename") or "未命名资料"
+    body = [
+        f"# {title}",
+        "",
+        "## 编译状态",
+        "",
+        "- 状态：待人工确认",
+        "- 编译方式：OpsCore 离线兜底候选页",
+        f"- 编译时间：{now}",
+    ]
+    if reason:
+        body.append(f"- 模型提示：{reason}")
+    body.extend(
+        [
+            "",
+            "## 来源",
+            "",
+            f"- Source Session：`{record.get('source_session_id') or record.get('id')}`",
+            f"- 原始文件：`{record.get('source_path') or '-'}`",
+            f"- 来源卡片：`{record.get('note_path') or '-'}`",
+            "",
+            "## 初步摘要",
+            "",
+            "该页面由 OpsCore 基于原始资料自动生成候选 Wiki，尚未经过辅助模型深度分析或人工确认。",
+            "",
+            "## 证据预览",
+            "",
+            "```text",
+            (source_preview or "该文件暂未提取到可读文本预览。")[:MAX_SOURCE_PREVIEW_CHARS],
+            "```",
+            "",
+            "## 待辅助模型补充",
+            "",
+            "- 关键实体和资产关系",
+            "- 风险等级和证据链",
+            "- 可复用 Runbook 或故障案例",
+            "- 与现有知识的冲突检查",
+        ]
+    )
+    return "\n".join(body)
+
+
+async def compile_vault_source_candidate(
+    identifier: str,
+    *,
+    use_ai: bool = True,
+    vault_dir: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    root, record = _find_vault_record(identifier, vault_dir)
+    _ensure_vault_skeleton(root)
+    source_preview = _read_source_preview(root, record)
+    model_status = "fallback"
+    model_error = ""
+    markdown = ""
+    if use_ai:
+        try:
+            markdown = await _generate_candidate_with_model(record, source_preview)
+            model_status = "ai_generated"
+        except Exception as exc:
+            model_error = str(exc)
+    if not markdown:
+        markdown = _fallback_candidate_markdown(record, source_preview, model_error)
+
+    candidate_path = _candidate_note_path(root, record)
+    candidate_path.parent.mkdir(parents=True, exist_ok=True)
+    frontmatter = [
+        "---",
+        f'id: "candidate-{uuid.uuid4().hex[:12]}"',
+        'type: "wiki-candidate"',
+        f'source_id: "{record.get("id")}"',
+        f'source_session_id: "{record.get("source_session_id")}"',
+        f'original_filename: "{_safe_markdown_value(str(record.get("original_filename") or ""))}"',
+        f'source_file: "{_safe_markdown_value(str(record.get("source_path") or ""))}"',
+        'review_status: "pending"',
+        f'compile_model_status: "{model_status}"',
+        "tags:",
+        "  - wiki/candidate",
+        "  - opscore/knowledge",
+        "---",
+        "",
+    ]
+    candidate_path.write_text("\n".join(frontmatter) + markdown.strip() + "\n", encoding="utf-8")
+
+    records = _read_manifest(root)
+    updated_record: dict[str, Any] | None = None
+    for item in records:
+        if item.get("id") == record.get("id"):
+            item.update(
+                {
+                    "compile_status": "awaiting_review",
+                    "compile_stage": "candidate_generated",
+                    "candidate_path": candidate_path.relative_to(root).as_posix(),
+                    "compiled_at": _utc_now_iso(),
+                    "compile_model_status": model_status,
+                    "compile_error": model_error,
+                }
+            )
+            updated_record = item
+            break
+    if updated_record is None:
+        updated_record = record
+    _write_manifest(root, records)
+    _write_vault_index(root, records)
+    _append_vault_log(root, "compile-candidate", f"{record.get('original_filename')} -> {updated_record.get('candidate_path')}")
+    return updated_record
 
 
 def list_vault_source_records(vault_dir: str | os.PathLike[str] | None = None) -> list[dict[str, Any]]:

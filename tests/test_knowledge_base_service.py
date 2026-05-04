@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from core.knowledge_base_service import (
     KnowledgeBaseServiceError,
+    compile_vault_source_candidate,
     ingest_knowledge_document,
     list_vault_compile_queue,
     list_vault_source_records,
@@ -153,3 +154,28 @@ class TestKnowledgeBaseService(unittest.TestCase):
         self.assertEqual(list_vault_source_records(self.vault_dir), [])
         self.assertFalse((self.vault_dir / record["source_path"]).exists())
         self.assertFalse((self.vault_dir / record["note_path"]).exists())
+
+    def test_compile_vault_source_candidate_writes_review_candidate(self):
+        kb = FakeKnowledgeBase("compile_candidate", message="注入成功")
+        upload = FakeUpload("巡检记录.txt", "CPU 正常\n内存正常\n".encode("utf-8"))
+
+        with patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")):
+            asyncio.run(ingest_knowledge_document(kb, upload))
+
+        record = list_vault_source_records(self.vault_dir)[0]
+        updated = asyncio.run(
+            compile_vault_source_candidate(
+                record["source_session_id"],
+                use_ai=False,
+                vault_dir=self.vault_dir,
+            )
+        )
+
+        self.assertEqual(updated["compile_status"], "awaiting_review")
+        self.assertEqual(updated["compile_stage"], "candidate_generated")
+        self.assertTrue(updated["candidate_path"].startswith("wiki/candidates/"))
+        candidate_path = self.vault_dir / updated["candidate_path"]
+        self.assertTrue(candidate_path.exists())
+        candidate_text = candidate_path.read_text(encoding="utf-8")
+        self.assertIn("待人工确认", candidate_text)
+        self.assertIn("CPU 正常", candidate_text)

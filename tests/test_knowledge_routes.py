@@ -36,6 +36,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/upload", paths)
         self.assertIn("/knowledge/list", paths)
         self.assertIn("/knowledge/vault/queue", paths)
+        self.assertIn("/knowledge/vault/compile", paths)
         self.assertIn("/knowledge/{filename}", paths)
 
     def test_upload_knowledge_document_preserves_response_shape(self):
@@ -69,6 +70,24 @@ class TestKnowledgeRoutes(unittest.TestCase):
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, {"items": [{"id": "src-1", "source_session_id": "source-session-1"}]})
+
+    def test_compile_knowledge_vault_source_preserves_response_shape(self):
+        with patch(
+            "api.knowledge_routes.compile_vault_source_candidate",
+            return_value={"id": "src-1", "candidate_path": "wiki/candidates/runbook.md"},
+        ):
+            response = asyncio.run(
+                knowledge_routes.compile_knowledge_vault_source(
+                    knowledge_routes.KnowledgeVaultCompileRequest(
+                        source_session_id="source-session-1",
+                        use_ai=False,
+                    )
+                )
+            )
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.message, "候选 Wiki 页面已生成")
+        self.assertEqual(response.data, {"item": {"id": "src-1", "candidate_path": "wiki/candidates/runbook.md"}})
 
     def test_delete_knowledge_document_preserves_response_shape(self):
         with patch(

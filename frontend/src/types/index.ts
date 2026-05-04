@@ -630,6 +630,10 @@ export interface KnowledgeCompileQueueItem extends KnowledgeFile {
   source_session_id?: string
   compile_stage?: string
   status_label?: string
+  candidate_path?: string
+  compiled_at?: string
+  compile_model_status?: string
+  compile_error?: string
 }
 
 export interface MemoryItem {

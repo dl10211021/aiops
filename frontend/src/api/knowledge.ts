@@ -9,6 +9,16 @@ export async function listKnowledgeVaultQueue() {
   return request<{ items: KnowledgeCompileQueueItem[] }>('/knowledge/vault/queue')
 }
 
+export async function compileKnowledgeVaultSource(sourceSessionId: string, useAi = true) {
+  return request<{ item: KnowledgeCompileQueueItem }>('/knowledge/vault/compile', {
+    method: 'POST',
+    body: JSON.stringify({
+      source_session_id: sourceSessionId,
+      use_ai: useAi,
+    }),
+  })
+}
+
 export async function uploadKnowledgeDocument(file: File) {
   const fd = new FormData()
   fd.append('file', file)

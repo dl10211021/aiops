@@ -128,7 +128,15 @@ export function KnowledgeFileCard({
   )
 }
 
-export function KnowledgeCompileQueuePanel({ items }: { items: KnowledgeCompileQueueItem[] }) {
+export function KnowledgeCompileQueuePanel({
+  compilingSourceSession,
+  items,
+  onCompile,
+}: {
+  compilingSourceSession: string | null
+  items: KnowledgeCompileQueueItem[]
+  onCompile: (item: KnowledgeCompileQueueItem) => void
+}) {
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -171,6 +179,22 @@ export function KnowledgeCompileQueuePanel({ items }: { items: KnowledgeCompileQ
                 wiki: {item.note_path}
               </div>
             )}
+            {item.candidate_path && (
+              <div className="mt-1 truncate rounded border border-ops-success/30 bg-ops-success/5 px-2 py-1 font-mono text-[11px] text-ops-success" title={item.candidate_path}>
+                candidate: {item.candidate_path}
+              </div>
+            )}
+            <button
+              onClick={() => onCompile(item)}
+              disabled={Boolean(compilingSourceSession) || item.compile_stage === 'candidate_generated'}
+              className="mt-2 w-full rounded-md border border-ops-accent/40 px-3 py-1.5 text-xs font-semibold text-ops-accent transition-colors hover:bg-ops-accent/10 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {compilingSourceSession === (item.source_session_id || item.id)
+                ? '生成候选中...'
+                : item.compile_stage === 'candidate_generated'
+                  ? '候选已生成'
+                  : '生成候选 Wiki'}
+            </button>
           </article>
         )) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">

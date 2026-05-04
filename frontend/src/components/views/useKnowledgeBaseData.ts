@@ -1,6 +1,7 @@
 import type { ChangeEvent } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import {
+  compileKnowledgeVaultSource,
   createMemoryItem,
   deleteKnowledgeDocument,
   deleteMemoryItem,
@@ -53,6 +54,7 @@ export function useKnowledgeBaseData() {
   const [resolvingMemoryConflict, setResolvingMemoryConflict] = useState<string | null>(null)
   const [redactingMemoryVersion, setRedactingMemoryVersion] = useState<string | null>(null)
   const [reviewingMemoryPath, setReviewingMemoryPath] = useState<string | null>(null)
+  const [compilingSourceSession, setCompilingSourceSession] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [memoryLoading, setMemoryLoading] = useState(true)
   const [error, setError] = useState('')
@@ -150,6 +152,25 @@ export function useKnowledgeBaseData() {
       addToast('删除失败', 'error')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const handleCompileKnowledgeSource = async (item: KnowledgeCompileQueueItem) => {
+    const sourceSessionId = item.source_session_id || item.id
+    if (!sourceSessionId) {
+      addToast('该资料缺少 source session，无法编译', 'error')
+      return
+    }
+    setCompilingSourceSession(sourceSessionId)
+    try {
+      const res = await compileKnowledgeVaultSource(sourceSessionId, true)
+      await loadFiles()
+      const candidatePath = res.data.item?.candidate_path
+      addToast(candidatePath ? `候选 Wiki 已生成：${candidatePath}` : '候选 Wiki 已生成', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '生成候选 Wiki 失败', 'error')
+    } finally {
+      setCompilingSourceSession(null)
     }
   }
 
@@ -330,7 +351,9 @@ export function useKnowledgeBaseData() {
     exportingMemory,
     files,
     compileQueueItems,
+    compilingSourceSession,
     handleDelete,
+    handleCompileKnowledgeSource,
     handleDeleteMemory,
     handleCreateMemory,
     handleExportMemory,

@@ -6,6 +6,7 @@ from api.response_mappers.knowledge import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    knowledge_vault_candidate_response_kwargs,
     knowledge_vault_queue_response_kwargs,
     memory_item_created_response_kwargs,
     memory_item_deleted_response_kwargs,
@@ -26,6 +27,7 @@ from api.response_mappers.knowledge import (
 from api.schema_models.common import ResponseModel
 from core.knowledge_base_service import (
     KnowledgeBaseServiceError,
+    compile_vault_source_candidate,
     ingest_knowledge_document,
     list_knowledge_document_records,
     list_vault_compile_queue,
@@ -68,6 +70,11 @@ class MemoryConflictResolveRequest(BaseModel):
 
 class MemoryReviewConfirmRequest(BaseModel):
     path: str = Field(..., min_length=1)
+
+
+class KnowledgeVaultCompileRequest(BaseModel):
+    source_session_id: str = Field(..., min_length=1, max_length=200)
+    use_ai: bool = True
 
 
 @router.get("/knowledge/memory/stores", response_model=ResponseModel)
@@ -286,6 +293,19 @@ async def list_knowledge_documents():
 async def list_knowledge_vault_queue():
     """列出 Obsidian/LLM Wiki Vault 中等待辅助模型编译的 source session。"""
     return ResponseModel(**knowledge_vault_queue_response_kwargs(list_vault_compile_queue()))
+
+
+@router.post("/knowledge/vault/compile", response_model=ResponseModel)
+async def compile_knowledge_vault_source(req: KnowledgeVaultCompileRequest):
+    """把 source session 编译成待人工确认的候选 Wiki 页面。"""
+    try:
+        item = await compile_vault_source_candidate(
+            req.source_session_id,
+            use_ai=req.use_ai,
+        )
+    except KnowledgeBaseServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**knowledge_vault_candidate_response_kwargs(item))
 
 
 @router.delete("/knowledge/{filename}", response_model=ResponseModel)

@@ -24,6 +24,14 @@ def knowledge_vault_queue_response_kwargs(items: list[Any]) -> dict[str, Any]:
     }
 
 
+def knowledge_vault_candidate_response_kwargs(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "候选 Wiki 页面已生成",
+        "data": {"item": item},
+    }
+
+
 def knowledge_document_deleted_response_kwargs(message: str) -> dict[str, Any]:
     return {
         "status": "success",
