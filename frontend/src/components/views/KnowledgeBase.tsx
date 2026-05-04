@@ -12,6 +12,7 @@ import {
   MemoryItemCard,
   MemoryPendingConflictsPanel,
   MemoryReviewPanel,
+  MemorySearchPanel,
   MemoryStoresPanel,
   MemoryVersionsPanel,
   type KnowledgeTab,
@@ -37,6 +38,7 @@ export default function KnowledgeBase() {
     handleRestoreMemoryVersion,
     handleResolveMemoryConflict,
     handleSaveMemory,
+    handleSearchMemory,
     handleUpload,
     loadFiles,
     loadMemories,
@@ -50,6 +52,9 @@ export default function KnowledgeBase() {
     memoryLoading,
     memoryPendingConflicts,
     memoryReviewItems,
+    memorySearchQuery,
+    memorySearchResults,
+    memorySearchScopes,
     memoryStores,
     memoryVersions,
     savingMemory,
@@ -61,6 +66,9 @@ export default function KnowledgeBase() {
     setMemoryCreateSummary,
     setMemoryDraft,
     setMemoryDeleteTarget,
+    setMemorySearchQuery,
+    setMemorySearchScopes,
+    searchingMemory,
     uploading,
   } = useKnowledgeBaseData()
 
@@ -161,6 +169,15 @@ export default function KnowledgeBase() {
                 onCreate={() => void handleCreateMemory()}
                 onScopeChange={setMemoryCreateScope}
                 onSummaryChange={setMemoryCreateSummary}
+              />
+              <MemorySearchPanel
+                query={memorySearchQuery}
+                results={memorySearchResults}
+                scopes={memorySearchScopes}
+                searching={searchingMemory}
+                onQueryChange={setMemorySearchQuery}
+                onScopesChange={setMemorySearchScopes}
+                onSearch={() => void handleSearchMemory()}
               />
               <MemoryDetailPanel
                 draft={memoryDraft}

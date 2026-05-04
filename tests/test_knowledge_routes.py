@@ -22,6 +22,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
 
         self.assertIn("/knowledge/memory/list", paths)
         self.assertIn("/knowledge/memory/read", paths)
+        self.assertIn("/knowledge/memory/search", paths)
         self.assertIn("/knowledge/memory", paths)
         self.assertIn("/knowledge/memory/versions", paths)
         self.assertIn("/knowledge/memory/pending", paths)
@@ -82,6 +83,10 @@ class TestKnowledgeRoutes(unittest.TestCase):
                 self.created = (scope_id, summary, source_session_id, metadata)
                 return {"version_id": "created-v1", "operation": "created", "path": "sessions/manual/memory.md"}
 
+            def search(self, scope_ids, query, limit=6):
+                self.searched = (scope_ids, query, limit)
+                return [{"path": "sessions/manual/memory.md", "summary": "命中记忆"}]
+
             def update_memory(self, path, content, content_sha256=None):
                 self.updated = (path, content, content_sha256)
 
@@ -133,6 +138,15 @@ class TestKnowledgeRoutes(unittest.TestCase):
                     )
                 )
             )
+            search_response = asyncio.run(
+                knowledge_routes.search_memory_items(
+                    knowledge_routes.MemorySearchRequest(
+                        query="SSH 高频登录",
+                        scope_ids=["manual"],
+                        limit=3,
+                    )
+                )
+            )
             versions_response = asyncio.run(knowledge_routes.list_memory_versions(10))
             pending_response = asyncio.run(knowledge_routes.list_memory_pending_conflicts(20))
             review_response = asyncio.run(knowledge_routes.list_memory_review_items(180, 20))
@@ -165,6 +179,8 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(read_response.data, {"item": {"path": "sessions/sid-1/memory.md", "content": "# memory", "content_sha256": "sha"}})
         self.assertEqual(create_response.message, "记忆已创建")
         self.assertEqual(fake_db.file_memory_store.created[0], "manual")
+        self.assertEqual(search_response.data, {"results": [{"path": "sessions/manual/memory.md", "summary": "命中记忆"}]})
+        self.assertEqual(fake_db.file_memory_store.searched, (["manual"], "SSH 高频登录", 3))
         self.assertEqual(versions_response.data, {"versions": [{"version_id": "v1", "operation": "created", "path": "sessions/sid-1/memory.md"}]})
         self.assertEqual(pending_response.data, {"items": [{"version_id": "v-pending", "path": "sessions/sid-1/memory.md"}]})
         self.assertEqual(review_response.data, {"items": [{"path": "sessions/sid-1/memory.md", "age_days": 181}]})

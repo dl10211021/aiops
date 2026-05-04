@@ -660,6 +660,15 @@ export interface MemoryReviewItem extends MemoryItem {
   recommended_action: string
 }
 
+export interface MemorySearchResult {
+  session_id?: string
+  _memory_scope_id?: string
+  timestamp?: string
+  summary?: string
+  _distance?: number
+  path?: string
+}
+
 export interface MemoryStoreInfo {
   id: string
   name: string

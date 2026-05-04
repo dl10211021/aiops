@@ -1,4 +1,4 @@
-import type { ApiResponse, KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { ApiResponse, KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { apiUrl, authHeaders, request } from './http'
 
 export async function listKnowledgeDocuments() {
@@ -39,6 +39,17 @@ export async function createMemoryItem(scopeId: string, summary: string) {
       scope_id: scopeId,
       summary,
       source_session_id: 'manual',
+    }),
+  })
+}
+
+export async function searchMemoryItems(query: string, scopeIds: string[], limit = 6) {
+  return request<{ results: MemorySearchResult[] }>('/knowledge/memory/search', {
+    method: 'POST',
+    body: JSON.stringify({
+      query,
+      scope_ids: scopeIds,
+      limit,
     }),
   })
 }

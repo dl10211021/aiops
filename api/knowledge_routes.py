@@ -17,6 +17,7 @@ from api.response_mappers.knowledge import (
     memory_pending_conflicts_response_kwargs,
     memory_review_confirmed_response_kwargs,
     memory_review_items_response_kwargs,
+    memory_search_response_kwargs,
     memory_stores_response_kwargs,
     memory_versions_response_kwargs,
 )
@@ -41,6 +42,12 @@ class MemoryCreateRequest(BaseModel):
     scope_id: str = Field(..., min_length=1, max_length=160)
     summary: str = Field(..., min_length=1, max_length=8000)
     source_session_id: str = Field("manual", max_length=160)
+
+
+class MemorySearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=1000)
+    scope_ids: list[str] = Field(default_factory=lambda: ["manual"])
+    limit: int = Field(6, ge=1, le=20)
 
 
 class MemoryRestoreRequest(BaseModel):
@@ -83,6 +90,21 @@ async def read_memory_item(path: str = Query(..., min_length=1)):
     except ValueError:
         raise HTTPException(status_code=400, detail="记忆路径非法")
     return ResponseModel(**memory_item_response_kwargs(item))
+
+
+@router.post("/knowledge/memory/search", response_model=ResponseModel)
+async def search_memory_items(req: MemorySearchRequest):
+    from core.memory import memory_db
+
+    scope_ids = [str(scope).strip() for scope in req.scope_ids if str(scope).strip()]
+    if not scope_ids:
+        raise HTTPException(status_code=400, detail="至少需要一个记忆作用域")
+    results = memory_db.file_memory_store.search(
+        scope_ids=scope_ids,
+        query=req.query,
+        limit=req.limit,
+    )
+    return ResponseModel(**memory_search_response_kwargs(results))
 
 
 @router.post("/knowledge/memory", response_model=ResponseModel)

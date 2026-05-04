@@ -15,11 +15,12 @@ import {
   readMemoryItem,
   restoreMemoryVersion,
   resolveMemoryPendingConflict,
+  searchMemoryItems,
   updateMemoryItem,
   uploadKnowledgeDocument,
 } from '@/api/knowledge'
 import { useStore } from '@/store'
-import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { isAcceptedKnowledgeFile } from './knowledgeBaseModel'
 
 export function useKnowledgeBaseData() {
@@ -34,6 +35,9 @@ export function useKnowledgeBaseData() {
   const [memoryDraft, setMemoryDraft] = useState('')
   const [memoryCreateScope, setMemoryCreateScope] = useState('manual')
   const [memoryCreateSummary, setMemoryCreateSummary] = useState('')
+  const [memorySearchQuery, setMemorySearchQuery] = useState('')
+  const [memorySearchScopes, setMemorySearchScopes] = useState('manual')
+  const [memorySearchResults, setMemorySearchResults] = useState<MemorySearchResult[]>([])
   const [uploading, setUploading] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeFile | null>(null)
   const [memoryDeleteTarget, setMemoryDeleteTarget] = useState<MemoryItem | null>(null)
@@ -41,6 +45,7 @@ export function useKnowledgeBaseData() {
   const [deletingMemory, setDeletingMemory] = useState(false)
   const [savingMemory, setSavingMemory] = useState(false)
   const [creatingMemory, setCreatingMemory] = useState(false)
+  const [searchingMemory, setSearchingMemory] = useState(false)
   const [exportingMemory, setExportingMemory] = useState(false)
   const [resolvingMemoryConflict, setResolvingMemoryConflict] = useState<string | null>(null)
   const [reviewingMemoryPath, setReviewingMemoryPath] = useState<string | null>(null)
@@ -174,6 +179,29 @@ export function useKnowledgeBaseData() {
     }
   }
 
+  const handleSearchMemory = async () => {
+    const query = memorySearchQuery.trim()
+    const scopes = memorySearchScopes
+      .split(/[\s,，]+/)
+      .map((scope) => scope.trim())
+      .filter(Boolean)
+    if (!query || scopes.length === 0) {
+      addToast('请填写检索问题和作用域', 'error')
+      return
+    }
+    setSearchingMemory(true)
+    try {
+      const res = await searchMemoryItems(query, scopes, 8)
+      const results = res.data.results || []
+      setMemorySearchResults(results)
+      addToast(`检索到 ${results.length} 条记忆`, 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '检索 AI 记忆失败', 'error')
+    } finally {
+      setSearchingMemory(false)
+    }
+  }
+
   const handleDeleteMemory = async () => {
     if (!memoryDeleteTarget) return
     const path = memoryDeleteTarget.path
@@ -287,6 +315,7 @@ export function useKnowledgeBaseData() {
     handleRestoreMemoryVersion,
     handleResolveMemoryConflict,
     handleSaveMemory,
+    handleSearchMemory,
     handleUpload,
     loadFiles,
     loadMemories,
@@ -300,6 +329,9 @@ export function useKnowledgeBaseData() {
     memoryLoading,
     memoryPendingConflicts,
     memoryReviewItems,
+    memorySearchQuery,
+    memorySearchResults,
+    memorySearchScopes,
     memoryStores,
     memoryVersions,
     savingMemory,
@@ -311,6 +343,9 @@ export function useKnowledgeBaseData() {
     setMemoryCreateSummary,
     setMemoryDraft,
     setMemoryDeleteTarget,
+    setMemorySearchQuery,
+    setMemorySearchScopes,
+    searchingMemory,
     uploading,
   }
 }

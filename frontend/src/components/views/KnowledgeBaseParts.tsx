@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react'
-import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemoryVersion } from '@/types'
+import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryVersion } from '@/types'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
 export type KnowledgeTab = 'documents' | 'memory'
@@ -344,6 +344,70 @@ export function MemoryCreatePanel({
       >
         {creating ? '创建中...' : '创建记忆'}
       </button>
+    </section>
+  )
+}
+
+export function MemorySearchPanel({
+  query,
+  results,
+  scopes,
+  searching,
+  onQueryChange,
+  onScopesChange,
+  onSearch,
+}: {
+  query: string
+  results: MemorySearchResult[]
+  scopes: string
+  searching: boolean
+  onQueryChange: (value: string) => void
+  onScopesChange: (value: string) => void
+  onSearch: () => void
+}) {
+  return (
+    <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+      <div className="text-sm font-semibold text-ops-text">记忆检索预览</div>
+      <p className="mt-1 text-xs leading-5 text-ops-subtext">
+        输入问题后先预览会命中的长期记忆，用来检查“AI 为什么想起这条经验”。
+      </p>
+      <input
+        value={scopes}
+        onChange={(event) => onScopesChange(event.target.value)}
+        className="mt-3 h-9 w-full rounded-md border border-ops-surface1 bg-ops-panel/70 px-3 text-xs text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent/60"
+        placeholder="作用域，多个用逗号分隔，例如 manual, asset-host:172.17.8.131"
+      />
+      <textarea
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+        className="mt-2 min-h-20 w-full resize-y rounded-md border border-ops-surface1 bg-ops-panel/70 px-3 py-2 text-xs leading-5 text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent/60"
+        placeholder="例如：SSH 高频登录是不是本地程序造成的？"
+      />
+      <button
+        onClick={onSearch}
+        disabled={searching || !query.trim() || !scopes.trim()}
+        className="mt-2 rounded-lg border border-ops-accent/45 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10 disabled:opacity-50"
+      >
+        {searching ? '检索中...' : '预览命中记忆'}
+      </button>
+      <div className="mt-3 space-y-2">
+        {results.length > 0 ? results.map((item, index) => (
+          <article key={`${item.path || item.session_id || 'memory'}-${index}`} className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+            <div className="flex items-center justify-between gap-2 text-[11px] text-ops-overlay">
+              <span className="truncate">{item._memory_scope_id || item.session_id || item.path || 'unknown'}</span>
+              <span>{item.timestamp || '无时间'}</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-ops-subtext">{item.summary || '该记忆没有摘要内容'}</p>
+            {typeof item._distance === 'number' && (
+              <div className="mt-1 font-mono text-[11px] text-ops-overlay">距离 {item._distance.toFixed(4)}</div>
+            )}
+          </article>
+        )) : (
+          <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-4 text-center text-xs text-ops-overlay">
+            暂无检索结果
+          </div>
+        )}
+      </div>
     </section>
   )
 }
