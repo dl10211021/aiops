@@ -8,6 +8,8 @@ export interface SessionHistoryMessage {
   feedback?: ChatMessage['feedback']
   exec_trace?: ChatMessage['execTrace']
   execTrace?: ChatMessage['execTrace']
+  memory_refs?: ChatMessage['memoryRefs']
+  memoryRefs?: ChatMessage['memoryRefs']
   timestamp?: number | string
   created_at?: string
 }
@@ -36,6 +38,7 @@ export function normalizeHistoryMessages(sessionId: string, messages: SessionHis
       attachments: message.attachments,
       feedback: message.feedback,
       execTrace: message.execTrace || message.exec_trace,
+      memoryRefs: message.memoryRefs || message.memory_refs,
       timestamp: Number.isFinite(parsedTimestamp)
         ? parsedTimestamp
         : Date.now() - (messages.length - index) * 1000,

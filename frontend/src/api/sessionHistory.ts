@@ -1,5 +1,5 @@
 import { request } from './http'
-import type { ExecTraceItem } from '@/types'
+import type { ExecTraceItem, MemoryReference } from '@/types'
 
 interface SessionHistoryApiMessage {
   role: string
@@ -13,6 +13,8 @@ interface SessionHistoryApiMessage {
   }
   exec_trace?: ExecTraceItem[]
   execTrace?: ExecTraceItem[]
+  memory_refs?: MemoryReference[]
+  memoryRefs?: MemoryReference[]
   timestamp?: number | string
   created_at?: string
   attachments?: Array<{

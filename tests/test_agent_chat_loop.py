@@ -115,6 +115,22 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(cancel_flags["sid-1"])
         self.assertEqual(len(scheduler_calls), 1)
 
+    async def test_attaches_memory_references_to_visible_assistant_message(self):
+        async def streamer(**kwargs):
+            kwargs["state"].assistant_content = "基于历史记忆完成"
+            yield "stream-event"
+
+        events, kwargs, memory_store, _cancel_flags, _scheduler_calls = (
+            await collect_chat_loop_events(
+                assistant_streamer=streamer,
+                memory_references=[{"scope_id": "sid-1", "summary_preview": "历史偏好"}],
+            )
+        )
+
+        self.assertIn("stream-event", events)
+        self.assertEqual(kwargs["messages"][0]["memory_refs"][0]["summary_preview"], "历史偏好")
+        self.assertEqual(memory_store.appended[0][1]["memory_refs"][0]["scope_id"], "sid-1")
+
     async def test_processes_tools_then_emits_step_limit_summary(self):
         async def streamer(**kwargs):
             kwargs["state"].assistant_content = "需要工具"

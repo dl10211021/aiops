@@ -55,6 +55,7 @@ async def run_chat_agent_loop(
     cancel_flags: dict[str, bool],
     emb_client: Any,
     embedding_model: str,
+    memory_references: list[dict[str, Any]] | None = None,
     event_logger: logging.Logger,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     max_steps_resolver: Callable[[str], int] = agent_max_steps,
@@ -84,6 +85,7 @@ async def run_chat_agent_loop(
             tool_call_processor=tool_call_processor,
             step_summary_streamer=step_summary_streamer,
             orchestration=orchestration,
+            memory_references=memory_references,
         ):
             yield event
         compression_scheduler(
@@ -97,6 +99,7 @@ async def run_chat_agent_loop(
         return
 
     max_steps = max_steps_resolver("chat")
+    pending_memory_references = list(memory_references or [])
     for iteration in range(max_steps):
         event_logger.info(
             f"Loop {iteration} for {session_id}, cancel_flags: {cancel_flags.get(session_id)}"
@@ -122,6 +125,10 @@ async def run_chat_agent_loop(
 
         tool_calls = stream_state.tool_calls
         safe_msg = stream_state.assistant_message()
+        pending_memory_references = _attach_memory_references_if_visible(
+            safe_msg,
+            pending_memory_references,
+        )
         messages.append(safe_msg)
         assistant_memory_id = memory_store.append_message(session_id, safe_msg)
 
@@ -476,10 +483,12 @@ async def _run_split_model_chat_agent_loop(
     tool_call_processor: Callable[..., AsyncIterator[str]],
     step_summary_streamer: Callable[..., AsyncIterator[str]],
     orchestration: dict[str, Any],
+    memory_references: list[dict[str, Any]] | None = None,
 ) -> AsyncIterator[str]:
     primary_model_id = str(orchestration["primary_model_id"])
     assistant_model_id = str(orchestration["assistant_model_id"] or model_name)
     assistant_mode = str(orchestration.get("assistant_thinking_mode") or "high")
+    pending_memory_references = list(memory_references or [])
 
     yield sse_event(
         {
@@ -577,6 +586,10 @@ async def _run_split_model_chat_agent_loop(
                     event_logger.warning("Primary model final review failed, keeping assistant final: %s", exc)
 
             final_msg = {"role": "assistant", "content": final_text}
+            pending_memory_references = _attach_memory_references_if_visible(
+                final_msg,
+                pending_memory_references,
+            )
             messages.append(final_msg)
             memory_store.append_message(session_id, final_msg)
             for chunk in _split_text_for_sse(final_text):
@@ -585,6 +598,10 @@ async def _run_split_model_chat_agent_loop(
             yield sse_event({"type": "done"})
             return
 
+        pending_memory_references = _attach_memory_references_if_visible(
+            safe_msg,
+            pending_memory_references,
+        )
         messages.append(safe_msg)
         assistant_memory_id = memory_store.append_message(session_id, safe_msg)
         exec_trace: list[dict] = []
@@ -710,3 +727,15 @@ AI 输出摘要：
         "content": content,
         "memory_type": "successful_execution",
     }
+
+
+def _attach_memory_references_if_visible(
+    message: dict,
+    pending_references: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not pending_references:
+        return []
+    if str(message.get("content") or "").strip():
+        message["memory_refs"] = pending_references
+        return []
+    return pending_references

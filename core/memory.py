@@ -14,7 +14,7 @@ from cryptography.fernet import Fernet
 
 from core.asset_profile_store import AssetProfileStore
 from core.asset_store import AssetStore
-from core.file_memory_store import FileMemoryStore
+from core.file_memory_store import FileMemoryStore, memory_scope_path
 from core.lancedb_utils import ensure_lancedb_table, lancedb_table_names
 from core.session_message_store import SessionMessageStore, is_protocol_retry_noise
 from core.slash_command_store import SlashCommandStore, slash_command_row
@@ -89,6 +89,54 @@ def build_ltm_retrieval_context(rows: list[dict], max_chars: int = LTM_CONTEXT_M
         lines.append(item)
         current_size += len(item) + 1
     return "\n".join(lines) + "\n"
+
+
+def build_ltm_references(rows: list[dict], max_summary_chars: int = 180) -> list[dict]:
+    references = []
+    for row in rows:
+        scope = row.get("_memory_scope_id") or row.get("session_id") or "unknown"
+        summary = sanitize_ltm_summary(row.get("summary") or "", max_chars=max_summary_chars)
+        references.append(
+            {
+                "scope_id": scope,
+                "scope_label": ltm_scope_label(scope),
+                "timestamp": row.get("timestamp") or "unknown-time",
+                "summary_preview": summary,
+                "path": row.get("path") or memory_scope_path(str(scope)).as_posix(),
+            }
+        )
+    return references
+
+
+def detect_memory_conflict(new_summary: str, existing_rows: list[dict]) -> dict | None:
+    new_polarity = _memory_polarity(new_summary)
+    if not new_polarity:
+        return None
+    for row in existing_rows:
+        existing_summary = str(row.get("summary") or "")
+        old_polarity = _memory_polarity(existing_summary)
+        if old_polarity and old_polarity != new_polarity:
+            return {
+                "status": "pending_review",
+                "reason": "新旧记忆对同类事实或操作倾向存在相反判断，需要人工确认后再作为稳定经验使用。",
+                "existing_scope_id": row.get("_memory_scope_id") or row.get("session_id") or "",
+                "existing_timestamp": row.get("timestamp") or "",
+                "existing_preview": sanitize_ltm_summary(existing_summary, max_chars=220),
+            }
+    return None
+
+
+def _memory_polarity(text: str) -> str | None:
+    normalized = str(text or "").lower()
+    risk_words = ["异常", "风险", "高危", "中高", "告警", "需要处理", "禁止", "不要", "不得", "失败", "错误"]
+    safe_words = ["正常", "不是异常", "不作为异常", "白名单", "可忽略", "允许", "可以", "成功", "已确认"]
+    risk_score = sum(1 for word in risk_words if word in normalized)
+    safe_score = sum(1 for word in safe_words if word in normalized)
+    if risk_score > safe_score:
+        return "risk_or_negative"
+    if safe_score > risk_score:
+        return "safe_or_positive"
+    return None
 
 
 def build_ltm_compression_prompt(text_to_summarize: str) -> str:
@@ -653,8 +701,28 @@ class MemoryDB:
         memory_scope_ids: list[str] | None = None,
     ) -> str:
         """根据用户查询检索相关的文件型长期记忆节点"""
+        context, _references = await self.retrieve_ltm_with_references(
+            session_id,
+            query,
+            client,
+            embedding_model,
+            limit=limit,
+            memory_scope_ids=memory_scope_ids,
+        )
+        return context
+
+    async def retrieve_ltm_with_references(
+        self,
+        session_id: str,
+        query: str,
+        client,
+        embedding_model: str | None = None,
+        limit: int = 3,
+        memory_scope_ids: list[str] | None = None,
+    ) -> tuple[str, list[dict]]:
+        """检索长期记忆，并返回可展示/审计的引用元数据"""
         if not self.ltm_enabled:
-            return ""
+            return "", []
         try:
             scope_ids = self._normalize_ltm_scope_ids(session_id, memory_scope_ids)
             results = await asyncio.to_thread(
@@ -670,12 +738,12 @@ class MemoryDB:
             ]
 
             if not results:
-                return ""
+                return "", []
 
-            return build_ltm_retrieval_context(results)
+            return build_ltm_retrieval_context(results), build_ltm_references(results)
         except Exception as e:
             logger.error(f"长期记忆检索失败: {e}")
-            return ""
+            return "", []
 
     async def compress_and_store_ltm(
         self,
@@ -800,16 +868,34 @@ class MemoryDB:
                 scope_ids = self._normalize_ltm_scope_ids(session_id, memory_scope_ids)
 
                 for scope_id in scope_ids:
+                    conflict = await asyncio.to_thread(
+                        self._detect_scope_memory_conflict,
+                        scope_id,
+                        summary,
+                    )
+                    summary_to_store = summary
+                    metadata = {
+                        "source": "ltm_compression",
+                        "primary_model_id": primary_model_id or "",
+                        "embedding_model": embedding_model or "",
+                    }
+                    if conflict:
+                        metadata["conflict_status"] = "pending_review"
+                        metadata["conflict"] = conflict
+                        summary_to_store = "\n".join(
+                            [
+                                "【冲突状态】待确认",
+                                f"【冲突原因】{conflict.get('reason')}",
+                                f"【旧记忆摘要】{conflict.get('existing_preview')}",
+                                summary,
+                            ]
+                        )
                     await asyncio.to_thread(
                         self.file_memory_store.append_memory,
                         scope_id=scope_id,
-                        summary=summary,
+                        summary=summary_to_store,
                         source_session_id=session_id,
-                        metadata={
-                            "source": "ltm_compression",
-                            "primary_model_id": primary_model_id or "",
-                            "embedding_model": embedding_model or "",
-                        },
+                        metadata=metadata,
                     )
 
                 ids_to_delete = [r[0] for r in compress_rows]
@@ -826,6 +912,14 @@ class MemoryDB:
 
         except Exception as e:
             logger.error(f"长期记忆压缩失败: {e}")
+
+    def _detect_scope_memory_conflict(self, scope_id: str, summary: str) -> dict | None:
+        existing_rows = self.file_memory_store.search(
+            scope_ids=[scope_id],
+            query=summary[:500],
+            limit=6,
+        )
+        return detect_memory_conflict(summary, existing_rows)
 
 
 memory_db = MemoryDB()

@@ -65,6 +65,7 @@ async def chat_stream_agent(
     messages = run.messages
     context = run.context
     tools = run.tools
+    memory_references = run.memory_references
 
     try:
         async for event in run_chat_agent_loop(
@@ -80,6 +81,7 @@ async def chat_stream_agent(
             cancel_flags=cancel_flags,
             emb_client=emb_client,
             embedding_model=embedding_model,
+            memory_references=memory_references,
             event_logger=logger,
         ):
             yield event

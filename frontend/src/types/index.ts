@@ -149,12 +149,22 @@ export interface ChatMessage {
     created_at?: string
     memory_policy?: string
   }
+  memoryRefs?: MemoryReference[]
+  memory_refs?: MemoryReference[]
   // For tool execution traces
   execTrace?: ExecTraceItem[]
   // For tool approval requests
   toolApproval?: ToolApproval
   // For model-initiated user input or option selection
   userInteraction?: UserInteractionRequest
+}
+
+export interface MemoryReference {
+  scope_id: string
+  scope_label?: string
+  timestamp?: string
+  summary_preview?: string
+  path?: string
 }
 
 export interface ChatMessageAttachment {

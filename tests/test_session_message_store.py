@@ -78,11 +78,20 @@ class SessionMessageStoreTest(unittest.TestCase):
             {"role": "assistant", "content": "[System Notice: hidden]"},
         )
         self.store.append_message("sid-1", {"role": "assistant", "content": "hello"})
+        self.store.append_message(
+            "sid-1",
+            {
+                "role": "assistant",
+                "content": "with refs",
+                "memory_refs": [{"scope_id": "sid-1", "summary_preview": "历史"}],
+            },
+        )
 
         messages = self.store.get_messages("sid-1", for_ui=True)
 
-        self.assertEqual([msg["content"] for msg in messages], ["hi", "hello"])
-        self.assertEqual([msg["role"] for msg in messages], ["user", "assistant"])
+        self.assertEqual([msg["content"] for msg in messages], ["hi", "hello", "with refs"])
+        self.assertEqual([msg["role"] for msg in messages], ["user", "assistant", "assistant"])
+        self.assertEqual(messages[-1]["memory_refs"][0]["scope_id"], "sid-1")
         self.assertTrue(all("_memory_id" in msg for msg in messages))
 
     def test_model_context_filters_protocol_retry_noise_but_ui_keeps_it(self):

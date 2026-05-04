@@ -142,12 +142,44 @@ export function AssistantReportBubble({
             : '已标记：回答较差，AI 后续会规避这条错误经验'}
         </div>
       )}
+      <MemoryReferenceStrip message={message} />
       <div
         className="markdown-body ai-report-body w-full px-5 py-4"
         onClick={handleCodeCopy}
         dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
       />
     </article>
+  )
+}
+
+function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
+  const refs = message.memoryRefs || message.memory_refs || []
+  if (!refs.length) return null
+  return (
+    <details className="border-b border-ops-surface0/70 bg-ops-dark/25 px-4 py-2 text-[11px] text-ops-subtext">
+      <summary className="cursor-pointer select-none font-semibold text-ops-accent">
+        本次引用记忆 {refs.length} 条
+      </summary>
+      <div className="mt-2 grid gap-1.5">
+        {refs.map((ref, index) => (
+          <div
+            key={`${ref.scope_id}-${ref.timestamp || index}-${index}`}
+            className="rounded-md border border-ops-surface1/60 bg-ops-panel/60 px-2.5 py-1.5"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-ops-accent">
+                {ref.scope_label || ref.scope_id}
+              </span>
+              <span className="font-mono text-ops-overlay">{ref.timestamp || '未知时间'}</span>
+              {ref.path && <span className="truncate font-mono text-ops-overlay">{ref.path}</span>}
+            </div>
+            <div className="mt-1 line-clamp-2 text-ops-subtext">
+              {ref.summary_preview || '无摘要'}
+            </div>
+          </div>
+        ))}
+      </div>
+    </details>
   )
 }
 

@@ -4,8 +4,10 @@ import unittest
 
 from core.memory import (
     MemoryDB,
+    build_ltm_references,
     build_ltm_compression_prompt,
     build_ltm_retrieval_context,
+    detect_memory_conflict,
     ltm_row_is_stale,
     sanitize_ltm_summary,
 )
@@ -93,6 +95,37 @@ class MemoryPolicyTests(unittest.TestCase):
         self.assertFalse(ltm_row_is_stale(old_timestamp, stale_days=0))
         self.assertFalse(ltm_row_is_stale("not-a-date", stale_days=180))
 
+    def test_ltm_references_are_safe_display_metadata(self):
+        refs = build_ltm_references(
+            [
+                {
+                    "_memory_scope_id": "asset-host:10.0.0.1",
+                    "timestamp": "2026-05-04 12:00:00",
+                    "summary": "【核心记忆】" + "a" * 300,
+                }
+            ],
+            max_summary_chars=80,
+        )
+
+        self.assertEqual(refs[0]["scope_label"], "同主机")
+        self.assertEqual(refs[0]["path"], "hosts/10.0.0.1/memory.md")
+        self.assertLess(len(refs[0]["summary_preview"]), 140)
+
+    def test_conflicting_memory_is_marked_pending_review(self):
+        conflict = detect_memory_conflict(
+            "【核心记忆】192.168.111.45 是白名单，不作为异常。",
+            [
+                {
+                    "_memory_scope_id": "asset-host:10.0.0.1",
+                    "timestamp": "2026-05-04 12:00:00",
+                    "summary": "【核心记忆】192.168.111.45 高频登录是中高风险异常。",
+                }
+            ],
+        )
+
+        self.assertEqual(conflict["status"], "pending_review")
+        self.assertIn("相反判断", conflict["reason"])
+
     def test_compression_prompt_requires_structured_chinese_memory(self):
         prompt = build_ltm_compression_prompt("[assistant]: ok")
 
@@ -124,6 +157,24 @@ class MemoryPolicyTests(unittest.TestCase):
             db.file_memory_store.calls,
             [(["sid-1", "asset-host:10.0.0.1"], "检查 Oracle 锁等待", 6)],
         )
+
+    def test_memorydb_retrieve_ltm_with_references_returns_context_and_refs(self):
+        db = MemoryDB.__new__(MemoryDB)
+        db.ltm_enabled = True
+        db.file_memory_store = FakeFileMemoryStore()
+
+        context, references = asyncio.run(
+            MemoryDB.retrieve_ltm_with_references(
+                db,
+                "sid-1",
+                "检查 Oracle 锁等待",
+                ExplodingEmbeddingClient(),
+                memory_scope_ids=["asset-host:10.0.0.1"],
+            )
+        )
+
+        self.assertIn("OpsCore 长期记忆", context)
+        self.assertEqual(references[0]["scope_id"], "asset-host:10.0.0.1")
 
 
 if __name__ == "__main__":

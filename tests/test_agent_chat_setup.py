@@ -29,6 +29,23 @@ class FakeMemoryStore:
         )
         return "LTM-CONTEXT"
 
+    async def retrieve_ltm_with_references(
+        self,
+        session_id,
+        user_message,
+        emb_client,
+        embedding_model,
+        memory_scope_ids=None,
+    ):
+        context = await self.retrieve_ltm(
+            session_id,
+            user_message,
+            emb_client,
+            embedding_model,
+            memory_scope_ids=memory_scope_ids,
+        )
+        return context, [{"scope_id": "sid-1", "summary_preview": "LTM-CONTEXT"}]
+
 
 class FakeDispatcher:
     def __init__(self):
@@ -120,6 +137,7 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(dispatcher.skill_path_requests, [["skill-creator"]])
         self.assertEqual(dispatcher.instruction_requests, [(["skill-creator"], True)])
         self.assertEqual(run.tools, [{"name": "inspect"}])
+        self.assertEqual(run.memory_references[0]["scope_id"], "sid-1")
         self.assertEqual(run.context["session_id"], "sid-1")
         self.assertEqual(run.context["active_skill_paths"], ["D:/skills/skill-creator"])
         self.assertEqual(dispatcher.tool_contexts, [run.context])
