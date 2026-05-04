@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from 'react'
-import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
 export type KnowledgeTab = 'documents' | 'memory'
@@ -17,6 +17,13 @@ function vectorStatusLabel(file: KnowledgeFile) {
   if (file.vector_status === 'failed') return '向量失败'
   if (file.vector_status === 'pending') return '待向量注入'
   return file.chunks !== undefined ? `${file.chunks} 个向量块` : 'Vault 原文'
+}
+
+function formatMemorySize(size: number) {
+  if (!Number.isFinite(size) || size <= 0) return '0 B'
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KiB`
+  return `${(size / 1024 / 1024).toFixed(1)} MiB`
 }
 
 export function KnowledgeTabs({
@@ -1425,6 +1432,118 @@ export function MemoryStoresPanel({ stores }: { stores: MemoryStoreInfo[] }) {
             </div>
           </div>
         ))}
+      </div>
+    </section>
+  )
+}
+
+export function MemoryQualityPanel({
+  report,
+  onGoGovern,
+  onOpen,
+  onRefresh,
+}: {
+  report: MemoryQualityReport | null
+  onGoGovern: () => void
+  onOpen: (path: string) => void
+  onRefresh: () => void
+}) {
+  const summary = report?.summary
+  const stores = report?.stores || []
+  const candidates = report?.compression_candidates || []
+  const healthScore = summary?.health_score ?? 0
+  const healthTone = healthScore >= 80 ? 'text-ops-success' : healthScore >= 60 ? 'text-amber-200' : 'text-ops-alert'
+  const qualityCards = [
+    ['健康分', `${healthScore}`, '按冲突、过期、重复和碎片化综合估算'],
+    ['记忆条目', `${summary?.entry_count ?? 0}`, `${summary?.memory_count ?? 0} 个文件 / ${summary?.store_count ?? 0} 个库`],
+    ['待治理', `${(summary?.pending_conflict_count ?? 0) + (summary?.stale_review_count ?? 0)}`, '冲突与过期复核需要人工确认'],
+    ['压缩候选', `${summary?.compression_candidate_count ?? 0}`, '只生成候选，不自动覆盖正式记忆'],
+  ]
+
+  return (
+    <section className="rounded-xl border border-ops-surface0 bg-gradient-to-br from-ops-panel/85 via-ops-panel/55 to-ops-dark/70 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.22)]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-ops-text">记忆质量仪表盘</div>
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-ops-subtext">
+            按 Claude Managed Agents 的思路，把记忆拆成可审计、可压缩、可复核的文件库；这里先给治理建议，避免后台偷偷改掉 AI 的长期记忆。
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={onRefresh} className="rounded-md border border-ops-surface1 px-3 py-1.5 text-xs text-ops-subtext hover:border-ops-accent hover:text-ops-text">
+            刷新质量
+          </button>
+          <button onClick={onGoGovern} className="rounded-md border border-ops-accent/50 bg-ops-accent/10 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent hover:text-ops-dark">
+            去治理
+          </button>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        {qualityCards.map(([label, value, hint], index) => (
+          <div key={label} className="rounded-lg border border-ops-surface0 bg-ops-dark/45 p-3">
+            <div className="text-[11px] uppercase tracking-[0.22em] text-ops-overlay">{label}</div>
+            <div className={`mt-2 text-2xl font-black ${index === 0 ? healthTone : 'text-ops-text'}`}>{value}</div>
+            <div className="mt-1 text-[11px] leading-4 text-ops-subtext">{hint}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-[0.95fr_1.2fr]">
+        <div className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-ops-text">记忆库分布</span>
+            <span className="text-[11px] text-ops-overlay">{report?.policy?.rule || '候选模式，人工确认后再整理。'}</span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {stores.length > 0 ? stores.map((store) => (
+              <div key={store.store_id} className="rounded-md border border-ops-surface1/70 bg-ops-panel/35 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-ops-text">{store.store_name}</span>
+                  <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-subtext">{store.store_id === 'global' ? '只读' : '可写'}</span>
+                </div>
+                <div className="mt-2 grid grid-cols-4 gap-2 text-[11px] text-ops-subtext">
+                  <span>{store.memories} 文件</span>
+                  <span>{store.entries} 条</span>
+                  <span>{formatMemorySize(store.size)}</span>
+                  <span>{candidates.filter((candidate) => candidate.store_id === store.store_id).length} 候选</span>
+                </div>
+              </div>
+            )) : (
+              <div className="rounded-md border border-dashed border-ops-surface1 p-4 text-xs text-ops-subtext">暂无质量数据，刷新后会显示各个记忆库的分布。</div>
+            )}
+          </div>
+        </div>
+        <div className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-ops-text">压缩候选</span>
+            <span className="text-[11px] text-ops-overlay">不会自动压缩，先给人工审计</span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {candidates.length > 0 ? candidates.map((candidate) => (
+              <button
+                key={candidate.path}
+                onClick={() => onOpen(candidate.path)}
+                className="w-full rounded-md border border-amber-300/25 bg-amber-300/5 px-3 py-2 text-left transition-colors hover:border-amber-300/55 hover:bg-amber-300/10"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-ops-text">{candidate.path}</span>
+                  <span className="rounded-full bg-amber-300/10 px-2 py-0.5 text-[10px] text-amber-200">评分 {candidate.score}</span>
+                </div>
+                <div className="mt-1 text-[11px] text-ops-subtext">
+                  {candidate.store_name || candidate.store_id || '未分组'} / {candidate.entries} 条 / {formatMemorySize(candidate.size)}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {candidate.reason.split('；').filter(Boolean).map((reason) => (
+                    <span key={reason} className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-overlay">{reason}</span>
+                  ))}
+                </div>
+              </button>
+            )) : (
+              <div className="rounded-md border border-dashed border-ops-surface1 p-4 text-xs leading-5 text-ops-subtext">
+                当前没有明显需要压缩的记忆。后续如果某个资产、会话或用户偏好记忆过多，会先进入这里排队，再由你确认是否整理。
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </section>
   )

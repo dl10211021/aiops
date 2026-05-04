@@ -217,6 +217,129 @@ class FileMemoryStore:
             )
         return memories
 
+    def analyze_quality(
+        self,
+        *,
+        stale_days: int = 180,
+        pending_conflicts: list[dict[str, Any]] | None = None,
+        recent_versions: list[dict[str, Any]] | None = None,
+        max_candidates: int = 8,
+    ) -> dict[str, Any]:
+        self.initialize()
+        memories = self.list_memories()
+        pending_conflicts = list(pending_conflicts or [])
+        recent_versions = recent_versions if recent_versions is not None else self.list_versions(limit=200)
+        review_items = self.list_review_items(stale_days=stale_days)
+        stale_paths = {item.get("path") for item in review_items}
+
+        by_store: dict[str, dict[str, Any]] = {}
+        for item in memories:
+            store_id = str(item.get("store_id") or "unknown")
+            bucket = by_store.setdefault(
+                store_id,
+                {
+                    "store_id": store_id,
+                    "store_name": item.get("store_name") or store_id,
+                    "memories": 0,
+                    "entries": 0,
+                    "size": 0,
+                },
+            )
+            bucket["memories"] += 1
+            bucket["entries"] += int(item.get("entries") or 0)
+            bucket["size"] += int(item.get("size") or 0)
+
+        version_counts: dict[str, int] = {}
+        for version in recent_versions:
+            path = str(version.get("path") or "")
+            if path:
+                version_counts[path] = version_counts.get(path, 0) + 1
+
+        candidates: list[dict[str, Any]] = []
+        duplicate_entry_count = 0
+        for item in memories:
+            path = str(item.get("path") or "")
+            reasons: list[str] = []
+            score = 0
+            entries = int(item.get("entries") or 0)
+            size = int(item.get("size") or 0)
+
+            if entries >= 12:
+                reasons.append(f"该文件累计 {entries} 条记忆，建议压缩成阶段性结论。")
+                score += 30
+            if size >= 24000:
+                reasons.append(f"文件大小约 {round(size / 1024, 1)} KiB，可能影响检索上下文预算。")
+                score += 20
+            if path in stale_paths:
+                reasons.append(f"超过 {stale_days} 天未复核，需要确认是否仍适用。")
+                score += 20
+            if version_counts.get(path, 0) >= 5:
+                reasons.append(f"最近版本变更 {version_counts[path]} 次，可能存在反复修订或冲突。")
+                score += 15
+
+            duplicate_count = 0
+            try:
+                memory_path = self._resolve_memory_path(self._safe_relative_path(path))
+                entry_hashes: dict[str, int] = {}
+                for entry in self._parse_entries(str(item.get("scope_id") or ""), memory_path):
+                    key = str(entry.get("summary_sha256") or "")
+                    if key:
+                        entry_hashes[key] = entry_hashes.get(key, 0) + 1
+                duplicate_count = sum(count - 1 for count in entry_hashes.values() if count > 1)
+            except Exception:
+                duplicate_count = 0
+            if duplicate_count:
+                duplicate_entry_count += duplicate_count
+                reasons.append(f"发现 {duplicate_count} 条重复或高度相同的记忆片段。")
+                score += 25
+
+            if reasons:
+                candidates.append(
+                    {
+                        "path": path,
+                        "scope_id": item.get("scope_id") or "",
+                        "store_id": item.get("store_id") or "",
+                        "store_name": item.get("store_name") or "",
+                        "entries": entries,
+                        "size": size,
+                        "updated_at": item.get("updated_at") or "",
+                        "priority": "high" if score >= 45 else "medium" if score >= 25 else "low",
+                        "score": score,
+                        "reason": "；".join(reasons),
+                        "recommended_action": "先由辅助模型生成压缩草稿，再人工确认后替换原记忆，保留版本记录。",
+                    }
+                )
+
+        candidates.sort(key=lambda item: (int(item.get("score") or 0), str(item.get("updated_at") or "")), reverse=True)
+        candidate_count = len(candidates)
+        memory_count = len(memories)
+        entry_count = sum(int(item.get("entries") or 0) for item in memories)
+        pending_count = len(pending_conflicts)
+        stale_count = len(review_items)
+        deductions = min(80, pending_count * 10 + stale_count * 6 + candidate_count * 4 + duplicate_entry_count * 3)
+        health_score = max(0, 100 - deductions)
+        return {
+            "summary": {
+                "memory_count": memory_count,
+                "entry_count": entry_count,
+                "store_count": len(by_store),
+                "pending_conflict_count": pending_count,
+                "stale_review_count": stale_count,
+                "compression_candidate_count": candidate_count,
+                "duplicate_entry_count": duplicate_entry_count,
+                "recent_version_count": len(recent_versions),
+                "health_score": health_score,
+            },
+            "stores": list(by_store.values()),
+            "compression_candidates": candidates[: max(1, max_candidates)],
+            "policy": {
+                "mode": "candidate_only",
+                "stale_days": stale_days,
+                "auto_apply": False,
+                "rule": "只生成压缩候选和治理建议，不自动覆盖正式记忆。",
+            },
+        }
+
     def list_review_items(self, *, stale_days: int) -> list[dict[str, Any]]:
         self.initialize()
         if stale_days <= 0:

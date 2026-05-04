@@ -155,6 +155,13 @@ def memory_review_items_response_kwargs(items: list[Any]) -> dict[str, Any]:
     }
 
 
+def memory_quality_response_kwargs(quality: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"quality": quality},
+    }
+
+
 def memory_review_confirmed_response_kwargs(version: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "success",

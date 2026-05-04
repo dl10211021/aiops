@@ -1,4 +1,4 @@
-import type { ApiResponse, KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { ApiResponse, KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { apiUrl, authHeaders, request } from './http'
 
 export async function listKnowledgeDocuments() {
@@ -169,6 +169,10 @@ export async function listMemoryPendingConflicts(limit = 50) {
 
 export async function listMemoryReviewItems(staleDays = 180, limit = 50) {
   return request<{ items: MemoryReviewItem[] }>(`/knowledge/memory/review?stale_days=${staleDays}&limit=${limit}`)
+}
+
+export async function getMemoryQuality(staleDays = 180, limit = 8) {
+  return request<{ quality: MemoryQualityReport }>(`/knowledge/memory/quality?stale_days=${staleDays}&limit=${limit}`)
 }
 
 export async function resolveMemoryPendingConflict(versionId: string, action: 'accept_new' | 'keep_old' | 'merged') {

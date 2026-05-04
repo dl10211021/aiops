@@ -26,6 +26,7 @@ from api.response_mappers.knowledge import (
     memory_items_response_kwargs,
     memory_pending_conflict_resolved_response_kwargs,
     memory_pending_conflicts_response_kwargs,
+    memory_quality_response_kwargs,
     memory_review_confirmed_response_kwargs,
     memory_review_items_response_kwargs,
     memory_search_response_kwargs,
@@ -214,6 +215,24 @@ async def list_memory_review_items(
 
     items = memory_db.list_memory_review_items(stale_days=stale_days, limit=limit)
     return ResponseModel(**memory_review_items_response_kwargs(items))
+
+
+@router.get("/knowledge/memory/quality", response_model=ResponseModel)
+async def get_memory_quality(
+    stale_days: int = Query(180, ge=1, le=3650),
+    limit: int = Query(8, ge=1, le=50),
+):
+    from core.memory import memory_db
+
+    pending = memory_db.list_pending_memory_conflicts(limit=200)
+    versions = memory_db.file_memory_store.list_versions(limit=200)
+    quality = memory_db.file_memory_store.analyze_quality(
+        stale_days=stale_days,
+        pending_conflicts=pending,
+        recent_versions=versions,
+        max_candidates=limit,
+    )
+    return ResponseModel(**memory_quality_response_kwargs(quality))
 
 
 @router.put("/knowledge/memory", response_model=ResponseModel)

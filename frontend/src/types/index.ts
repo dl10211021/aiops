@@ -749,6 +749,48 @@ export interface MemoryReviewItem extends MemoryItem {
   recommended_action: string
 }
 
+export interface MemoryQualityCompressionCandidate {
+  path: string
+  scope_id: string
+  store_id?: string
+  store_name?: string
+  entries: number
+  size: number
+  updated_at: string
+  priority: 'high' | 'medium' | 'low' | string
+  score: number
+  reason: string
+  recommended_action: string
+}
+
+export interface MemoryQualityReport {
+  summary: {
+    memory_count: number
+    entry_count: number
+    store_count: number
+    pending_conflict_count: number
+    stale_review_count: number
+    compression_candidate_count: number
+    duplicate_entry_count: number
+    recent_version_count: number
+    health_score: number
+  }
+  stores: Array<{
+    store_id: string
+    store_name: string
+    memories: number
+    entries: number
+    size: number
+  }>
+  compression_candidates: MemoryQualityCompressionCandidate[]
+  policy: {
+    mode: string
+    stale_days: number
+    auto_apply: boolean
+    rule: string
+  }
+}
+
 export interface MemorySearchResult {
   session_id?: string
   _memory_scope_id?: string

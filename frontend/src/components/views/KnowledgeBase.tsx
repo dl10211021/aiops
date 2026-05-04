@@ -12,6 +12,7 @@ import {
   MemoryDetailPanel,
   MemoryItemCard,
   MemoryPendingConflictsPanel,
+  MemoryQualityPanel,
   MemoryReviewPanel,
   MemorySearchPanel,
   SessionMemoryActivityPanel,
@@ -90,6 +91,7 @@ export default function KnowledgeBase() {
     memoryItems,
     memoryLoading,
     memoryPendingConflicts,
+    memoryQuality,
     memoryReviewItems,
     sessionMemoryActivity,
     sessionMemoryActivityLoading,
@@ -585,6 +587,13 @@ export default function KnowledgeBase() {
                 ))}
               </div>
             </section>
+
+            <MemoryQualityPanel
+              report={memoryQuality}
+              onGoGovern={() => setMemoryStep('govern')}
+              onOpen={handleOpenMemoryPath}
+              onRefresh={() => void loadMemories()}
+            />
 
             {memoryStep === 'browse' && (
               <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1fr)]">

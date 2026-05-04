@@ -174,6 +174,36 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertEqual(version["operation"], "modified")
         self.assertIn("【复核状态】已复核", self.store.read_memory(item["path"])["content"])
 
+    def test_analyze_quality_reports_candidate_only_compression_advice(self):
+        for index in range(2):
+            self.store.append_memory(
+                scope_id="sid-1",
+                summary=f"【核心记忆】重复巡检经验 {index}。",
+                source_session_id="sid-1",
+            )
+        for index in range(12):
+            self.store.append_memory(
+                scope_id="asset-host:10.0.0.8",
+                summary=f"【核心记忆】巡检碎片 {index}。",
+                source_session_id="sid-8",
+            )
+
+        quality = self.store.analyze_quality(
+            pending_conflicts=[{"version_id": "v1"}],
+            recent_versions=[],
+            max_candidates=5,
+        )
+
+        self.assertGreaterEqual(quality["summary"]["memory_count"], 2)
+        self.assertGreaterEqual(quality["summary"]["entry_count"], 14)
+        self.assertGreaterEqual(quality["summary"]["compression_candidate_count"], 1)
+        self.assertEqual(quality["summary"]["pending_conflict_count"], 1)
+        self.assertFalse(quality["policy"]["auto_apply"])
+        self.assertEqual(quality["policy"]["mode"], "candidate_only")
+        self.assertTrue(
+            any(candidate["path"].endswith("memory.md") for candidate in quality["compression_candidates"])
+        )
+
     def test_delete_memory_rejects_read_only_store(self):
         self.store.initialize()
         global_path = self.tmp_path / "global" / "memory.md"

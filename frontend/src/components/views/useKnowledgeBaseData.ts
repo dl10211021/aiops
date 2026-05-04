@@ -8,6 +8,7 @@ import {
   deleteMemoryItem,
   exportKnowledgeVault,
   exportMemoryStore,
+  getMemoryQuality,
   graphKnowledgeVault,
   confirmMemoryReview,
   importKnowledgeVault,
@@ -34,7 +35,7 @@ import {
 } from '@/api/knowledge'
 import { getSessionMemoryActivity } from '@/api/sessionHistory'
 import { useStore } from '@/store'
-import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
 import { isAcceptedKnowledgeFile } from './knowledgeBaseModel'
 
 export function useKnowledgeBaseData() {
@@ -57,6 +58,7 @@ export function useKnowledgeBaseData() {
   const [memoryVersions, setMemoryVersions] = useState<MemoryVersion[]>([])
   const [memoryPendingConflicts, setMemoryPendingConflicts] = useState<MemoryPendingConflict[]>([])
   const [memoryReviewItems, setMemoryReviewItems] = useState<MemoryReviewItem[]>([])
+  const [memoryQuality, setMemoryQuality] = useState<MemoryQualityReport | null>(null)
   const [sessionMemoryActivity, setSessionMemoryActivity] = useState<SessionMemoryActivity | null>(null)
   const [selectedMemory, setSelectedMemory] = useState<MemoryDetail | null>(null)
   const [memoryDraft, setMemoryDraft] = useState('')
@@ -126,16 +128,18 @@ export function useKnowledgeBaseData() {
     setMemoryLoading(true)
     setMemoryError('')
     try {
-      const [itemsRes, versionsRes, pendingRes] = await Promise.all([
+      const [itemsRes, versionsRes, pendingRes, qualityRes] = await Promise.all([
         listMemoryItems(),
         listMemoryVersions(30),
         listMemoryPendingConflicts(50),
+        getMemoryQuality(180, 8),
       ])
       const reviewRes = await listMemoryReviewItems(180, 50)
       setMemoryItems(itemsRes.data.items || [])
       setMemoryVersions(versionsRes.data.versions || [])
       setMemoryPendingConflicts(pendingRes.data.items || [])
       setMemoryReviewItems(reviewRes.data.items || [])
+      setMemoryQuality(qualityRes.data.quality || null)
       setSelectedMemory((current) => {
         if (!current) return current
         const stillExists = (itemsRes.data.items || []).some((item) => item.path === current.path)
@@ -145,6 +149,7 @@ export function useKnowledgeBaseData() {
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : '加载 AI 记忆失败'
       setMemoryError(message === 'Not Found' ? 'AI 记忆服务暂未开启或当前服务需要重启。' : message)
+      setMemoryQuality(null)
     } finally {
       setMemoryLoading(false)
     }
@@ -625,6 +630,7 @@ export function useKnowledgeBaseData() {
     memoryItems,
     memoryLoading,
     memoryPendingConflicts,
+    memoryQuality,
     memoryReviewItems,
     sessionMemoryActivity,
     sessionMemoryActivityLoading,
