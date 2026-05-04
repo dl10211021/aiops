@@ -11,6 +11,8 @@ from api.response_mappers.knowledge import (
     knowledge_vault_candidate_response_kwargs,
     knowledge_vault_candidate_updated_response_kwargs,
     knowledge_vault_candidates_response_kwargs,
+    knowledge_vault_article_item_response_kwargs,
+    knowledge_vault_articles_response_kwargs,
     knowledge_vault_queue_response_kwargs,
     memory_item_created_response_kwargs,
     memory_item_deleted_response_kwargs,
@@ -35,8 +37,10 @@ from core.knowledge_base_service import (
     compile_vault_source_candidate,
     ingest_knowledge_document,
     list_knowledge_document_records,
+    list_vault_articles,
     list_vault_candidates,
     list_vault_compile_queue,
+    read_vault_article,
     read_vault_candidate,
     remove_knowledge_document_record,
     update_vault_candidate,
@@ -354,6 +358,22 @@ async def update_knowledge_vault_candidate(req: KnowledgeVaultCandidateUpdateReq
     except KnowledgeBaseServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**knowledge_vault_candidate_updated_response_kwargs(item))
+
+
+@router.get("/knowledge/vault/articles", response_model=ResponseModel)
+async def list_knowledge_vault_articles():
+    """列出已批准入库的正式 Wiki 文章。"""
+    return ResponseModel(**knowledge_vault_articles_response_kwargs(list_vault_articles()))
+
+
+@router.get("/knowledge/vault/article", response_model=ResponseModel)
+async def read_knowledge_vault_article(source_session_id: str = Query(..., min_length=1)):
+    """读取正式 Wiki Markdown 正文。"""
+    try:
+        item = read_vault_article(source_session_id)
+    except KnowledgeBaseServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**knowledge_vault_article_item_response_kwargs(item))
 
 
 @router.post("/knowledge/vault/approve", response_model=ResponseModel)

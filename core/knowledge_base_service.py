@@ -369,6 +369,19 @@ def _resolve_candidate_file(root: Path, record: dict[str, Any]) -> Path:
     return path
 
 
+def _resolve_article_file(root: Path, record: dict[str, Any]) -> Path:
+    article_rel = record.get("wiki_path")
+    if not article_rel:
+        raise KnowledgeBaseServiceError(400, "该资料还没有正式 Wiki 页面")
+    path = (root / str(article_rel)).resolve()
+    root_resolved = root.resolve()
+    if root_resolved not in path.parents and path != root_resolved:
+        raise KnowledgeBaseServiceError(400, "正式 Wiki 路径非法")
+    if not path.exists():
+        raise KnowledgeBaseServiceError(404, "正式 Wiki 页面不存在")
+    return path
+
+
 async def _generate_candidate_with_model(record: dict[str, Any], source_preview: str) -> str:
     from core.assistant_model_config import assistant_thinking_mode, resolve_assistant_model_id
     from core.llm_execution import execute_chat_stream
@@ -532,6 +545,42 @@ def list_vault_candidates(vault_dir: str | os.PathLike[str] | None = None) -> li
             }
         )
     return sorted(candidates, key=lambda item: str(item.get("compiled_at") or item.get("updated_at") or ""), reverse=True)
+
+
+def list_vault_articles(vault_dir: str | os.PathLike[str] | None = None) -> list[dict[str, Any]]:
+    root = Path(vault_dir) if vault_dir is not None else _vault_root()
+    articles: list[dict[str, Any]] = []
+    for item in _read_manifest(root):
+        article_path = item.get("wiki_path")
+        if not article_path:
+            continue
+        path = root / str(article_path)
+        articles.append(
+            {
+                **item,
+                "article_exists": path.exists(),
+                "article_size": path.stat().st_size if path.exists() else 0,
+                "review_status": "approved" if item.get("compile_status") == "approved" else item.get("compile_status"),
+            }
+        )
+    return sorted(articles, key=lambda item: str(item.get("approved_at") or item.get("updated_at") or ""), reverse=True)
+
+
+def read_vault_article(
+    identifier: str,
+    *,
+    vault_dir: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    root, record = _find_vault_record(identifier, vault_dir)
+    article_path = _resolve_article_file(root, record)
+    content = article_path.read_text(encoding="utf-8")
+    return {
+        **record,
+        "content": content,
+        "content_sha256": _sha256_text(content),
+        "article_size": article_path.stat().st_size,
+        "article_exists": True,
+    }
 
 
 def read_vault_candidate(

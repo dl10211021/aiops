@@ -15,8 +15,10 @@ from core.knowledge_base_service import (
     ingest_knowledge_document,
     list_vault_compile_queue,
     list_vault_candidates,
+    list_vault_articles,
     list_vault_source_records,
     list_knowledge_document_records,
+    read_vault_article,
     read_vault_candidate,
     remove_knowledge_document_record,
     remove_vault_source_record,
@@ -216,3 +218,8 @@ class TestKnowledgeBaseService(unittest.TestCase):
         self.assertIn('review_status: "approved"', article_text)
         self.assertIn('type: "wiki-article"', article_text)
         self.assertEqual(list_vault_compile_queue(self.vault_dir), [])
+        articles = list_vault_articles(self.vault_dir)
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]["review_status"], "approved")
+        article_detail = read_vault_article(record["source_session_id"], vault_dir=self.vault_dir)
+        self.assertIn("人工补充", article_detail["content"])

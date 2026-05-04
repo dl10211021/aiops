@@ -40,6 +40,8 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/vault/candidates", paths)
         self.assertIn("/knowledge/vault/candidate", paths)
         self.assertIn("/knowledge/vault/approve", paths)
+        self.assertIn("/knowledge/vault/articles", paths)
+        self.assertIn("/knowledge/vault/article", paths)
         self.assertIn("/knowledge/{filename}", paths)
 
     def test_upload_knowledge_document_preserves_response_shape(self):
@@ -143,6 +145,24 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(update_response.status, "success")
         self.assertEqual(update_response.message, "候选 Wiki 已保存")
         self.assertEqual(update_response.data, {"item": {"id": "src-1", "content": "# changed", "content_sha256": "sha2"}})
+
+    def test_list_and_read_knowledge_vault_articles_preserve_response_shape(self):
+        with patch(
+            "api.knowledge_routes.list_vault_articles",
+            return_value=[{"id": "src-1", "wiki_path": "wiki/articles/runbook.md"}],
+        ):
+            list_response = asyncio.run(knowledge_routes.list_knowledge_vault_articles())
+
+        with patch(
+            "api.knowledge_routes.read_vault_article",
+            return_value={"id": "src-1", "content": "# article", "content_sha256": "sha"},
+        ):
+            read_response = asyncio.run(knowledge_routes.read_knowledge_vault_article("source-session-1"))
+
+        self.assertEqual(list_response.status, "success")
+        self.assertEqual(list_response.data, {"items": [{"id": "src-1", "wiki_path": "wiki/articles/runbook.md"}]})
+        self.assertEqual(read_response.status, "success")
+        self.assertEqual(read_response.data, {"item": {"id": "src-1", "content": "# article", "content_sha256": "sha"}})
 
     def test_delete_knowledge_document_preserves_response_shape(self):
         with patch(

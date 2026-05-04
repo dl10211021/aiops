@@ -13,6 +13,10 @@ export async function listKnowledgeVaultCandidates() {
   return request<{ items: KnowledgeCompileQueueItem[] }>('/knowledge/vault/candidates')
 }
 
+export async function listKnowledgeVaultArticles() {
+  return request<{ items: KnowledgeCompileQueueItem[] }>('/knowledge/vault/articles')
+}
+
 export async function compileKnowledgeVaultSource(sourceSessionId: string, useAi = true) {
   return request<{ item: KnowledgeCompileQueueItem }>('/knowledge/vault/compile', {
     method: 'POST',
@@ -34,6 +38,10 @@ export async function approveKnowledgeVaultCandidate(sourceSessionId: string) {
 
 export async function readKnowledgeVaultCandidate(sourceSessionId: string) {
   return request<{ item: KnowledgeCompileQueueItem }>(`/knowledge/vault/candidate?source_session_id=${encodeURIComponent(sourceSessionId)}`)
+}
+
+export async function readKnowledgeVaultArticle(sourceSessionId: string) {
+  return request<{ item: KnowledgeCompileQueueItem }>(`/knowledge/vault/article?source_session_id=${encodeURIComponent(sourceSessionId)}`)
 }
 
 export async function updateKnowledgeVaultCandidate(sourceSessionId: string, content: string, contentSha256?: string) {

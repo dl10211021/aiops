@@ -347,6 +347,97 @@ export function KnowledgeCandidateEditor({
   )
 }
 
+export function KnowledgeArticlePanel({
+  items,
+  openingArticle,
+  onOpen,
+}: {
+  items: KnowledgeCompileQueueItem[]
+  openingArticle: string | null
+  onOpen: (item: KnowledgeCompileQueueItem) => void
+}) {
+  return (
+    <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-ops-text">正式 Wiki</div>
+          <p className="mt-1 text-xs leading-5 text-ops-subtext">
+            已批准的知识会进入 `wiki/articles/`，作为后续会话、画像和检索可引用的正式知识。
+          </p>
+        </div>
+        <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
+          {items.length}
+        </span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {items.length > 0 ? items.map((item) => {
+          const sourceSession = item.source_session_id || item.id
+          return (
+            <article key={`${item.id || item.filename}-article`} className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-semibold text-ops-text" title={item.original_filename || item.filename}>
+                    {item.original_filename || item.filename}
+                  </div>
+                  <div className="mt-1 font-mono text-[11px] text-ops-overlay">{sourceSession}</div>
+                </div>
+                <span className="shrink-0 rounded-full border border-ops-success/30 px-2 py-0.5 text-[10px] text-ops-success">
+                  正式
+                </span>
+              </div>
+              {item.wiki_path && (
+                <div className="mt-2 truncate rounded border border-ops-success/30 bg-ops-success/5 px-2 py-1 font-mono text-[11px] text-ops-success" title={item.wiki_path}>
+                  article: {item.wiki_path}
+                </div>
+              )}
+              <button
+                onClick={() => onOpen(item)}
+                disabled={Boolean(openingArticle) || item.article_exists === false}
+                className="mt-2 w-full rounded-md border border-ops-accent/40 px-3 py-1.5 text-xs font-semibold text-ops-accent transition-colors hover:bg-ops-accent/10 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {openingArticle === sourceSession ? '打开中...' : item.article_exists === false ? '文章缺失' : '打开正式 Wiki'}
+              </button>
+            </article>
+          )
+        }) : (
+          <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
+            暂无正式 Wiki。批准候选页后，这里会出现可引用的长期知识。
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+export function KnowledgeArticleViewer({ article }: { article: KnowledgeCompileQueueItem | null }) {
+  if (!article) {
+    return (
+      <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+        <div className="text-sm font-semibold text-ops-text">正式正文</div>
+        <p className="mt-1 text-xs leading-5 text-ops-subtext">
+          点击正式 Wiki 的“打开正式 Wiki”，这里会以只读方式展示 Markdown 正文。
+        </p>
+      </section>
+    )
+  }
+  return (
+    <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60">
+      <div className="border-b border-ops-surface0 px-4 py-3">
+        <div className="text-xs font-semibold text-ops-success">正式正文</div>
+        <h2 className="mt-1 truncate text-sm font-bold text-ops-text" title={article.wiki_path || article.original_filename || article.filename}>
+          {article.wiki_path || article.original_filename || article.filename}
+        </h2>
+        <div className="mt-1 text-xs text-ops-overlay">
+          {article.source_session_id || article.id} · {article.content_sha256 ? `sha256 ${article.content_sha256.slice(0, 10)}` : '未计算哈希'}
+        </div>
+      </div>
+      <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-5 text-ops-subtext">
+        {article.content || '该正式 Wiki 暂无正文'}
+      </pre>
+    </section>
+  )
+}
+
 export function KnowledgeEmptyState({
   uploading,
   onUpload,

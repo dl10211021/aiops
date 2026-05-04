@@ -18,6 +18,8 @@ import {
   KnowledgeCompileQueuePanel,
   KnowledgeCandidatePanel,
   KnowledgeCandidateEditor,
+  KnowledgeArticlePanel,
+  KnowledgeArticleViewer,
   type KnowledgeTab,
 } from './KnowledgeBaseParts'
 import { useKnowledgeBaseData } from './useKnowledgeBaseData'
@@ -34,16 +36,20 @@ export default function KnowledgeBase() {
     files,
     compileQueueItems,
     candidateItems,
+    articleItems,
     candidateDraft,
     compilingSourceSession,
     approvingSourceSession,
     openingCandidate,
+    openingArticle,
     savingCandidate,
     selectedCandidate,
+    selectedArticle,
     handleDelete,
     handleCompileKnowledgeSource,
     handleApproveKnowledgeCandidate,
     handleOpenKnowledgeCandidate,
+    handleOpenKnowledgeArticle,
     handleSaveKnowledgeCandidate,
     handleDeleteMemory,
     handleCreateMemory,
@@ -174,6 +180,16 @@ export default function KnowledgeBase() {
                   onSave={handleSaveKnowledgeCandidate}
                 />
               </div>
+              <div className="mt-4">
+                <KnowledgeArticlePanel
+                  items={articleItems}
+                  openingArticle={openingArticle}
+                  onOpen={handleOpenKnowledgeArticle}
+                />
+              </div>
+              <div className="mt-4">
+                <KnowledgeArticleViewer article={selectedArticle} />
+              </div>
             </aside>
           </div>
         ) : activeTab === 'documents' && !loading ? (
@@ -198,6 +214,12 @@ export default function KnowledgeBase() {
               onDraftChange={setCandidateDraft}
               onSave={handleSaveKnowledgeCandidate}
             />
+            <KnowledgeArticlePanel
+              items={articleItems}
+              openingArticle={openingArticle}
+              onOpen={handleOpenKnowledgeArticle}
+            />
+            <KnowledgeArticleViewer article={selectedArticle} />
           </div>
         ) : null}
 

@@ -9,6 +9,7 @@ import {
   exportMemoryStore,
   confirmMemoryReview,
   listKnowledgeDocuments,
+  listKnowledgeVaultArticles,
   listKnowledgeVaultCandidates,
   listKnowledgeVaultQueue,
   listMemoryItems,
@@ -19,6 +20,7 @@ import {
   redactMemoryVersion,
   readMemoryItem,
   readKnowledgeVaultCandidate,
+  readKnowledgeVaultArticle,
   restoreMemoryVersion,
   resolveMemoryPendingConflict,
   searchMemoryItems,
@@ -35,7 +37,9 @@ export function useKnowledgeBaseData() {
   const [files, setFiles] = useState<KnowledgeFile[]>([])
   const [compileQueueItems, setCompileQueueItems] = useState<KnowledgeCompileQueueItem[]>([])
   const [candidateItems, setCandidateItems] = useState<KnowledgeCompileQueueItem[]>([])
+  const [articleItems, setArticleItems] = useState<KnowledgeCompileQueueItem[]>([])
   const [selectedCandidate, setSelectedCandidate] = useState<KnowledgeCompileQueueItem | null>(null)
+  const [selectedArticle, setSelectedArticle] = useState<KnowledgeCompileQueueItem | null>(null)
   const [candidateDraft, setCandidateDraft] = useState('')
   const [memoryItems, setMemoryItems] = useState<MemoryItem[]>([])
   const [memoryStores, setMemoryStores] = useState<MemoryStoreInfo[]>([])
@@ -64,6 +68,7 @@ export function useKnowledgeBaseData() {
   const [compilingSourceSession, setCompilingSourceSession] = useState<string | null>(null)
   const [approvingSourceSession, setApprovingSourceSession] = useState<string | null>(null)
   const [openingCandidate, setOpeningCandidate] = useState<string | null>(null)
+  const [openingArticle, setOpeningArticle] = useState<string | null>(null)
   const [savingCandidate, setSavingCandidate] = useState(false)
   const [loading, setLoading] = useState(true)
   const [memoryLoading, setMemoryLoading] = useState(true)
@@ -75,13 +80,15 @@ export function useKnowledgeBaseData() {
     setError('')
     try {
       const res = await listKnowledgeDocuments()
-      const [queueRes, candidatesRes] = await Promise.all([
+      const [queueRes, candidatesRes, articlesRes] = await Promise.all([
         listKnowledgeVaultQueue(),
         listKnowledgeVaultCandidates(),
+        listKnowledgeVaultArticles(),
       ])
       setFiles(res.data.files || [])
       setCompileQueueItems(queueRes.data.items || [])
       setCandidateItems(candidatesRes.data.items || [])
+      setArticleItems(articlesRes.data.items || [])
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '加载知识库失败')
       addToast('加载知识库失败', 'error')
@@ -246,6 +253,23 @@ export function useKnowledgeBaseData() {
       addToast(e instanceof Error ? e.message : '保存候选 Wiki 失败', 'error')
     } finally {
       setSavingCandidate(false)
+    }
+  }
+
+  const handleOpenKnowledgeArticle = async (item: KnowledgeCompileQueueItem) => {
+    const sourceSessionId = item.source_session_id || item.id
+    if (!sourceSessionId) {
+      addToast('该文章缺少 source session，无法打开', 'error')
+      return
+    }
+    setOpeningArticle(sourceSessionId)
+    try {
+      const res = await readKnowledgeVaultArticle(sourceSessionId)
+      setSelectedArticle(res.data.item)
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '打开正式 Wiki 失败', 'error')
+    } finally {
+      setOpeningArticle(null)
     }
   }
 
@@ -427,16 +451,20 @@ export function useKnowledgeBaseData() {
     files,
     compileQueueItems,
     candidateItems,
+    articleItems,
     candidateDraft,
     compilingSourceSession,
     approvingSourceSession,
     openingCandidate,
+    openingArticle,
     savingCandidate,
     selectedCandidate,
+    selectedArticle,
     handleDelete,
     handleCompileKnowledgeSource,
     handleApproveKnowledgeCandidate,
     handleOpenKnowledgeCandidate,
+    handleOpenKnowledgeArticle,
     handleSaveKnowledgeCandidate,
     handleDeleteMemory,
     handleCreateMemory,
