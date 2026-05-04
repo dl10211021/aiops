@@ -328,6 +328,22 @@ export function KnowledgeVaultGraphPanel({
   const nodeById = new Map((graph?.nodes || []).map((node) => [node.id, node]))
   const relationCounts = graph?.summary.relation_counts || {}
   const hasGraphLinks = Boolean(graph && graph.nodes.length > 0)
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [graphZoom, setGraphZoom] = useState(1)
+  const [graphPan, setGraphPan] = useState({ x: 0, y: 0 })
+  const [dragStart, setDragStart] = useState<{ x: number; y: number; panX: number; panY: number } | null>(null)
+  const selectedNode = selectedNodeId ? nodeById.get(selectedNodeId) : topNodes[0]
+  const selectedNodeEdges = selectedNode && graph
+    ? graph.edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id).slice(0, 8)
+    : []
+  const viewWidth = 100 / graphZoom
+  const viewHeight = 64 / graphZoom
+  const viewBox = `${(100 - viewWidth) / 2 + graphPan.x} ${(64 - viewHeight) / 2 + graphPan.y} ${viewWidth} ${viewHeight}`
+  const resetGraphView = () => {
+    setGraphZoom(1)
+    setGraphPan({ x: 0, y: 0 })
+    setDragStart(null)
+  }
 
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
@@ -381,61 +397,208 @@ export function KnowledgeVaultGraphPanel({
             </div>
           </div>
 
-          <div className="rounded-xl border border-ops-accent/20 bg-[radial-gradient(circle_at_20%_20%,rgba(45,212,191,0.18),transparent_32%),linear-gradient(135deg,rgba(8,13,28,0.96),rgba(10,31,45,0.72))] p-3">
-            <div className="mb-2 flex items-center justify-between text-xs">
-              <span className="font-semibold text-ops-text">知识图谱</span>
-              <span className="text-ops-subtext">
-                关联 {relationCounts.wikilink || 0} / 提及 {relationCounts.mention || 0}
-              </span>
+          <div className="rounded-xl border border-ops-accent/25 bg-[radial-gradient(circle_at_18%_18%,rgba(45,212,191,0.2),transparent_30%),radial-gradient(circle_at_82%_20%,rgba(96,165,250,0.16),transparent_28%),linear-gradient(135deg,rgba(8,13,28,0.98),rgba(8,30,48,0.78))] p-3 shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div>
+                <span className="font-semibold text-ops-text">可视化知识图谱</span>
+                <span className="ml-2 rounded-full border border-ops-accent/35 px-2 py-0.5 text-[10px] text-ops-accent">
+                  可缩放 · 可拖动 · 可点选
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-ops-subtext">
+                  关联 {relationCounts.wikilink || 0} / 提及 {relationCounts.mention || 0}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setGraphZoom((value) => Math.max(0.75, Number((value - 0.25).toFixed(2))))}
+                  className="rounded border border-ops-surface1 px-2 py-1 text-[11px] text-ops-subtext hover:border-ops-accent hover:text-ops-accent"
+                >
+                  缩小
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGraphZoom((value) => Math.min(2.5, Number((value + 0.25).toFixed(2))))}
+                  className="rounded border border-ops-surface1 px-2 py-1 text-[11px] text-ops-subtext hover:border-ops-accent hover:text-ops-accent"
+                >
+                  放大
+                </button>
+                <button
+                  type="button"
+                  onClick={resetGraphView}
+                  className="rounded border border-ops-surface1 px-2 py-1 text-[11px] text-ops-subtext hover:border-ops-accent hover:text-ops-accent"
+                >
+                  居中
+                </button>
+              </div>
             </div>
             {hasGraphLinks ? (
-              <svg viewBox="0 0 100 64" role="img" aria-label="知识图谱" className="h-72 w-full overflow-visible rounded-lg border border-ops-surface0 bg-ops-dark/45">
-                <defs>
-                  <filter id="knowledgeGraphGlow" x="-40%" y="-40%" width="180%" height="180%">
-                    <feGaussianBlur stdDeviation="1.8" result="coloredBlur" />
-                    <feMerge>
-                      <feMergeNode in="coloredBlur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                </defs>
-                {graph.edges.map((edge, index) => {
-                  const source = nodeById.get(edge.source)
-                  const target = nodeById.get(edge.target)
-                  if (!source || !target) return null
-                  return (
-                    <line
-                      key={`${edge.source}-${edge.target}-${edge.kind}-${index}`}
-                      x1={source.x || 50}
-                      y1={source.y || 32}
-                      x2={target.x || 50}
-                      y2={target.y || 32}
-                      stroke={edge.kind === 'wikilink' ? 'rgba(45,212,191,0.72)' : 'rgba(148,163,184,0.36)'}
-                      strokeWidth={edge.kind === 'wikilink' ? 0.55 : 0.35}
-                    />
-                  )
-                })}
-                {graph.nodes.map((node) => (
-                  <g key={node.id} filter={(node.degree || 0) > 0 ? 'url(#knowledgeGraphGlow)' : undefined}>
-                    <circle
-                      cx={node.x || 50}
-                      cy={node.y || 32}
-                      r={Math.max(2.3, (node.size || 8) / 2.6)}
-                      fill={node.kind === 'article' ? 'rgba(45,212,191,0.88)' : 'rgba(251,191,36,0.78)'}
-                      stroke="rgba(226,232,240,0.75)"
-                      strokeWidth="0.25"
-                    />
-                    <text
-                      x={(node.x || 50) + 3}
-                      y={(node.y || 32) + 1}
-                      fill="rgba(226,232,240,0.88)"
-                      fontSize="2.6"
-                    >
-                      {node.title.slice(0, 18)}
-                    </text>
-                  </g>
-                ))}
-              </svg>
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
+                <div className="relative overflow-hidden rounded-lg border border-ops-surface0 bg-[linear-gradient(rgba(45,212,191,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(45,212,191,0.07)_1px,transparent_1px),rgba(2,6,23,0.72)] bg-[size:24px_24px]">
+                  <svg
+                    viewBox={viewBox}
+                    role="img"
+                    aria-label="知识图谱"
+                    className="h-[410px] w-full cursor-grab select-none overflow-visible active:cursor-grabbing"
+                    onWheel={(event) => {
+                      event.preventDefault()
+                      setGraphZoom((value) => Math.min(2.5, Math.max(0.75, Number((value + (event.deltaY > 0 ? -0.12 : 0.12)).toFixed(2)))))
+                    }}
+                    onPointerDown={(event) => {
+                      setDragStart({ x: event.clientX, y: event.clientY, panX: graphPan.x, panY: graphPan.y })
+                    }}
+                    onPointerMove={(event) => {
+                      if (!dragStart) return
+                      const scale = 0.18 / graphZoom
+                      setGraphPan({
+                        x: dragStart.panX - (event.clientX - dragStart.x) * scale,
+                        y: dragStart.panY - (event.clientY - dragStart.y) * scale,
+                      })
+                    }}
+                    onPointerUp={() => setDragStart(null)}
+                    onPointerLeave={() => setDragStart(null)}
+                  >
+                    <defs>
+                      <filter id="knowledgeGraphGlow" x="-40%" y="-40%" width="180%" height="180%">
+                        <feGaussianBlur stdDeviation="1.8" result="coloredBlur" />
+                        <feMerge>
+                          <feMergeNode in="coloredBlur" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
+                      <linearGradient id="knowledgeGraphEdge" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="rgba(45,212,191,0.9)" />
+                        <stop offset="100%" stopColor="rgba(96,165,250,0.52)" />
+                      </linearGradient>
+                    </defs>
+                    {graph.edges.map((edge, index) => {
+                      const source = nodeById.get(edge.source)
+                      const target = nodeById.get(edge.target)
+                      if (!source || !target) return null
+                      const isSelectedEdge = selectedNode && (edge.source === selectedNode.id || edge.target === selectedNode.id)
+                      return (
+                        <line
+                          key={`${edge.source}-${edge.target}-${edge.kind}-${index}`}
+                          x1={source.x || 50}
+                          y1={source.y || 32}
+                          x2={target.x || 50}
+                          y2={target.y || 32}
+                          stroke={isSelectedEdge ? 'url(#knowledgeGraphEdge)' : edge.kind === 'wikilink' ? 'rgba(45,212,191,0.6)' : 'rgba(148,163,184,0.28)'}
+                          strokeWidth={isSelectedEdge ? 0.92 : edge.kind === 'wikilink' ? 0.52 : 0.32}
+                          strokeLinecap="round"
+                          opacity={selectedNode ? (isSelectedEdge ? 1 : 0.24) : 1}
+                        />
+                      )
+                    })}
+                    {graph.nodes.map((node) => {
+                      const isSelected = selectedNode?.id === node.id
+                      const isNeighbor = selectedNodeEdges.some((edge) => edge.source === node.id || edge.target === node.id)
+                      const muted = selectedNode && !isSelected && !isNeighbor
+                      const radius = Math.max(2.4, (node.size || 8) / 2.65) + (isSelected ? 1.35 : 0)
+                      return (
+                        <g
+                          key={node.id}
+                          role="button"
+                          tabIndex={0}
+                          filter={(node.degree || 0) > 0 ? 'url(#knowledgeGraphGlow)' : undefined}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setSelectedNodeId(node.id)
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') setSelectedNodeId(node.id)
+                          }}
+                          className="cursor-pointer outline-none transition-opacity"
+                          opacity={muted ? 0.28 : 1}
+                        >
+                          <circle
+                            cx={node.x || 50}
+                            cy={node.y || 32}
+                            r={radius + 1.1}
+                            fill={isSelected ? 'rgba(45,212,191,0.18)' : 'rgba(15,23,42,0.18)'}
+                            stroke={isSelected ? 'rgba(45,212,191,0.96)' : 'rgba(148,163,184,0.26)'}
+                            strokeWidth={isSelected ? 0.5 : 0.2}
+                          />
+                          <circle
+                            cx={node.x || 50}
+                            cy={node.y || 32}
+                            r={radius}
+                            fill={node.kind === 'article' ? 'rgba(45,212,191,0.9)' : 'rgba(251,191,36,0.82)'}
+                            stroke="rgba(226,232,240,0.78)"
+                            strokeWidth="0.28"
+                          />
+                          <text
+                            x={(node.x || 50) + radius + 1.4}
+                            y={(node.y || 32) + 1}
+                            fill={isSelected ? 'rgba(255,255,255,0.98)' : 'rgba(226,232,240,0.84)'}
+                            fontSize={isSelected ? '3.1' : '2.55'}
+                            fontWeight={isSelected ? 700 : 500}
+                            paintOrder="stroke"
+                            stroke="rgba(2,6,23,0.88)"
+                            strokeWidth="0.7"
+                          >
+                            {node.title.slice(0, 20)}
+                          </text>
+                        </g>
+                      )
+                    })}
+                  </svg>
+                  <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-2 text-[10px] text-ops-subtext">
+                    <span className="rounded-full border border-ops-accent/30 bg-ops-dark/70 px-2 py-1">青色：正式知识</span>
+                    <span className="rounded-full border border-amber-300/30 bg-ops-dark/70 px-2 py-1">黄色：候选草稿</span>
+                    <span className="rounded-full border border-ops-surface1 bg-ops-dark/70 px-2 py-1">滚轮缩放，拖动移动</span>
+                  </div>
+                </div>
+                <aside className="rounded-lg border border-ops-surface0 bg-ops-dark/45 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-semibold text-ops-text">节点详情</div>
+                      <p className="mt-1 text-[11px] leading-5 text-ops-overlay">点击图谱节点查看它连接了哪些知识。</p>
+                    </div>
+                    <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-[10px] text-ops-accent">
+                      {graphZoom.toFixed(2)}x
+                    </span>
+                  </div>
+                  {selectedNode ? (
+                    <div className="mt-3 space-y-3">
+                      <div className="rounded-md border border-ops-accent/25 bg-ops-accent/10 px-3 py-2">
+                        <div className="text-sm font-semibold text-ops-text">{selectedNode.title}</div>
+                        <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-ops-subtext">
+                          <span>{selectedNode.kind === 'article' ? '正式知识' : '候选草稿'}</span>
+                          <span>{selectedNode.degree || 0} 个关系</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {selectedNodeEdges.length > 0 ? selectedNodeEdges.map((edge, index) => {
+                          const peerId = edge.source === selectedNode.id ? edge.target : edge.source
+                          const peer = nodeById.get(peerId)
+                          return (
+                            <button
+                              type="button"
+                              key={`${edge.source}-${edge.target}-${index}`}
+                              onClick={() => peer && setSelectedNodeId(peer.id)}
+                              className="w-full rounded-md border border-ops-surface0 bg-ops-panel/45 px-3 py-2 text-left transition-colors hover:border-ops-accent/45 hover:bg-ops-accent/10"
+                            >
+                              <div className="truncate text-xs font-semibold text-ops-text">{peer?.title || peerId}</div>
+                              <div className="mt-1 text-[11px] text-ops-overlay">
+                                {edge.kind === 'wikilink' ? '显式关联' : '内容提及'} · 点击跳转
+                              </div>
+                            </button>
+                          )
+                        }) : (
+                          <div className="rounded-md border border-dashed border-ops-surface1 p-3 text-xs leading-5 text-ops-subtext">
+                            这个节点暂时没有关系，可以在 Wiki 内容里补充关联。
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-md border border-dashed border-ops-surface1 p-4 text-xs leading-5 text-ops-subtext">
+                      先点击左侧任意节点。
+                    </div>
+                  )}
+                </aside>
+              </div>
             ) : (
               <div className="rounded-lg border border-dashed border-ops-surface1 p-6 text-center text-xs leading-6 text-ops-subtext">
                 暂无可绘制节点。批准 Wiki 文章后，或在文章中加入 `[[文章标题]]`，这里会形成关系图。
