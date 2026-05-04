@@ -90,6 +90,9 @@ export function useMessageHistoryActions(currentSessionId: string | null) {
           : '已记录差评：只用于纠错审计，不作为成功经验沉淀',
         'success',
       )
+      window.dispatchEvent(new CustomEvent('opscore:session-memory-activity-updated', {
+        detail: { sessionId, messageId: memoryId, rating },
+      }))
     } catch (err: unknown) {
       addToast(err instanceof Error ? err.message : '反馈记录失败', 'error')
     }

@@ -175,6 +175,19 @@ export function useKnowledgeBaseData() {
     void loadSessionMemoryActivity()
   }, [loadSessionMemoryActivity])
 
+  useEffect(() => {
+    const handleSessionMemoryActivityUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionId?: string }>).detail
+      if (detail?.sessionId && detail.sessionId !== currentSessionId) return
+      void loadSessionMemoryActivity()
+      void loadMemories()
+    }
+    window.addEventListener('opscore:session-memory-activity-updated', handleSessionMemoryActivityUpdated)
+    return () => {
+      window.removeEventListener('opscore:session-memory-activity-updated', handleSessionMemoryActivityUpdated)
+    }
+  }, [currentSessionId, loadMemories, loadSessionMemoryActivity])
+
   const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files
     if (!fileList || fileList.length === 0) return
