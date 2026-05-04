@@ -119,7 +119,11 @@ class TestSessionHistory(unittest.TestCase):
                 "role": "assistant",
                 "content": "回答内容很好，应该沉淀。",
                 "memory_refs": [{"path": "global/foo.md", "scope_id": "global"}],
-                "feedback": {"rating": "up", "created_at": "2026-05-04 08:00:00"},
+                "feedback": {
+                    "rating": "up",
+                    "created_at": "2026-05-04 08:00:00",
+                    "memory_policy": "promote",
+                },
             },
             {
                 "id": 8,
@@ -140,3 +144,5 @@ class TestSessionHistory(unittest.TestCase):
         self.assertEqual(activity["summary"]["rejected_count"], 1)
         self.assertEqual(activity["summary"]["pending_conflict_count"], 1)
         self.assertEqual(activity["referenced"][0]["message_id"], 7)
+        self.assertEqual(activity["feedback"][0]["memory_policy"], "promote")
+        self.assertEqual(activity["feedback"][1]["memory_policy"], "do_not_promote_answer")

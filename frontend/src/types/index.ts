@@ -148,6 +148,7 @@ export interface ChatMessage {
     note?: string
     created_at?: string
     memory_policy?: string
+    memory_path?: string
   }
   memoryRefs?: MemoryReference[]
   memory_refs?: MemoryReference[]
@@ -187,6 +188,7 @@ export interface SessionMemoryActivity {
     created_at?: string | number
     rating: 'up' | 'down' | string
     note?: string
+    memory_policy?: string
     message_preview: string
   }>
   pending_conflicts: MemoryPendingConflict[]

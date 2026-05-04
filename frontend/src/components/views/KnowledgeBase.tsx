@@ -13,6 +13,7 @@ import {
   MemoryPendingConflictsPanel,
   MemoryReviewPanel,
   MemorySearchPanel,
+  SessionMemoryActivityPanel,
   MemoryStoresPanel,
   MemoryVersionsPanel,
   KnowledgeCompileQueuePanel,
@@ -76,6 +77,7 @@ export default function KnowledgeBase() {
     handleUpload,
     loadFiles,
     loadMemories,
+    loadSessionMemoryActivity,
     loading,
     memoryDeleteTarget,
     memoryDraft,
@@ -86,6 +88,8 @@ export default function KnowledgeBase() {
     memoryLoading,
     memoryPendingConflicts,
     memoryReviewItems,
+    sessionMemoryActivity,
+    sessionMemoryActivityLoading,
     memorySearchQuery,
     memorySearchResults,
     memorySearchScopes,
@@ -119,6 +123,7 @@ export default function KnowledgeBase() {
   const handleRefresh = () => {
     if (activeTab === 'memory') {
       void loadMemories()
+      void loadSessionMemoryActivity()
     } else {
       void loadFiles()
     }
@@ -182,6 +187,7 @@ export default function KnowledgeBase() {
   const memoryHealth = [
     ['记忆库', `${memoryStores.length}`, '全局、会话、资产、主机、类型'],
     ['文件记忆', `${memoryItems.length}`, '成功经验和用户确认事实'],
+    ['本会话反馈', `${sessionMemoryActivity?.summary.promoted_count || 0}/${sessionMemoryActivity?.summary.rejected_count || 0}`, '好评 / 差评，能追溯到输出'],
     ['待治理', `${memoryPendingConflicts.length + memoryReviewItems.length}`, '冲突、过期、反馈待处理'],
     ['历史版本', `${memoryVersions.length}`, '可审计、可恢复、可脱敏'],
   ]
@@ -294,12 +300,12 @@ export default function KnowledgeBase() {
                 <div className="text-xs font-semibold uppercase tracking-[0.22em] text-ops-success/80">Agent Memory</div>
                 <h3 className="mt-1 text-base font-semibold text-ops-text">记忆负责“成功经验”</h3>
                 <p className="mt-1 text-sm leading-6 text-ops-subtext">
-                  只保存用户点赞、人工确认、资产复盘和可复用经验；差评、冲突、过期内容进入治理，不进入长期记忆。
+                  只保存用户点赞、人工确认、资产复盘和可复用经验；差评只做纠错审计，不作为成功经验沉淀。
                 </p>
               </div>
               <span className="rounded-full border border-ops-success/30 px-2 py-1 text-xs text-ops-success">文件记忆</span>
             </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-4">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
               {memoryHealth.map(([label, value, hint]) => (
                 <div key={label} className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-3">
                   <div className="text-[11px] text-ops-overlay">{label}</div>
@@ -621,6 +627,11 @@ export default function KnowledgeBase() {
             {memoryStep === 'govern' && (
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.75fr)]">
                 <section className="space-y-4">
+                  <SessionMemoryActivityPanel
+                    activity={sessionMemoryActivity}
+                    loading={sessionMemoryActivityLoading}
+                    onReload={() => void loadSessionMemoryActivity()}
+                  />
                   <MemoryPendingConflictsPanel
                     items={memoryPendingConflicts}
                     resolvingKey={resolvingMemoryConflict}

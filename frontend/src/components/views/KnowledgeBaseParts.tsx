@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react'
-import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
 export type KnowledgeTab = 'documents' | 'memory'
@@ -1085,6 +1085,114 @@ export function MemoryPendingConflictsPanel({
           </div>
         )}
       </div>
+    </section>
+  )
+}
+
+function feedbackPolicyLabel(rating: string, policy?: string) {
+  if (rating === 'up') return policy === 'promote' ? '成功经验已沉淀' : '好评待沉淀'
+  if (policy === 'do_not_promote_answer') return '纠错审计'
+  return '负反馈'
+}
+
+export function SessionMemoryActivityPanel({
+  activity,
+  loading,
+  onReload,
+}: {
+  activity: SessionMemoryActivity | null
+  loading: boolean
+  onReload: () => void
+}) {
+  const feedbackRows = activity?.feedback.slice().reverse().slice(0, 6) || []
+  const referencedRows = activity?.referenced.slice().reverse().slice(0, 4) || []
+  const stats = [
+    ['引用记忆', activity?.summary.referenced_count || 0],
+    ['好评沉淀', activity?.summary.promoted_count || 0],
+    ['差评纠错', activity?.summary.rejected_count || 0],
+    ['待确认', activity?.summary.pending_conflict_count || 0],
+  ]
+
+  return (
+    <section className="rounded-lg border border-ops-success/30 bg-ops-success/5 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-ops-text">当前会话记忆活动</div>
+          <p className="mt-1 text-xs leading-5 text-ops-subtext">
+            把左侧会话里的记忆引用、点赞沉淀和点踩纠错集中到这里，方便审计“哪条回答影响了 AI 记忆”。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onReload}
+          disabled={loading}
+          className="rounded-md border border-ops-success/40 px-3 py-1.5 text-xs font-semibold text-ops-success hover:bg-ops-success/10 disabled:opacity-50"
+        >
+          {loading ? '加载中...' : '刷新活动'}
+        </button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {stats.map(([label, value]) => (
+          <div key={label} className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-2">
+            <div className="text-[11px] text-ops-overlay">{label}</div>
+            <div className="mt-1 text-lg font-semibold text-ops-text">{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {!activity && !loading ? (
+        <div className="mt-3 rounded-md border border-dashed border-ops-surface1 p-4 text-center text-xs leading-5 text-ops-subtext">
+          当前没有打开会话，或该会话还没有可展示的记忆活动。
+        </div>
+      ) : (
+        <div className="mt-3 grid gap-3 xl:grid-cols-2">
+          <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-3">
+            <div className="text-xs font-semibold text-ops-text">反馈记录</div>
+            <div className="mt-2 space-y-2">
+              {feedbackRows.length > 0 ? feedbackRows.map((item, index) => (
+                <article key={`${item.message_id || 'feedback'}-${index}`} className="rounded border border-ops-surface0 bg-ops-panel/55 px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className={`rounded-full px-2 py-0.5 ${item.rating === 'up' ? 'bg-ops-success/10 text-ops-success' : 'bg-ops-alert/10 text-ops-alert'}`}>
+                      {item.rating === 'up' ? '好评' : '差评'}
+                    </span>
+                    <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-subtext">
+                      {feedbackPolicyLabel(String(item.rating), item.memory_policy)}
+                    </span>
+                    <span className="font-mono text-ops-overlay">{item.created_at || '无时间'}</span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-ops-subtext">{item.message_preview}</p>
+                  {item.note && <div className="mt-1 text-[11px] text-ops-overlay">备注：{item.note}</div>}
+                </article>
+              )) : (
+                <div className="rounded border border-dashed border-ops-surface1 p-3 text-center text-xs text-ops-overlay">
+                  暂无点赞或点踩记录
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-3">
+            <div className="text-xs font-semibold text-ops-text">引用过的记忆</div>
+            <div className="mt-2 space-y-2">
+              {referencedRows.length > 0 ? referencedRows.map((row, index) => (
+                <article key={`${row.message_id || 'ref'}-${index}`} className="rounded border border-ops-surface0 bg-ops-panel/55 px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-ops-overlay">
+                    <span>消息 {row.message_id || '-'}</span>
+                    <span>{row.created_at || '无时间'}</span>
+                    <span>{row.refs.length} 条引用</span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-ops-subtext">{row.message_preview}</p>
+                </article>
+              )) : (
+                <div className="rounded border border-dashed border-ops-surface1 p-3 text-center text-xs text-ops-overlay">
+                  暂无长期记忆引用
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

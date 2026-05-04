@@ -108,7 +108,7 @@ export function AssistantReportBubble({
         <div className="flex items-center gap-2">
           <button
             onClick={() => onFeedback?.(message, 'up')}
-            title="回答很好，允许沉淀为记忆"
+            title="回答很好，写入会话成功经验记忆"
             className={`rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
               feedbackRating === 'up'
                 ? 'border-ops-success/70 bg-ops-success/15 text-ops-success'
@@ -119,7 +119,7 @@ export function AssistantReportBubble({
           </button>
           <button
             onClick={() => onFeedback?.(message, 'down')}
-            title="回答较差，标记为错误并禁止作为成功经验"
+            title="回答较差，只做纠错审计，不作为成功经验"
             className={`rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
               feedbackRating === 'down'
                 ? 'border-ops-alert/70 bg-ops-alert/15 text-ops-alert'
@@ -138,8 +138,8 @@ export function AssistantReportBubble({
           feedbackRating === 'up' ? 'text-ops-success' : 'text-ops-alert'
         }`}>
           {feedbackRating === 'up'
-            ? '已标记：回答很好，可沉淀为个人记忆'
-            : '已标记：回答较差，AI 后续会规避这条错误经验'}
+            ? '已记录好评：进入会话记忆，后续可复用但必须实时验证'
+            : '已记录差评：只用于纠错审计，不作为成功经验沉淀'}
         </div>
       )}
       <MemoryReferenceStrip message={message} />

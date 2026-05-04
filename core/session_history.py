@@ -103,6 +103,9 @@ def build_session_memory_activity(memory_db, session_id: str) -> dict:
         feedback = message.get("feedback") or {}
         rating = feedback.get("rating") if isinstance(feedback, dict) else None
         if rating in {"up", "down"}:
+            memory_policy = feedback.get("memory_policy") or (
+                "promote" if rating == "up" else "do_not_promote_answer"
+            )
             feedback_rows.append(
                 {
                     "message_id": message.get("_memory_id") or message.get("id"),
@@ -111,6 +114,7 @@ def build_session_memory_activity(memory_db, session_id: str) -> dict:
                     or message.get("timestamp"),
                     "rating": rating,
                     "note": feedback.get("note") or "",
+                    "memory_policy": memory_policy,
                     "message_preview": _message_preview(message),
                 }
             )

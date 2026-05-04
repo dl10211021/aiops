@@ -86,8 +86,8 @@ export function useMessageHistoryActions(currentSessionId: string | null) {
       }))
       addToast(
         rating === 'up'
-          ? '已记录好评：这条回答可沉淀为记忆'
-          : '已记录差评：这条回答不会作为成功经验沉淀',
+          ? '已记录好评：已进入会话记忆，后续复用前仍会实时验证'
+          : '已记录差评：只用于纠错审计，不作为成功经验沉淀',
         'success',
       )
     } catch (err: unknown) {

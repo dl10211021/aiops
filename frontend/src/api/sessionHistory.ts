@@ -10,6 +10,7 @@ interface SessionHistoryApiMessage {
     note?: string
     created_at?: string
     memory_policy?: string
+    memory_path?: string
   }
   exec_trace?: ExecTraceItem[]
   execTrace?: ExecTraceItem[]

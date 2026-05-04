@@ -32,12 +32,14 @@ import {
   updateKnowledgeVaultCandidate,
   uploadKnowledgeDocument,
 } from '@/api/knowledge'
+import { getSessionMemoryActivity } from '@/api/sessionHistory'
 import { useStore } from '@/store'
-import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
 import { isAcceptedKnowledgeFile } from './knowledgeBaseModel'
 
 export function useKnowledgeBaseData() {
   const addToast = useStore((s) => s.addToast)
+  const currentSessionId = useStore((s) => s.currentSessionId)
   const [files, setFiles] = useState<KnowledgeFile[]>([])
   const [compileQueueItems, setCompileQueueItems] = useState<KnowledgeCompileQueueItem[]>([])
   const [candidateItems, setCandidateItems] = useState<KnowledgeCompileQueueItem[]>([])
@@ -55,6 +57,7 @@ export function useKnowledgeBaseData() {
   const [memoryVersions, setMemoryVersions] = useState<MemoryVersion[]>([])
   const [memoryPendingConflicts, setMemoryPendingConflicts] = useState<MemoryPendingConflict[]>([])
   const [memoryReviewItems, setMemoryReviewItems] = useState<MemoryReviewItem[]>([])
+  const [sessionMemoryActivity, setSessionMemoryActivity] = useState<SessionMemoryActivity | null>(null)
   const [selectedMemory, setSelectedMemory] = useState<MemoryDetail | null>(null)
   const [memoryDraft, setMemoryDraft] = useState('')
   const [memoryCreateScope, setMemoryCreateScope] = useState('manual')
@@ -85,6 +88,7 @@ export function useKnowledgeBaseData() {
   const [loadingVaultGraph, setLoadingVaultGraph] = useState(false)
   const [loading, setLoading] = useState(true)
   const [memoryLoading, setMemoryLoading] = useState(true)
+  const [sessionMemoryActivityLoading, setSessionMemoryActivityLoading] = useState(false)
   const [error, setError] = useState('')
   const [memoryError, setMemoryError] = useState('')
 
@@ -146,10 +150,30 @@ export function useKnowledgeBaseData() {
     }
   }, [addToast])
 
+  const loadSessionMemoryActivity = useCallback(async () => {
+    if (!currentSessionId) {
+      setSessionMemoryActivity(null)
+      return
+    }
+    setSessionMemoryActivityLoading(true)
+    try {
+      const res = await getSessionMemoryActivity(currentSessionId)
+      setSessionMemoryActivity(res.data.activity)
+    } catch {
+      setSessionMemoryActivity(null)
+    } finally {
+      setSessionMemoryActivityLoading(false)
+    }
+  }, [currentSessionId])
+
   useEffect(() => {
     void loadFiles()
     void loadMemories()
   }, [loadFiles, loadMemories])
+
+  useEffect(() => {
+    void loadSessionMemoryActivity()
+  }, [loadSessionMemoryActivity])
 
   const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files
@@ -576,6 +600,7 @@ export function useKnowledgeBaseData() {
     handleUpload,
     loadFiles,
     loadMemories,
+    loadSessionMemoryActivity,
     loadingVaultGraph,
     loading,
     memoryDeleteTarget,
@@ -588,6 +613,8 @@ export function useKnowledgeBaseData() {
     memoryLoading,
     memoryPendingConflicts,
     memoryReviewItems,
+    sessionMemoryActivity,
+    sessionMemoryActivityLoading,
     memorySearchQuery,
     memorySearchResults,
     memorySearchScopes,
