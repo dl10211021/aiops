@@ -38,6 +38,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/vault/queue", paths)
         self.assertIn("/knowledge/vault/compile", paths)
         self.assertIn("/knowledge/vault/candidates", paths)
+        self.assertIn("/knowledge/vault/search", paths)
         self.assertIn("/knowledge/vault/candidate", paths)
         self.assertIn("/knowledge/vault/approve", paths)
         self.assertIn("/knowledge/vault/articles", paths)
@@ -163,6 +164,35 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(list_response.data, {"items": [{"id": "src-1", "wiki_path": "wiki/articles/runbook.md"}]})
         self.assertEqual(read_response.status, "success")
         self.assertEqual(read_response.data, {"item": {"id": "src-1", "content": "# article", "content_sha256": "sha"}})
+
+    def test_search_knowledge_vault_preserves_response_shape(self):
+        with patch(
+            "api.knowledge_routes.search_vault_knowledge",
+            return_value=[
+                {
+                    "id": "src-1",
+                    "title": "Linux 巡检",
+                    "kind": "articles",
+                    "kind_label": "正式 Wiki",
+                    "path": "wiki/articles/linux.md",
+                    "snippet": "CPU 正常",
+                    "score": 2,
+                }
+            ],
+        ):
+            response = asyncio.run(
+                knowledge_routes.search_knowledge_vault(
+                    knowledge_routes.KnowledgeVaultSearchRequest(
+                        query="CPU",
+                        scope="all",
+                        limit=5,
+                    )
+                )
+            )
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data["results"][0]["kind_label"], "正式 Wiki")
+        self.assertEqual(response.data["results"][0]["snippet"], "CPU 正常")
 
     def test_delete_knowledge_document_preserves_response_shape(self):
         with patch(

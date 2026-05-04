@@ -14,6 +14,7 @@ from api.response_mappers.knowledge import (
     knowledge_vault_article_item_response_kwargs,
     knowledge_vault_articles_response_kwargs,
     knowledge_vault_queue_response_kwargs,
+    knowledge_vault_search_response_kwargs,
     memory_item_created_response_kwargs,
     memory_item_deleted_response_kwargs,
     memory_export_response_kwargs,
@@ -43,6 +44,7 @@ from core.knowledge_base_service import (
     read_vault_article,
     read_vault_candidate,
     remove_knowledge_document_record,
+    search_vault_knowledge,
     update_vault_candidate,
 )
 
@@ -97,6 +99,12 @@ class KnowledgeVaultCandidateUpdateRequest(BaseModel):
     source_session_id: str = Field(..., min_length=1, max_length=200)
     content: str = Field(..., min_length=1)
     content_sha256: str | None = None
+
+
+class KnowledgeVaultSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500)
+    scope: str = Field("all", pattern="^(all|articles|candidates|sources|raw)$")
+    limit: int = Field(20, ge=1, le=50)
 
 
 @router.get("/knowledge/memory/stores", response_model=ResponseModel)
@@ -374,6 +382,16 @@ async def read_knowledge_vault_article(source_session_id: str = Query(..., min_l
     except KnowledgeBaseServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**knowledge_vault_article_item_response_kwargs(item))
+
+
+@router.post("/knowledge/vault/search", response_model=ResponseModel)
+async def search_knowledge_vault(req: KnowledgeVaultSearchRequest):
+    """离线搜索 Vault 中的正式 Wiki、候选页、来源卡片和可读原文。"""
+    try:
+        results = search_vault_knowledge(req.query, scope=req.scope, limit=req.limit)
+    except KnowledgeBaseServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**knowledge_vault_search_response_kwargs(results))
 
 
 @router.post("/knowledge/vault/approve", response_model=ResponseModel)

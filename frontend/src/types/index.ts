@@ -645,6 +645,20 @@ export interface KnowledgeCompileQueueItem extends KnowledgeFile {
   content_sha256?: string
 }
 
+export interface KnowledgeVaultSearchResult {
+  id?: string
+  source_session_id?: string
+  title: string
+  kind: 'articles' | 'candidates' | 'sources' | 'raw' | string
+  kind_label: string
+  path: string
+  compile_status?: string
+  compile_stage?: string
+  snippet: string
+  score: number
+  updated_at?: string
+}
+
 export interface MemoryItem {
   path: string
   scope_id: string

@@ -23,13 +23,14 @@ import {
   readKnowledgeVaultArticle,
   restoreMemoryVersion,
   resolveMemoryPendingConflict,
+  searchKnowledgeVault,
   searchMemoryItems,
   updateMemoryItem,
   updateKnowledgeVaultCandidate,
   uploadKnowledgeDocument,
 } from '@/api/knowledge'
 import { useStore } from '@/store'
-import type { KnowledgeCompileQueueItem, KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { isAcceptedKnowledgeFile } from './knowledgeBaseModel'
 
 export function useKnowledgeBaseData() {
@@ -41,6 +42,9 @@ export function useKnowledgeBaseData() {
   const [selectedCandidate, setSelectedCandidate] = useState<KnowledgeCompileQueueItem | null>(null)
   const [selectedArticle, setSelectedArticle] = useState<KnowledgeCompileQueueItem | null>(null)
   const [candidateDraft, setCandidateDraft] = useState('')
+  const [vaultSearchQuery, setVaultSearchQuery] = useState('')
+  const [vaultSearchScope, setVaultSearchScope] = useState('all')
+  const [vaultSearchResults, setVaultSearchResults] = useState<KnowledgeVaultSearchResult[]>([])
   const [memoryItems, setMemoryItems] = useState<MemoryItem[]>([])
   const [memoryStores, setMemoryStores] = useState<MemoryStoreInfo[]>([])
   const [memoryVersions, setMemoryVersions] = useState<MemoryVersion[]>([])
@@ -70,6 +74,7 @@ export function useKnowledgeBaseData() {
   const [openingCandidate, setOpeningCandidate] = useState<string | null>(null)
   const [openingArticle, setOpeningArticle] = useState<string | null>(null)
   const [savingCandidate, setSavingCandidate] = useState(false)
+  const [searchingVault, setSearchingVault] = useState(false)
   const [loading, setLoading] = useState(true)
   const [memoryLoading, setMemoryLoading] = useState(true)
   const [error, setError] = useState('')
@@ -273,6 +278,25 @@ export function useKnowledgeBaseData() {
     }
   }
 
+  const handleSearchKnowledgeVault = async () => {
+    const query = vaultSearchQuery.trim()
+    if (!query) {
+      addToast('请输入知识库搜索关键词', 'error')
+      return
+    }
+    setSearchingVault(true)
+    try {
+      const res = await searchKnowledgeVault(query, vaultSearchScope, 20)
+      const results = res.data.results || []
+      setVaultSearchResults(results)
+      addToast(`搜索到 ${results.length} 条知识`, 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '搜索知识库失败', 'error')
+    } finally {
+      setSearchingVault(false)
+    }
+  }
+
   const handleOpenMemory = async (item: MemoryItem) => {
     setMemoryError('')
     try {
@@ -458,6 +482,7 @@ export function useKnowledgeBaseData() {
     openingCandidate,
     openingArticle,
     savingCandidate,
+    searchingVault,
     selectedCandidate,
     selectedArticle,
     handleDelete,
@@ -465,6 +490,7 @@ export function useKnowledgeBaseData() {
     handleApproveKnowledgeCandidate,
     handleOpenKnowledgeCandidate,
     handleOpenKnowledgeArticle,
+    handleSearchKnowledgeVault,
     handleSaveKnowledgeCandidate,
     handleDeleteMemory,
     handleCreateMemory,
@@ -504,10 +530,15 @@ export function useKnowledgeBaseData() {
     setMemoryCreateSummary,
     setMemoryDraft,
     setCandidateDraft,
+    setVaultSearchQuery,
+    setVaultSearchScope,
     setMemoryDeleteTarget,
     setMemorySearchQuery,
     setMemorySearchScopes,
     searchingMemory,
+    vaultSearchQuery,
+    vaultSearchResults,
+    vaultSearchScope,
     uploading,
   }
 }

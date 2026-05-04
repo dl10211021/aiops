@@ -382,6 +382,36 @@ def _resolve_article_file(root: Path, record: dict[str, Any]) -> Path:
     return path
 
 
+def _read_vault_text_file(root: Path, rel: str | None) -> str:
+    if not rel:
+        return ""
+    path = (root / str(rel)).resolve()
+    root_resolved = root.resolve()
+    if root_resolved not in path.parents and path != root_resolved:
+        return ""
+    if not path.exists() or path.suffix.lower() not in {".md", ".txt", ".log", ".csv", ".html", ".htm"}:
+        return ""
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return ""
+
+
+def _search_snippet(content: str, query: str, width: int = 180) -> str:
+    if not content:
+        return ""
+    lower = content.lower()
+    needle = query.lower()
+    index = lower.find(needle)
+    if index < 0:
+        return content[:width].replace("\n", " ").strip()
+    start = max(0, index - width // 2)
+    end = min(len(content), index + len(query) + width // 2)
+    prefix = "..." if start > 0 else ""
+    suffix = "..." if end < len(content) else ""
+    return (prefix + content[start:end] + suffix).replace("\n", " ").strip()
+
+
 async def _generate_candidate_with_model(record: dict[str, Any], source_preview: str) -> str:
     from core.assistant_model_config import assistant_thinking_mode, resolve_assistant_model_id
     from core.llm_execution import execute_chat_stream
@@ -581,6 +611,78 @@ def read_vault_article(
         "article_size": article_path.stat().st_size,
         "article_exists": True,
     }
+
+
+def search_vault_knowledge(
+    query: str,
+    *,
+    scope: str = "all",
+    limit: int = 20,
+    vault_dir: str | os.PathLike[str] | None = None,
+) -> list[dict[str, Any]]:
+    term = query.strip()
+    if not term:
+        raise KnowledgeBaseServiceError(400, "搜索关键词不能为空")
+    root = Path(vault_dir) if vault_dir is not None else _vault_root()
+    scope = scope if scope in {"all", "articles", "candidates", "sources", "raw"} else "all"
+    results: list[dict[str, Any]] = []
+    searchable_fields = [
+        ("articles", "正式 Wiki", "wiki_path"),
+        ("candidates", "候选 Wiki", "candidate_path"),
+        ("sources", "来源卡片", "note_path"),
+        ("raw", "原始资料", "source_path"),
+    ]
+    for record in _read_manifest(root):
+        title = str(record.get("original_filename") or record.get("filename") or record.get("id") or "unknown")
+        metadata_blob = " ".join(
+            str(record.get(key) or "")
+            for key in (
+                "id",
+                "source_session_id",
+                "filename",
+                "original_filename",
+                "source_path",
+                "note_path",
+                "candidate_path",
+                "wiki_path",
+                "compile_status",
+                "compile_stage",
+            )
+        )
+        for kind, kind_label, path_key in searchable_fields:
+            if scope != "all" and scope != kind:
+                continue
+            rel = record.get(path_key)
+            if not rel:
+                continue
+            content = _read_vault_text_file(root, str(rel))
+            haystack = f"{metadata_blob}\n{content}"
+            if term.lower() not in haystack.lower():
+                continue
+            score = 1
+            if term.lower() in title.lower():
+                score += 5
+            if term.lower() in metadata_blob.lower():
+                score += 2
+            if content and term.lower() in content.lower():
+                score += 3
+            results.append(
+                {
+                    "id": record.get("id"),
+                    "source_session_id": record.get("source_session_id"),
+                    "title": title,
+                    "kind": kind,
+                    "kind_label": kind_label,
+                    "path": rel,
+                    "compile_status": record.get("compile_status"),
+                    "compile_stage": record.get("compile_stage"),
+                    "snippet": _search_snippet(content or metadata_blob, term),
+                    "score": score,
+                    "updated_at": record.get("updated_at") or record.get("approved_at") or record.get("compiled_at"),
+                }
+            )
+    results.sort(key=lambda item: (int(item.get("score") or 0), str(item.get("updated_at") or "")), reverse=True)
+    return results[:limit]
 
 
 def read_vault_candidate(

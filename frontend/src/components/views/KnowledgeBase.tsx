@@ -16,6 +16,7 @@ import {
   MemoryStoresPanel,
   MemoryVersionsPanel,
   KnowledgeCompileQueuePanel,
+  KnowledgeVaultSearchPanel,
   KnowledgeCandidatePanel,
   KnowledgeCandidateEditor,
   KnowledgeArticlePanel,
@@ -43,6 +44,7 @@ export default function KnowledgeBase() {
     openingCandidate,
     openingArticle,
     savingCandidate,
+    searchingVault,
     selectedCandidate,
     selectedArticle,
     handleDelete,
@@ -50,6 +52,7 @@ export default function KnowledgeBase() {
     handleApproveKnowledgeCandidate,
     handleOpenKnowledgeCandidate,
     handleOpenKnowledgeArticle,
+    handleSearchKnowledgeVault,
     handleSaveKnowledgeCandidate,
     handleDeleteMemory,
     handleCreateMemory,
@@ -89,10 +92,15 @@ export default function KnowledgeBase() {
     setMemoryCreateSummary,
     setMemoryDraft,
     setCandidateDraft,
+    setVaultSearchQuery,
+    setVaultSearchScope,
     setMemoryDeleteTarget,
     setMemorySearchQuery,
     setMemorySearchScopes,
     searchingMemory,
+    vaultSearchQuery,
+    vaultSearchResults,
+    vaultSearchScope,
     uploading,
   } = useKnowledgeBaseData()
 
@@ -163,6 +171,17 @@ export default function KnowledgeBase() {
                 onCompile={handleCompileKnowledgeSource}
               />
               <div className="mt-4">
+                <KnowledgeVaultSearchPanel
+                  query={vaultSearchQuery}
+                  results={vaultSearchResults}
+                  scope={vaultSearchScope}
+                  searching={searchingVault}
+                  onQueryChange={setVaultSearchQuery}
+                  onScopeChange={setVaultSearchScope}
+                  onSearch={handleSearchKnowledgeVault}
+                />
+              </div>
+              <div className="mt-4">
                 <KnowledgeCandidatePanel
                   approvingSourceSession={approvingSourceSession}
                   items={candidateItems}
@@ -199,6 +218,15 @@ export default function KnowledgeBase() {
               compilingSourceSession={compilingSourceSession}
               items={compileQueueItems}
               onCompile={handleCompileKnowledgeSource}
+            />
+            <KnowledgeVaultSearchPanel
+              query={vaultSearchQuery}
+              results={vaultSearchResults}
+              scope={vaultSearchScope}
+              searching={searchingVault}
+              onQueryChange={setVaultSearchQuery}
+              onScopeChange={setVaultSearchScope}
+              onSearch={handleSearchKnowledgeVault}
             />
             <KnowledgeCandidatePanel
               approvingSourceSession={approvingSourceSession}

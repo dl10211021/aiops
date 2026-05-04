@@ -76,6 +76,13 @@ def knowledge_vault_article_item_response_kwargs(item: dict[str, Any]) -> dict[s
     }
 
 
+def knowledge_vault_search_response_kwargs(results: list[Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"results": results},
+    }
+
+
 def knowledge_document_deleted_response_kwargs(message: str) -> dict[str, Any]:
     return {
         "status": "success",

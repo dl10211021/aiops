@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react'
-import type { KnowledgeCompileQueueItem, KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
 export type KnowledgeTab = 'documents' | 'memory'
@@ -199,6 +199,100 @@ export function KnowledgeCompileQueuePanel({
         )) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
             暂无待编译资料。上传文档后，这里会显示等待辅助模型处理的 source session。
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+export function KnowledgeVaultSearchPanel({
+  query,
+  results,
+  scope,
+  searching,
+  onQueryChange,
+  onScopeChange,
+  onSearch,
+}: {
+  query: string
+  results: KnowledgeVaultSearchResult[]
+  scope: string
+  searching: boolean
+  onQueryChange: (value: string) => void
+  onScopeChange: (value: string) => void
+  onSearch: () => void
+}) {
+  const scopes = [
+    ['all', '全部'],
+    ['articles', '正式 Wiki'],
+    ['candidates', '候选 Wiki'],
+    ['sources', 'Source 卡片'],
+    ['raw', '原始资料'],
+  ]
+
+  return (
+    <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-ops-text">Vault 离线搜索</div>
+          <p className="mt-1 text-xs leading-5 text-ops-subtext">
+            在正式 Wiki、候选稿、source session 和原始资料中查找证据，方便从 Obsidian Vault 快速追溯来源。
+          </p>
+        </div>
+        <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-xs text-ops-accent">
+          {results.length}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_130px]">
+        <input
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') onSearch()
+          }}
+          placeholder="搜索关键词、资产、命令、结论或 runbook..."
+          className="rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
+        />
+        <select
+          value={scope}
+          onChange={(event) => onScopeChange(event.target.value)}
+          className="rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors focus:border-ops-accent"
+        >
+          {scopes.map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
+      </div>
+      <button
+        onClick={onSearch}
+        disabled={searching}
+        className="mt-2 w-full rounded-md border border-ops-accent/40 px-3 py-1.5 text-xs font-semibold text-ops-accent transition-colors hover:bg-ops-accent/10 disabled:cursor-not-allowed disabled:opacity-45"
+      >
+        {searching ? '搜索中...' : '搜索 Vault'}
+      </button>
+      <div className="mt-3 space-y-2">
+        {results.length > 0 ? results.map((item, index) => (
+          <article key={`${item.path}-${index}`} className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="truncate text-xs font-semibold text-ops-text" title={item.title}>{item.title}</div>
+                <div className="mt-1 truncate font-mono text-[11px] text-ops-overlay" title={item.path}>{item.path}</div>
+              </div>
+              <span className="shrink-0 rounded-full border border-ops-accent/30 px-2 py-0.5 text-[10px] text-ops-accent">
+                {item.kind_label}
+              </span>
+            </div>
+            <p className="mt-2 line-clamp-3 text-xs leading-5 text-ops-subtext">{item.snippet}</p>
+            <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-ops-overlay">
+              {(item.source_session_id || item.id) && <span>source: {item.source_session_id || item.id}</span>}
+              {item.compile_stage && <span>stage: {item.compile_stage}</span>}
+              <span>score: {item.score}</span>
+            </div>
+          </article>
+        )) : (
+          <div className="rounded-md border border-dashed border-ops-surface1 p-3 text-xs leading-5 text-ops-subtext">
+            输入关键词后即可离线搜索 Vault。正式知识优先来自人工批准后的 `wiki/articles/`。
           </div>
         )}
       </div>

@@ -23,6 +23,7 @@ from core.knowledge_base_service import (
     remove_knowledge_document_record,
     remove_vault_source_record,
     safe_knowledge_filename,
+    search_vault_knowledge,
     update_vault_candidate,
 )
 
@@ -223,3 +224,6 @@ class TestKnowledgeBaseService(unittest.TestCase):
         self.assertEqual(articles[0]["review_status"], "approved")
         article_detail = read_vault_article(record["source_session_id"], vault_dir=self.vault_dir)
         self.assertIn("人工补充", article_detail["content"])
+        search_results = search_vault_knowledge("CPU", vault_dir=self.vault_dir)
+        self.assertTrue(any(item["kind"] == "articles" for item in search_results))
+        self.assertTrue(any("CPU" in item["snippet"] or "人工补充" in item["snippet"] for item in search_results))

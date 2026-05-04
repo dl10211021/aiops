@@ -1,4 +1,4 @@
-import type { ApiResponse, KnowledgeCompileQueueItem, KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { ApiResponse, KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { apiUrl, authHeaders, request } from './http'
 
 export async function listKnowledgeDocuments() {
@@ -42,6 +42,13 @@ export async function readKnowledgeVaultCandidate(sourceSessionId: string) {
 
 export async function readKnowledgeVaultArticle(sourceSessionId: string) {
   return request<{ item: KnowledgeCompileQueueItem }>(`/knowledge/vault/article?source_session_id=${encodeURIComponent(sourceSessionId)}`)
+}
+
+export async function searchKnowledgeVault(query: string, scope = 'all', limit = 20) {
+  return request<{ results: KnowledgeVaultSearchResult[] }>('/knowledge/vault/search', {
+    method: 'POST',
+    body: JSON.stringify({ query, scope, limit }),
+  })
 }
 
 export async function updateKnowledgeVaultCandidate(sourceSessionId: string, content: string, contentSha256?: string) {
