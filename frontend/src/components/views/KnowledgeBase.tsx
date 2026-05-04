@@ -9,6 +9,7 @@ import {
   MemoryDeleteDialog,
   MemoryDetailPanel,
   MemoryItemCard,
+  MemoryPendingConflictsPanel,
   MemoryStoresPanel,
   MemoryVersionsPanel,
   type KnowledgeTab,
@@ -29,6 +30,7 @@ export default function KnowledgeBase() {
     handleExportMemory,
     handleOpenMemory,
     handleRestoreMemoryVersion,
+    handleResolveMemoryConflict,
     handleSaveMemory,
     handleUpload,
     loadFiles,
@@ -39,10 +41,12 @@ export default function KnowledgeBase() {
     memoryError,
     memoryItems,
     memoryLoading,
+    memoryPendingConflicts,
     memoryStores,
     memoryVersions,
     savingMemory,
     selectedMemory,
+    resolvingMemoryConflict,
     setDeleteTarget,
     setMemoryDraft,
     setMemoryDeleteTarget,
@@ -55,6 +59,11 @@ export default function KnowledgeBase() {
     } else {
       void loadFiles()
     }
+  }
+
+  const handleOpenMemoryPath = (path: string) => {
+    const item = memoryItems.find((candidate) => candidate.path === path)
+    if (item) void handleOpenMemory(item)
   }
 
   return (
@@ -142,6 +151,12 @@ export default function KnowledgeBase() {
                 onDraftChange={setMemoryDraft}
                 onExport={() => void handleExportMemory()}
                 onSave={() => void handleSaveMemory()}
+              />
+              <MemoryPendingConflictsPanel
+                items={memoryPendingConflicts}
+                resolvingKey={resolvingMemoryConflict}
+                onOpen={handleOpenMemoryPath}
+                onResolve={(item, action) => void handleResolveMemoryConflict(item, action)}
               />
               <MemoryStoresPanel stores={memoryStores} />
               <MemoryVersionsPanel

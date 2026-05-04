@@ -6,15 +6,17 @@ import {
   exportMemoryStore,
   listKnowledgeDocuments,
   listMemoryItems,
+  listMemoryPendingConflicts,
   listMemoryStores,
   listMemoryVersions,
   readMemoryItem,
   restoreMemoryVersion,
+  resolveMemoryPendingConflict,
   updateMemoryItem,
   uploadKnowledgeDocument,
 } from '@/api/knowledge'
 import { useStore } from '@/store'
-import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { isAcceptedKnowledgeFile } from './knowledgeBaseModel'
 
 export function useKnowledgeBaseData() {
@@ -23,6 +25,7 @@ export function useKnowledgeBaseData() {
   const [memoryItems, setMemoryItems] = useState<MemoryItem[]>([])
   const [memoryStores, setMemoryStores] = useState<MemoryStoreInfo[]>([])
   const [memoryVersions, setMemoryVersions] = useState<MemoryVersion[]>([])
+  const [memoryPendingConflicts, setMemoryPendingConflicts] = useState<MemoryPendingConflict[]>([])
   const [selectedMemory, setSelectedMemory] = useState<MemoryDetail | null>(null)
   const [memoryDraft, setMemoryDraft] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -32,6 +35,7 @@ export function useKnowledgeBaseData() {
   const [deletingMemory, setDeletingMemory] = useState(false)
   const [savingMemory, setSavingMemory] = useState(false)
   const [exportingMemory, setExportingMemory] = useState(false)
+  const [resolvingMemoryConflict, setResolvingMemoryConflict] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [memoryLoading, setMemoryLoading] = useState(true)
   const [error, setError] = useState('')
@@ -55,12 +59,14 @@ export function useKnowledgeBaseData() {
     setMemoryLoading(true)
     setMemoryError('')
     try {
-      const [itemsRes, versionsRes] = await Promise.all([
+      const [itemsRes, versionsRes, pendingRes] = await Promise.all([
         listMemoryItems(),
         listMemoryVersions(30),
+        listMemoryPendingConflicts(50),
       ])
       setMemoryItems(itemsRes.data.items || [])
       setMemoryVersions(versionsRes.data.versions || [])
+      setMemoryPendingConflicts(pendingRes.data.items || [])
       setSelectedMemory((current) => {
         if (!current) return current
         const stillExists = (itemsRes.data.items || []).some((item) => item.path === current.path)
@@ -186,6 +192,22 @@ export function useKnowledgeBaseData() {
     }
   }
 
+  const handleResolveMemoryConflict = async (
+    item: MemoryPendingConflict,
+    action: 'accept_new' | 'keep_old' | 'merged',
+  ) => {
+    setResolvingMemoryConflict(`${item.version_id}:${action}`)
+    try {
+      await resolveMemoryPendingConflict(item.version_id, action)
+      await loadMemories()
+      addToast('待确认记忆已处理', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '处理待确认记忆失败', 'error')
+    } finally {
+      setResolvingMemoryConflict(null)
+    }
+  }
+
   const handleExportMemory = async () => {
     setExportingMemory(true)
     try {
@@ -217,6 +239,7 @@ export function useKnowledgeBaseData() {
     handleExportMemory,
     handleOpenMemory,
     handleRestoreMemoryVersion,
+    handleResolveMemoryConflict,
     handleSaveMemory,
     handleUpload,
     loadFiles,
@@ -227,10 +250,12 @@ export function useKnowledgeBaseData() {
     memoryError,
     memoryItems,
     memoryLoading,
+    memoryPendingConflicts,
     memoryStores,
     memoryVersions,
     savingMemory,
     selectedMemory,
+    resolvingMemoryConflict,
     setDeleteTarget,
     setMemoryDraft,
     setMemoryDeleteTarget,

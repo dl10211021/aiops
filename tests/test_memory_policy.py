@@ -16,6 +16,7 @@ from core.memory import (
 class FakeFileMemoryStore:
     def __init__(self):
         self.calls = []
+        self.appended = []
 
     def search(self, *, scope_ids, query, limit):
         self.calls.append((scope_ids, query, limit))
@@ -27,6 +28,10 @@ class FakeFileMemoryStore:
                 "summary": "【记忆类型】纠错经验\n【核心记忆】不要跳过实时验证。",
             }
         ]
+
+    def append_memory(self, **kwargs):
+        self.appended.append(kwargs)
+        return {"operation": "created", "path": "sessions/sid-1/memory.md"}
 
 
 class ExplodingEmbeddingClient:
@@ -175,6 +180,89 @@ class MemoryPolicyTests(unittest.TestCase):
 
         self.assertIn("OpsCore 长期记忆", context)
         self.assertEqual(references[0]["scope_id"], "asset-host:10.0.0.1")
+
+    def test_positive_feedback_is_promoted_to_file_memory_immediately(self):
+        class FakeSessionStore:
+            def update_message_feedback(self, session_id, message_id, rating, note=None):
+                return {
+                    "role": "assistant",
+                    "content": "这条巡检回答被用户认可。",
+                    "feedback": {"rating": rating, "note": note or ""},
+                }
+
+        db = MemoryDB.__new__(MemoryDB)
+        db.ltm_enabled = True
+        db._session_message_store = FakeSessionStore()
+        db.file_memory_store = FakeFileMemoryStore()
+
+        message = MemoryDB.update_message_feedback(db, "sid-1", 7, "up", "很好")
+
+        self.assertEqual(message["feedback"]["rating"], "up")
+        self.assertEqual(db.file_memory_store.appended[0]["scope_id"], "sid-1")
+        self.assertEqual(
+            db.file_memory_store.appended[0]["metadata"]["source"],
+            "answer_feedback_immediate",
+        )
+
+    def test_negative_feedback_is_not_promoted_as_positive_memory(self):
+        class FakeSessionStore:
+            def update_message_feedback(self, session_id, message_id, rating, note=None):
+                return {"role": "assistant", "content": "错误回答", "feedback": {"rating": rating}}
+
+        db = MemoryDB.__new__(MemoryDB)
+        db.ltm_enabled = True
+        db._session_message_store = FakeSessionStore()
+        db.file_memory_store = FakeFileMemoryStore()
+
+        MemoryDB.update_message_feedback(db, "sid-1", 7, "down", "不对")
+
+        self.assertEqual(db.file_memory_store.appended, [])
+
+    def test_pending_memory_conflict_queue_and_resolution(self):
+        class FakeConflictStore:
+            def __init__(self):
+                self.content = "【冲突状态】待确认\n【核心记忆】新旧判断冲突"
+
+            def list_versions(self, limit=50):
+                return [
+                    {
+                        "version_id": "v-conflict",
+                        "timestamp": "2026-05-04 12:00:00",
+                        "path": "sessions/sid-1/memory.md",
+                        "scope_id": "sid-1",
+                        "source_session_id": "sid-1",
+                        "metadata": {
+                            "conflict_status": "pending_review",
+                            "conflict": {
+                                "reason": "相反判断",
+                                "existing_preview": "旧记忆",
+                            },
+                        },
+                    }
+                ]
+
+            def read_memory(self, path):
+                return {
+                    "path": path,
+                    "content": self.content,
+                    "content_sha256": "sha",
+                }
+
+            def update_memory(self, path, content, content_sha256=None, actor="user"):
+                self.content = content
+                self.updated = (path, content_sha256, actor)
+                return {"operation": "modified", "path": path, "metadata": {"actor": actor}}
+
+        db = MemoryDB.__new__(MemoryDB)
+        db.file_memory_store = FakeConflictStore()
+
+        pending = MemoryDB.list_pending_memory_conflicts(db)
+        resolved = MemoryDB.resolve_pending_memory_conflict(db, "v-conflict", "keep_old")
+
+        self.assertEqual(pending[0]["version_id"], "v-conflict")
+        self.assertEqual(pending[0]["existing_preview"], "旧记忆")
+        self.assertEqual(resolved["operation"], "modified")
+        self.assertIn("已保留旧记忆", db.file_memory_store.content)
 
 
 if __name__ == "__main__":

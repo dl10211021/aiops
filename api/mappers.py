@@ -78,6 +78,8 @@ from api.response_mappers.knowledge import (
     memory_item_restored_response_kwargs,
     memory_item_updated_response_kwargs,
     memory_items_response_kwargs,
+    memory_pending_conflict_resolved_response_kwargs,
+    memory_pending_conflicts_response_kwargs,
     memory_stores_response_kwargs,
     memory_versions_response_kwargs,
 )

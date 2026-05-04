@@ -617,6 +617,17 @@ export interface MemoryVersion {
   metadata?: Record<string, unknown>
 }
 
+export interface MemoryPendingConflict {
+  version_id: string
+  timestamp: string
+  path: string
+  scope_id: string
+  reason: string
+  existing_preview?: string
+  new_preview?: string
+  source_session_id?: string
+}
+
 export interface MemoryStoreInfo {
   id: string
   name: string

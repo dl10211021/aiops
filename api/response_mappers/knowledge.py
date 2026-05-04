@@ -45,6 +45,21 @@ def memory_versions_response_kwargs(versions: list[Any]) -> dict[str, Any]:
     }
 
 
+def memory_pending_conflicts_response_kwargs(items: list[Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"items": items},
+    }
+
+
+def memory_pending_conflict_resolved_response_kwargs(version: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "待确认记忆已处理",
+        "data": {"version": version},
+    }
+
+
 def memory_stores_response_kwargs(stores: list[Any]) -> dict[str, Any]:
     return {
         "status": "success",

@@ -1,4 +1,4 @@
-import type { ApiResponse, KnowledgeFile, MemoryDetail, MemoryItem, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { ApiResponse, KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { apiUrl, authHeaders, request } from './http'
 
 export async function listKnowledgeDocuments() {
@@ -47,6 +47,17 @@ export async function restoreMemoryVersion(versionId: string) {
   return request<{ version: MemoryVersion }>('/knowledge/memory/restore', {
     method: 'POST',
     body: JSON.stringify({ version_id: versionId }),
+  })
+}
+
+export async function listMemoryPendingConflicts(limit = 50) {
+  return request<{ items: MemoryPendingConflict[] }>(`/knowledge/memory/pending?limit=${limit}`)
+}
+
+export async function resolveMemoryPendingConflict(versionId: string, action: 'accept_new' | 'keep_old' | 'merged') {
+  return request<{ version: MemoryVersion }>('/knowledge/memory/pending/resolve', {
+    method: 'POST',
+    body: JSON.stringify({ version_id: versionId, action }),
   })
 }
 

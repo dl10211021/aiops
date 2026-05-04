@@ -602,12 +602,14 @@ class MemoryDB:
         rating: str,
         note: str | None = None,
     ) -> dict:
-        return self._session_message_store.update_message_feedback(
+        message = self._session_message_store.update_message_feedback(
             session_id,
             message_id,
             rating,
             note,
         )
+        self._promote_positive_feedback_memory(session_id, message_id, rating, note, message)
+        return message
 
     def delete_message(self, session_id: str, message_id: int):
         self._session_message_store.delete_message(session_id, message_id)
@@ -744,6 +746,115 @@ class MemoryDB:
         except Exception as e:
             logger.error(f"长期记忆检索失败: {e}")
             return "", []
+
+    def list_pending_memory_conflicts(self, limit: int = 50) -> list[dict]:
+        versions = self.file_memory_store.list_versions(limit=max(limit * 6, limit))
+        items: list[dict] = []
+        seen: set[str] = set()
+        for version in versions:
+            metadata = version.get("metadata") or {}
+            if metadata.get("conflict_status") != "pending_review":
+                continue
+            version_id = str(version.get("version_id") or "")
+            path = str(version.get("path") or "")
+            if not version_id or version_id in seen:
+                continue
+            try:
+                detail = self.file_memory_store.read_memory(path)
+            except Exception:
+                continue
+            content = str(detail.get("content") or "")
+            if "【冲突状态】待确认" not in content:
+                continue
+            conflict = metadata.get("conflict") or {}
+            items.append(
+                {
+                    "version_id": version_id,
+                    "timestamp": version.get("timestamp") or "",
+                    "path": path,
+                    "scope_id": version.get("scope_id") or "",
+                    "reason": conflict.get("reason") or "记忆存在冲突，等待人工确认。",
+                    "existing_preview": conflict.get("existing_preview") or "",
+                    "new_preview": sanitize_ltm_summary(content, max_chars=360),
+                    "source_session_id": version.get("source_session_id") or "",
+                }
+            )
+            seen.add(version_id)
+            if len(items) >= limit:
+                break
+        return items
+
+    def resolve_pending_memory_conflict(self, version_id: str, action: str) -> dict:
+        normalized_action = str(action or "").strip()
+        if normalized_action not in {"accept_new", "keep_old", "merged"}:
+            raise ValueError("待确认记忆处理动作无效")
+        target_version = None
+        for version in self.file_memory_store.list_versions(limit=500):
+            if version.get("version_id") == version_id:
+                target_version = version
+                break
+        if not target_version:
+            raise FileNotFoundError(version_id)
+
+        path = str(target_version.get("path") or "")
+        detail = self.file_memory_store.read_memory(path)
+        content = str(detail.get("content") or "")
+        if "【冲突状态】待确认" not in content:
+            raise ValueError("该记忆不处于待确认状态")
+        labels = {
+            "accept_new": "已采纳新记忆",
+            "keep_old": "已保留旧记忆",
+            "merged": "已人工合并",
+        }
+        resolved_content = content.replace("【冲突状态】待确认", f"【冲突状态】{labels[normalized_action]}")
+        resolved_content = resolved_content.rstrip() + f"\n\n【处理结果】{labels[normalized_action]}，处理人：user。\n"
+        return self.file_memory_store.update_memory(
+            path,
+            content=resolved_content,
+            content_sha256=detail.get("content_sha256"),
+            actor=f"memory_conflict:{normalized_action}",
+        )
+
+    def _promote_positive_feedback_memory(
+        self,
+        session_id: str,
+        message_id: int,
+        rating: str,
+        note: str | None,
+        message: dict,
+    ) -> None:
+        if str(rating or "").strip().lower() != "up":
+            return
+        if not self.ltm_enabled:
+            return
+        content = sanitize_ltm_summary(str(message.get("content") or ""), max_chars=1800)
+        if not content:
+            return
+        summary = "\n".join(
+            [
+                "【记忆类型】用户认可回答",
+                "【来源】用户点赞",
+                "【可信度】高：用户明确点击大拇指认可该回答。",
+                "【适用范围】当前会话，后续可由压缩任务提升到资产/主机范围。",
+                "【核心记忆】",
+                content,
+                "【使用提醒】后续使用前仍需结合当前资产实时工具结果验证。",
+                f"【用户备注】{str(note or '').strip() or '-'}",
+            ]
+        )
+        try:
+            self.file_memory_store.append_memory(
+                scope_id=session_id,
+                summary=summary,
+                source_session_id=session_id,
+                metadata={
+                    "source": "answer_feedback_immediate",
+                    "feedback_rating": "up",
+                    "feedback_target_message_id": message_id,
+                },
+            )
+        except Exception as exc:
+            logger.warning(f"点赞记忆立即沉淀失败: {exc}")
 
     async def compress_and_store_ltm(
         self,

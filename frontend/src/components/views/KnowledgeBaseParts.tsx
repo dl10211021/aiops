@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react'
-import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryVersion } from '@/types'
+import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryVersion } from '@/types'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
 export type KnowledgeTab = 'documents' | 'memory'
@@ -300,6 +300,82 @@ export function MemoryDetailPanel({
         readOnly={memory.access === 'read_only'}
         className="min-h-[420px] w-full resize-y bg-transparent p-4 font-mono text-xs leading-5 text-ops-subtext outline-none read-only:opacity-80"
       />
+    </section>
+  )
+}
+
+export function MemoryPendingConflictsPanel({
+  items,
+  resolvingKey,
+  onOpen,
+  onResolve,
+}: {
+  items: MemoryPendingConflict[]
+  resolvingKey: string | null
+  onOpen: (path: string) => void
+  onResolve: (item: MemoryPendingConflict, action: 'accept_new' | 'keep_old' | 'merged') => void
+}) {
+  return (
+    <section className="rounded-lg border border-ops-accent/30 bg-ops-accent/5 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-ops-text">待确认记忆</div>
+          <p className="mt-1 text-xs text-ops-subtext">新旧记忆存在冲突时先进入这里，由你决定是否采纳。</p>
+        </div>
+        <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-xs text-ops-accent">
+          {items.length}
+        </span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {items.length > 0 ? items.map((item) => (
+          <article key={item.version_id} className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+            <div className="flex items-start justify-between gap-2">
+              <button
+                onClick={() => onOpen(item.path)}
+                className="min-w-0 truncate text-left text-xs font-semibold text-ops-accent hover:text-ops-text"
+                title={item.path}
+              >
+                {item.path}
+              </button>
+              <span className="shrink-0 font-mono text-[11px] text-ops-overlay">{item.timestamp}</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-ops-subtext">{item.reason}</p>
+            {item.existing_preview && (
+              <div className="mt-2 rounded border border-ops-alert/20 bg-ops-alert/5 px-2 py-1 text-[11px] leading-5 text-ops-subtext">
+                旧记忆：{item.existing_preview}
+              </div>
+            )}
+            {item.new_preview && (
+              <div className="mt-1 rounded border border-ops-success/20 bg-ops-success/5 px-2 py-1 text-[11px] leading-5 text-ops-subtext">
+                新记忆：{item.new_preview}
+              </div>
+            )}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {([
+                ['accept_new', '采纳新记忆'],
+                ['keep_old', '保留旧记忆'],
+                ['merged', '已手动合并'],
+              ] as const).map(([action, label]) => {
+                const busy = resolvingKey === `${item.version_id}:${action}`
+                return (
+                  <button
+                    key={action}
+                    onClick={() => onResolve(item, action)}
+                    disabled={Boolean(resolvingKey)}
+                    className="rounded border border-ops-surface0 px-2 py-1 text-[11px] text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent disabled:opacity-50"
+                  >
+                    {busy ? '处理中...' : label}
+                  </button>
+                )
+              })}
+            </div>
+          </article>
+        )) : (
+          <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-4 text-center text-xs text-ops-overlay">
+            暂无待确认冲突
+          </div>
+        )}
+      </div>
     </section>
   )
 }
