@@ -103,7 +103,16 @@ export function useKnowledgeBaseData() {
       setCandidateItems(candidatesRes.data.items || [])
       setArticleItems(articlesRes.data.items || [])
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : '加载知识库失败')
+      const message = e instanceof Error ? e.message : '加载知识库失败'
+      if (message === 'Not Found') {
+        setFiles([])
+        setCompileQueueItems([])
+        setCandidateItems([])
+        setArticleItems([])
+        setError('')
+      } else {
+        setError(message)
+      }
     } finally {
       setLoading(false)
     }
@@ -130,7 +139,8 @@ export function useKnowledgeBaseData() {
       })
       void listMemoryStores().then((storesRes) => setMemoryStores(storesRes.data.stores || []))
     } catch (e: unknown) {
-      setMemoryError(e instanceof Error ? e.message : '加载 AI 记忆失败')
+      const message = e instanceof Error ? e.message : '加载 AI 记忆失败'
+      setMemoryError(message === 'Not Found' ? 'AI 记忆服务暂未开启或当前服务需要重启。' : message)
     } finally {
       setMemoryLoading(false)
     }

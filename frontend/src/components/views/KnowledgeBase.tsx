@@ -252,6 +252,13 @@ export default function KnowledgeBase() {
                       <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">生成 source session，记录来源路径和状态。</div>
                       <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">后续再进入 AI 编译，不在这里混杂审核和检索。</div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setDocumentStep('compile')}
+                      className="mt-4 w-full rounded-md border border-ops-accent/45 px-3 py-2 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
+                    >
+                      下一步：AI 编译
+                    </button>
                   </div>
                 </aside>
               </div>
@@ -269,12 +276,22 @@ export default function KnowledgeBase() {
                   <p className="mt-2 text-xs leading-5 text-ops-subtext">
                     辅助模型把原始资料整理成候选 Wiki。候选不会直接进入长期知识，必须到下一步人工审核。
                   </p>
-                  <button
-                    onClick={() => setDocumentStep('review')}
-                    className="mt-4 rounded-md border border-ops-accent/45 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
-                  >
-                    去审核入库
-                  </button>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDocumentStep('source')}
+                      className="rounded-md border border-ops-surface0 px-3 py-1.5 text-xs font-semibold text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
+                    >
+                      返回入库
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDocumentStep('review')}
+                      className="rounded-md border border-ops-accent/45 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
+                    >
+                      去审核入库
+                    </button>
+                  </div>
                 </aside>
               </div>
             )}
@@ -304,6 +321,19 @@ export default function KnowledgeBase() {
                     onSave={handleSaveKnowledgeCandidate}
                   />
                   <KnowledgeArticleViewer article={selectedArticle} />
+                  <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+                    <div className="text-sm font-semibold text-ops-text">审核完成后做什么？</div>
+                    <p className="mt-2 text-xs leading-5 text-ops-subtext">
+                      正式文章会进入检索和图谱，后续会话、记忆和审计都从这里追溯证据。
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setDocumentStep('discover')}
+                      className="mt-4 rounded-md border border-ops-accent/45 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
+                    >
+                      下一步：检索追溯
+                    </button>
+                  </div>
                 </section>
               </div>
             )}
@@ -392,6 +422,19 @@ export default function KnowledgeBase() {
                   onExport={() => void handleExportMemory()}
                   onSave={() => void handleSaveMemory()}
                 />
+                <aside className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+                  <div className="text-sm font-semibold text-ops-text">没有找到合适记忆？</div>
+                  <p className="mt-2 text-xs leading-5 text-ops-subtext">
+                    进入写入与检索，把新的成功经验、用户偏好或资产画像沉淀成可审计文件。
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setMemoryStep('write')}
+                    className="mt-4 rounded-md border border-ops-accent/45 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
+                  >
+                    去写入/检索
+                  </button>
+                </aside>
               </div>
             )}
 
@@ -414,6 +457,19 @@ export default function KnowledgeBase() {
                   onScopesChange={setMemorySearchScopes}
                   onSearch={() => void handleSearchMemory()}
                 />
+                <aside className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+                  <div className="text-sm font-semibold text-ops-text">记忆写完后要治理</div>
+                  <p className="mt-2 text-xs leading-5 text-ops-subtext">
+                    冲突、过期、失败反馈都集中到审计治理，避免错误经验长期污染 AI。
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setMemoryStep('govern')}
+                    className="mt-4 rounded-md border border-ops-accent/45 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
+                  >
+                    下一步：审计治理
+                  </button>
+                </aside>
               </div>
             )}
 
