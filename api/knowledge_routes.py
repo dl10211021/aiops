@@ -40,6 +40,7 @@ from core.knowledge_base_service import (
     build_vault_knowledge_graph,
     compile_vault_source_candidate,
     create_vault_export_zip,
+    import_vault_archive,
     ingest_knowledge_document,
     list_knowledge_document_records,
     list_vault_articles,
@@ -423,6 +424,23 @@ async def export_knowledge_vault():
         archive_path,
         media_type="application/zip",
         filename=archive_path.name,
+    )
+
+
+@router.post("/knowledge/vault/import", response_model=ResponseModel)
+async def import_knowledge_vault(file: UploadFile = File(...)):
+    """导入 Obsidian 兼容 Vault ZIP，用于离线迁移和备份恢复。"""
+    try:
+        result = import_vault_archive(
+            await file.read(),
+            filename=file.filename or "vault.zip",
+        )
+    except KnowledgeBaseServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(
+        status="success",
+        message=f"Vault 导入完成，写入 {result['imported_count']} 个文件，跳过 {result['skipped_count']} 个文件",
+        data={"import": result},
     )
 
 

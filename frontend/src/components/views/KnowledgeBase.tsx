@@ -36,6 +36,7 @@ export default function KnowledgeBase() {
     error,
     exportingMemory,
     exportingVault,
+    importingVault,
     files,
     compileQueueItems,
     candidateItems,
@@ -62,6 +63,7 @@ export default function KnowledgeBase() {
     handleCreateMemory,
     handleExportMemory,
     handleExportKnowledgeVault,
+    handleImportKnowledgeVault,
     handleConfirmMemoryReview,
     handleOpenMemory,
     handleRedactMemoryVersion,
@@ -142,6 +144,16 @@ export default function KnowledgeBase() {
                 >
                   {exportingVault ? '导出中...' : '导出 Vault'}
                 </button>
+                <label className={`cursor-pointer bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors ${importingVault ? 'pointer-events-none opacity-50' : ''}`}>
+                  {importingVault ? '导入中...' : '导入 Vault'}
+                  <input
+                    type="file"
+                    accept=".zip,application/zip"
+                    className="hidden"
+                    disabled={importingVault}
+                    onChange={handleImportKnowledgeVault}
+                  />
+                </label>
                 <KnowledgeUploadButton uploading={uploading} onUpload={handleUpload} />
               </>
             )}

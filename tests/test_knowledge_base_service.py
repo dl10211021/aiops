@@ -16,6 +16,7 @@ from core.knowledge_base_service import (
     compile_vault_source_candidate,
     create_vault_export_zip,
     ingest_knowledge_document,
+    import_vault_archive,
     list_vault_compile_queue,
     list_vault_candidates,
     list_vault_articles,
@@ -239,3 +240,10 @@ class TestKnowledgeBaseService(unittest.TestCase):
             names = set(archive.namelist())
         self.assertIn("index.md", names)
         self.assertTrue(any(name.startswith("wiki/articles/") for name in names))
+        restored = import_vault_archive(
+            archive_path.read_bytes(),
+            filename="vault.zip",
+            vault_dir=self.vault_dir / "restored",
+        )
+        self.assertGreaterEqual(restored["imported_count"], 1)
+        self.assertTrue((self.vault_dir / "restored" / "index.md").exists())

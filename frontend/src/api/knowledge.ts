@@ -67,6 +67,17 @@ export async function exportKnowledgeVault() {
   return res.blob()
 }
 
+export async function importKnowledgeVault(file: File) {
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await fetch(apiUrl('/knowledge/vault/import'), { method: 'POST', body: fd, headers: authHeaders() })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || res.statusText)
+  }
+  return res.json() as Promise<ApiResponse>
+}
+
 export async function updateKnowledgeVaultCandidate(sourceSessionId: string, content: string, contentSha256?: string) {
   return request<{ item: KnowledgeCompileQueueItem }>('/knowledge/vault/candidate', {
     method: 'PUT',

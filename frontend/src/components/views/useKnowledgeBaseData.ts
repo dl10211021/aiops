@@ -10,6 +10,7 @@ import {
   exportMemoryStore,
   graphKnowledgeVault,
   confirmMemoryReview,
+  importKnowledgeVault,
   listKnowledgeDocuments,
   listKnowledgeVaultArticles,
   listKnowledgeVaultCandidates,
@@ -71,6 +72,7 @@ export function useKnowledgeBaseData() {
   const [searchingMemory, setSearchingMemory] = useState(false)
   const [exportingMemory, setExportingMemory] = useState(false)
   const [exportingVault, setExportingVault] = useState(false)
+  const [importingVault, setImportingVault] = useState(false)
   const [resolvingMemoryConflict, setResolvingMemoryConflict] = useState<string | null>(null)
   const [redactingMemoryVersion, setRedactingMemoryVersion] = useState<string | null>(null)
   const [reviewingMemoryPath, setReviewingMemoryPath] = useState<string | null>(null)
@@ -334,6 +336,26 @@ export function useKnowledgeBaseData() {
     }
   }
 
+  const handleImportKnowledgeVault = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+      addToast('Vault 导入仅支持 ZIP 文件', 'error')
+      return
+    }
+    setImportingVault(true)
+    try {
+      await importKnowledgeVault(file)
+      await loadFiles()
+      addToast('Vault ZIP 已导入', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '导入 Vault 失败', 'error')
+    } finally {
+      setImportingVault(false)
+    }
+  }
+
   const handleOpenMemory = async (item: MemoryItem) => {
     setMemoryError('')
     try {
@@ -535,6 +557,7 @@ export function useKnowledgeBaseData() {
     handleCreateMemory,
     handleExportMemory,
     handleExportKnowledgeVault,
+    handleImportKnowledgeVault,
     handleConfirmMemoryReview,
     handleOpenMemory,
     handleRedactMemoryVersion,
@@ -550,6 +573,7 @@ export function useKnowledgeBaseData() {
     memoryDeleteTarget,
     memoryDraft,
     memoryError,
+    importingVault,
     memoryCreateScope,
     memoryCreateSummary,
     memoryItems,

@@ -41,6 +41,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/vault/search", paths)
         self.assertIn("/knowledge/vault/graph", paths)
         self.assertIn("/knowledge/vault/export", paths)
+        self.assertIn("/knowledge/vault/import", paths)
         self.assertIn("/knowledge/vault/candidate", paths)
         self.assertIn("/knowledge/vault/approve", paths)
         self.assertIn("/knowledge/vault/articles", paths)

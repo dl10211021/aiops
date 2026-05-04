@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import io
 import json
 import re
 import shutil
@@ -779,6 +780,55 @@ def create_vault_export_zip(
             archive.write(path, path.relative_to(root).as_posix())
 
     return archive_path
+
+
+def import_vault_archive(
+    file_bytes: bytes,
+    *,
+    filename: str = "vault.zip",
+    vault_dir: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    if not filename.lower().endswith(".zip"):
+        raise KnowledgeBaseServiceError(400, "仅支持导入 .zip 格式的 Vault 归档")
+    root = Path(vault_dir) if vault_dir is not None else _vault_root()
+    _ensure_vault_skeleton(root)
+    root_resolved = root.resolve()
+    imported: list[str] = []
+    skipped: list[str] = []
+
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(file_bytes))
+    except zipfile.BadZipFile as exc:
+        raise KnowledgeBaseServiceError(400, "Vault ZIP 文件无法解析") from exc
+
+    with archive:
+        for info in archive.infolist():
+            if info.is_dir():
+                continue
+            name = info.filename.replace("\\", "/")
+            parts = [part for part in name.split("/") if part and part != "."]
+            if not parts or any(part == ".." for part in parts):
+                skipped.append(name)
+                continue
+            if len(parts) >= 2 and parts[0] == "state" and parts[1] == "exports":
+                skipped.append(name)
+                continue
+            target = (root / Path(*parts)).resolve()
+            if root_resolved not in target.parents and target != root_resolved:
+                skipped.append(name)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(archive.read(info))
+            imported.append("/".join(parts))
+
+    _ensure_vault_skeleton(root)
+    return {
+        "filename": filename,
+        "imported_count": len(imported),
+        "skipped_count": len(skipped),
+        "imported": imported,
+        "skipped": skipped,
+    }
 
 
 def read_vault_candidate(
