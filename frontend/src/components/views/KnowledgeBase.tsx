@@ -25,6 +25,7 @@ import {
   KnowledgeCandidateEditor,
   KnowledgeArticlePanel,
   KnowledgeArticleViewer,
+  KnowledgeMemoryBridgePanel,
   type KnowledgeTab,
 } from './KnowledgeBaseParts'
 import { useKnowledgeBaseData } from './useKnowledgeBaseData'
@@ -314,52 +315,28 @@ export default function KnowledgeBase() {
             }
           }}
         />
+        <KnowledgeMemoryBridgePanel
+          activeTab={activeTab}
+          documentStep={documentStep}
+          memoryStep={memoryStep}
+          fileCount={files.length}
+          compileQueueCount={compileQueueItems.length}
+          candidateCount={candidateItems.length}
+          articleCount={articleItems.length}
+          memoryCount={memoryItems.length}
+          promotedCount={sessionMemoryActivity?.summary.promoted_count || 0}
+          rejectedCount={sessionMemoryActivity?.summary.rejected_count || 0}
+          pendingGovernanceCount={memoryPendingConflicts.length + memoryReviewItems.length}
+          onDocumentStep={(step) => {
+            setActiveTab('documents')
+            setDocumentStep(step)
+          }}
+          onMemoryStep={(step) => {
+            setActiveTab('memory')
+            setMemoryStep(step)
+          }}
+        />
 
-        <section className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-ops-accent/80">Knowledge Vault</div>
-                <h3 className="mt-1 text-base font-semibold text-ops-text">知识库负责“可信资料”</h3>
-                <p className="mt-1 text-sm leading-6 text-ops-subtext">
-                  只沉淀文档、巡检报告、Runbook、故障案例、资产画像和可追溯证据。必须先审核，再进入正式知识。
-                </p>
-              </div>
-              <span className="rounded-full border border-ops-accent/30 px-2 py-1 text-xs text-ops-accent">固定四步</span>
-            </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-4">
-              {knowledgeHealth.map(([label, value, hint]) => (
-                <div key={label} className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-3">
-                  <div className="text-[11px] text-ops-overlay">{label}</div>
-                  <div className="mt-1 text-xl font-semibold text-ops-text">{value}</div>
-                  <div className="mt-1 text-[11px] leading-4 text-ops-subtext">{hint}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-ops-success/80">Agent Memory</div>
-                <h3 className="mt-1 text-base font-semibold text-ops-text">记忆负责“成功经验”</h3>
-                <p className="mt-1 text-sm leading-6 text-ops-subtext">
-                  只保存用户点赞、人工确认、资产复盘和可复用经验；差评只做纠错审计，不作为成功经验沉淀。
-                </p>
-              </div>
-              <span className="rounded-full border border-ops-success/30 px-2 py-1 text-xs text-ops-success">文件记忆</span>
-            </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-              {memoryHealth.map(([label, value, hint]) => (
-                <div key={label} className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-3">
-                  <div className="text-[11px] text-ops-overlay">{label}</div>
-                  <div className="mt-1 text-xl font-semibold text-ops-text">{value}</div>
-                  <div className="mt-1 text-[11px] leading-4 text-ops-subtext">{hint}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
 
         <section className="mb-4 rounded-lg border border-ops-accent/20 bg-gradient-to-r from-ops-accent/10 via-ops-panel/70 to-ops-dark/30 p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

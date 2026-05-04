@@ -61,6 +61,123 @@ export function KnowledgeTabs({
   )
 }
 
+export function KnowledgeMemoryBridgePanel({
+  activeTab,
+  documentStep,
+  memoryStep,
+  fileCount,
+  compileQueueCount,
+  candidateCount,
+  articleCount,
+  memoryCount,
+  promotedCount,
+  rejectedCount,
+  pendingGovernanceCount,
+  onDocumentStep,
+  onMemoryStep,
+}: {
+  activeTab: KnowledgeTab
+  documentStep: 'source' | 'compile' | 'review' | 'discover'
+  memoryStep: 'browse' | 'write' | 'govern'
+  fileCount: number
+  compileQueueCount: number
+  candidateCount: number
+  articleCount: number
+  memoryCount: number
+  promotedCount: number
+  rejectedCount: number
+  pendingGovernanceCount: number
+  onDocumentStep: (step: 'source' | 'compile' | 'review' | 'discover') => void
+  onMemoryStep: (step: 'browse' | 'write' | 'govern') => void
+}) {
+  const documentFlow = [
+    { id: 'source' as const, label: '资料留底', value: fileCount, hint: '上传原文、巡检报告、Runbook，保持只读证据' },
+    { id: 'compile' as const, label: 'AI 编译', value: compileQueueCount, hint: '辅助模型生成候选 Wiki，不直接入库' },
+    { id: 'review' as const, label: '人工审核', value: candidateCount, hint: '确认事实、来源、适用范围后再入正式知识' },
+    { id: 'discover' as const, label: '图谱追溯', value: articleCount, hint: '正式知识可检索、可引用、可看双链关系' },
+  ]
+  const memoryFlow = [
+    { id: 'browse' as const, label: '记忆浏览', value: memoryCount, hint: '成功经验、用户偏好、资产画像按文件留存' },
+    { id: 'write' as const, label: '写入验证', value: promotedCount, hint: '点赞和人工确认才沉淀为成功经验' },
+    { id: 'govern' as const, label: '审计治理', value: pendingGovernanceCount + rejectedCount, hint: '差评、冲突、过期记忆进入治理，不污染长期记忆' },
+  ]
+
+  return (
+    <section className="mb-4 overflow-hidden rounded-xl border border-ops-surface0 bg-[radial-gradient(circle_at_top_left,rgba(43,211,182,0.14),transparent_32%),linear-gradient(135deg,rgba(10,24,40,0.92),rgba(6,16,28,0.98))] shadow-[0_24px_80px_rgba(0,0,0,0.26)]">
+      <div className="grid gap-0 xl:grid-cols-[1.05fr_0.95fr]">
+        <div className="border-b border-ops-surface0 p-4 xl:border-b-0 xl:border-r">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-ops-accent">Knowledge Flow</div>
+              <h3 className="mt-2 text-lg font-black text-ops-text">知识负责“可信资料”</h3>
+              <p className="mt-1 text-xs leading-5 text-ops-subtext">
+                原始资料先留底，AI 只生成候选，人工审核后才进入 Vault。这样后续会话引用知识时，可以追溯来源和审核状态。
+              </p>
+            </div>
+            <span className={`rounded-full border px-3 py-1 text-[11px] ${activeTab === 'documents' ? 'border-ops-accent bg-ops-accent/10 text-ops-accent' : 'border-ops-surface1 text-ops-overlay'}`}>
+              {activeTab === 'documents' ? '当前正在管理资料' : '可切回 Vault 文档'}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-4">
+            {documentFlow.map((step, index) => (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => onDocumentStep(step.id)}
+                className={`group rounded-lg border p-3 text-left transition-colors ${
+                  documentStep === step.id
+                    ? 'border-ops-accent bg-ops-accent text-ops-dark'
+                    : 'border-ops-surface0 bg-ops-dark/35 text-ops-subtext hover:border-ops-accent/45 hover:bg-ops-surface0/45 hover:text-ops-text'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold">{index + 1}. {step.label}</span>
+                  <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px]">{step.value}</span>
+                </div>
+                <div className="mt-2 min-h-10 text-[11px] leading-5 opacity-80">{step.hint}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.28em] text-ops-success">Memory Loop</div>
+              <h3 className="mt-2 text-lg font-black text-ops-text">记忆负责“成功经验”</h3>
+              <p className="mt-1 text-xs leading-5 text-ops-subtext">
+                记忆不是知识库复制品。它只保存被验证过的经验、偏好和画像；失败回答进入纠错审计，帮助 AI 下次避坑。
+              </p>
+            </div>
+            <span className={`rounded-full border px-3 py-1 text-[11px] ${activeTab === 'memory' ? 'border-ops-success bg-ops-success/10 text-ops-success' : 'border-ops-surface1 text-ops-overlay'}`}>
+              {activeTab === 'memory' ? '当前正在管理记忆' : '可切回 AI 记忆'}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-3">
+            {memoryFlow.map((step, index) => (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => onMemoryStep(step.id)}
+                className={`rounded-lg border p-3 text-left transition-colors ${
+                  memoryStep === step.id
+                    ? 'border-ops-success bg-ops-success text-ops-dark'
+                    : 'border-ops-surface0 bg-ops-dark/35 text-ops-subtext hover:border-ops-success/45 hover:bg-ops-surface0/45 hover:text-ops-text'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold">{index + 1}. {step.label}</span>
+                  <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px]">{step.value}</span>
+                </div>
+                <div className="mt-2 min-h-10 text-[11px] leading-5 opacity-80">{step.hint}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 interface UploadInputProps {
   disabled: boolean
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void
