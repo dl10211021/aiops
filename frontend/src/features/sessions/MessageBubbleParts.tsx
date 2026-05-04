@@ -1,4 +1,4 @@
-import type { MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { useStore } from '@/store'
 import type { ChatMessage, ChatMessageAttachment } from '@/types'
 import { formatBytes } from './format'
@@ -65,17 +65,34 @@ export function AssistantReportBubble({
   onFeedback?: (message: ChatMessage, rating: 'up' | 'down') => void
 }) {
   const setView = useStore((state) => state.setView)
+  const bubbleRef = useRef<HTMLElement | null>(null)
+  const [focusedByAudit, setFocusedByAudit] = useState(false)
   const assistantTime = formatMessageTime(message.timestamp)
   const feedbackRating = message.feedback?.rating
+  const ownMessageId = String(message.memoryId || message._memory_id || message.id || '')
   const openMemoryActivity = () => {
-    const messageId = message.memoryId || message._memory_id || message.id
     setView('knowledge')
     window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent('opscore:knowledge-target', {
-        detail: { tab: 'memory', step: 'govern', messageId },
+        detail: { tab: 'memory', step: 'govern', messageId: ownMessageId },
       }))
     }, 60)
   }
+
+  useEffect(() => {
+    const handleChatFocusMessage = (event: Event) => {
+      const detail = (event as CustomEvent<{ messageId?: string | number }>).detail
+      const targetMessageId = String(detail?.messageId || '')
+      if (!targetMessageId || targetMessageId !== ownMessageId) return
+      bubbleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setFocusedByAudit(true)
+      window.setTimeout(() => setFocusedByAudit(false), 2400)
+    }
+    window.addEventListener('opscore:chat-focus-message', handleChatFocusMessage)
+    return () => {
+      window.removeEventListener('opscore:chat-focus-message', handleChatFocusMessage)
+    }
+  }, [ownMessageId])
   const handleCodeCopy = async (event: MouseEvent<HTMLDivElement>) => {
     const target = event.target
     if (!(target instanceof HTMLButtonElement) || !target.dataset.copyCode) return
@@ -110,7 +127,14 @@ export function AssistantReportBubble({
   }
 
   return (
-    <article className="w-full overflow-hidden rounded-lg border border-ops-surface1/55 bg-ops-panel/85 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
+    <article
+      ref={bubbleRef}
+      className={`w-full overflow-hidden rounded-lg border bg-ops-panel/85 shadow-[0_10px_28px_rgba(0,0,0,0.16)] transition-all ${
+        focusedByAudit
+          ? 'border-ops-accent shadow-[0_0_0_1px_rgba(45,212,191,0.35),0_16px_36px_rgba(45,212,191,0.12)]'
+          : 'border-ops-surface1/55'
+      }`}
+    >
       <div className="flex items-center justify-between gap-3 border-b border-ops-surface0/80 bg-ops-surface0/35 px-4 py-2">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-ops-success shadow-[0_0_14px_rgba(79,209,177,0.55)]" />

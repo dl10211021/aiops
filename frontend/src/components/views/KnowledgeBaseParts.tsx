@@ -1099,11 +1099,13 @@ export function SessionMemoryActivityPanel({
   activity,
   focusMessageId,
   loading,
+  onFocusMessage,
   onReload,
 }: {
   activity: SessionMemoryActivity | null
   focusMessageId?: string | number | null
   loading: boolean
+  onFocusMessage?: (messageId: string | number) => void
   onReload: () => void
 }) {
   const focusKey = focusMessageId === undefined || focusMessageId === null ? '' : String(focusMessageId)
@@ -1188,6 +1190,15 @@ export function SessionMemoryActivityPanel({
                     </span>
                     <span className="font-mono text-ops-overlay">消息 {item.message_id || '-'}</span>
                     <span className="font-mono text-ops-overlay">{item.created_at || '无时间'}</span>
+                    {item.message_id !== undefined && (
+                      <button
+                        type="button"
+                        onClick={() => onFocusMessage?.(item.message_id as string | number)}
+                        className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-ops-accent hover:bg-ops-accent/10"
+                      >
+                        回到会话
+                      </button>
+                    )}
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-ops-subtext">{item.message_preview}</p>
                   {item.note && <div className="mt-1 text-[11px] text-ops-overlay">备注：{item.note}</div>}

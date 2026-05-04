@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import PageHeader from '@/components/layout/PageHeader'
+import { useStore } from '@/store'
 import {
   KnowledgeDeleteDialog,
   KnowledgeEmptyState,
@@ -28,6 +29,7 @@ import {
 import { useKnowledgeBaseData } from './useKnowledgeBaseData'
 
 export default function KnowledgeBase() {
+  const setView = useStore((state) => state.setView)
   const [activeTab, setActiveTab] = useState<KnowledgeTab>('documents')
   const [documentStep, setDocumentStep] = useState<'source' | 'compile' | 'review' | 'discover'>('source')
   const [memoryStep, setMemoryStep] = useState<'browse' | 'write' | 'govern'>('browse')
@@ -163,6 +165,15 @@ export default function KnowledgeBase() {
   const handleOpenMemoryPath = (path: string) => {
     const item = memoryItems.find((candidate) => candidate.path === path)
     if (item) void handleOpenMemory(item)
+  }
+
+  const handleFocusChatMessage = (messageId: string | number) => {
+    setView('chat')
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('opscore:chat-focus-message', {
+        detail: { messageId },
+      }))
+    }, 90)
   }
 
   const visibleError = activeTab === 'documents' ? error : memoryError
@@ -662,6 +673,7 @@ export default function KnowledgeBase() {
                     activity={sessionMemoryActivity}
                     focusMessageId={memoryFocusMessageId}
                     loading={sessionMemoryActivityLoading}
+                    onFocusMessage={handleFocusChatMessage}
                     onReload={() => void loadSessionMemoryActivity()}
                   />
                   <MemoryPendingConflictsPanel
