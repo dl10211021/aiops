@@ -1,4 +1,5 @@
 import type { MouseEvent } from 'react'
+import { useStore } from '@/store'
 import type { ChatMessage, ChatMessageAttachment } from '@/types'
 import { formatBytes } from './format'
 import { renderMarkdown } from './markdown'
@@ -63,8 +64,17 @@ export function AssistantReportBubble({
   onDelete?: (message: ChatMessage) => void
   onFeedback?: (message: ChatMessage, rating: 'up' | 'down') => void
 }) {
+  const setView = useStore((state) => state.setView)
   const assistantTime = formatMessageTime(message.timestamp)
   const feedbackRating = message.feedback?.rating
+  const openMemoryActivity = () => {
+    setView('knowledge')
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('opscore:knowledge-target', {
+        detail: { tab: 'memory', step: 'govern' },
+      }))
+    }, 60)
+  }
   const handleCodeCopy = async (event: MouseEvent<HTMLDivElement>) => {
     const target = event.target
     if (!(target instanceof HTMLButtonElement) || !target.dataset.copyCode) return
@@ -134,12 +144,21 @@ export function AssistantReportBubble({
         </div>
       </div>
       {feedbackRating && (
-        <div className={`border-b border-ops-surface0/70 px-4 py-1.5 text-[11px] ${
+        <div className={`flex flex-wrap items-center justify-between gap-2 border-b border-ops-surface0/70 px-4 py-1.5 text-[11px] ${
           feedbackRating === 'up' ? 'text-ops-success' : 'text-ops-alert'
         }`}>
-          {feedbackRating === 'up'
-            ? '已记录好评：进入会话记忆，后续可复用但必须实时验证'
-            : '已记录差评：只用于纠错审计，不作为成功经验沉淀'}
+          <span>
+            {feedbackRating === 'up'
+              ? '已记录好评：进入会话记忆，后续可复用但必须实时验证'
+              : '已记录差评：只用于纠错审计，不作为成功经验沉淀'}
+          </span>
+          <button
+            type="button"
+            onClick={openMemoryActivity}
+            className="rounded-full border border-current/35 px-2 py-0.5 text-[11px] hover:bg-current/10"
+          >
+            查看记忆活动
+          </button>
         </div>
       )}
       <MemoryReferenceStrip message={message} />

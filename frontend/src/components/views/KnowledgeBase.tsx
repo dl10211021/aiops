@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import PageHeader from '@/components/layout/PageHeader'
 import {
   KnowledgeDeleteDialog,
@@ -119,6 +119,33 @@ export default function KnowledgeBase() {
     vaultSearchScope,
     uploading,
   } = useKnowledgeBaseData()
+
+  useEffect(() => {
+    const handleKnowledgeTarget = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        tab?: KnowledgeTab
+        step?: 'browse' | 'write' | 'govern' | 'source' | 'compile' | 'review' | 'discover'
+      }>).detail
+      if (detail?.tab === 'memory') {
+        setActiveTab('memory')
+        setMemoryStep(detail.step === 'browse' || detail.step === 'write' || detail.step === 'govern' ? detail.step : 'govern')
+        void loadMemories()
+        void loadSessionMemoryActivity()
+      }
+      if (detail?.tab === 'documents') {
+        setActiveTab('documents')
+        setDocumentStep(
+          detail.step === 'source' || detail.step === 'compile' || detail.step === 'review' || detail.step === 'discover'
+            ? detail.step
+            : 'discover',
+        )
+      }
+    }
+    window.addEventListener('opscore:knowledge-target', handleKnowledgeTarget)
+    return () => {
+      window.removeEventListener('opscore:knowledge-target', handleKnowledgeTarget)
+    }
+  }, [loadMemories, loadSessionMemoryActivity])
 
   const handleRefresh = () => {
     if (activeTab === 'memory') {
