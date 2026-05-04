@@ -639,6 +639,8 @@ export interface KnowledgeCompileQueueItem extends KnowledgeFile {
   review_status?: string
   candidate_exists?: boolean
   candidate_size?: number
+  content?: string
+  content_sha256?: string
 }
 
 export interface MemoryItem {

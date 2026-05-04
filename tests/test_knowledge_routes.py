@@ -38,6 +38,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/vault/queue", paths)
         self.assertIn("/knowledge/vault/compile", paths)
         self.assertIn("/knowledge/vault/candidates", paths)
+        self.assertIn("/knowledge/vault/candidate", paths)
         self.assertIn("/knowledge/vault/approve", paths)
         self.assertIn("/knowledge/{filename}", paths)
 
@@ -115,6 +116,33 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(approve_response.status, "success")
         self.assertEqual(approve_response.message, "候选 Wiki 已批准入库")
         self.assertEqual(approve_response.data, {"item": {"id": "src-1", "wiki_path": "wiki/articles/runbook.md"}})
+
+    def test_read_and_update_knowledge_vault_candidate_preserve_response_shape(self):
+        with patch(
+            "api.knowledge_routes.read_vault_candidate",
+            return_value={"id": "src-1", "content": "# candidate", "content_sha256": "sha"},
+        ):
+            read_response = asyncio.run(knowledge_routes.read_knowledge_vault_candidate("source-session-1"))
+
+        with patch(
+            "api.knowledge_routes.update_vault_candidate",
+            return_value={"id": "src-1", "content": "# changed", "content_sha256": "sha2"},
+        ):
+            update_response = asyncio.run(
+                knowledge_routes.update_knowledge_vault_candidate(
+                    knowledge_routes.KnowledgeVaultCandidateUpdateRequest(
+                        source_session_id="source-session-1",
+                        content="# changed",
+                        content_sha256="sha",
+                    )
+                )
+            )
+
+        self.assertEqual(read_response.status, "success")
+        self.assertEqual(read_response.data, {"item": {"id": "src-1", "content": "# candidate", "content_sha256": "sha"}})
+        self.assertEqual(update_response.status, "success")
+        self.assertEqual(update_response.message, "候选 Wiki 已保存")
+        self.assertEqual(update_response.data, {"item": {"id": "src-1", "content": "# changed", "content_sha256": "sha2"}})
 
     def test_delete_knowledge_document_preserves_response_shape(self):
         with patch(

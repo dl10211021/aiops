@@ -17,9 +17,11 @@ from core.knowledge_base_service import (
     list_vault_candidates,
     list_vault_source_records,
     list_knowledge_document_records,
+    read_vault_candidate,
     remove_knowledge_document_record,
     remove_vault_source_record,
     safe_knowledge_filename,
+    update_vault_candidate,
 )
 
 
@@ -181,6 +183,24 @@ class TestKnowledgeBaseService(unittest.TestCase):
         candidate_text = candidate_path.read_text(encoding="utf-8")
         self.assertIn("待人工确认", candidate_text)
         self.assertIn("CPU 正常", candidate_text)
+        detail = read_vault_candidate(record["source_session_id"], vault_dir=self.vault_dir)
+        self.assertIn("CPU 正常", detail["content"])
+        saved = update_vault_candidate(
+            record["source_session_id"],
+            content=detail["content"] + "\n\n## 人工补充\n\n确认可入库。",
+            content_sha256=detail["content_sha256"],
+            vault_dir=self.vault_dir,
+        )
+        self.assertIn("人工补充", saved["content"])
+        self.assertEqual(saved["compile_stage"], "candidate_edited")
+        with self.assertRaises(KnowledgeBaseServiceError) as stale_ctx:
+            update_vault_candidate(
+                record["source_session_id"],
+                content=saved["content"] + "\n旧版本覆盖",
+                content_sha256=detail["content_sha256"],
+                vault_dir=self.vault_dir,
+            )
+        self.assertEqual(stale_ctx.exception.status_code, 409)
         candidates = list_vault_candidates(self.vault_dir)
         self.assertEqual(len(candidates), 1)
         self.assertEqual(candidates[0]["review_status"], "pending")

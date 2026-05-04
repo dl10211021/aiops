@@ -5,6 +5,7 @@ import json
 import re
 import shutil
 import asyncio
+import hashlib
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -351,6 +352,23 @@ def _replace_frontmatter_value(content: str, key: str, value: str) -> str:
     return "\n".join(lines) + ("\n" if content.endswith("\n") else "")
 
 
+def _sha256_text(content: str) -> str:
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _resolve_candidate_file(root: Path, record: dict[str, Any]) -> Path:
+    candidate_rel = record.get("candidate_path")
+    if not candidate_rel:
+        raise KnowledgeBaseServiceError(400, "该资料还没有候选 Wiki 页面")
+    path = (root / str(candidate_rel)).resolve()
+    root_resolved = root.resolve()
+    if root_resolved not in path.parents and path != root_resolved:
+        raise KnowledgeBaseServiceError(400, "候选 Wiki 路径非法")
+    if not path.exists():
+        raise KnowledgeBaseServiceError(404, "候选 Wiki 页面不存在")
+    return path
+
+
 async def _generate_candidate_with_model(record: dict[str, Any], source_preview: str) -> str:
     from core.assistant_model_config import assistant_thinking_mode, resolve_assistant_model_id
     from core.llm_execution import execute_chat_stream
@@ -514,6 +532,60 @@ def list_vault_candidates(vault_dir: str | os.PathLike[str] | None = None) -> li
             }
         )
     return sorted(candidates, key=lambda item: str(item.get("compiled_at") or item.get("updated_at") or ""), reverse=True)
+
+
+def read_vault_candidate(
+    identifier: str,
+    *,
+    vault_dir: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    root, record = _find_vault_record(identifier, vault_dir)
+    candidate_path = _resolve_candidate_file(root, record)
+    content = candidate_path.read_text(encoding="utf-8")
+    return {
+        **record,
+        "content": content,
+        "content_sha256": _sha256_text(content),
+        "candidate_size": candidate_path.stat().st_size,
+        "candidate_exists": True,
+    }
+
+
+def update_vault_candidate(
+    identifier: str,
+    *,
+    content: str,
+    content_sha256: str | None = None,
+    vault_dir: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    if not content.strip():
+        raise KnowledgeBaseServiceError(400, "候选 Wiki 内容不能为空")
+    root, record = _find_vault_record(identifier, vault_dir)
+    candidate_path = _resolve_candidate_file(root, record)
+    current = candidate_path.read_text(encoding="utf-8")
+    if content_sha256 and content_sha256 != _sha256_text(current):
+        raise KnowledgeBaseServiceError(409, "候选 Wiki 已被其他操作修改，请刷新后重试")
+    candidate_path.write_text(content, encoding="utf-8")
+
+    records = _read_manifest(root)
+    updated_record: dict[str, Any] | None = None
+    for item in records:
+        if item.get("id") == record.get("id"):
+            item.update(
+                {
+                    "compile_stage": "candidate_edited",
+                    "compile_status": "awaiting_review",
+                    "edited_at": _utc_now_iso(),
+                }
+            )
+            updated_record = item
+            break
+    if updated_record is None:
+        updated_record = record
+    _write_manifest(root, records)
+    _write_vault_index(root, records)
+    _append_vault_log(root, "edit-candidate", str(record.get("original_filename") or record.get("filename") or identifier))
+    return read_vault_candidate(str(updated_record.get("source_session_id") or updated_record.get("id")), vault_dir=root)
 
 
 def approve_vault_candidate(

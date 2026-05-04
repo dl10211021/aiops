@@ -209,11 +209,15 @@ export function KnowledgeCompileQueuePanel({
 export function KnowledgeCandidatePanel({
   approvingSourceSession,
   items,
+  openingCandidate,
   onApprove,
+  onOpen,
 }: {
   approvingSourceSession: string | null
   items: KnowledgeCompileQueueItem[]
+  openingCandidate: string | null
   onApprove: (item: KnowledgeCompileQueueItem) => void
+  onOpen: (item: KnowledgeCompileQueueItem) => void
 }) {
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
@@ -255,19 +259,28 @@ export function KnowledgeCandidatePanel({
                   article: {item.wiki_path}
                 </div>
               )}
-              <button
-                onClick={() => onApprove(item)}
-                disabled={Boolean(approvingSourceSession) || approved || !item.candidate_exists}
-                className="mt-2 w-full rounded-md border border-ops-success/40 px-3 py-1.5 text-xs font-semibold text-ops-success transition-colors hover:bg-ops-success/10 disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                {approvingSourceSession === sourceSession
-                  ? '批准中...'
-                  : approved
-                    ? '已批准入库'
-                    : item.candidate_exists === false
-                      ? '候选文件缺失'
-                      : '批准入正式 Wiki'}
-              </button>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => onOpen(item)}
+                  disabled={Boolean(openingCandidate) || item.candidate_exists === false}
+                  className="rounded-md border border-ops-accent/40 px-3 py-1.5 text-xs font-semibold text-ops-accent transition-colors hover:bg-ops-accent/10 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {openingCandidate === sourceSession ? '打开中...' : '预览/编辑'}
+                </button>
+                <button
+                  onClick={() => onApprove(item)}
+                  disabled={Boolean(approvingSourceSession) || approved || !item.candidate_exists}
+                  className="rounded-md border border-ops-success/40 px-3 py-1.5 text-xs font-semibold text-ops-success transition-colors hover:bg-ops-success/10 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {approvingSourceSession === sourceSession
+                    ? '批准中...'
+                    : approved
+                      ? '已入库'
+                      : item.candidate_exists === false
+                        ? '缺失'
+                        : '批准入库'}
+                </button>
+              </div>
             </article>
           )
         }) : (
@@ -276,6 +289,60 @@ export function KnowledgeCandidatePanel({
           </div>
         )}
       </div>
+    </section>
+  )
+}
+
+export function KnowledgeCandidateEditor({
+  candidate,
+  draft,
+  saving,
+  onDraftChange,
+  onSave,
+}: {
+  candidate: KnowledgeCompileQueueItem | null
+  draft: string
+  saving: boolean
+  onDraftChange: (value: string) => void
+  onSave: () => void
+}) {
+  if (!candidate) {
+    return (
+      <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+        <div className="text-sm font-semibold text-ops-text">候选正文</div>
+        <p className="mt-1 text-xs leading-5 text-ops-subtext">
+          点击候选 Wiki 的“预览/编辑”，这里会显示 Markdown 正文。确认内容无误后再批准入正式知识库。
+        </p>
+      </section>
+    )
+  }
+  return (
+    <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60">
+      <div className="border-b border-ops-surface0 px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-ops-accent">候选正文</div>
+            <h2 className="mt-1 truncate text-sm font-bold text-ops-text" title={candidate.candidate_path || candidate.original_filename || candidate.filename}>
+              {candidate.candidate_path || candidate.original_filename || candidate.filename}
+            </h2>
+          </div>
+          <button
+            onClick={onSave}
+            disabled={saving || !draft.trim()}
+            className="shrink-0 rounded-lg bg-ops-accent px-3 py-1.5 text-xs font-semibold text-ops-dark disabled:opacity-50"
+          >
+            {saving ? '保存中...' : '保存候选'}
+          </button>
+        </div>
+        <div className="mt-1 text-xs text-ops-overlay">
+          {candidate.source_session_id || candidate.id} · {candidate.content_sha256 ? `sha256 ${candidate.content_sha256.slice(0, 10)}` : '未计算哈希'}
+        </div>
+      </div>
+      <textarea
+        value={draft}
+        onChange={(event) => onDraftChange(event.target.value)}
+        className="min-h-[420px] w-full resize-y bg-transparent p-4 font-mono text-xs leading-5 text-ops-subtext outline-none"
+      />
     </section>
   )
 }

@@ -32,6 +32,21 @@ export async function approveKnowledgeVaultCandidate(sourceSessionId: string) {
   })
 }
 
+export async function readKnowledgeVaultCandidate(sourceSessionId: string) {
+  return request<{ item: KnowledgeCompileQueueItem }>(`/knowledge/vault/candidate?source_session_id=${encodeURIComponent(sourceSessionId)}`)
+}
+
+export async function updateKnowledgeVaultCandidate(sourceSessionId: string, content: string, contentSha256?: string) {
+  return request<{ item: KnowledgeCompileQueueItem }>('/knowledge/vault/candidate', {
+    method: 'PUT',
+    body: JSON.stringify({
+      source_session_id: sourceSessionId,
+      content,
+      content_sha256: contentSha256,
+    }),
+  })
+}
+
 export async function uploadKnowledgeDocument(file: File) {
   const fd = new FormData()
   fd.append('file', file)

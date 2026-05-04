@@ -17,6 +17,7 @@ import {
   MemoryVersionsPanel,
   KnowledgeCompileQueuePanel,
   KnowledgeCandidatePanel,
+  KnowledgeCandidateEditor,
   type KnowledgeTab,
 } from './KnowledgeBaseParts'
 import { useKnowledgeBaseData } from './useKnowledgeBaseData'
@@ -33,11 +34,17 @@ export default function KnowledgeBase() {
     files,
     compileQueueItems,
     candidateItems,
+    candidateDraft,
     compilingSourceSession,
     approvingSourceSession,
+    openingCandidate,
+    savingCandidate,
+    selectedCandidate,
     handleDelete,
     handleCompileKnowledgeSource,
     handleApproveKnowledgeCandidate,
+    handleOpenKnowledgeCandidate,
+    handleSaveKnowledgeCandidate,
     handleDeleteMemory,
     handleCreateMemory,
     handleExportMemory,
@@ -75,6 +82,7 @@ export default function KnowledgeBase() {
     setMemoryCreateScope,
     setMemoryCreateSummary,
     setMemoryDraft,
+    setCandidateDraft,
     setMemoryDeleteTarget,
     setMemorySearchQuery,
     setMemorySearchScopes,
@@ -152,7 +160,18 @@ export default function KnowledgeBase() {
                 <KnowledgeCandidatePanel
                   approvingSourceSession={approvingSourceSession}
                   items={candidateItems}
+                  openingCandidate={openingCandidate}
                   onApprove={handleApproveKnowledgeCandidate}
+                  onOpen={handleOpenKnowledgeCandidate}
+                />
+              </div>
+              <div className="mt-4">
+                <KnowledgeCandidateEditor
+                  draft={candidateDraft}
+                  candidate={selectedCandidate}
+                  saving={savingCandidate}
+                  onDraftChange={setCandidateDraft}
+                  onSave={handleSaveKnowledgeCandidate}
                 />
               </div>
             </aside>
@@ -168,7 +187,16 @@ export default function KnowledgeBase() {
             <KnowledgeCandidatePanel
               approvingSourceSession={approvingSourceSession}
               items={candidateItems}
+              openingCandidate={openingCandidate}
               onApprove={handleApproveKnowledgeCandidate}
+              onOpen={handleOpenKnowledgeCandidate}
+            />
+            <KnowledgeCandidateEditor
+              draft={candidateDraft}
+              candidate={selectedCandidate}
+              saving={savingCandidate}
+              onDraftChange={setCandidateDraft}
+              onSave={handleSaveKnowledgeCandidate}
             />
           </div>
         ) : null}

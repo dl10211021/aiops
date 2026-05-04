@@ -7,7 +7,9 @@ from api.response_mappers.knowledge import (
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
     knowledge_vault_candidate_approved_response_kwargs,
+    knowledge_vault_candidate_item_response_kwargs,
     knowledge_vault_candidate_response_kwargs,
+    knowledge_vault_candidate_updated_response_kwargs,
     knowledge_vault_candidates_response_kwargs,
     knowledge_vault_queue_response_kwargs,
     memory_item_created_response_kwargs,
@@ -35,7 +37,9 @@ from core.knowledge_base_service import (
     list_knowledge_document_records,
     list_vault_candidates,
     list_vault_compile_queue,
+    read_vault_candidate,
     remove_knowledge_document_record,
+    update_vault_candidate,
 )
 
 
@@ -83,6 +87,12 @@ class KnowledgeVaultCompileRequest(BaseModel):
 
 class KnowledgeVaultApproveRequest(BaseModel):
     source_session_id: str = Field(..., min_length=1, max_length=200)
+
+
+class KnowledgeVaultCandidateUpdateRequest(BaseModel):
+    source_session_id: str = Field(..., min_length=1, max_length=200)
+    content: str = Field(..., min_length=1)
+    content_sha256: str | None = None
 
 
 @router.get("/knowledge/memory/stores", response_model=ResponseModel)
@@ -320,6 +330,30 @@ async def compile_knowledge_vault_source(req: KnowledgeVaultCompileRequest):
 async def list_knowledge_vault_candidates():
     """列出等待人工确认或已批准的候选 Wiki 页面。"""
     return ResponseModel(**knowledge_vault_candidates_response_kwargs(list_vault_candidates()))
+
+
+@router.get("/knowledge/vault/candidate", response_model=ResponseModel)
+async def read_knowledge_vault_candidate(source_session_id: str = Query(..., min_length=1)):
+    """读取候选 Wiki Markdown 正文，供人工审阅和修订。"""
+    try:
+        item = read_vault_candidate(source_session_id)
+    except KnowledgeBaseServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**knowledge_vault_candidate_item_response_kwargs(item))
+
+
+@router.put("/knowledge/vault/candidate", response_model=ResponseModel)
+async def update_knowledge_vault_candidate(req: KnowledgeVaultCandidateUpdateRequest):
+    """保存人工修订后的候选 Wiki Markdown。"""
+    try:
+        item = update_vault_candidate(
+            req.source_session_id,
+            content=req.content,
+            content_sha256=req.content_sha256,
+        )
+    except KnowledgeBaseServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**knowledge_vault_candidate_updated_response_kwargs(item))
 
 
 @router.post("/knowledge/vault/approve", response_model=ResponseModel)

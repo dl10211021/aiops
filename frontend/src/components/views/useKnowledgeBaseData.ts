@@ -18,10 +18,12 @@ import {
   listMemoryVersions,
   redactMemoryVersion,
   readMemoryItem,
+  readKnowledgeVaultCandidate,
   restoreMemoryVersion,
   resolveMemoryPendingConflict,
   searchMemoryItems,
   updateMemoryItem,
+  updateKnowledgeVaultCandidate,
   uploadKnowledgeDocument,
 } from '@/api/knowledge'
 import { useStore } from '@/store'
@@ -33,6 +35,8 @@ export function useKnowledgeBaseData() {
   const [files, setFiles] = useState<KnowledgeFile[]>([])
   const [compileQueueItems, setCompileQueueItems] = useState<KnowledgeCompileQueueItem[]>([])
   const [candidateItems, setCandidateItems] = useState<KnowledgeCompileQueueItem[]>([])
+  const [selectedCandidate, setSelectedCandidate] = useState<KnowledgeCompileQueueItem | null>(null)
+  const [candidateDraft, setCandidateDraft] = useState('')
   const [memoryItems, setMemoryItems] = useState<MemoryItem[]>([])
   const [memoryStores, setMemoryStores] = useState<MemoryStoreInfo[]>([])
   const [memoryVersions, setMemoryVersions] = useState<MemoryVersion[]>([])
@@ -59,6 +63,8 @@ export function useKnowledgeBaseData() {
   const [reviewingMemoryPath, setReviewingMemoryPath] = useState<string | null>(null)
   const [compilingSourceSession, setCompilingSourceSession] = useState<string | null>(null)
   const [approvingSourceSession, setApprovingSourceSession] = useState<string | null>(null)
+  const [openingCandidate, setOpeningCandidate] = useState<string | null>(null)
+  const [savingCandidate, setSavingCandidate] = useState(false)
   const [loading, setLoading] = useState(true)
   const [memoryLoading, setMemoryLoading] = useState(true)
   const [error, setError] = useState('')
@@ -198,6 +204,48 @@ export function useKnowledgeBaseData() {
       addToast(e instanceof Error ? e.message : '批准候选 Wiki 失败', 'error')
     } finally {
       setApprovingSourceSession(null)
+    }
+  }
+
+  const handleOpenKnowledgeCandidate = async (item: KnowledgeCompileQueueItem) => {
+    const sourceSessionId = item.source_session_id || item.id
+    if (!sourceSessionId) {
+      addToast('该候选缺少 source session，无法打开', 'error')
+      return
+    }
+    setOpeningCandidate(sourceSessionId)
+    try {
+      const res = await readKnowledgeVaultCandidate(sourceSessionId)
+      setSelectedCandidate(res.data.item)
+      setCandidateDraft(res.data.item.content || '')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '打开候选 Wiki 失败', 'error')
+    } finally {
+      setOpeningCandidate(null)
+    }
+  }
+
+  const handleSaveKnowledgeCandidate = async () => {
+    const sourceSessionId = selectedCandidate?.source_session_id || selectedCandidate?.id
+    if (!sourceSessionId) {
+      addToast('请先打开候选 Wiki', 'error')
+      return
+    }
+    setSavingCandidate(true)
+    try {
+      const res = await updateKnowledgeVaultCandidate(
+        sourceSessionId,
+        candidateDraft,
+        selectedCandidate?.content_sha256,
+      )
+      setSelectedCandidate(res.data.item)
+      setCandidateDraft(res.data.item.content || '')
+      await loadFiles()
+      addToast('候选 Wiki 已保存', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '保存候选 Wiki 失败', 'error')
+    } finally {
+      setSavingCandidate(false)
     }
   }
 
@@ -379,11 +427,17 @@ export function useKnowledgeBaseData() {
     files,
     compileQueueItems,
     candidateItems,
+    candidateDraft,
     compilingSourceSession,
     approvingSourceSession,
+    openingCandidate,
+    savingCandidate,
+    selectedCandidate,
     handleDelete,
     handleCompileKnowledgeSource,
     handleApproveKnowledgeCandidate,
+    handleOpenKnowledgeCandidate,
+    handleSaveKnowledgeCandidate,
     handleDeleteMemory,
     handleCreateMemory,
     handleExportMemory,
@@ -421,6 +475,7 @@ export function useKnowledgeBaseData() {
     setMemoryCreateScope,
     setMemoryCreateSummary,
     setMemoryDraft,
+    setCandidateDraft,
     setMemoryDeleteTarget,
     setMemorySearchQuery,
     setMemorySearchScopes,

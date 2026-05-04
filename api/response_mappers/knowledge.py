@@ -47,6 +47,21 @@ def knowledge_vault_candidate_approved_response_kwargs(item: dict[str, Any]) -> 
     }
 
 
+def knowledge_vault_candidate_item_response_kwargs(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"item": item},
+    }
+
+
+def knowledge_vault_candidate_updated_response_kwargs(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "候选 Wiki 已保存",
+        "data": {"item": item},
+    }
+
+
 def knowledge_document_deleted_response_kwargs(message: str) -> dict[str, Any]:
     return {
         "status": "success",
