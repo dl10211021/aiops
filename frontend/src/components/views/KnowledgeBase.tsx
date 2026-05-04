@@ -25,7 +25,6 @@ import {
   KnowledgeCandidateEditor,
   KnowledgeArticlePanel,
   KnowledgeArticleViewer,
-  KnowledgeMemoryBridgePanel,
   type KnowledgeTab,
 } from './KnowledgeBaseParts'
 import { useKnowledgeBaseData } from './useKnowledgeBaseData'
@@ -183,46 +182,17 @@ export default function KnowledgeBase() {
   const friendlyError = visibleError === 'Not Found'
     ? '后台接口返回 Not Found，通常是服务未加载最新路由或需要重启。页面功能已保留，可先刷新或重启服务后再试。'
     : visibleError
-  const documentStepGuide = {
-    source: {
-      title: '当前在做：资料入库',
-      body: '先把原始文件安全保存下来，不让 AI 直接改原文。这里关注来源、格式和留底。',
-      next: '下一步让辅助模型编译候选 Wiki。',
-    },
-    compile: {
-      title: '当前在做：生成 Wiki',
-      body: '辅助模型把原始资料压缩成候选知识页，只生成候选，不直接写入Wiki 知识。',
-      next: '下一步整理知识候选内容。',
-    },
-    review: {
-      title: '当前在做：整理知识',
-      body: '把 AI 生成的 Wiki 草稿整理成可用知识，重点看事实、来源和适用范围。',
-      next: '整理完成后就可以搜索和查看图谱。',
-    },
-    discover: {
-      title: '当前在做：检索追溯',
-      body: 'Wiki 知识、来源证据和双链关系集中在这里，用于会话引用、审计和复盘。',
-      next: '需要新增资料时回到资料入库。',
-    },
-  }[documentStep]
-  const memoryStepGuide = {
-    browse: {
-      title: '当前在做：浏览记忆',
-      body: '这里查看已经沉淀的文件记忆，包括成功经验、用户偏好、资产画像和规则。',
-      next: '没有合适记忆时进入写入与检索。',
-    },
-    write: {
-      title: '当前在做：写入与检索',
-      body: '把新的可靠经验写成文件记忆，或检索已有记忆验证 AI 是否能找到正确上下文。',
-      next: '下一步处理冲突、复核和版本。',
-    },
-    govern: {
-      title: '当前在做：管理记忆',
-      body: '错误反馈、冲突记忆、过期经验和版本记录都在这里处理，避免记忆污染。',
-      next: '治理完成后回到浏览记忆。',
-    },
-  }[memoryStep]
-  const activeStepGuide = activeTab === 'documents' ? documentStepGuide : memoryStepGuide
+    const activeStepGuide = activeTab === 'documents'
+    ? {
+      title: '资料库',
+      body: '这里管理上传资料、Wiki 知识和搜索图谱。资料先保存原文，需要时再让 AI 生成 Wiki。',
+      next: '简单管理资料和 Wiki。',
+    }
+    : {
+      title: 'AI 记忆',
+      body: '这里管理 AI 已经记住的经验、偏好和资产画像。好的回答可以沉淀，错误回答只做纠错记录。',
+      next: '查看、新增、管理记忆。',
+    }
   const knowledgeHealth = [
     ['原始资料', `${files.length}`, '保存原文，不被 AI 改写'],
     ['待编译', `${compileQueueItems.length}`, '等待生成 Wiki 草稿'],
@@ -315,34 +285,13 @@ export default function KnowledgeBase() {
             }
           }}
         />
-        <KnowledgeMemoryBridgePanel
-          activeTab={activeTab}
-          documentStep={documentStep}
-          memoryStep={memoryStep}
-          fileCount={files.length}
-          compileQueueCount={compileQueueItems.length}
-          candidateCount={candidateItems.length}
-          articleCount={articleItems.length}
-          memoryCount={memoryItems.length}
-          promotedCount={sessionMemoryActivity?.summary.promoted_count || 0}
-          rejectedCount={sessionMemoryActivity?.summary.rejected_count || 0}
-          pendingGovernanceCount={memoryPendingConflicts.length + memoryReviewItems.length}
-          onDocumentStep={(step) => {
-            setActiveTab('documents')
-            setDocumentStep(step)
-          }}
-          onMemoryStep={(step) => {
-            setActiveTab('memory')
-            setMemoryStep(step)
-          }}
-        />
 
 
         <section className="mb-4 rounded-lg border border-ops-accent/20 bg-gradient-to-r from-ops-accent/10 via-ops-panel/70 to-ops-dark/30 p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.22em] text-ops-accent/80">
-                {activeTab === 'documents' ? '资料流程' : '记忆流程'}
+                {activeTab === 'documents' ? '资料库' : 'AI 记忆'}
               </div>
               <h3 className="mt-1 text-base font-semibold text-ops-text">{activeStepGuide.title}</h3>
               <p className="mt-1 max-w-4xl text-sm leading-6 text-ops-subtext">{activeStepGuide.body}</p>
@@ -382,9 +331,9 @@ export default function KnowledgeBase() {
               <div className="grid gap-2 md:grid-cols-4">
                 {([
                   ['source', '1. 资料入库', `${files.length} 份原始资料`, '上传、导入、留底'],
-                  ['compile', '2. 生成 Wiki', `${compileQueueItems.length} 个待处理`, '生成候选 Wiki'],
-                  ['review', '3. 整理知识', `${candidateItems.length} 个草稿 / ${articleItems.length} 篇 Wiki`, '整理成可用知识'],
-                  ['discover', '4. 检索追溯', `${vaultSearchResults.length} 条命中`, '搜索、图谱、证据链'],
+                  ['compile', '生成 Wiki', `${compileQueueItems.length} 个待处理`, '让 AI 生成 Wiki 草稿'],
+                  ['review', 'Wiki 知识', `${candidateItems.length} 个草稿 / ${articleItems.length} 篇 Wiki`, '整理和查看 Wiki'],
+                  ['discover', '搜索图谱', `${vaultSearchResults.length} 条命中`, '搜索资料和关联图谱'],
                 ] as const).map(([id, label, count, desc]) => (
                   <button
                     key={id}
@@ -544,9 +493,9 @@ export default function KnowledgeBase() {
             <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-3">
               <div className="grid gap-2 md:grid-cols-3">
                 {([
-                  ['browse', '1. 浏览记忆', `${memoryItems.length} 条文件记忆`, '查看、编辑、删除'],
-                  ['write', '2. 写入与检索', `${memorySearchResults.length} 条检索命中`, '新建、搜索、验证'],
-                  ['govern', '3. 管理记忆', `${memoryPendingConflicts.length + memoryReviewItems.length} 项待处理`, '冲突、复核、版本'],
+                  ['browse', '记忆列表', `${memoryItems.length} 条文件记忆`, '查看、编辑、删除'],
+                  ['write', '新增/搜索', `${memorySearchResults.length} 条检索命中`, '新增和搜索记忆'],
+                  ['govern', '管理记忆', `${memoryPendingConflicts.length + memoryReviewItems.length} 项待处理`, '处理冲突和版本'],
                 ] as const).map(([id, label, count, desc]) => (
                   <button
                     key={id}
