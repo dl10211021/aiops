@@ -13,8 +13,10 @@ interface SessionToolsetBarProps {
   session: Session
   availableModels: ModelGroup[]
   modelName: string
+  orchestrationMode: 'single' | 'split'
   thinkingMode: string
   onModelChange: (value: string) => void
+  onOrchestrationModeChange: (mode: 'single' | 'split') => void
   onThinkingModeChange: (value: string) => void
 }
 
@@ -23,8 +25,10 @@ export default function SessionToolsetBar({
   session,
   availableModels,
   modelName,
+  orchestrationMode,
   thinkingMode,
   onModelChange,
+  onOrchestrationModeChange,
   onThinkingModeChange,
 }: SessionToolsetBarProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -42,10 +46,12 @@ export default function SessionToolsetBar({
         <SessionRuntimeControls
           availableModels={availableModels}
           modelName={modelName}
+          orchestrationMode={orchestrationMode}
           thinkingMode={thinkingMode}
           capabilityItems={toolsetModel.capabilityItems}
           detailsOpen={detailsOpen}
           onModelChange={onModelChange}
+          onOrchestrationModeChange={onOrchestrationModeChange}
           onThinkingModeChange={onThinkingModeChange}
           onToggleDetails={() => setDetailsOpen((open) => !open)}
         />

@@ -33,6 +33,7 @@ async def process_chat_tool_calls(
     dispatcher: Any,
     context: dict,
     iteration: int,
+    trace_collector: Callable[[dict], None] | None = None,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> AsyncIterator[str]:
     for tc in tool_calls:
@@ -45,6 +46,7 @@ async def process_chat_tool_calls(
         if prepared_call.parse_error:
             tool_res = invalid_tool_arguments_result(prepared_call.parse_error)
             msg_end, safe_tool_res = build_tool_end_event(tc_id, func_name, tool_res)
+            _collect_tool_end_trace(trace_collector, msg_end)
             yield sse_raw(msg_end)
             tool_msg = {
                 "tool_call_id": tc_id,
@@ -185,6 +187,7 @@ async def process_chat_tool_calls(
                     func_name,
                     tool_res,
                 )
+                _collect_tool_end_trace(trace_collector, msg_end)
                 yield sse_raw(msg_end)
 
                 tool_msg = {
@@ -205,6 +208,14 @@ async def process_chat_tool_calls(
                 "cmd": display_cmd,
             }
         )
+        if trace_collector:
+            trace_collector(
+                {
+                    "type": "tool_start",
+                    "tool": func_name,
+                    "args": display_cmd,
+                }
+            )
         yield sse_raw(msg_start)
         await sleep(0.05)
 
@@ -217,6 +228,7 @@ async def process_chat_tool_calls(
             except KeyError:
                 pass
         msg_end, safe_tool_res = build_tool_end_event(tc_id, func_name, tool_res)
+        _collect_tool_end_trace(trace_collector, msg_end)
         yield sse_raw(msg_end)
         await sleep(0.05)
 
@@ -237,3 +249,24 @@ async def process_chat_tool_calls(
     )
     yield sse_raw(msg_loop)
     await sleep(0.05)
+
+
+def _collect_tool_end_trace(
+    trace_collector: Callable[[dict], None] | None,
+    raw_event: str,
+) -> None:
+    if not trace_collector:
+        return
+    try:
+        payload = json.loads(raw_event)
+    except Exception:
+        return
+    trace_collector(
+        {
+            "type": "tool_end",
+            "tool": payload.get("tool") or "unknown",
+            "result": payload.get("result") or "",
+            "resultMeta": payload.get("result_meta") or {},
+            "status": payload.get("result_status") or "done",
+        }
+    )

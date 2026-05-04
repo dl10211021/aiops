@@ -28,7 +28,7 @@ export function CommandBasicFields({
         label="显示名称"
         value={current.label || ''}
         disabled={readonlyDraft}
-        placeholder="/oracle-health 实例健康"
+        placeholder="实例健康检查"
         onChange={(label) => onPatch({ label })}
       />
       <CommandTextField
@@ -42,7 +42,7 @@ export function CommandBasicFields({
         label="说明"
         value={current.description || ''}
         disabled={readonlyDraft}
-        placeholder="用于输入框上方和 / 菜单里的说明"
+        placeholder="用于输入框上方和快捷命令选择框里的说明"
         className="md:col-span-2"
         onChange={(description) => onPatch({ description })}
       />
@@ -117,7 +117,7 @@ export function CommandPromptField({
 }) {
   return (
     <label className="text-sm md:col-span-2">
-      <span className="text-ops-subtext">Prompt 模板</span>
+      <span className="text-ops-subtext">提示词模板</span>
       <textarea
         value={current.prompt_template || current.prompt || ''}
         onChange={(event) => onPatch({ prompt_template: event.target.value })}

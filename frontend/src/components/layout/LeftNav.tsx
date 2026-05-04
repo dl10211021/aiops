@@ -6,6 +6,7 @@ const NAV_ITEMS: Array<{ id: ViewId; icon: string; label: string }> = [
   { id: 'dashboard', icon: 'D', label: '总览' },
   { id: 'chat', icon: 'C', label: '会话' },
   { id: 'assets', icon: 'A', label: '资产' },
+  { id: 'canvas', icon: 'V', label: '画板' },
   { id: 'cron', icon: 'T', label: '巡检' },
   { id: 'alerts', icon: 'L', label: '告警' },
   { id: 'approvals', icon: 'P', label: '审批' },

@@ -4,16 +4,22 @@ from unittest.mock import patch
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
 from core import llm_factory
+from core import assistant_model_config
 
 class TestLLMFactory(unittest.TestCase):
     def setUp(self):
         self.tmpdir = Path.cwd() / "tests" / "tmp_llm_factory"
         self.tmpdir.mkdir(parents=True, exist_ok=True)
         self.provider_path = self.tmpdir / "providers.json"
+        self.assistant_config_path = self.tmpdir / "assistant_model.json"
         self.provider_path_patcher = patch.object(
             llm_factory, "PROVIDERS_JSON_PATH", self.provider_path
         )
+        self.assistant_config_path_patcher = patch.object(
+            assistant_model_config, "ASSISTANT_MODEL_CONFIG_PATH", self.assistant_config_path
+        )
         self.provider_path_patcher.start()
+        self.assistant_config_path_patcher.start()
         # Setup specific mock providers
         mock_providers = [
             {
@@ -41,7 +47,10 @@ class TestLLMFactory(unittest.TestCase):
         llm_factory.save_providers(mock_providers)
 
     def tearDown(self):
+        self.assistant_config_path_patcher.stop()
         self.provider_path_patcher.stop()
+        if self.assistant_config_path.exists():
+            self.assistant_config_path.unlink()
         if self.provider_path.exists():
             self.provider_path.unlink()
         if self.tmpdir.exists():

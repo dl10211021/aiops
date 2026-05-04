@@ -410,7 +410,19 @@ class MemoryDB:
         return self._session_message_store.get_messages(session_id, for_ui)
 
     def append_message(self, session_id: str, message_dict: dict):
-        self._session_message_store.append_message(session_id, message_dict)
+        return self._session_message_store.append_message(session_id, message_dict)
+
+    def update_message_exec_trace(
+        self,
+        session_id: str,
+        message_id: int,
+        exec_trace: list[dict],
+    ):
+        self._session_message_store.update_message_exec_trace(
+            session_id,
+            message_id,
+            exec_trace,
+        )
 
     def update_message_content(self, session_id: str, message_id: int, content: str) -> dict:
         return self._session_message_store.update_message_content(
@@ -526,7 +538,11 @@ class MemoryDB:
             return ""
 
     async def compress_and_store_ltm(
-        self, session_id: str, client, embedding_model: str | None = None
+        self,
+        session_id: str,
+        client,
+        embedding_model: str | None = None,
+        primary_model_id: str | None = None,
     ):
         """将超出短期窗口的历史对话进行总结并存入 LanceDB，然后从 SQLite 释放"""
         if not self.ltm_enabled or not self.ldb:
@@ -579,16 +595,53 @@ class MemoryDB:
                 # 无实质内容，直接从 SQLite 删除
                 ids_to_delete = [r[0] for r in compress_rows]
             else:
-                prompt = f"以下是一段过往的对话日志。请提取其中的关键事实、配置信息、用户的偏好或系统状态，写成一段简洁客观的总结，便于未来作为长期记忆供 AI 检索。不需要任何寒暄，直接输出核心信息：\n\n{text_to_summarize}"
+                prompt = f"""以下是一段 AIOps 会话日志，其中可能包含用户目标、工具执行轨迹、成功执行经验、资产画像和 AI 输出。
+请提取适合长期记忆保存的内容，写成客观、可检索、可复用的运维记忆。
 
-                # 默认使用当前配置的模型，避免写死某个云厂商模型。
-                compress_model = os.environ.get("COMPRESS_MODEL") or embedding_model or self._get_embedding_model()
-                resp = await client.chat.completions.create(
-                    model=compress_model,
-                    messages=[{"role": "user", "content": prompt}],
-                    stream=False,
-                )
-                summary = resp.choices[0].message.content.strip()
+重点保留：
+- 已验证成功的排查路径、命令模式、工具调用顺序
+- 资产事实、业务角色、风险特征、常见故障信号
+- 用户明确偏好和平台工作方式
+- 后续再次遇到同类资产时应该注意什么
+
+必须过滤：
+- 密码、Token、密钥、Cookie、完整连接串
+- 一次性噪声、重复日志、无价值流水
+
+不需要寒暄，直接输出核心记忆：\n\n{text_to_summarize}"""
+
+                try:
+                    from core.assistant_model_config import (
+                        assistant_task_enabled,
+                        assistant_thinking_mode,
+                        resolve_assistant_model_id,
+                    )
+                    from core.llm_execution import execute_chat_stream
+
+                    fallback_model = primary_model_id or os.environ.get("COMPRESS_MODEL") or embedding_model or self._get_embedding_model()
+                    compress_model = (
+                        resolve_assistant_model_id(fallback_model)
+                        if assistant_task_enabled("memory_compression")
+                        else fallback_model
+                    )
+                    parts = []
+                    async for event in execute_chat_stream(
+                        compress_model,
+                        [{"role": "user", "content": prompt}],
+                        assistant_thinking_mode() if assistant_task_enabled("memory_compression") else "off",
+                        None,
+                    ):
+                        if event.get("type") == "content":
+                            parts.append(str(event.get("content") or ""))
+                    summary = "".join(parts).strip()
+                except Exception:
+                    compress_model = os.environ.get("COMPRESS_MODEL") or embedding_model or self._get_embedding_model()
+                    resp = await client.chat.completions.create(
+                        model=compress_model,
+                        messages=[{"role": "user", "content": prompt}],
+                        stream=False,
+                    )
+                    summary = resp.choices[0].message.content.strip()
 
                 # 获取向量
                 emb_res = await client.embeddings.create(

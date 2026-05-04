@@ -1,0 +1,13 @@
+{
+  "main_model_id": "gpustack|qwen3.6-35b-a3b-awq",
+  "enabled": true,
+  "model_id": "gpustack|qwen3.6-27b-fp8",
+  "thinking_mode": "high",
+  "tasks": {
+    "memory_compression": true,
+    "trace_review": true,
+    "risk_advice": true,
+    "asset_profile_prompt": true,
+    "completion_check": true
+  }
+}

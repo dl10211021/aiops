@@ -137,6 +137,15 @@ def save_providers(providers):
 
 def get_default_model_id() -> str:
     """Return the first configured model as a provider-qualified id."""
+    try:
+        from core.assistant_model_config import configured_main_model_id
+
+        configured = configured_main_model_id()
+        if configured:
+            return configured
+    except Exception:
+        pass
+
     providers = get_all_providers()
     for provider in providers:
         models = [m.strip() for m in provider.get("models", "").split(",") if m.strip()]

@@ -2,6 +2,7 @@ import type { MouseEvent } from 'react'
 import type { Session } from '@/types'
 import { protocolLabel } from '@/utils/assetDisplay'
 import { sessionAttention } from './sessionAttention'
+import { isSessionRunning } from './sessionMetrics'
 
 interface SessionItemProps {
   session: Session
@@ -20,6 +21,7 @@ export default function SessionItem({
 }: SessionItemProps) {
   const attention = sessionAttention(session)
   const needsAttention = attention.type !== 'none'
+  const running = isSessionRunning(session)
   return (
     <div
       onClick={onSelect}
@@ -32,8 +34,17 @@ export default function SessionItem({
     >
       <span
         title={`${session.asset_type}/${session.protocol}`}
-        className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-lg bg-ops-dark/70 px-1 text-center text-[10px] font-bold leading-tight text-ops-text"
+        className="relative grid h-[38px] w-[38px] shrink-0 place-items-center rounded-lg bg-ops-dark/70 px-1 text-center text-[10px] font-bold leading-tight text-ops-text"
       >
+        <span
+          className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-ops-panel ${
+            running
+              ? 'bg-ops-accent shadow-[0_0_10px_rgba(40,208,168,0.85)] animate-pulse'
+              : 'bg-ops-success shadow-[0_0_8px_rgba(90,214,125,0.6)]'
+          }`}
+          title={running ? '会话执行中' : '会话已连接'}
+          aria-label={running ? '会话执行中' : '会话已连接'}
+        />
         {protocolLabel(session.protocol || session.asset_type)}
       </span>
       <div className="min-w-0 flex-1">
@@ -51,7 +62,7 @@ export default function SessionItem({
               {attention.label}
             </span>
           )}
-          {session.isStreaming && !needsAttention && (
+          {running && !needsAttention && (
             <span
               className="inline-flex shrink-0 items-center gap-1 rounded-full border border-ops-accent/35 bg-ops-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-ops-accent"
               title="AI 正在执行"

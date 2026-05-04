@@ -31,6 +31,7 @@ interface UseChatStreamingArgs {
   attachmentsBySession: Record<string, ChatAttachmentPreview[]>
   readWriteWarningEnabled: boolean
   modelName: string
+  orchestrationMode: 'single' | 'split'
   thinkingMode: string
   setReadWriteConfirm: (confirmation: ReadWriteConfirmation | null) => void
   setInputHistory: Dispatch<SetStateAction<string[]>>
@@ -49,6 +50,7 @@ export function useChatStreaming({
   attachmentsBySession,
   readWriteWarningEnabled,
   modelName,
+  orchestrationMode,
   thinkingMode,
   setReadWriteConfirm,
   setInputHistory,
@@ -124,6 +126,7 @@ export function useChatStreaming({
         sessionId,
         modelMessageContent,
         modelName,
+        orchestrationMode,
         thinkingMode,
         updateLastAssistantMessage,
       })
@@ -147,6 +150,7 @@ export function useChatStreaming({
     draftsBySession,
     input,
     modelName,
+    orchestrationMode,
     readWriteWarningEnabled,
     removeEmptyAssistantMessages,
     revokeAttachmentPreviews,

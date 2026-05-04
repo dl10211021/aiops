@@ -12,6 +12,7 @@ export function streamChat(
   message: string,
   modelName: string,
   thinkingMode: string = 'off',
+  orchestrationMode: 'single' | 'split' = 'single',
   displayMessage?: string,
   attachments: Array<{
     filename: string
@@ -30,7 +31,7 @@ export function streamChat(
   return fetch(apiUrl('/chat'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ session_id: sessionId, message, display_message: displayMessage || message, model_name: modelName, thinking_mode: thinkingMode, attachments }),
+    body: JSON.stringify({ session_id: sessionId, message, display_message: displayMessage || message, model_name: modelName, thinking_mode: thinkingMode, orchestration_mode: orchestrationMode, attachments }),
     signal,
   })
 }

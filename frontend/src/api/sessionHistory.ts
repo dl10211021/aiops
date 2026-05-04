@@ -1,7 +1,15 @@
 import { request } from './http'
+import type { ExecTraceItem } from '@/types'
 
-export async function getSessionHistory(sessionId: string) {
-  return request<{ messages: Array<{ role: string; content: string; _memory_id?: number; attachments?: Array<{
+interface SessionHistoryApiMessage {
+  role: string
+  content: string
+  _memory_id?: number
+  exec_trace?: ExecTraceItem[]
+  execTrace?: ExecTraceItem[]
+  timestamp?: number | string
+  created_at?: string
+  attachments?: Array<{
     filename: string
     ext?: string
     size: number
@@ -10,7 +18,11 @@ export async function getSessionHistory(sessionId: string) {
     pages?: number
     sheets?: string[]
     truncated?: boolean
-  }> }> }>(
+  }>
+}
+
+export async function getSessionHistory(sessionId: string) {
+  return request<{ messages: SessionHistoryApiMessage[] }>(
     `/session/${sessionId}/history`
   )
 }

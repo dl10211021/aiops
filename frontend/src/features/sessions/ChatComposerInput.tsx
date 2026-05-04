@@ -9,6 +9,7 @@ interface ChatComposerInputProps {
   hasSendableContent: boolean
   onInputChange: (value: string) => void
   onHistoryReset: () => void
+  onShowAttachmentFormats: () => void
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
   onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void
   onSend: () => void
@@ -24,6 +25,7 @@ export default function ChatComposerInput({
   hasSendableContent,
   onInputChange,
   onHistoryReset,
+  onShowAttachmentFormats,
   onKeyDown,
   onPaste,
   onSend,
@@ -33,7 +35,10 @@ export default function ChatComposerInput({
     <div className="flex items-end gap-2">
       <button
         type="button"
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => {
+          onShowAttachmentFormats()
+          fileInputRef.current?.click()
+        }}
         disabled={uploadingAttachment || isStreaming}
         className="h-[46px] shrink-0 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-sm text-ops-subtext transition-colors hover:border-ops-accent/70 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-50"
         title="上传附件"

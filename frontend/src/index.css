@@ -170,11 +170,36 @@ button, input, textarea, select {
 .ai-report-body h2 { font-size: 1.08rem; }
 .ai-report-body h3 { font-size: 1rem; }
 .markdown-body pre {
+  position: relative;
   background: var(--color-ops-dark);
   border-radius: 6px;
-  padding: 12px;
+  padding: 38px 12px 12px;
   overflow-x: auto;
   margin: 8px 0;
+}
+.markdown-code-copy {
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  border: 1px solid color-mix(in oklab, var(--color-ops-accent) 34%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-ops-panel) 92%, transparent);
+  color: var(--color-ops-accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 6px 10px;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+.markdown-code-copy:hover {
+  background: color-mix(in oklab, var(--color-ops-accent) 18%, var(--color-ops-panel));
+  border-color: var(--color-ops-accent);
+  transform: translateY(-1px);
+}
+.markdown-code-copy.is-copied {
+  border-color: var(--color-ops-success);
+  color: var(--color-ops-success);
 }
 .markdown-body code {
   background: var(--color-ops-dark);

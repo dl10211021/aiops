@@ -6,6 +6,8 @@ from api.errors import raise_http_error
 from api.response_mappers.config import (
     agent_runtime_config_response_kwargs,
     agent_runtime_config_saved_response_kwargs,
+    assistant_model_config_response_kwargs,
+    assistant_model_config_saved_response_kwargs,
     embedding_config_saved_response_kwargs,
     llm_config_response_kwargs,
     models_response_kwargs,
@@ -18,10 +20,15 @@ from api.response_mappers.config import (
 from api.schema_models.common import ResponseModel
 from api.schema_models.config import (
     AgentRuntimeConfigRequest,
+    AssistantModelConfigRequest,
     EmbeddingConfigRequest,
     ProviderConfig,
     SafetyPolicyTestRequest,
     SafetyPolicyUpdateRequest,
+)
+from core.assistant_model_config import (
+    get_assistant_model_config,
+    save_assistant_model_config,
 )
 from core.app_config_service import (
     AppConfigServiceError,
@@ -76,6 +83,19 @@ async def update_agent_runtime_config_endpoint(req: AgentRuntimeConfigRequest):
     except AppConfigServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**agent_runtime_config_saved_response_kwargs(config))
+
+
+@router.get("/config/assistant-model", response_model=ResponseModel)
+async def get_assistant_model_config_endpoint():
+    return ResponseModel(
+        **assistant_model_config_response_kwargs(get_assistant_model_config())
+    )
+
+
+@router.post("/config/assistant-model", response_model=ResponseModel)
+async def update_assistant_model_config_endpoint(req: AssistantModelConfigRequest):
+    config = save_assistant_model_config(req.model_dump())
+    return ResponseModel(**assistant_model_config_saved_response_kwargs(config))
 
 
 @router.get("/config/embedding")

@@ -12,6 +12,7 @@ import {
   commandDraftForBuiltin,
   commandDraftForSession,
   commandDraftFromCommand,
+  displayCommandLabel,
 } from './slashCommands'
 
 interface UseSessionCommandsArgs {
@@ -68,6 +69,7 @@ export function useSessionCommands({
     setReadonlyDraft(false)
     setDraft({
       ...command,
+      label: displayCommandLabel(command.label),
       prompt_template: command.prompt_template || command.prompt,
     })
   }, [])
@@ -98,7 +100,10 @@ export function useSessionCommands({
     setBusy(true)
     setError('')
     try {
-      await persistCommandDraft(draft)
+      await persistCommandDraft({
+        ...draft,
+        label: displayCommandLabel(draft.label),
+      })
       setDraft(commandDraftForSession(session))
       setReadonlyDraft(false)
       await refreshCommands()

@@ -38,19 +38,23 @@ export function SessionIdentityStrip({
 export function SessionRuntimeControls({
   availableModels,
   modelName,
+  orchestrationMode,
   thinkingMode,
   capabilityItems,
   detailsOpen,
   onModelChange,
+  onOrchestrationModeChange,
   onThinkingModeChange,
   onToggleDetails,
 }: {
   availableModels: ModelGroup[]
   modelName: string
+  orchestrationMode: 'single' | 'split'
   thinkingMode: string
   capabilityItems: string[]
   detailsOpen: boolean
   onModelChange: (value: string) => void
+  onOrchestrationModeChange: (mode: 'single' | 'split') => void
   onThinkingModeChange: (value: string) => void
   onToggleDetails: () => void
 }) {
@@ -65,6 +69,32 @@ export function SessionRuntimeControls({
         thinkingMode={thinkingMode}
         onThinkingModeChange={onThinkingModeChange}
       />
+      <div className="inline-flex h-9 overflow-hidden rounded-lg border border-ops-surface1/70 bg-ops-panel/45 p-0.5" title="切换本次会话的模型协作策略">
+        <button
+          type="button"
+          onClick={() => onOrchestrationModeChange('single')}
+          className={`rounded-md px-2.5 text-[11px] font-semibold transition-colors ${
+            orchestrationMode === 'single'
+              ? 'bg-ops-accent/18 text-ops-accent'
+              : 'text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text'
+          }`}
+          title="原始单模型流程：主模型自己规划、选工具、执行后回复"
+        >
+          原始
+        </button>
+        <button
+          type="button"
+          onClick={() => onOrchestrationModeChange('split')}
+          className={`rounded-md px-2.5 text-[11px] font-semibold transition-colors ${
+            orchestrationMode === 'split'
+              ? 'bg-ops-accent/18 text-ops-accent'
+              : 'text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text'
+          }`}
+          title="主副模型流程：主模型定目标和兜底，辅助模型选工具和整理回复"
+        >
+          主副
+        </button>
+      </div>
       <span className="inline-flex h-9 rounded-lg border border-ops-surface1/60 bg-ops-panel/35 px-2.5 text-right text-[11px] text-ops-subtext sm:hidden">
         <span className="self-center">{capabilityItems.join(' / ')}</span>
       </span>

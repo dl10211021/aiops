@@ -7,35 +7,35 @@ export function buildSlashCommands(session: Session, catalog: SessionToolCatalog
   return [
     {
       id: 'inspect',
-      label: '/inspect 只读巡检',
+      label: '只读巡检',
       description: '按当前协议执行系统、数据库或网络设备巡检',
       category: '通用',
       prompt: `请对当前资产 ${target} 执行一次完整只读巡检。必须使用当前会话的原生协议工具，不要使用本地脚本。输出包括：关键健康状态、异常项、风险等级、建议下一步。`,
     },
     {
       id: 'config',
-      label: '/config 当前配置',
+      label: '当前配置',
       description: '查看系统或实例关键配置',
       category: '通用',
       prompt: `请查看当前资产 ${target} 的关键配置信息。必须使用当前会话的原生协议工具，不要重新登录或要求我提供账号密码。请按“基础信息、资源/版本、网络/监听、关键配置、异常项”输出。`,
     },
     {
       id: 'status',
-      label: '/status 当前状态',
+      label: '当前状态',
       description: '快速确认在线状态和核心指标',
       category: '通用',
       prompt: `请快速检查当前资产 ${target} 的运行状态。优先返回在线性、核心服务/实例状态、资源使用率、近期错误或告警线索。`,
     },
     {
       id: 'tools',
-      label: '/tools 可用工具',
+      label: '可用工具',
       description: '解释当前会话会用哪些协议工具',
       category: '通用',
       prompt: `请说明当前资产 ${target} 已启用的工具和正确使用边界。当前工具包括：${toolList}。请特别说明哪些操作只读可执行，哪些需要审批或会被硬拦截。`,
     },
     {
       id: 'risk',
-      label: '/risk 风险排查',
+      label: '风险排查',
       description: '只读模式下做安全和稳定性风险扫描',
       category: '通用',
       prompt: `请在只读模式下对当前资产 ${target} 做风险排查。禁止修改配置、重启服务、删除文件或写入数据。请输出高风险、中风险、低风险和需要人工确认的事项。`,
@@ -45,7 +45,7 @@ export function buildSlashCommands(session: Session, catalog: SessionToolCatalog
 
 export function commandDraftForSession(session: Session | null): Partial<SlashCommand> {
   return {
-    label: '/custom 自定义命令',
+    label: '自定义命令',
     description: '',
     prompt_template: session
       ? `请针对当前资产 {target} 执行自定义只读检查，并按“发现、影响、建议”输出。`
@@ -64,7 +64,7 @@ export function commandDraftForSession(session: Session | null): Partial<SlashCo
 
 export function commandDraftFromCommand(command: SlashCommand, session: Session | null): Partial<SlashCommand> {
   return {
-    label: command.label,
+    label: displayCommandLabel(command.label),
     description: command.description || '',
     prompt_template: command.prompt_template || command.prompt || '',
     category: command.category || '自定义',
@@ -82,7 +82,7 @@ export function commandDraftFromCommand(command: SlashCommand, session: Session 
 export function commandDraftForBuiltin(command: SlashCommand): Partial<SlashCommand> {
   return {
     id: command.builtin_id || command.id,
-    label: command.label,
+    label: displayCommandLabel(command.label),
     description: command.description || '',
     prompt_template: command.prompt_template || command.prompt || '',
     category: command.category || '通用',
@@ -114,6 +114,12 @@ function commandSortKey(command: SlashCommand) {
 
 export function commandStableId(command: SlashCommand) {
   return command.builtin_id || command.id
+}
+
+export function displayCommandLabel(label: string | undefined) {
+  const raw = String(label || '').trim()
+  if (!raw) return '快捷命令'
+  return raw.replace(/^\/[A-Za-z0-9_-]+\s*/, '').trim() || raw.replace(/^\//, '')
 }
 
 export function sortCommandList(commands: SlashCommand[]) {

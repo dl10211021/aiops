@@ -30,6 +30,21 @@ export interface AgentRuntimeConfig {
   }
 }
 
+export interface AssistantModelConfig {
+  main_model_id: string
+  enabled: boolean
+  model_id: string
+  thinking_mode: 'off' | 'low' | 'medium' | 'high' | 'enabled' | string
+  tasks: {
+    memory_compression?: boolean
+    trace_review?: boolean
+    risk_advice?: boolean
+    asset_profile_prompt?: boolean
+    completion_check?: boolean
+    [key: string]: boolean | undefined
+  }
+}
+
 export async function getProviders() {
   return request<{ providers: ProviderConfig[] }>('/config/providers')
 }
@@ -57,6 +72,17 @@ export async function updateAgentRuntimeConfig(config: {
   headless_max_steps: number
 }) {
   return request<{ config: AgentRuntimeConfig }>('/config/agent-runtime', {
+    method: 'POST',
+    body: JSON.stringify(config),
+  })
+}
+
+export async function getAssistantModelConfig() {
+  return request<{ config: AssistantModelConfig }>('/config/assistant-model')
+}
+
+export async function updateAssistantModelConfig(config: AssistantModelConfig) {
+  return request<{ config: AssistantModelConfig }>('/config/assistant-model', {
     method: 'POST',
     body: JSON.stringify(config),
   })

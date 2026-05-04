@@ -143,6 +143,7 @@ class TestApiMappers(unittest.TestCase):
                 "user_display_message": "/inspect disk",
                 "model_name": "ops-model",
                 "thinking_mode": "high",
+                "orchestration_mode": "single",
                 "user_attachments": req.attachments,
             },
         )

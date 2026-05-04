@@ -41,6 +41,84 @@ LINUX_INSPECTION_COMMANDS = [
         "command": "ps -eo pid,ppid,comm,%cpu,%mem --sort=-%cpu | head -10",
         "timeout": 10,
     },
+    {
+        "name": "os_release",
+        "title": "操作系统版本",
+        "command": "cat /etc/os-release 2>/dev/null | head -20",
+        "timeout": 10,
+    },
+    {
+        "name": "cpu_detail",
+        "title": "CPU 详细信息",
+        "command": "lscpu 2>/dev/null | egrep 'Architecture|CPU\\(s\\)|Model name|Thread|Core|Socket|Virtualization' || true",
+        "timeout": 10,
+    },
+    {
+        "name": "filesystem_detail",
+        "title": "文件系统容量明细",
+        "command": "df -hP -x tmpfs -x devtmpfs 2>/dev/null | head -30",
+        "timeout": 10,
+    },
+    {
+        "name": "inode_usage",
+        "title": "inode 使用情况",
+        "command": "df -ihP -x tmpfs -x devtmpfs 2>/dev/null | head -30",
+        "timeout": 10,
+    },
+    {
+        "name": "failed_services",
+        "title": "失败服务",
+        "command": "systemctl --failed --no-pager --plain 2>/dev/null || true",
+        "timeout": 12,
+    },
+    {
+        "name": "key_services",
+        "title": "关键服务状态",
+        "command": "for s in ssh sshd docker cron crond rsyslog ufw firewalld chrony systemd-networkd systemd-resolved; do systemctl is-active $s >/dev/null 2>&1 && echo \"$s active\" || true; done",
+        "timeout": 12,
+    },
+    {
+        "name": "docker_containers",
+        "title": "Docker 容器",
+        "command": "docker ps --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}\\t{{.Image}}' 2>/dev/null || echo 'docker unavailable'",
+        "timeout": 12,
+    },
+    {
+        "name": "docker_disk",
+        "title": "Docker 磁盘占用",
+        "command": "docker system df 2>/dev/null || echo 'docker unavailable'",
+        "timeout": 12,
+    },
+    {
+        "name": "network_address",
+        "title": "网络地址与路由",
+        "command": "ip -br addr 2>/dev/null; echo '---ROUTE---'; ip route 2>/dev/null | head -20; echo '---DNS---'; resolvectl status 2>/dev/null | head -40 || cat /etc/resolv.conf 2>/dev/null",
+        "timeout": 12,
+    },
+    {
+        "name": "listening_ports",
+        "title": "监听端口",
+        "command": "ss -lntup 2>/dev/null | head -40",
+        "timeout": 12,
+    },
+    {
+        "name": "recent_errors",
+        "title": "最近错误日志",
+        "command": "journalctl -p err --since '24 hours ago' --no-pager 2>/dev/null | tail -80 || true",
+        "timeout": 15,
+    },
+    {
+        "name": "auth_logins",
+        "title": "登录与认证摘要",
+        "command": "last -n 20 2>/dev/null; echo '---FAILED---'; lastb -n 20 2>/dev/null || true; echo '---SSH-CONFIG---'; egrep -i '^(PermitRootLogin|PasswordAuthentication|MaxAuthTries|AllowUsers|X11Forwarding)' /etc/ssh/sshd_config 2>/dev/null || true",
+        "timeout": 15,
+    },
+    {
+        "name": "security_firewall",
+        "title": "防火墙状态",
+        "command": "ufw status verbose 2>/dev/null || firewall-cmd --state 2>/dev/null || iptables -S 2>/dev/null | head -40 || true",
+        "timeout": 12,
+    },
 ]
 
 NETWORK_CLI_INSPECTION_COMMANDS = [

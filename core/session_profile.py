@@ -10,6 +10,11 @@ from typing import Any
 
 from connections.ssh_manager import ssh_manager
 from core.asset_protocols import get_asset_definition, normalize_protocol
+from core.assistant_model_config import (
+    assistant_task_enabled,
+    assistant_thinking_mode,
+    resolve_assistant_model_id,
+)
 from core.memory import memory_db
 from core.redaction import redact_json_text, redact_text
 
@@ -214,6 +219,7 @@ def _normalize_profile(profile: dict[str, Any], context: dict[str, Any]) -> dict
         "tags": profile.get("tags") if isinstance(profile.get("tags"), list) else context.get("tags") or [],
         "source": str(profile.get("source") or "ai"),
         "source_summary": str(profile.get("source_summary") or "")[:700],
+        "profile_prompt": str(profile.get("profile_prompt") or "")[:1800],
         "updated_at": str(profile.get("updated_at") or datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
     }
     normalized["confidence"] = max(0, min(100, normalized["confidence"]))
@@ -249,14 +255,13 @@ async def _generate_ai_profile(
     model_name: str | None,
 ) -> dict[str, Any] | None:
     from core.llm_execution import execute_chat_stream
-    from core.llm_factory import get_default_model_id
 
-    selected_model = model_name or get_default_model_id()
+    selected_model = resolve_assistant_model_id(model_name)
     prompt = f"""
 你是企业 AIOps 平台的资产画像分析器。请根据资产连接信息、只读巡检结果和最近会话内容，判断这是什么资产、可能承担什么业务角色、后续排查应该重点关注什么。
 
 只输出 JSON 对象，不要 Markdown，不要解释。字段：
-role_label, role_category, purpose, confidence, risk_level, evidence, focus_areas, services, tags, source_summary。
+role_label, role_category, purpose, confidence, risk_level, evidence, focus_areas, services, tags, source_summary, profile_prompt。
 
 要求：
 - role_label 用中文短语，例如“Oracle 数据库服务”“Linux 应用服务器”“Windows 主机”“网络交换设备”。
@@ -265,6 +270,7 @@ role_label, role_category, purpose, confidence, risk_level, evidence, focus_area
 - risk_level 只能是 normal/watch/high。
 - evidence 最多 6 条，每条含 label,value,source。
 - focus_areas 最多 6 条，每条含 title,reason,priority，priority 用 P0/P1/P2。
+- profile_prompt 是写给主会话模型的专业提示词，必须基于本资产画像汇聚生成，说明资产角色、业务用途、排查优先级、风险边界、工具使用注意事项；不要超过 900 字。
 - 不要输出密码、Token、密钥、完整敏感连接串。
 
 资产连接信息：
@@ -281,7 +287,8 @@ role_label, role_category, purpose, confidence, risk_level, evidence, focus_area
         {"role": "user", "content": prompt},
     ]
     content_parts: list[str] = []
-    async for event in execute_chat_stream(selected_model, messages, "off", None):
+    thinking_mode = assistant_thinking_mode() if assistant_task_enabled("asset_profile_prompt") else "off"
+    async for event in execute_chat_stream(selected_model, messages, thinking_mode, None):
         if event.get("type") == "content":
             content_parts.append(str(event.get("content") or ""))
     parsed = _extract_json_object("".join(content_parts))
@@ -352,3 +359,17 @@ def profile_to_markdown(profile: dict[str, Any]) -> str:
     for item in profile.get("focus_areas") or []:
         lines.append(f"- [{item.get('priority') or 'P1'}] {item.get('title')}: {item.get('reason')}")
     return "\n".join(lines)
+
+
+def profile_to_system_prompt(profile: dict[str, Any] | None) -> str:
+    if not profile:
+        return ""
+    profile_prompt = str(profile.get("profile_prompt") or "").strip()
+    if not profile_prompt:
+        return ""
+    return f"""
+[资产画像提示词]
+这段提示词由辅助思维模型在用户主动生成资产画像时汇聚写入。你必须把它作为理解当前资产和制定排查路径的重要上下文，但仍要用工具结果验证，不要盲目信任。
+
+{profile_prompt}
+""".strip()

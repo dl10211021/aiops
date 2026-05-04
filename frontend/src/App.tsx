@@ -15,6 +15,7 @@ const SkillMarket = lazy(() => import('@/components/views/SkillMarket'))
 const KnowledgeBase = lazy(() => import('@/components/views/KnowledgeBase'))
 const CronManager = lazy(() => import('@/components/views/CronManager'))
 const AlertCenter = lazy(() => import('@/components/views/AlertCenter'))
+const RealtimeCanvas = lazy(() => import('@/components/views/RealtimeCanvas'))
 const ConnectionModal = lazy(() => import('@/components/modals/ConnectionModal'))
 const LLMConfigModal = lazy(() => import('@/components/modals/LLMConfigModal'))
 const NotificationsModal = lazy(() => import('@/components/modals/NotificationsModal'))
@@ -46,12 +47,13 @@ function ViewRouter() {
       {currentView === 'bigscreen' && <Dashboard />}
       {currentView === 'chat' && <ChatWindow />}
       {currentView === 'assets' && <AssetVault />}
+      {currentView === 'canvas' && <RealtimeCanvas />}
       {currentView === 'skills' && <SkillMarket />}
       {currentView === 'knowledge' && <KnowledgeBase />}
       {currentView === 'cron' && <CronManager />}
       {currentView === 'alerts' && <AlertCenter />}
       {currentView === 'approvals' && <ApprovalCenter />}
-      {!['dashboard', 'bigscreen', 'chat', 'assets', 'skills', 'knowledge', 'cron', 'alerts', 'approvals'].includes(currentView) && <ChatWindow />}
+      {!['dashboard', 'bigscreen', 'chat', 'assets', 'canvas', 'skills', 'knowledge', 'cron', 'alerts', 'approvals'].includes(currentView) && <ChatWindow />}
     </Suspense>
   )
 }

@@ -20,6 +20,7 @@ class AgentLongTermMemoryStore(Protocol):
         session_id: str,
         emb_client: Any,
         embedding_model: str,
+        primary_model_id: str | None = None,
     ) -> None:
         ...
 
@@ -51,11 +52,13 @@ def schedule_ltm_compression(
     session_id: str,
     emb_client: Any,
     embedding_model: str,
+    primary_model_id: str | None = None,
 ) -> asyncio.Task:
     return asyncio.create_task(
         memory_store.compress_and_store_ltm(
             session_id,
             emb_client,
             embedding_model,
+            primary_model_id,
         )
     )

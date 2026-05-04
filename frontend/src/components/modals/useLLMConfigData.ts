@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import {
   getAgentRuntimeConfig,
+  getAssistantModelConfig,
   getAvailableModels,
   getProviders,
   updateAgentRuntimeConfig,
+  updateAssistantModelConfig,
   updateProviders,
 } from '@/api/config'
-import type { AgentRuntimeConfig, ModelGroup, ProviderConfig } from '@/api/config'
+import type { AgentRuntimeConfig, AssistantModelConfig, ModelGroup, ProviderConfig } from '@/api/config'
 import { useStore } from '@/store'
 
 export interface RuntimeDraft {
@@ -30,6 +32,20 @@ export function useLLMConfigData() {
   const [runtimeConfig, setRuntimeConfig] = useState<AgentRuntimeConfig | null>(null)
   const [runtimeDraft, setRuntimeDraft] = useState<RuntimeDraft>({ chat_max_steps: 80, headless_max_steps: 60 })
   const [runtimeSaving, setRuntimeSaving] = useState(false)
+  const [assistantConfig, setAssistantConfig] = useState<AssistantModelConfig>({
+    main_model_id: '',
+    enabled: false,
+    model_id: '',
+    thinking_mode: 'high',
+    tasks: {
+      memory_compression: true,
+      trace_review: true,
+      risk_advice: true,
+      asset_profile_prompt: true,
+      completion_check: false,
+    },
+  })
+  const [assistantSaving, setAssistantSaving] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -52,6 +68,11 @@ export function useLLMConfigData() {
       })
     }).catch(() => {
       addToast('加载执行保护配置失败', 'error')
+    })
+    getAssistantModelConfig().then((r) => {
+      setAssistantConfig(r.data.config)
+    }).catch(() => {
+      addToast('加载主模型/辅助模型配置失败', 'error')
     })
   }, [])
 
@@ -170,7 +191,47 @@ export function useLLMConfigData() {
     setRuntimeDraft((current) => ({ ...current, ...patch }))
   }
 
+  const modelOptions = providers.flatMap((provider) => (
+    provider.models
+      .split(',')
+      .map((model) => model.trim())
+      .filter(Boolean)
+      .map((model) => ({
+        id: `${provider.id}|${model}`,
+        name: model,
+        providerName: provider.name,
+      }))
+  ))
+
+  const updateAssistantDraft = (patch: Partial<AssistantModelConfig>) => {
+    setAssistantConfig((current) => ({ ...current, ...patch }))
+  }
+
+  const updateAssistantTask = (task: string, enabled: boolean) => {
+    setAssistantConfig((current) => ({
+      ...current,
+      tasks: {
+        ...current.tasks,
+        [task]: enabled,
+      },
+    }))
+  }
+
+  const handleSaveAssistantConfig = async () => {
+    setAssistantSaving(true)
+    try {
+      const res = await updateAssistantModelConfig(assistantConfig)
+      setAssistantConfig(res.data.config)
+      addToast('主模型/辅助思维模型配置已保存', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '保存模型角色配置失败', 'error')
+    }
+    setAssistantSaving(false)
+  }
+
   return {
+    assistantConfig,
+    assistantSaving,
     closeModal,
     deleteTarget,
     error,
@@ -179,9 +240,11 @@ export function useLLMConfigData() {
     handleDelete,
     handleSave,
     handleSaveRuntime,
+    handleSaveAssistantConfig,
     handleTestModels,
     loading,
     modelsCount,
+    modelOptions,
     providers,
     runtimeConfig,
     runtimeDraft,
@@ -193,6 +256,8 @@ export function useLLMConfigData() {
     setSelectedId,
     testing,
     updateProvider,
+    updateAssistantDraft,
+    updateAssistantTask,
     updateRuntimeDraft,
   }
 }

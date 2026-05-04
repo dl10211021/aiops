@@ -10,6 +10,8 @@ from core.agent_message_history import build_chat_message_history
 from core.agent_prompts import render_chat_system_prompt
 from core.agent_session_context import AgentSessionContext, build_agent_session_context
 from core.agent_profiles import load_agent_profile_prompt
+from core.assistant_model_config import assistant_task_enabled
+from core.session_profile import profile_to_system_prompt
 
 
 class ChatAgentMemoryStore(Protocol):
@@ -101,6 +103,11 @@ async def prepare_chat_agent_run(
             allow_local_scripts=session_context.local_skill_scripts_allowed,
         ),
         ltm_context=ltm_context,
+        asset_profile_prompt=profile_to_system_prompt(
+            memory_store.get_asset_profile(session_id)
+            if assistant_task_enabled("asset_profile_prompt") and hasattr(memory_store, "get_asset_profile")
+            else None
+        ),
     )
     messages = build_chat_message_history(
         memory_store=memory_store,

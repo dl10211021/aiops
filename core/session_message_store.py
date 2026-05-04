@@ -35,16 +35,46 @@ class SessionMessageStore:
             logger.error(f"读取短期记忆库失败: {e}")
             return []
 
-    def append_message(self, session_id: str, message_dict: dict) -> None:
+    def append_message(self, session_id: str, message_dict: dict) -> int | None:
         """存入 SQLite 作为短期记忆"""
         try:
             with self._lock, self._connect() as conn:
-                conn.execute(
+                cursor = conn.execute(
                     "INSERT INTO memory (session_id, message_json) VALUES (?, ?)",
                     (session_id, json.dumps(message_dict, ensure_ascii=False)),
                 )
+                return int(cursor.lastrowid)
         except Exception as e:
             logger.error(f"保存记忆至 DB 失败: {e}")
+            return None
+
+    def update_message_exec_trace(
+        self,
+        session_id: str,
+        message_id: int,
+        exec_trace: list[dict],
+    ) -> None:
+        """Attach durable tool execution trace metadata to an assistant message."""
+        try:
+            with self._lock, self._connect() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT message_json FROM memory WHERE id = ? AND session_id = ?",
+                    (message_id, session_id),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return
+                message = json.loads(row[0])
+                if message.get("role") != "assistant":
+                    return
+                message["exec_trace"] = exec_trace
+                cursor.execute(
+                    "UPDATE memory SET message_json = ? WHERE id = ? AND session_id = ?",
+                    (json.dumps(message, ensure_ascii=False), message_id, session_id),
+                )
+        except Exception as e:
+            logger.error(f"保存执行轨迹至 DB 失败: {e}")
 
     def update_message_content(
         self,
@@ -107,7 +137,7 @@ class SessionMessageStore:
             cursor = conn.cursor()
             if for_ui:
                 cursor.execute(
-                    "SELECT id, message_json FROM memory WHERE session_id = ? ORDER BY id ASC",
+                    "SELECT id, message_json, timestamp FROM memory WHERE session_id = ? ORDER BY id ASC",
                     (session_id,),
                 )
             else:
@@ -126,6 +156,8 @@ def message_rows_to_dicts(rows: list[tuple], for_ui: bool = False) -> list[dict]
             if isinstance(msg, dict) and "role" in msg:
                 if for_ui:
                     msg["_memory_id"] = row[0]
+                    if len(row) > 2:
+                        msg["created_at"] = row[2]
                 if not for_ui and is_protocol_retry_noise(msg):
                     continue
                 if (

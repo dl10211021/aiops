@@ -39,6 +39,7 @@ async def chat_stream_agent(
     user_display_message: str | None = None,
     model_name: str | None = None,
     thinking_mode: str = "off",
+    orchestration_mode: str = "single",
     user_attachments: list[dict] | None = None,
 ):
     cancel_flags[session_id] = False
@@ -70,6 +71,7 @@ async def chat_stream_agent(
             session_id=session_id,
             model_name=model_name,
             thinking_mode=thinking_mode,
+            orchestration_mode=orchestration_mode,
             messages=messages,
             memory_store=memory_db,
             dispatcher=dispatcher,

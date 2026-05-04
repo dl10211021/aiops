@@ -1,10 +1,13 @@
 import LLMDeleteProviderDialog from './LLMDeleteProviderDialog'
 import LLMFetchedModelsList from './LLMFetchedModelsList'
 import LLMRuntimeConfigPanel from './LLMRuntimeConfigPanel'
+import LLMAssistantModelPanel from './LLMAssistantModelPanel'
 import { useLLMConfigData } from './useLLMConfigData'
 
 export default function LLMConfigModal() {
   const {
+    assistantConfig,
+    assistantSaving,
     closeModal,
     deleteTarget,
     error,
@@ -12,10 +15,12 @@ export default function LLMConfigModal() {
     handleAddProvider,
     handleDelete,
     handleSave,
+    handleSaveAssistantConfig,
     handleSaveRuntime,
     handleTestModels,
     loading,
     modelsCount,
+    modelOptions,
     providers,
     runtimeConfig,
     runtimeDraft,
@@ -26,13 +31,15 @@ export default function LLMConfigModal() {
     setDeleteTarget,
     setSelectedId,
     testing,
+    updateAssistantDraft,
+    updateAssistantTask,
     updateProvider,
     updateRuntimeDraft,
   } = useLLMConfigData()
 
   return (
     <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4" onClick={closeModal}>
-      <div className="flex h-[min(680px,92vh)] w-full max-w-5xl overflow-hidden rounded-lg border border-ops-surface1 bg-ops-panel shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="flex h-[min(740px,94vh)] w-full max-w-6xl overflow-hidden rounded-lg border border-ops-surface1 bg-ops-panel shadow-2xl" onClick={(e) => e.stopPropagation()}>
         
         {/* 左侧：供应商列表 */}
         <div className="w-64 bg-ops-dark border-r border-ops-surface0 flex flex-col">
@@ -59,7 +66,7 @@ export default function LLMConfigModal() {
         {/* 右侧：详情配置面板 */}
         <div className="flex-1 flex flex-col bg-ops-panel">
           <div className="p-4 border-b border-ops-surface0 flex justify-between items-center h-14">
-            <h2 className="text-ops-text font-medium">{selectedProvider ? '编辑配置' : '请选择一项配置'}</h2>
+            <h2 className="text-ops-text font-medium">模型配置 · 主模型 / 辅助模型</h2>
             <button onClick={closeModal} className="text-ops-subtext hover:text-ops-text text-xl">&times;</button>
           </div>
 
@@ -73,8 +80,27 @@ export default function LLMConfigModal() {
               <div className="flex h-full items-center justify-center text-sm text-ops-subtext">
                 正在读取模型供应商配置...
               </div>
-            ) : selectedProvider ? (
+            ) : (
               <div className="space-y-5">
+                <LLMAssistantModelPanel
+                  config={assistantConfig}
+                  modelOptions={modelOptions}
+                  saving={assistantSaving}
+                  onChange={updateAssistantDraft}
+                  onTaskChange={updateAssistantTask}
+                  onSave={handleSaveAssistantConfig}
+                />
+
+                {selectedProvider ? (
+                <>
+                <div className="rounded-lg border border-ops-surface0 bg-ops-dark/20 p-4">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-ops-text">供应商连接参数</div>
+                      <p className="mt-1 text-[11px] text-ops-subtext">这里维护模型网关、API Key 和模型列表；上方负责选择主模型与辅助模型。</p>
+                    </div>
+                    <span className="rounded bg-ops-surface0 px-2 py-1 text-[10px] text-ops-overlay">{selectedProvider.name}</span>
+                  </div>
                 <div>
                   <label className="text-xs text-ops-subtext block mb-1">供应商/渠道名称</label>
                   <input value={selectedProvider.name} onChange={(e) => updateProvider({ name: e.target.value })}
@@ -120,6 +146,7 @@ export default function LLMConfigModal() {
                     className="w-full bg-ops-dark border border-ops-surface1 rounded px-3 py-2 text-sm font-mono text-ops-text focus:border-ops-accent outline-none resize-none" />
                   <p className="text-[11px] text-ops-subtext mt-1">可手动填写，也可点击下方按钮从当前供应商的 /models 接口强制刷新。</p>
                 </div>
+                </div>
 
                 
                 <div className="pt-4 border-t border-ops-surface0">
@@ -139,10 +166,12 @@ export default function LLMConfigModal() {
                     删除该供应商
                   </button>
                 </div>
-              </div>
-            ) : (
-              <div className="h-full flex items-center justify-center text-ops-subtext text-sm">
-                请在左侧选择或者添加一个新的配置
+                </>
+                ) : (
+                  <div className="rounded-lg border border-ops-surface0 bg-ops-dark/25 p-6 text-sm text-ops-subtext">
+                    左侧还没有模型供应商。可以先添加供应商和模型列表；主模型/辅助模型配置会在模型列表可用后自动出现选项。
+                  </div>
+                )}
               </div>
             )}
           </div>

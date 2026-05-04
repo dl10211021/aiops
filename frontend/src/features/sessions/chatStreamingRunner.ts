@@ -27,6 +27,7 @@ export async function runChatStream({
   displayContent,
   modelMessageContent,
   modelName,
+  orchestrationMode,
   sessionId,
   thinkingMode,
   updateLastAssistantMessage,
@@ -37,6 +38,7 @@ export async function runChatStream({
   displayContent: string
   modelMessageContent: string
   modelName: string
+  orchestrationMode: 'single' | 'split'
   sessionId: string
   thinkingMode: string
   updateLastAssistantMessage: UpdateLastAssistantMessage
@@ -49,6 +51,7 @@ export async function runChatStream({
       modelMessageContent,
       modelName,
       thinkingMode,
+      orchestrationMode,
       displayContent,
       attachmentPayload,
       controller.signal,

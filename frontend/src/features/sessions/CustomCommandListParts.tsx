@@ -1,5 +1,5 @@
 import type { Session, SlashCommand } from '@/types'
-import { commandStableId, scopeLabel } from './slashCommands'
+import { commandStableId, displayCommandLabel, scopeLabel } from './slashCommands'
 
 type CommandSortMode = 'custom' | 'builtin' | null
 
@@ -85,7 +85,7 @@ export function CustomCommandCard({
       className={`w-full rounded-lg border p-3 text-left transition-colors hover:border-ops-accent/45 ${pickedOrder > 0 ? 'border-ops-accent/55 bg-ops-accent/10' : 'border-ops-surface0 bg-ops-dark/45'}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-sm font-semibold text-ops-text">{command.label}</span>
+        <span className="text-sm font-semibold text-ops-text">{displayCommandLabel(command.label)}</span>
         <span className={`rounded-full border px-2 py-0.5 text-[11px] ${pickedOrder > 0 ? 'border-ops-accent/45 text-ops-accent' : 'border-ops-surface1 text-ops-subtext'}`}>
           {sortMode === 'custom' ? (pickedOrder > 0 ? `第 ${pickedOrder}` : '点击排序') : scopeLabel(command)}
         </span>

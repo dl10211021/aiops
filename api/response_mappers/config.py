@@ -32,6 +32,21 @@ def agent_runtime_config_saved_response_kwargs(config: dict[str, Any]) -> dict[s
     }
 
 
+def assistant_model_config_response_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"config": config},
+    }
+
+
+def assistant_model_config_saved_response_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"config": config},
+        "message": "辅助思维模型配置已保存",
+    }
+
+
 def embedding_config_saved_response_kwargs(model: str, dim: int) -> dict[str, Any]:
     return {
         "status": "success",

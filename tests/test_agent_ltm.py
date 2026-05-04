@@ -24,8 +24,14 @@ class FakeMemoryStore:
             raise self.retrieve_error
         return "历史摘要"
 
-    async def compress_and_store_ltm(self, session_id, emb_client, embedding_model):
-        self.compress_calls.append((session_id, emb_client, embedding_model))
+    async def compress_and_store_ltm(
+        self,
+        session_id,
+        emb_client,
+        embedding_model,
+        primary_model_id=None,
+    ):
+        self.compress_calls.append((session_id, emb_client, embedding_model, primary_model_id))
 
 
 class AgentLongTermMemoryTests(unittest.TestCase):
@@ -83,7 +89,7 @@ class AgentLongTermMemoryTests(unittest.TestCase):
 
         self.assertEqual(
             asyncio.run(run_case()),
-            [("sid-ltm", "emb-client", "emb-model")],
+            [("sid-ltm", "emb-client", "emb-model", None)],
         )
 
 

@@ -20,6 +20,7 @@ interface MessageBubbleProps {
   policyRuleBusy?: string | null
   onEdit?: (message: ChatMessage) => void
   onDelete?: (message: ChatMessage) => void
+  showInlineTrace?: boolean
 }
 
 export default function MessageBubble({
@@ -31,6 +32,7 @@ export default function MessageBubble({
   policyRuleBusy,
   onEdit,
   onDelete,
+  showInlineTrace = true,
 }: MessageBubbleProps) {
   const [traceOpen, setTraceOpen] = useState(false)
 
@@ -58,7 +60,7 @@ export default function MessageBubble({
   return (
     <div className="group flex w-full justify-start">
       <div className="w-full space-y-2">
-        {hasTrace && (
+        {hasTrace && showInlineTrace && (
           <div className="text-xs">
             <button
               onClick={() => setTraceOpen(!traceOpen)}

@@ -19,7 +19,7 @@ export function summarizeSessions(sessions: Session[]): SessionMetrics {
   }
 
   for (const session of sessions) {
-    if (session.isStreaming) metrics.running += 1
+    if (isSessionRunning(session)) metrics.running += 1
     const attention = sessionAttention(session)
     if (attention.type === 'approval') metrics.pendingApproval += 1
     if (attention.type === 'input') metrics.pendingInput += 1
@@ -27,4 +27,11 @@ export function summarizeSessions(sessions: Session[]): SessionMetrics {
   }
 
   return metrics
+}
+
+export function isSessionRunning(session: Session): boolean {
+  if (session.isStreaming || session.backendStreaming) return true
+  return session.messages.slice(-3).some((message) =>
+    (message.execTrace || []).some((trace) => trace.status === 'running'),
+  )
 }

@@ -1,5 +1,5 @@
 import type { SlashCommand } from '@/types'
-import { commandStableId } from './slashCommands'
+import { commandStableId, displayCommandLabel } from './slashCommands'
 
 type CommandSortMode = 'custom' | 'builtin' | null
 
@@ -96,7 +96,7 @@ export function BuiltInCommandCard({
       className={`w-full rounded-lg border p-3 text-left transition-colors hover:border-ops-accent/45 ${pickedOrder > 0 ? 'border-ops-accent/55 bg-ops-accent/10' : 'border-ops-surface0 bg-ops-dark/30'}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-sm font-semibold text-ops-text">{command.label}</span>
+        <span className="text-sm font-semibold text-ops-text">{displayCommandLabel(command.label)}</span>
         <BuiltInCommandActions
           command={command}
           pickedOrder={pickedOrder}

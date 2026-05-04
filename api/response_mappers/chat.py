@@ -12,6 +12,7 @@ def chat_stream_agent_kwargs(req: ChatRequest) -> dict[str, Any]:
         "user_display_message": req.display_message,
         "model_name": req.model_name,
         "thinking_mode": req.thinking_mode or "off",
+        "orchestration_mode": req.orchestration_mode or "single",
         "user_attachments": req.attachments,
     }
 

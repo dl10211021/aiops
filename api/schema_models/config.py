@@ -32,6 +32,14 @@ class AgentRuntimeConfigRequest(BaseModel):
     headless_max_steps: int = Field(60, ge=10, le=200)
 
 
+class AssistantModelConfigRequest(BaseModel):
+    main_model_id: str = ""
+    enabled: bool = False
+    model_id: str = ""
+    thinking_mode: str = "high"
+    tasks: dict = Field(default_factory=dict)
+
+
 class NotificationConfigRequest(BaseModel):
     wechat_enabled: bool = True
     wechat_webhook: str = ""

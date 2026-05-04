@@ -1,6 +1,19 @@
+import type { MouseEvent } from 'react'
 import type { ChatMessage, ChatMessageAttachment } from '@/types'
 import { formatBytes } from './format'
 import { renderMarkdown } from './markdown'
+
+function formatMessageTime(timestamp: number) {
+  return new Date(timestamp).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+}
 
 export function UserMessageBubble({
   message,
@@ -11,12 +24,14 @@ export function UserMessageBubble({
   onEdit?: (message: ChatMessage) => void
   onDelete?: (message: ChatMessage) => void
 }) {
+  const userTime = formatMessageTime(message.timestamp)
   return (
     <div className="group flex justify-end">
       <div className="max-w-[86%] rounded-lg rounded-br-sm bg-ops-accent/15 px-4 py-2.5 text-sm text-ops-text">
-        <div className="mb-1 flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button onClick={() => onEdit?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-subtext hover:bg-ops-dark/50 hover:text-ops-text">编辑</button>
-          <button onClick={() => onDelete?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-alert hover:bg-ops-alert/10">删除</button>
+        <div className="mb-1 flex items-center justify-end gap-2">
+          <span className="font-mono text-[11px] text-ops-overlay">{userTime}</span>
+          <button onClick={() => onEdit?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-subtext opacity-0 transition-opacity hover:bg-ops-dark/50 hover:text-ops-text group-hover:opacity-100">编辑</button>
+          <button onClick={() => onDelete?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-alert opacity-0 transition-opacity hover:bg-ops-alert/10 group-hover:opacity-100">删除</button>
         </div>
         <div className="whitespace-pre-wrap">{message.content}</div>
         {message.attachments && message.attachments.length > 0 && (
@@ -46,10 +61,39 @@ export function AssistantReportBubble({
   onEdit?: (message: ChatMessage) => void
   onDelete?: (message: ChatMessage) => void
 }) {
-  const assistantTime = new Date(message.timestamp).toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  const assistantTime = formatMessageTime(message.timestamp)
+  const handleCodeCopy = async (event: MouseEvent<HTMLDivElement>) => {
+    const target = event.target
+    if (!(target instanceof HTMLButtonElement) || !target.dataset.copyCode) return
+    const text = target.dataset.copyCode
+    const originalText = target.textContent || '复制'
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.setAttribute('readonly', 'true')
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
+      target.textContent = '已复制'
+      target.classList.add('is-copied')
+      window.setTimeout(() => {
+        target.textContent = originalText
+        target.classList.remove('is-copied')
+      }, 1200)
+    } catch {
+      target.textContent = '复制失败'
+      window.setTimeout(() => {
+        target.textContent = originalText
+      }, 1200)
+    }
+  }
 
   return (
     <article className="w-full overflow-hidden rounded-lg border border-ops-surface1/55 bg-ops-panel/85 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
@@ -66,6 +110,7 @@ export function AssistantReportBubble({
       </div>
       <div
         className="markdown-body ai-report-body w-full px-5 py-4"
+        onClick={handleCodeCopy}
         dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
       />
     </article>

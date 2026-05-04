@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from core.agent_protocol_context import (
     format_extra_args_for_prompt,
     protocol_tool_guidance,
@@ -19,12 +21,28 @@ def _asset_credentials_prompt(session_context: AgentSessionContext) -> str:
 {protocol_tool_guidance(session_context.protocol, session_context.asset_type, session_context.host)}"""
 
 
+def _trusted_operator_source_prompt() -> str:
+    raw_ips = os.environ.get("OPSCORE_TRUSTED_SOURCE_IPS", "192.168.111.45")
+    trusted_ips = [
+        item.strip()
+        for item in raw_ips.replace("，", ",").split(",")
+        if item.strip()
+    ]
+    trusted_text = "、".join(trusted_ips) if trusted_ips else "未配置"
+    return f"""[可信运维来源过滤]
+- 以下来源 IP 视为 OpsCore 平台、本地浏览器、自动采集程序或已知运维跳板来源：{trusted_text}
+- 分析 SSH/WinRM/数据库/网络设备登录日志时，来自上述来源的成功登录只能作为“平台巡检/运维访问事实”记录，默认不要升级为异常、暴力破解、凭证泄露或高风险项。
+- 只有同时出现 Failed 登录、未知账号、非工作时间异常、来源不在可信列表、权限提升、横向移动、命令异常或用户明确要求排查该来源时，才可以把可信来源登录提升为风险。
+- 如果报告里需要提到可信来源登录，请写成“来自可信运维来源/OpsCore 采集来源的访问”，不要反复给出高风险结论。"""
+
+
 def render_chat_system_prompt(
     *,
     session_context: AgentSessionContext,
     base_prompt: str,
     skill_instructions: str,
     ltm_context: str,
+    asset_profile_prompt: str = "",
 ) -> str:
     permission_text = (
         "**高级读写修改权限**：可以执行修改系统的操作"
@@ -41,6 +59,8 @@ def render_chat_system_prompt(
 1. 用户动态加载的「可用Skills」决定了你「什么时候能调什么路」。仔细阅读已加载的技能说明！
 2. 当前会话权限状态：{permission_text}
 3. 执行某些较高风险脚本时，请仔细参考技能说明中提供的 `<SKILL_ABSOLUTE_PATH>` 路径和 `cwd` 工作目录路径。不要自己凭空猜测目录。
+
+{_trusted_operator_source_prompt()}
 
 [AIOps 专家行为准则 (CRITICAL)]
 作为运维管理工程师现场助手级别的专业伙伴：
@@ -59,6 +79,8 @@ def render_chat_system_prompt(
 以下是当前专业技能的详细 <INSTRUCTIONS> 指令，请严格遵照其中的步骤进行操作
 {skill_instructions}
 
+{asset_profile_prompt}
+
 {ltm_context}
 """
 
@@ -72,6 +94,8 @@ def render_headless_system_prompt(
     return f"""{base_prompt}
 
 {_asset_credentials_prompt(session_context)}
+
+{_trusted_operator_source_prompt()}
 
 [上级指挥官委派的任务]
 你是第一线的运维管理工程师调用的 Agent。

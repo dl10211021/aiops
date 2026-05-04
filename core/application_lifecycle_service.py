@@ -50,3 +50,10 @@ def start_app_services(
 def stop_app_services(logger: logging.Logger | None = None) -> None:
     logger = logger or logging.getLogger(__name__)
     logger.info("OpsCore Backend shutting down...")
+    try:
+        from core.realtime_canvas import realtime_canvas_manager
+
+        for task in list(realtime_canvas_manager._tasks.values()):
+            task.cancel()
+    except Exception:
+        logger.debug("Realtime canvas shutdown cleanup skipped.", exc_info=True)

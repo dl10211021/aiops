@@ -54,7 +54,63 @@ export interface AssetProfile {
   tags: string[]
   source?: string
   source_summary?: string
+  profile_prompt?: string
   updated_at?: string
+}
+
+export interface RealtimeMetricPoint {
+  time: string
+  status: 'ok' | 'error' | string
+  cpu?: number
+  memory?: number
+  disk?: number
+  load?: number
+  top_process?: Array<{ pid: string; name: string; cpu: number; memory: number }>
+  error?: string
+  command?: string
+}
+
+export interface RealtimeCanvasItem {
+  id: string
+  title: string
+  kind?: 'metrics' | 'topology' | 'fault_story' | 'custom_html' | string
+  mode?: 'realtime' | 'window' | 'static' | string
+  session_id: string
+  session?: {
+    session_id: string
+    host: string
+    port?: string | number
+    username?: string
+    asset_type?: string
+    protocol?: string
+    remark?: string
+  }
+  status: 'running' | 'paused' | 'expired' | 'stopped' | string
+  metrics: string[]
+  metric_labels?: Record<string, string>
+  interval_seconds: number
+  duration_seconds: number
+  remaining_seconds: number
+  started_at: string
+  created_at: string
+  generated_at?: string
+  expires_at: string
+  last_collect_at?: string
+  last_error?: string
+  stop_reason?: string
+  stop_existing?: boolean
+  scripts?: Record<string, string>
+  script_mode?: string
+  collector_language?: string
+  collector_code?: string
+  canvas_spec?: Record<string, unknown>
+  data_schema?: Record<string, unknown>
+  html?: string
+  ai_prompt_template?: string
+  cleanup_note?: string
+  command_audit?: Array<{ time: string; command: string; status?: string }>
+  points: RealtimeMetricPoint[]
+  latest?: RealtimeMetricPoint | null
 }
 
 export interface SlashCommand {
@@ -522,7 +578,7 @@ export interface ApiResponse<T = Record<string, unknown>> {
   message: string
 }
 
-export type ViewId = 'dashboard' | 'bigscreen' | 'chat' | 'assets' | 'cron' | 'alerts' | 'approvals' | 'skills' | 'knowledge'
+export type ViewId = 'dashboard' | 'bigscreen' | 'chat' | 'assets' | 'canvas' | 'cron' | 'alerts' | 'approvals' | 'skills' | 'knowledge'
 
 export interface ApprovalRequest {
   id: string

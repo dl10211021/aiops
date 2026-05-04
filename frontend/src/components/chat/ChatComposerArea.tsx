@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { ClipboardEvent, DragEvent, KeyboardEvent, RefObject } from 'react'
 import type {
   SafetyPolicyAction,
@@ -25,8 +26,10 @@ interface ChatComposerAreaProps {
   uploadingAttachment: boolean
   visiblePolicyBlock: LatestPolicyBlock | null
   visibleSlashCommands: SlashCommand[]
+  selectedSlashCommandIndex: number
   onApproval: (approval: ToolApproval, approved: boolean, autoAll?: boolean) => void
   onApplySlashCommand: (prompt: string) => void
+  onSlashCommandIndexChange: (index: number) => void
   onDismissPolicyBlock: () => void
   onDragLeave: (event: DragEvent<HTMLDivElement>) => void
   onDragOver: (event: DragEvent<HTMLDivElement>) => void
@@ -37,6 +40,7 @@ interface ChatComposerAreaProps {
   onInteraction: (requestId: string, value: string, label?: string) => void
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
   onManageCommands: () => void
+  onOpenRealtimeCanvas?: () => void
   onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void
   onRemoveAttachment: (id: string) => void
   onSend: () => void
@@ -57,8 +61,10 @@ export default function ChatComposerArea({
   uploadingAttachment,
   visiblePolicyBlock,
   visibleSlashCommands,
+  selectedSlashCommandIndex,
   onApproval,
   onApplySlashCommand,
+  onSlashCommandIndexChange,
   onDismissPolicyBlock,
   onDragLeave,
   onDragOver,
@@ -69,12 +75,24 @@ export default function ChatComposerArea({
   onInteraction,
   onKeyDown,
   onManageCommands,
+  onOpenRealtimeCanvas,
   onPaste,
   onRemoveAttachment,
   onSend,
   onStop,
   onTraceActionRule,
 }: ChatComposerAreaProps) {
+  const [showAttachmentFormats, setShowAttachmentFormats] = useState(false)
+
+  useEffect(() => {
+    const onShowFormats = () => {
+      setShowAttachmentFormats(true)
+      window.setTimeout(() => setShowAttachmentFormats(false), 6500)
+    }
+    window.addEventListener('opscore:show-attachment-formats', onShowFormats)
+    return () => window.removeEventListener('opscore:show-attachment-formats', onShowFormats)
+  }, [])
+
   return (
     <div
       className="relative border-t border-ops-surface1/75 bg-ops-surface0 px-4 py-3 lg:px-5"
@@ -102,17 +120,20 @@ export default function ChatComposerArea({
           policyRuleBusy={policyRuleBusy}
         />
       )}
-      {quickCommands.length > 0 && (
+      {(quickCommands.length > 0 || onOpenRealtimeCanvas) && (
         <QuickCommandDock
           commands={quickCommands}
           onSelect={onApplySlashCommand}
           onManage={onManageCommands}
+          onOpenRealtimeCanvas={onOpenRealtimeCanvas}
         />
       )}
       {visibleSlashCommands.length > 0 && (
         <SlashCommandMenu
           commands={visibleSlashCommands}
+          activeIndex={selectedSlashCommandIndex}
           onSelect={onApplySlashCommand}
+          onActiveIndexChange={onSlashCommandIndexChange}
         />
       )}
       {attachments.length > 0 && (
@@ -120,6 +141,21 @@ export default function ChatComposerArea({
           attachments={attachments}
           onRemove={onRemoveAttachment}
         />
+      )}
+      {showAttachmentFormats && (
+        <div className="mb-2 flex items-start justify-between gap-3 rounded-lg border border-ops-accent/25 bg-ops-accent/10 px-3 py-2 text-xs leading-5 text-ops-subtext">
+          <div>
+            <span className="font-semibold text-ops-accent">支持附件：</span>
+            文本、日志、Markdown、CSV/TSV、JSON、YAML、INI/CONF、SQL、XML、PDF、Word、Excel、PNG/JPG/GIF/WebP/BMP 图片。
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAttachmentFormats(false)}
+            className="shrink-0 rounded px-1.5 py-0.5 text-[11px] text-ops-overlay hover:bg-ops-dark/40 hover:text-ops-text"
+          >
+            收起
+          </button>
+        </div>
       )}
       <input
         ref={fileInputRef}
@@ -138,6 +174,10 @@ export default function ChatComposerArea({
         hasSendableContent={Boolean(input.trim() || attachments.length > 0)}
         onInputChange={onInputChange}
         onHistoryReset={onHistoryReset}
+        onShowAttachmentFormats={() => {
+          const event = new CustomEvent('opscore:show-attachment-formats')
+          window.dispatchEvent(event)
+        }}
         onKeyDown={onKeyDown}
         onPaste={onPaste}
         onSend={onSend}
