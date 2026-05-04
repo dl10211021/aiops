@@ -1,4 +1,4 @@
-import type { ChangeEvent } from 'react'
+import { useState, type ChangeEvent } from 'react'
 import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
@@ -1109,15 +1109,39 @@ export function SessionMemoryActivityPanel({
   onReload: () => void
 }) {
   const focusKey = focusMessageId === undefined || focusMessageId === null ? '' : String(focusMessageId)
+  const [activityDateFilter, setActivityDateFilter] = useState('all')
+  const [activityMessageFilter, setActivityMessageFilter] = useState('all')
   const allFeedbackRows = activity?.feedback.slice().reverse() || []
+  const allReferencedRows = activity?.referenced.slice().reverse() || []
+  const activityDates = Array.from(new Set([...allFeedbackRows, ...allReferencedRows]
+    .map((item) => String(item.created_at || '').slice(0, 10))
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))))
+    .sort()
+    .reverse()
+  const activityMessages = Array.from(new Set([...allFeedbackRows, ...allReferencedRows]
+    .map((item) => item.message_id)
+    .filter((messageId) => messageId !== undefined && messageId !== null)
+    .map((messageId) => String(messageId))))
+    .sort((left, right) => Number(left) - Number(right))
+  const rowMatchesActivityFilters = (item: { created_at?: string | number; message_id?: number | string | null }) => {
+    const date = String(item.created_at || '').slice(0, 10)
+    const messageId = item.message_id === undefined || item.message_id === null ? '' : String(item.message_id)
+    return (
+      (activityDateFilter === 'all' || date === activityDateFilter) &&
+      (activityMessageFilter === 'all' || messageId === activityMessageFilter)
+    )
+  }
+  const filteredFeedbackRows = allFeedbackRows.filter(rowMatchesActivityFilters)
+  const filteredReferencedRows = allReferencedRows.filter(rowMatchesActivityFilters)
   const focusedFeedbackRow = focusKey
-    ? allFeedbackRows.find((item) => String(item.message_id || '') === focusKey)
+    ? filteredFeedbackRows.find((item) => String(item.message_id || '') === focusKey)
     : undefined
-  const latestFeedbackRows = allFeedbackRows.slice(0, 6)
+  const latestFeedbackRows = filteredFeedbackRows.slice(0, 6)
   const feedbackRows = focusedFeedbackRow && !latestFeedbackRows.includes(focusedFeedbackRow)
     ? [focusedFeedbackRow, ...latestFeedbackRows.slice(0, 5)]
     : latestFeedbackRows
-  const referencedRows = activity?.referenced.slice().reverse().slice(0, 4) || []
+  const referencedRows = filteredReferencedRows.slice(0, 4)
+  const hasActivityFilter = activityDateFilter !== 'all' || activityMessageFilter !== 'all'
   const stats = [
     ['引用记忆', activity?.summary.referenced_count || 0],
     ['好评沉淀', activity?.summary.promoted_count || 0],
@@ -1156,6 +1180,55 @@ export function SessionMemoryActivityPanel({
             <div className="mt-1 text-lg font-semibold text-ops-text">{value}</div>
           </div>
         ))}
+      </div>
+
+      <div className="mt-3 rounded-md border border-ops-surface0 bg-ops-dark/25 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-xs font-semibold text-ops-text">按日期 / 会话轮次筛选</div>
+          {hasActivityFilter && (
+            <button
+              type="button"
+              onClick={() => {
+                setActivityDateFilter('all')
+                setActivityMessageFilter('all')
+              }}
+              className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-[11px] text-ops-accent hover:bg-ops-accent/10"
+            >
+              清除筛选
+            </button>
+          )}
+        </div>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <label className="space-y-1 text-[11px] text-ops-overlay">
+            <span>日期</span>
+            <select
+              value={activityDateFilter}
+              onChange={(event) => setActivityDateFilter(event.target.value)}
+              className="w-full rounded-md border border-ops-surface0 bg-ops-panel px-2 py-1.5 text-xs text-ops-text outline-none focus:border-ops-accent"
+            >
+              <option value="all">全部日期</option>
+              {activityDates.map((date) => (
+                <option key={date} value={date}>{date}</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1 text-[11px] text-ops-overlay">
+            <span>会话轮次</span>
+            <select
+              value={activityMessageFilter}
+              onChange={(event) => setActivityMessageFilter(event.target.value)}
+              className="w-full rounded-md border border-ops-surface0 bg-ops-panel px-2 py-1.5 text-xs text-ops-text outline-none focus:border-ops-accent"
+            >
+              <option value="all">全部轮次</option>
+              {activityMessages.map((messageId) => (
+                <option key={messageId} value={messageId}>消息 {messageId}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <p className="mt-2 text-[11px] text-ops-overlay">
+          当前范围：{filteredFeedbackRows.length} 条反馈，{filteredReferencedRows.length} 条引用。
+        </p>
       </div>
 
       {!activity && !loading ? (
