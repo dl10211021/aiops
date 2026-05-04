@@ -49,6 +49,7 @@ backend*.log
 .tmp/
 temp_sandbox/
 tmp*/
+tmp_knowledge_*.png
 oracle_client_*/
 tmp_history.json
 patch_*.py
@@ -78,6 +79,7 @@ inspection_templates.json
 protocol_verification_runs.json
 verification_runs.json
 asset_cleanup_backup_*.json
+realtime_canvases.json
 backups/
 logs/
 .git_log_frontend.txt

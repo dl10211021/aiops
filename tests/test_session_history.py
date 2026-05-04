@@ -129,7 +129,7 @@ class TestSessionHistory(unittest.TestCase):
                 "id": 8,
                 "role": "assistant",
                 "content": "错误回答。",
-                "feedback": {"rating": "down"},
+                "feedback": {"rating": "down", "note": "风险误判"},
             },
         ]
         memory_db.pending = [
@@ -142,7 +142,9 @@ class TestSessionHistory(unittest.TestCase):
         self.assertEqual(activity["summary"]["referenced_count"], 1)
         self.assertEqual(activity["summary"]["promoted_count"], 1)
         self.assertEqual(activity["summary"]["rejected_count"], 1)
-        self.assertEqual(activity["summary"]["pending_conflict_count"], 1)
+        self.assertEqual(activity["summary"]["pending_conflict_count"], 2)
         self.assertEqual(activity["referenced"][0]["message_id"], 7)
         self.assertEqual(activity["feedback"][0]["memory_policy"], "promote")
         self.assertEqual(activity["feedback"][1]["memory_policy"], "do_not_promote_answer")
+        self.assertEqual(activity["pending_conflicts"][1]["operation"], "negative_feedback")
+        self.assertEqual(activity["pending_conflicts"][1]["reason"], "风险误判")

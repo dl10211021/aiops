@@ -1275,6 +1275,16 @@ export function SessionMemoryActivityPanel({
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-ops-subtext">{item.message_preview}</p>
                   {item.note && <div className="mt-1 text-[11px] text-ops-overlay">备注：{item.note}</div>}
+                  <div className={`mt-2 rounded-md border px-2 py-1 text-[11px] leading-5 ${
+                    item.rating === 'up'
+                      ? 'border-ops-success/25 bg-ops-success/10 text-ops-success'
+                      : 'border-ops-alert/25 bg-ops-alert/10 text-ops-alert'
+                  }`}>
+                    写入状态：{feedbackPolicyLabel(String(item.rating), item.memory_policy)}。
+                    {item.rating === 'up'
+                      ? ' 作为成功经验候选沉淀，后续会话可引用。'
+                      : ' 已进入纠错治理队列，不会作为成功经验注入后续会话。'}
+                  </div>
                 </article>
               )) : (
                 <div className="rounded border border-dashed border-ops-surface1 p-3 text-center text-xs text-ops-overlay">

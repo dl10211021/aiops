@@ -210,10 +210,13 @@ function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
   const refs = message.memoryRefs || message.memory_refs || []
   if (!refs.length) return null
   return (
-    <details className="border-b border-ops-surface0/70 bg-ops-dark/25 px-4 py-2 text-[11px] text-ops-subtext">
+    <details open className="border-b border-ops-accent/25 bg-ops-accent/10 px-4 py-2 text-[11px] text-ops-subtext">
       <summary className="cursor-pointer select-none font-semibold text-ops-accent">
-        本次引用记忆 {refs.length} 条
+        本轮 AI 已引用 {refs.length} 条历史记忆
       </summary>
+      <p className="mt-1 leading-5 text-ops-overlay">
+        命中解释：这些记忆按资产、会话范围、路径和摘要与本轮问题匹配后召回，只作为历史经验提示，最终仍以当前会话的真实工具结果为准。
+      </p>
       <div className="mt-2 grid gap-1.5">
         {refs.map((ref, index) => (
           <div
@@ -229,6 +232,9 @@ function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
             </div>
             <div className="mt-1 line-clamp-2 text-ops-subtext">
               {ref.summary_preview || '无摘要'}
+            </div>
+            <div className="mt-1 rounded border border-ops-surface0/80 bg-ops-dark/30 px-2 py-1 text-[10px] leading-4 text-ops-overlay">
+              引用理由：与本轮上下文相关，回答时需要结合当前证据复核，不能直接当作事实替代实时巡检结果。
             </div>
           </div>
         ))}

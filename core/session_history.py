@@ -132,6 +132,25 @@ def build_session_memory_activity(memory_db, session_id: str) -> dict:
             if isinstance(row, dict) and _pending_conflict_matches_session(row, session_id)
         ]
 
+    feedback_corrections = [
+        {
+            "version_id": f"feedback-{session_id}-{row.get('message_id') or 'unknown'}",
+            "path": f"sessions/{session_id}/feedback/{row.get('message_id') or 'unknown'}",
+            "operation": "negative_feedback",
+            "source_session_id": session_id,
+            "scope_id": session_id,
+            "message_id": row.get("message_id"),
+            "created_at": row.get("created_at"),
+            "reason": row.get("note") or "用户点踩该回答，需要纠错审计。",
+            "recommended_action": "复核该回答的事实、证据和建议；确认不写入成功经验，必要时整理为纠错记忆。",
+            "message_preview": row.get("message_preview") or "",
+            "status": "pending_feedback_review",
+        }
+        for row in feedback_rows
+        if row.get("rating") == "down"
+    ]
+    pending_conflicts.extend(feedback_corrections)
+
     return {
         "session_id": session_id,
         "summary": {
