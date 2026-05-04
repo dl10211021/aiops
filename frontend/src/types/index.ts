@@ -659,6 +659,35 @@ export interface KnowledgeVaultSearchResult {
   updated_at?: string
 }
 
+export interface KnowledgeVaultGraphNode {
+  id: string
+  title: string
+  kind: 'article' | 'candidate' | string
+  path: string
+  source_session_id?: string
+  compile_stage?: string
+  review_status?: string
+  updated_at?: string
+}
+
+export interface KnowledgeVaultGraphEdge {
+  source: string
+  target: string
+  kind: 'wikilink' | 'mention' | string
+  label: string
+}
+
+export interface KnowledgeVaultGraph {
+  nodes: KnowledgeVaultGraphNode[]
+  edges: KnowledgeVaultGraphEdge[]
+  summary: {
+    node_count: number
+    edge_count: number
+    article_count: number
+    candidate_count: number
+  }
+}
+
 export interface MemoryItem {
   path: string
   scope_id: string

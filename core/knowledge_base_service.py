@@ -685,6 +685,77 @@ def search_vault_knowledge(
     return results[:limit]
 
 
+def build_vault_knowledge_graph(
+    *,
+    include_candidates: bool = True,
+    vault_dir: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    root = Path(vault_dir) if vault_dir is not None else _vault_root()
+    records = list_vault_articles(root)
+    if include_candidates:
+        records += list_vault_candidates(root)
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    by_path: dict[str, dict[str, Any]] = {}
+    by_title: dict[str, dict[str, Any]] = {}
+
+    for record in records:
+        rel_path = record.get("wiki_path") or record.get("candidate_path")
+        if not rel_path:
+            continue
+        title = record.get("original_filename") or record.get("filename") or Path(str(rel_path)).stem
+        kind = "article" if record.get("wiki_path") else "candidate"
+        node = {
+            "id": str(rel_path),
+            "title": str(title),
+            "kind": kind,
+            "path": str(rel_path),
+            "source_session_id": record.get("source_session_id") or record.get("id"),
+            "compile_stage": record.get("compile_stage"),
+            "review_status": record.get("review_status"),
+            "updated_at": record.get("approved_at") or record.get("compiled_at") or record.get("created_at"),
+        }
+        nodes.append(node)
+        by_path[str(rel_path).lower()] = node
+        by_title[str(title).lower()] = node
+        by_title[Path(str(rel_path)).stem.lower()] = node
+
+    seen_edges: set[tuple[str, str, str]] = set()
+    for node in nodes:
+        content = _read_vault_text_file(root, node["path"])
+        if not content:
+            continue
+        for link in re.findall(r"\[\[([^\]\|#]+)(?:[^\]]*)\]\]", content):
+            target_key = link.strip().lower()
+            target = by_title.get(target_key) or by_path.get(target_key) or by_path.get(f"wiki/articles/{target_key}.md")
+            if target and target["id"] != node["id"]:
+                edge_key = (node["id"], target["id"], "wikilink")
+                if edge_key not in seen_edges:
+                    edges.append({"source": node["id"], "target": target["id"], "kind": "wikilink", "label": "[[]] 双链"})
+                    seen_edges.add(edge_key)
+        lower_content = content.lower()
+        for target in nodes:
+            if target["id"] == node["id"]:
+                continue
+            title = str(target["title"]).lower()
+            if title and title in lower_content:
+                edge_key = (node["id"], target["id"], "mention")
+                if edge_key not in seen_edges:
+                    edges.append({"source": node["id"], "target": target["id"], "kind": "mention", "label": "内容提及"})
+                    seen_edges.add(edge_key)
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "summary": {
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+            "article_count": len([node for node in nodes if node["kind"] == "article"]),
+            "candidate_count": len([node for node in nodes if node["kind"] == "candidate"]),
+        },
+    }
+
+
 def read_vault_candidate(
     identifier: str,
     *,

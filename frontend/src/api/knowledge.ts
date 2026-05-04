@@ -1,4 +1,4 @@
-import type { ApiResponse, KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { ApiResponse, KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { apiUrl, authHeaders, request } from './http'
 
 export async function listKnowledgeDocuments() {
@@ -48,6 +48,13 @@ export async function searchKnowledgeVault(query: string, scope = 'all', limit =
   return request<{ results: KnowledgeVaultSearchResult[] }>('/knowledge/vault/search', {
     method: 'POST',
     body: JSON.stringify({ query, scope, limit }),
+  })
+}
+
+export async function graphKnowledgeVault(includeCandidates = true) {
+  return request<KnowledgeVaultGraph>('/knowledge/vault/graph', {
+    method: 'POST',
+    body: JSON.stringify({ include_candidates: includeCandidates }),
   })
 }
 

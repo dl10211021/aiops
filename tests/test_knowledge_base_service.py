@@ -11,6 +11,7 @@ from unittest.mock import patch
 from core.knowledge_base_service import (
     KnowledgeBaseServiceError,
     approve_vault_candidate,
+    build_vault_knowledge_graph,
     compile_vault_source_candidate,
     ingest_knowledge_document,
     list_vault_compile_queue,
@@ -227,3 +228,6 @@ class TestKnowledgeBaseService(unittest.TestCase):
         search_results = search_vault_knowledge("CPU", vault_dir=self.vault_dir)
         self.assertTrue(any(item["kind"] == "articles" for item in search_results))
         self.assertTrue(any("CPU" in item["snippet"] or "人工补充" in item["snippet"] for item in search_results))
+        graph = build_vault_knowledge_graph(vault_dir=self.vault_dir)
+        self.assertGreaterEqual(graph["summary"]["article_count"], 1)
+        self.assertGreaterEqual(graph["summary"]["node_count"], 1)

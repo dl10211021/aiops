@@ -7,6 +7,7 @@ import {
   deleteKnowledgeDocument,
   deleteMemoryItem,
   exportMemoryStore,
+  graphKnowledgeVault,
   confirmMemoryReview,
   listKnowledgeDocuments,
   listKnowledgeVaultArticles,
@@ -30,7 +31,7 @@ import {
   uploadKnowledgeDocument,
 } from '@/api/knowledge'
 import { useStore } from '@/store'
-import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { isAcceptedKnowledgeFile } from './knowledgeBaseModel'
 
 export function useKnowledgeBaseData() {
@@ -45,6 +46,8 @@ export function useKnowledgeBaseData() {
   const [vaultSearchQuery, setVaultSearchQuery] = useState('')
   const [vaultSearchScope, setVaultSearchScope] = useState('all')
   const [vaultSearchResults, setVaultSearchResults] = useState<KnowledgeVaultSearchResult[]>([])
+  const [vaultGraph, setVaultGraph] = useState<KnowledgeVaultGraph | null>(null)
+  const [vaultGraphIncludeCandidates, setVaultGraphIncludeCandidates] = useState(true)
   const [memoryItems, setMemoryItems] = useState<MemoryItem[]>([])
   const [memoryStores, setMemoryStores] = useState<MemoryStoreInfo[]>([])
   const [memoryVersions, setMemoryVersions] = useState<MemoryVersion[]>([])
@@ -75,6 +78,7 @@ export function useKnowledgeBaseData() {
   const [openingArticle, setOpeningArticle] = useState<string | null>(null)
   const [savingCandidate, setSavingCandidate] = useState(false)
   const [searchingVault, setSearchingVault] = useState(false)
+  const [loadingVaultGraph, setLoadingVaultGraph] = useState(false)
   const [loading, setLoading] = useState(true)
   const [memoryLoading, setMemoryLoading] = useState(true)
   const [error, setError] = useState('')
@@ -297,6 +301,19 @@ export function useKnowledgeBaseData() {
     }
   }
 
+  const handleLoadKnowledgeVaultGraph = async () => {
+    setLoadingVaultGraph(true)
+    try {
+      const res = await graphKnowledgeVault(vaultGraphIncludeCandidates)
+      setVaultGraph(res.data)
+      addToast(`关系图已生成：${res.data.summary.node_count} 个节点，${res.data.summary.edge_count} 条关系`, 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '生成知识图谱失败', 'error')
+    } finally {
+      setLoadingVaultGraph(false)
+    }
+  }
+
   const handleOpenMemory = async (item: MemoryItem) => {
     setMemoryError('')
     try {
@@ -490,6 +507,7 @@ export function useKnowledgeBaseData() {
     handleApproveKnowledgeCandidate,
     handleOpenKnowledgeCandidate,
     handleOpenKnowledgeArticle,
+    handleLoadKnowledgeVaultGraph,
     handleSearchKnowledgeVault,
     handleSaveKnowledgeCandidate,
     handleDeleteMemory,
@@ -505,6 +523,7 @@ export function useKnowledgeBaseData() {
     handleUpload,
     loadFiles,
     loadMemories,
+    loadingVaultGraph,
     loading,
     memoryDeleteTarget,
     memoryDraft,
@@ -530,12 +549,15 @@ export function useKnowledgeBaseData() {
     setMemoryCreateSummary,
     setMemoryDraft,
     setCandidateDraft,
+    setVaultGraphIncludeCandidates,
     setVaultSearchQuery,
     setVaultSearchScope,
     setMemoryDeleteTarget,
     setMemorySearchQuery,
     setMemorySearchScopes,
     searchingMemory,
+    vaultGraph,
+    vaultGraphIncludeCandidates,
     vaultSearchQuery,
     vaultSearchResults,
     vaultSearchScope,

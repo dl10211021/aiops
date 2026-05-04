@@ -83,6 +83,13 @@ def knowledge_vault_search_response_kwargs(results: list[Any]) -> dict[str, Any]
     }
 
 
+def knowledge_vault_graph_response_kwargs(graph: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": graph,
+    }
+
+
 def knowledge_document_deleted_response_kwargs(message: str) -> dict[str, Any]:
     return {
         "status": "success",

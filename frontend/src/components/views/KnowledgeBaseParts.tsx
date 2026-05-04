@@ -1,5 +1,5 @@
 import type { ChangeEvent } from 'react'
-import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
 export type KnowledgeTab = 'documents' | 'memory'
@@ -296,6 +296,93 @@ export function KnowledgeVaultSearchPanel({
           </div>
         )}
       </div>
+    </section>
+  )
+}
+
+export function KnowledgeVaultGraphPanel({
+  graph,
+  includeCandidates,
+  loading,
+  onIncludeCandidatesChange,
+  onLoad,
+}: {
+  graph: KnowledgeVaultGraph | null
+  includeCandidates: boolean
+  loading: boolean
+  onIncludeCandidatesChange: (value: boolean) => void
+  onLoad: () => void
+}) {
+  const topNodes = graph?.nodes.slice(0, 8) || []
+  const topEdges = graph?.edges.slice(0, 8) || []
+
+  return (
+    <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-ops-text">Vault 关系图</div>
+          <p className="mt-1 text-xs leading-5 text-ops-subtext">
+            根据 Obsidian `[[双链]]` 和内容提及生成知识连接，后续辅助模型检索时可沿关系追溯证据。
+          </p>
+        </div>
+        <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
+          {graph?.summary.node_count || 0}/{graph?.summary.edge_count || 0}
+        </span>
+      </div>
+      <label className="mt-3 flex items-center gap-2 text-xs text-ops-subtext">
+        <input
+          type="checkbox"
+          checked={includeCandidates}
+          onChange={(event) => onIncludeCandidatesChange(event.target.checked)}
+          className="accent-ops-accent"
+        />
+        包含候选 Wiki，便于审查未入库草稿之间的关系
+      </label>
+      <button
+        onClick={onLoad}
+        disabled={loading}
+        className="mt-2 w-full rounded-md border border-ops-success/40 px-3 py-1.5 text-xs font-semibold text-ops-success transition-colors hover:bg-ops-success/10 disabled:cursor-not-allowed disabled:opacity-45"
+      >
+        {loading ? '生成中...' : '生成关系图'}
+      </button>
+      {graph ? (
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-2">
+              <div className="text-ops-overlay">正式文章</div>
+              <div className="mt-1 text-lg font-semibold text-ops-text">{graph.summary.article_count}</div>
+            </div>
+            <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-2">
+              <div className="text-ops-overlay">候选草稿</div>
+              <div className="mt-1 text-lg font-semibold text-ops-text">{graph.summary.candidate_count}</div>
+            </div>
+          </div>
+          <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-3">
+            <div className="text-xs font-semibold text-ops-text">节点预览</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {topNodes.length > 0 ? topNodes.map((node) => (
+                <span key={node.id} className="max-w-full truncate rounded-full border border-ops-accent/25 px-2 py-1 text-[11px] text-ops-accent" title={node.path}>
+                  {node.kind === 'article' ? '文章' : '候选'} · {node.title}
+                </span>
+              )) : <span className="text-xs text-ops-subtext">暂无节点</span>}
+            </div>
+          </div>
+          <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-3">
+            <div className="text-xs font-semibold text-ops-text">关系预览</div>
+            <div className="mt-2 space-y-1">
+              {topEdges.length > 0 ? topEdges.map((edge, index) => (
+                <div key={`${edge.source}-${edge.target}-${index}`} className="truncate font-mono text-[11px] text-ops-subtext" title={`${edge.source} -> ${edge.target}`}>
+                  {edge.label}: {edge.source} {'->'} {edge.target}
+                </div>
+              )) : <div className="text-xs text-ops-subtext">暂无关系，建议在 Wiki 中使用 `[[文章标题]]` 建立双链。</div>}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 rounded-md border border-dashed border-ops-surface1 p-3 text-xs leading-5 text-ops-subtext">
+          点击生成后会扫描 Vault，不依赖外部数据库，适合离线部署和审计留痕。
+        </div>
+      )}
     </section>
   )
 }

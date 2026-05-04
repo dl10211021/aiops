@@ -39,6 +39,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/vault/compile", paths)
         self.assertIn("/knowledge/vault/candidates", paths)
         self.assertIn("/knowledge/vault/search", paths)
+        self.assertIn("/knowledge/vault/graph", paths)
         self.assertIn("/knowledge/vault/candidate", paths)
         self.assertIn("/knowledge/vault/approve", paths)
         self.assertIn("/knowledge/vault/articles", paths)
@@ -193,6 +194,25 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data["results"][0]["kind_label"], "正式 Wiki")
         self.assertEqual(response.data["results"][0]["snippet"], "CPU 正常")
+
+    def test_graph_knowledge_vault_preserves_response_shape(self):
+        with patch(
+            "api.knowledge_routes.build_vault_knowledge_graph",
+            return_value={
+                "nodes": [{"id": "wiki/articles/linux.md", "title": "Linux", "kind": "article"}],
+                "edges": [],
+                "summary": {"node_count": 1, "edge_count": 0, "article_count": 1, "candidate_count": 0},
+            },
+        ):
+            response = asyncio.run(
+                knowledge_routes.graph_knowledge_vault(
+                    knowledge_routes.KnowledgeVaultGraphRequest(include_candidates=False)
+                )
+            )
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data["summary"]["article_count"], 1)
+        self.assertEqual(response.data["nodes"][0]["title"], "Linux")
 
     def test_delete_knowledge_document_preserves_response_shape(self):
         with patch(

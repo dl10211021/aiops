@@ -17,6 +17,7 @@ import {
   MemoryVersionsPanel,
   KnowledgeCompileQueuePanel,
   KnowledgeVaultSearchPanel,
+  KnowledgeVaultGraphPanel,
   KnowledgeCandidatePanel,
   KnowledgeCandidateEditor,
   KnowledgeArticlePanel,
@@ -45,6 +46,7 @@ export default function KnowledgeBase() {
     openingArticle,
     savingCandidate,
     searchingVault,
+    loadingVaultGraph,
     selectedCandidate,
     selectedArticle,
     handleDelete,
@@ -52,6 +54,7 @@ export default function KnowledgeBase() {
     handleApproveKnowledgeCandidate,
     handleOpenKnowledgeCandidate,
     handleOpenKnowledgeArticle,
+    handleLoadKnowledgeVaultGraph,
     handleSearchKnowledgeVault,
     handleSaveKnowledgeCandidate,
     handleDeleteMemory,
@@ -92,12 +95,15 @@ export default function KnowledgeBase() {
     setMemoryCreateSummary,
     setMemoryDraft,
     setCandidateDraft,
+    setVaultGraphIncludeCandidates,
     setVaultSearchQuery,
     setVaultSearchScope,
     setMemoryDeleteTarget,
     setMemorySearchQuery,
     setMemorySearchScopes,
     searchingMemory,
+    vaultGraph,
+    vaultGraphIncludeCandidates,
     vaultSearchQuery,
     vaultSearchResults,
     vaultSearchScope,
@@ -182,6 +188,15 @@ export default function KnowledgeBase() {
                 />
               </div>
               <div className="mt-4">
+                <KnowledgeVaultGraphPanel
+                  graph={vaultGraph}
+                  includeCandidates={vaultGraphIncludeCandidates}
+                  loading={loadingVaultGraph}
+                  onIncludeCandidatesChange={setVaultGraphIncludeCandidates}
+                  onLoad={handleLoadKnowledgeVaultGraph}
+                />
+              </div>
+              <div className="mt-4">
                 <KnowledgeCandidatePanel
                   approvingSourceSession={approvingSourceSession}
                   items={candidateItems}
@@ -227,6 +242,13 @@ export default function KnowledgeBase() {
               onQueryChange={setVaultSearchQuery}
               onScopeChange={setVaultSearchScope}
               onSearch={handleSearchKnowledgeVault}
+            />
+            <KnowledgeVaultGraphPanel
+              graph={vaultGraph}
+              includeCandidates={vaultGraphIncludeCandidates}
+              loading={loadingVaultGraph}
+              onIncludeCandidatesChange={setVaultGraphIncludeCandidates}
+              onLoad={handleLoadKnowledgeVaultGraph}
             />
             <KnowledgeCandidatePanel
               approvingSourceSession={approvingSourceSession}

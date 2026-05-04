@@ -13,6 +13,7 @@ from api.response_mappers.knowledge import (
     knowledge_vault_candidates_response_kwargs,
     knowledge_vault_article_item_response_kwargs,
     knowledge_vault_articles_response_kwargs,
+    knowledge_vault_graph_response_kwargs,
     knowledge_vault_queue_response_kwargs,
     knowledge_vault_search_response_kwargs,
     memory_item_created_response_kwargs,
@@ -35,6 +36,7 @@ from api.schema_models.common import ResponseModel
 from core.knowledge_base_service import (
     KnowledgeBaseServiceError,
     approve_vault_candidate,
+    build_vault_knowledge_graph,
     compile_vault_source_candidate,
     ingest_knowledge_document,
     list_knowledge_document_records,
@@ -105,6 +107,10 @@ class KnowledgeVaultSearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=500)
     scope: str = Field("all", pattern="^(all|articles|candidates|sources|raw)$")
     limit: int = Field(20, ge=1, le=50)
+
+
+class KnowledgeVaultGraphRequest(BaseModel):
+    include_candidates: bool = True
 
 
 @router.get("/knowledge/memory/stores", response_model=ResponseModel)
@@ -392,6 +398,16 @@ async def search_knowledge_vault(req: KnowledgeVaultSearchRequest):
     except KnowledgeBaseServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**knowledge_vault_search_response_kwargs(results))
+
+
+@router.post("/knowledge/vault/graph", response_model=ResponseModel)
+async def graph_knowledge_vault(req: KnowledgeVaultGraphRequest):
+    """生成 Obsidian 风格 Vault 关系图，用于追溯 Wiki 双链和内容提及。"""
+    try:
+        graph = build_vault_knowledge_graph(include_candidates=req.include_candidates)
+    except KnowledgeBaseServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**knowledge_vault_graph_response_kwargs(graph))
 
 
 @router.post("/knowledge/vault/approve", response_model=ResponseModel)
