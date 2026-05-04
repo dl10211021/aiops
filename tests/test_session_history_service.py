@@ -5,6 +5,7 @@ from core.session_history_service import (
     clear_session_history_messages,
     delete_session_history_message_record,
     export_session_history_markdown_record,
+    get_session_memory_activity_record,
     list_session_history_messages,
     update_session_history_message_feedback_record,
     update_session_history_message_record,
@@ -41,6 +42,9 @@ class FakeMemoryDB:
     def update_message_feedback(self, session_id, message_id, rating, note=None):
         self.feedback.append((session_id, message_id, rating, note))
         return {"id": message_id, "feedback": {"rating": rating, "note": note or ""}}
+
+    def list_pending_memory_conflicts(self, limit=100):
+        return []
 
 
 class FailingMemoryDB:
@@ -136,6 +140,22 @@ class TestSessionHistoryService(unittest.TestCase):
 
         self.assertIn("# Chat History: 生产数据库", markdown)
         self.assertIn("## User", markdown)
+
+    def test_get_session_memory_activity_record_uses_injected_db(self):
+        memory_db = FakeMemoryDB(
+            [
+                {
+                    "id": 7,
+                    "role": "assistant",
+                    "content": "hi",
+                    "memory_refs": [{"path": "global/foo.md", "scope_id": "global"}],
+                }
+            ]
+        )
+
+        activity = get_session_memory_activity_record("sid-1", memory_db=memory_db)
+
+        self.assertEqual(activity["summary"]["referenced_count"], 1)
 
     def test_export_session_history_markdown_maps_empty_history_to_404(self):
         memory_db = FakeMemoryDB([])

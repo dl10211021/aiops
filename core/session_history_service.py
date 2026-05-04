@@ -4,6 +4,7 @@ from typing import Any
 
 from core import memory as memory_module
 from core.session_history import (
+    build_session_memory_activity,
     build_session_history_markdown,
     clear_session_history,
     delete_session_message,
@@ -113,3 +114,13 @@ def export_session_history_markdown_record(
     if not markdown:
         raise SessionHistoryServiceError(404, "该会话没有可导出的历史记录。")
     return markdown
+
+
+def get_session_memory_activity_record(
+    session_id: str,
+    memory_db: Any | None = None,
+) -> dict:
+    try:
+        return build_session_memory_activity(_resolve_memory_db(memory_db), session_id)
+    except Exception as exc:
+        raise SessionHistoryServiceError(500, str(exc)) from exc

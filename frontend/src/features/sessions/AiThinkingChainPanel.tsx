@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react'
-import type { ChatMessage, ExecTraceItem } from '@/types'
+import { useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
+import type { ChatMessage, ExecTraceItem, SessionMemoryActivity } from '@/types'
+import { getSessionMemoryActivity } from '@/api/sessionHistory'
 import { toolLabel } from '@/utils/assetDisplay'
 import { parseJsonRecord } from './jsonRecords'
 import { resultReason, traceTargetLabel } from './traceUtils'
@@ -182,6 +184,9 @@ export default function AiThinkingChainPanel({
   const [query, setQuery] = useState('')
   const [selectedGroupId, setSelectedGroupId] = useState('all')
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'trace' | 'memory'>('trace')
+  const [memoryActivity, setMemoryActivity] = useState<SessionMemoryActivity | null>(null)
+  const [memoryLoading, setMemoryLoading] = useState(false)
   const traceGroups = useMemo(() => buildThinkingGroups(messages), [messages])
   const latestGroupId = traceGroups[traceGroups.length - 1]?.id || null
   const activeExpandedGroupId = expandedGroupId === collapsedGroupId
@@ -206,6 +211,28 @@ export default function AiThinkingChainPanel({
     return Array.from(byDate.entries())
   }, [traceGroups])
 
+  useEffect(() => {
+    if (!sessionId) {
+      setMemoryActivity(null)
+      return
+    }
+    let cancelled = false
+    setMemoryLoading(true)
+    getSessionMemoryActivity(sessionId)
+      .then((response) => {
+        if (!cancelled) setMemoryActivity(response.data.activity)
+      })
+      .catch(() => {
+        if (!cancelled) setMemoryActivity(null)
+      })
+      .finally(() => {
+        if (!cancelled) setMemoryLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId, messages.length])
+
   const selectGroup = (groupId: string) => {
     setSelectedGroupId(groupId)
     if (groupId === 'all') return
@@ -228,37 +255,60 @@ export default function AiThinkingChainPanel({
     <section className="min-h-0 flex min-w-0 flex-1 flex-col overflow-hidden border-t border-ops-surface0/80">
       <header className="space-y-2 border-b border-ops-surface0/80 bg-ops-dark px-3 py-2">
         <div className="flex items-center justify-between gap-3 text-xs font-semibold tracking-wide text-ops-text">
-          <span>AI 思维链</span>
+          <div className="flex items-center gap-1 rounded-md border border-ops-surface0 bg-ops-panel/70 p-0.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab('trace')}
+              className={`rounded px-2 py-1 ${activeTab === 'trace' ? 'bg-ops-accent text-ops-ink' : 'text-ops-subtext hover:text-ops-text'}`}
+            >
+              思维链
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('memory')}
+              className={`rounded px-2 py-1 ${activeTab === 'memory' ? 'bg-ops-accent text-ops-ink' : 'text-ops-subtext hover:text-ops-text'}`}
+            >
+              记忆
+            </button>
+          </div>
           <span className="font-mono text-[10px] font-normal text-ops-overlay">
-            {sessionId ? `${traceGroups.length} 次` : '未绑定'}
+            {activeTab === 'trace'
+              ? (sessionId ? `${traceGroups.length} 次` : '未绑定')
+              : (sessionId ? `${memoryActivity?.summary.referenced_count || 0} 引用` : '未绑定')}
           </span>
         </div>
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          className="h-8 w-full rounded-md border border-ops-surface1 bg-ops-panel/70 px-2.5 text-xs text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent/60"
-          placeholder="查找时间 / 会话内容 / 工具 / 结果"
-        />
-        <select
-          value={selectedGroupId}
-          onChange={(event) => selectGroup(event.target.value)}
-          className="h-8 w-full rounded-md border border-ops-surface1 bg-ops-panel/70 px-2.5 text-xs text-ops-text outline-none focus:border-ops-accent/60"
-          title="按日期和轮次定位思维链"
-        >
-          <option value="all">全部日期 / 全部轮次</option>
-          {groupedOptions.map(([date, groups]) => (
-            <optgroup key={date} label={date}>
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {`${group.dateLabel} 第 ${group.turnNumber} 轮 · 输出 ${formatTimelineTime(group.outputAt || group.startedAt)} · ${group.userPrompt}`}
-                </option>
+        {activeTab === 'trace' && (
+          <>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="h-8 w-full rounded-md border border-ops-surface1 bg-ops-panel/70 px-2.5 text-xs text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent/60"
+              placeholder="查找时间 / 会话内容 / 工具 / 结果"
+            />
+            <select
+              value={selectedGroupId}
+              onChange={(event) => selectGroup(event.target.value)}
+              className="h-8 w-full rounded-md border border-ops-surface1 bg-ops-panel/70 px-2.5 text-xs text-ops-text outline-none focus:border-ops-accent/60"
+              title="按日期和轮次定位思维链"
+            >
+              <option value="all">全部日期 / 全部轮次</option>
+              {groupedOptions.map(([date, groups]) => (
+                <optgroup key={date} label={date}>
+                  {groups.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {`${group.dateLabel} 第 ${group.turnNumber} 轮 · 输出 ${formatTimelineTime(group.outputAt || group.startedAt)} · ${group.userPrompt}`}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
-            </optgroup>
-          ))}
-        </select>
+            </select>
+          </>
+        )}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto bg-ops-panel/70 px-3 py-2">
-        {traceGroups.length === 0 ? (
+        {activeTab === 'memory' ? (
+          <MemoryActivityPanel activity={memoryActivity} loading={memoryLoading} />
+        ) : traceGroups.length === 0 ? (
           <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
             暂无可展示的执行轨迹。AI 调用工具后会写入后端会话历史，并按轮次沉淀在这里。
           </div>
@@ -353,6 +403,106 @@ export default function AiThinkingChainPanel({
           </div>
         )}
       </div>
+    </section>
+  )
+}
+
+function MemoryActivityPanel({
+  activity,
+  loading,
+}: {
+  activity: SessionMemoryActivity | null
+  loading: boolean
+}) {
+  if (loading) {
+    return (
+      <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
+        正在读取本会话记忆活动...
+      </div>
+    )
+  }
+  if (!activity) {
+    return (
+      <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
+        暂无本会话记忆活动。
+      </div>
+    )
+  }
+
+  const summary = activity.summary
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <MemoryStat label="引用记忆" value={summary.referenced_count} />
+        <MemoryStat label="点赞沉淀" value={summary.promoted_count} />
+        <MemoryStat label="点踩纠错" value={summary.rejected_count} warn />
+        <MemoryStat label="待确认" value={summary.pending_conflict_count} warn />
+      </div>
+      <MemorySection title="本轮引用记忆" empty="本会话还没有引用长期记忆。">
+        {activity.referenced.map((row, rowIndex) => (
+          <article key={`${row.message_id || rowIndex}-refs`} className="rounded-md border border-ops-surface0 bg-ops-dark/30 px-3 py-2">
+            <p className="line-clamp-2 text-xs text-ops-text">{row.message_preview || 'AI 输出未保存摘要'}</p>
+            <div className="mt-2 space-y-1">
+              {row.refs.map((ref, index) => (
+                <div key={`${ref.path || ref.scope_id}-${index}`} className="rounded border border-ops-surface0 bg-ops-panel/45 px-2 py-1">
+                  <div className="text-[11px] font-semibold text-ops-accent">{ref.scope_label || ref.path || ref.scope_id}</div>
+                  <div className="mt-0.5 line-clamp-2 text-[10px] text-ops-overlay">{ref.summary_preview || ref.path || '已引用记忆'}</div>
+                </div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </MemorySection>
+      <MemorySection title="人工反馈沉淀" empty="还没有点赞或点踩反馈。">
+        {activity.feedback.map((row, index) => (
+          <article key={`${row.message_id || index}-feedback`} className="rounded-md border border-ops-surface0 bg-ops-dark/30 px-3 py-2">
+            <div className="flex items-center justify-between gap-2 text-[11px]">
+              <span className={row.rating === 'up' ? 'text-ops-accent' : 'text-amber-300'}>
+                {row.rating === 'up' ? '点赞保留记忆' : '点踩纠错，不保留'}
+              </span>
+              <span className="font-mono text-[10px] text-ops-overlay">{row.created_at || ''}</span>
+            </div>
+            <p className="mt-2 line-clamp-3 text-xs text-ops-subtext">{row.message_preview}</p>
+            {row.note ? <p className="mt-2 text-[11px] text-ops-overlay">备注：{row.note}</p> : null}
+          </article>
+        ))}
+      </MemorySection>
+      <MemorySection title="待确认记忆冲突" empty="暂无待确认冲突。">
+        {activity.pending_conflicts.map((row, index) => (
+          <article key={`${row.version_id || row.path}-${index}`} className="rounded-md border border-amber-400/30 bg-amber-400/5 px-3 py-2">
+            <div className="text-[11px] font-semibold text-amber-200">{row.path}</div>
+            <p className="mt-2 line-clamp-3 text-xs text-ops-subtext">
+              {row.reason || row.new_preview || row.existing_preview || '需要人工确认后再写入长期记忆。'}
+            </p>
+            <p className="mt-2 text-[10px] text-ops-overlay">可到知识库 / 记忆管理确认。</p>
+          </article>
+        ))}
+      </MemorySection>
+    </div>
+  )
+}
+
+function MemoryStat({ label, value, warn = false }: { label: string; value: number; warn?: boolean }) {
+  return (
+    <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 px-3 py-2">
+      <div className="text-[10px] text-ops-overlay">{label}</div>
+      <div className={`mt-1 text-lg font-semibold ${warn ? 'text-amber-300' : 'text-ops-accent'}`}>{value}</div>
+    </div>
+  )
+}
+
+function MemorySection({ title, empty, children }: { title: string; empty: string; children: ReactNode }) {
+  const items = Array.isArray(children) ? children.filter(Boolean) : children ? [children] : []
+  return (
+    <section>
+      <h4 className="mb-2 text-xs font-semibold text-ops-text">{title}</h4>
+      {items.length > 0 ? (
+        <div className="space-y-2">{children}</div>
+      ) : (
+        <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
+          {empty}
+        </div>
+      )}
     </section>
   )
 }

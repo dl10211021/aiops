@@ -20,6 +20,9 @@ class FakeMemoryDB:
     def get_messages(self, session_id, for_ui=False):
         return self.messages
 
+    def list_pending_memory_conflicts(self, limit=100):
+        return [{"path": "sessions/sid-1/conflict.md", "reason": "待确认"}]
+
     def clear_history(self, session_id):
         self.cleared.append(session_id)
 
@@ -49,6 +52,7 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         self.assertIn("/session/{session_id}/history", paths)
         self.assertIn("/session/{session_id}/history/{message_id}", paths)
         self.assertIn("/session/{session_id}/history/{message_id}/feedback", paths)
+        self.assertIn("/session/{session_id}/memory/activity", paths)
         self.assertIn("/session/{session_id}/export", paths)
 
     def test_session_history_routes_preserve_response_shapes(self):
@@ -74,6 +78,7 @@ class TestSessionHistoryRoutes(unittest.TestCase):
                     SessionMessageFeedbackRequest(rating="up"),
                 )
             )
+            activity_response = asyncio.run(session_history_routes.get_session_memory_activity("sid-1"))
 
         self.assertEqual(list_response.status, "success")
         self.assertEqual(list_response.data, {"messages": memory_db.messages})
@@ -104,6 +109,7 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         self.assertEqual(memory_db.updated, [("sid-1", 1, "updated")])
         self.assertEqual(memory_db.deleted, [("sid-1", 1)])
         self.assertEqual(memory_db.feedback, [("sid-1", 2, "up", None)])
+        self.assertEqual(activity_response.data["activity"]["summary"]["pending_conflict_count"], 1)
 
     def test_session_history_export_preserves_response_shape(self):
         with patch(

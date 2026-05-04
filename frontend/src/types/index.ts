@@ -167,6 +167,31 @@ export interface MemoryReference {
   path?: string
 }
 
+export interface SessionMemoryActivity {
+  session_id: string
+  summary: {
+    referenced_count: number
+    referenced_messages: number
+    promoted_count: number
+    rejected_count: number
+    pending_conflict_count: number
+  }
+  referenced: Array<{
+    message_id?: number | string
+    created_at?: string | number
+    message_preview: string
+    refs: MemoryReference[]
+  }>
+  feedback: Array<{
+    message_id?: number | string
+    created_at?: string | number
+    rating: 'up' | 'down' | string
+    note?: string
+    message_preview: string
+  }>
+  pending_conflicts: MemoryPendingConflict[]
+}
+
 export interface ChatMessageAttachment {
   filename: string
   ext?: string

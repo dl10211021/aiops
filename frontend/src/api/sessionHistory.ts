@@ -1,5 +1,5 @@
 import { request } from './http'
-import type { ExecTraceItem, MemoryReference } from '@/types'
+import type { ExecTraceItem, MemoryReference, SessionMemoryActivity } from '@/types'
 
 interface SessionHistoryApiMessage {
   role: string
@@ -70,4 +70,10 @@ export async function clearSessionHistory(sessionId: string) {
 
 export async function exportSessionHistory(sessionId: string) {
   return request<{ markdown: string }>(`/session/${sessionId}/export`)
+}
+
+export async function getSessionMemoryActivity(sessionId: string) {
+  return request<{ activity: SessionMemoryActivity }>(
+    `/session/${sessionId}/memory/activity`
+  )
 }

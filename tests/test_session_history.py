@@ -1,6 +1,7 @@
 import unittest
 
 from core.session_history import (
+    build_session_memory_activity,
     build_session_history_markdown,
     clear_session_history,
     delete_session_message,
@@ -17,16 +18,18 @@ class FakeMemoryDB:
         self.deleted = []
         self.feedback = []
         self.updated = []
-
-    def get_messages(self, session_id, for_ui=False):
-        self.session_id = session_id
-        self.for_ui = for_ui
-        return [
+        self.pending = []
+        self.messages = [
             {"role": "system", "content": "hidden"},
             {"role": "user", "content": "hi"},
             {"role": "assistant", "content": "hello"},
             {"role": "tool", "content": "hidden"},
         ]
+
+    def get_messages(self, session_id, for_ui=False):
+        self.session_id = session_id
+        self.for_ui = for_ui
+        return self.messages
 
     def clear_history(self, session_id):
         self.cleared.append(session_id)
@@ -41,6 +44,9 @@ class FakeMemoryDB:
     def update_message_feedback(self, session_id, message_id, rating, note=None):
         self.feedback.append((session_id, message_id, rating, note))
         return {"id": message_id, "feedback": {"rating": rating, "note": note or ""}}
+
+    def list_pending_memory_conflicts(self, limit=100):
+        return self.pending[:limit]
 
 
 class TestSessionHistory(unittest.TestCase):
@@ -104,3 +110,33 @@ class TestSessionHistory(unittest.TestCase):
         self.assertIn("## User\nhi", markdown)
         self.assertIn("## AI Assistant\nhello", markdown)
         self.assertNotIn("hidden", markdown)
+
+    def test_build_session_memory_activity_collects_refs_feedback_and_pending(self):
+        memory_db = FakeMemoryDB()
+        memory_db.messages = [
+            {
+                "id": 7,
+                "role": "assistant",
+                "content": "回答内容很好，应该沉淀。",
+                "memory_refs": [{"path": "global/foo.md", "scope_id": "global"}],
+                "feedback": {"rating": "up", "created_at": "2026-05-04 08:00:00"},
+            },
+            {
+                "id": 8,
+                "role": "assistant",
+                "content": "错误回答。",
+                "feedback": {"rating": "down"},
+            },
+        ]
+        memory_db.pending = [
+            {"path": "sessions/sid-1/foo.md", "reason": "内容冲突"},
+            {"path": "sessions/sid-2/foo.md", "reason": "其他会话"},
+        ]
+
+        activity = build_session_memory_activity(memory_db, "sid-1")
+
+        self.assertEqual(activity["summary"]["referenced_count"], 1)
+        self.assertEqual(activity["summary"]["promoted_count"], 1)
+        self.assertEqual(activity["summary"]["rejected_count"], 1)
+        self.assertEqual(activity["summary"]["pending_conflict_count"], 1)
+        self.assertEqual(activity["referenced"][0]["message_id"], 7)

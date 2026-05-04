@@ -220,6 +220,13 @@ def session_history_export_response_kwargs(markdown: str) -> dict[str, Any]:
     }
 
 
+def session_memory_activity_response_kwargs(activity: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"activity": activity},
+    }
+
+
 def session_group_response_kwargs(
     session_id: str,
     info: dict[str, Any],

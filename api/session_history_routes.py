@@ -8,6 +8,7 @@ from api.response_mappers.session import (
     session_history_message_feedback_response_kwargs,
     session_history_message_updated_response_kwargs,
     session_history_response_kwargs,
+    session_memory_activity_response_kwargs,
 )
 from api.schema_models.common import ResponseModel
 from api.schema_models.sessions import SessionMessageFeedbackRequest, SessionMessageUpdateRequest
@@ -17,6 +18,7 @@ from core.session_history_service import (
     clear_session_history_messages,
     delete_session_history_message_record,
     export_session_history_markdown_record,
+    get_session_memory_activity_record,
     list_session_history_messages,
     update_session_history_message_feedback_record,
     update_session_history_message_record,
@@ -104,3 +106,13 @@ async def export_session_history(session_id: str):
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_history_export_response_kwargs(markdown))
+
+
+@router.get("/session/{session_id}/memory/activity", response_model=ResponseModel)
+async def get_session_memory_activity(session_id: str):
+    """获取当前会话关联的记忆引用、反馈和待确认冲突。"""
+    try:
+        activity = get_session_memory_activity_record(session_id)
+    except SessionHistoryServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**session_memory_activity_response_kwargs(activity))
