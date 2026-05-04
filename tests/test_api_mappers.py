@@ -58,6 +58,10 @@ from api.mappers import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    memory_item_deleted_response_kwargs,
+    memory_item_response_kwargs,
+    memory_items_response_kwargs,
+    memory_versions_response_kwargs,
     legacy_command_response_kwargs,
     llm_config_response_kwargs,
     models_response_kwargs,
@@ -740,6 +744,8 @@ class TestApiMappers(unittest.TestCase):
 
     def test_knowledge_document_response_kwargs_preserve_route_shapes(self):
         files = ["runbook.md", "network.log"]
+        memory_item = {"path": "sessions/sid-1/memory.md"}
+        versions = [{"operation": "created"}]
 
         self.assertEqual(
             knowledge_document_uploaded_response_kwargs("文档已注入知识库"),
@@ -752,6 +758,22 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             knowledge_document_deleted_response_kwargs("文档已删除"),
             {"status": "success", "message": "文档已删除"},
+        )
+        self.assertEqual(
+            memory_items_response_kwargs([memory_item]),
+            {"status": "success", "data": {"items": [memory_item]}},
+        )
+        self.assertEqual(
+            memory_item_response_kwargs(memory_item),
+            {"status": "success", "data": {"item": memory_item}},
+        )
+        self.assertEqual(
+            memory_versions_response_kwargs(versions),
+            {"status": "success", "data": {"versions": versions}},
+        )
+        self.assertEqual(
+            memory_item_deleted_response_kwargs("sessions/sid-1/memory.md"),
+            {"status": "success", "message": "记忆已删除: sessions/sid-1/memory.md"},
         )
 
     def test_session_poll_response_kwargs_normalizes_empty_messages(self):

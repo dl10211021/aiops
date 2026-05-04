@@ -1,37 +1,66 @@
+import { useState } from 'react'
 import PageHeader from '@/components/layout/PageHeader'
 import {
   KnowledgeDeleteDialog,
   KnowledgeEmptyState,
   KnowledgeFileCard,
+  KnowledgeTabs,
   KnowledgeUploadButton,
+  MemoryDeleteDialog,
+  MemoryDetailPanel,
+  MemoryItemCard,
+  MemoryVersionsPanel,
+  type KnowledgeTab,
 } from './KnowledgeBaseParts'
 import { useKnowledgeBaseData } from './useKnowledgeBaseData'
 
 export default function KnowledgeBase() {
+  const [activeTab, setActiveTab] = useState<KnowledgeTab>('documents')
   const {
     deleteTarget,
+    deletingMemory,
     deleting,
     error,
     files,
     handleDelete,
+    handleDeleteMemory,
+    handleOpenMemory,
     handleUpload,
     loadFiles,
+    loadMemories,
     loading,
+    memoryDeleteTarget,
+    memoryError,
+    memoryItems,
+    memoryLoading,
+    memoryVersions,
+    selectedMemory,
     setDeleteTarget,
+    setMemoryDeleteTarget,
     uploading,
   } = useKnowledgeBaseData()
+
+  const handleRefresh = () => {
+    if (activeTab === 'memory') {
+      void loadMemories()
+    } else {
+      void loadFiles()
+    }
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-4 lg:p-5">
       <div className="w-full max-w-none">
         <PageHeader
           title="知识库"
-          description="上传运维文档，AI 将自动学习并在会话和巡检中引用。"
+          description="统一管理运维文档与 AI 长期记忆，支持检索、删除和审计。"
           actions={(
             <>
-            <KnowledgeUploadButton uploading={uploading} onUpload={handleUpload} />
+            {activeTab === 'documents' && (
+              <KnowledgeUploadButton uploading={uploading} onUpload={handleUpload} />
+            )}
             <button
-              onClick={() => void loadFiles()}
+              onClick={handleRefresh}
               className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors"
             >
               刷新
@@ -40,28 +69,67 @@ export default function KnowledgeBase() {
           )}
         />
 
-        {error && (
+        <KnowledgeTabs
+          activeTab={activeTab}
+          documentCount={files.length}
+          memoryCount={memoryItems.length}
+          onChange={setActiveTab}
+        />
+
+        {(activeTab === 'documents' ? error : memoryError) && (
           <div className="mb-4 rounded-lg border border-ops-alert/35 bg-ops-alert/10 px-4 py-3 text-sm text-ops-alert">
-            {error}
+            {activeTab === 'documents' ? error : memoryError}
           </div>
         )}
 
-        {loading && (
+        {activeTab === 'documents' && loading && (
           <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-8 text-center text-sm text-ops-subtext">
             正在加载知识库文档...
           </section>
         )}
 
-        {/* File list */}
-        {!loading && files.length > 0 ? (
+        {activeTab === 'documents' && !loading && files.length > 0 ? (
           <div className="grid gap-2 xl:grid-cols-2 2xl:grid-cols-3">
             {files.map((file) => (
               <KnowledgeFileCard key={file.filename} file={file} onDelete={setDeleteTarget} />
             ))}
           </div>
-        ) : !loading ? (
+        ) : activeTab === 'documents' && !loading ? (
           <KnowledgeEmptyState uploading={uploading} onUpload={handleUpload} />
         ) : null}
+
+        {activeTab === 'memory' && memoryLoading && (
+          <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-8 text-center text-sm text-ops-subtext">
+            正在加载 AI 记忆...
+          </section>
+        )}
+
+        {activeTab === 'memory' && !memoryLoading && (
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
+            <section className="space-y-2">
+              {memoryItems.length > 0 ? memoryItems.map((item) => (
+                <MemoryItemCard
+                  key={item.path}
+                  item={item}
+                  selected={selectedMemory?.path === item.path}
+                  onOpen={handleOpenMemory}
+                  onDelete={setMemoryDeleteTarget}
+                />
+              )) : (
+                <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-6">
+                  <div className="text-sm font-semibold text-ops-text">暂无 AI 记忆</div>
+                  <p className="mt-2 text-sm leading-6 text-ops-subtext">
+                    当会话产生可复用经验、用户点赞/点踩反馈或资产画像沉淀后，这里会出现 Claude 风格文件记忆。
+                  </p>
+                </div>
+              )}
+            </section>
+            <aside className="space-y-4">
+              <MemoryDetailPanel memory={selectedMemory} />
+              <MemoryVersionsPanel versions={memoryVersions} />
+            </aside>
+          </div>
+        )}
       </div>
       {deleteTarget && (
         <KnowledgeDeleteDialog
@@ -69,6 +137,14 @@ export default function KnowledgeBase() {
           target={deleteTarget}
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => void handleDelete()}
+        />
+      )}
+      {memoryDeleteTarget && (
+        <MemoryDeleteDialog
+          deleting={deletingMemory}
+          target={memoryDeleteTarget}
+          onCancel={() => setMemoryDeleteTarget(null)}
+          onConfirm={() => void handleDeleteMemory()}
         />
       )}
     </div>

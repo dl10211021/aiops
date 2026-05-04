@@ -132,6 +132,79 @@ class FileMemoryStore:
                 break
         return results
 
+    def list_memories(self) -> list[dict[str, Any]]:
+        self.initialize()
+        memories = []
+        for path in sorted(self.root_path.rglob("*.md")):
+            if "versions" in path.relative_to(self.root_path).parts:
+                continue
+            content = path.read_text(encoding="utf-8")
+            relative_path = path.relative_to(self.root_path).as_posix()
+            entries = self._parse_entries(self._scope_from_path(relative_path), path)
+            memories.append(
+                {
+                    "path": relative_path,
+                    "scope_id": self._scope_from_path(relative_path),
+                    "size": path.stat().st_size,
+                    "entries": len(entries),
+                    "updated_at": datetime.datetime.fromtimestamp(
+                        path.stat().st_mtime
+                    ).strftime("%Y-%m-%d %H:%M:%S"),
+                    "preview": self._preview(content),
+                }
+            )
+        return memories
+
+    def read_memory(self, path: str) -> dict[str, Any]:
+        self.initialize()
+        relative_path = self._safe_relative_path(path)
+        target = self._resolve_memory_path(relative_path)
+        if not target.exists() or not target.is_file():
+            raise FileNotFoundError(path)
+        content = target.read_text(encoding="utf-8")
+        return {
+            "path": relative_path.as_posix(),
+            "scope_id": self._scope_from_path(relative_path.as_posix()),
+            "content": content,
+            "size": target.stat().st_size,
+            "updated_at": datetime.datetime.fromtimestamp(target.stat().st_mtime).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
+        }
+
+    def delete_memory(self, path: str, *, actor: str = "user") -> dict[str, Any]:
+        self.initialize()
+        relative_path = self._safe_relative_path(path)
+        target = self._resolve_memory_path(relative_path)
+        if not target.exists() or not target.is_file():
+            raise FileNotFoundError(path)
+        content = target.read_text(encoding="utf-8")
+        target.unlink()
+        version = {
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "operation": "deleted",
+            "path": relative_path.as_posix(),
+            "scope_id": self._scope_from_path(relative_path.as_posix()),
+            "source_session_id": actor,
+            "content_sha256": memory_content_sha256(content),
+            "summary_sha256": "",
+            "metadata": {"actor": actor},
+        }
+        self._append_version(version)
+        return version
+
+    def list_versions(self, limit: int = 50) -> list[dict[str, Any]]:
+        self.initialize()
+        events: list[dict[str, Any]] = []
+        for path in sorted((self.root_path / "versions").glob("*.jsonl"), reverse=True):
+            for line in path.read_text(encoding="utf-8").splitlines():
+                try:
+                    events.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        events.sort(key=lambda item: str(item.get("timestamp") or ""), reverse=True)
+        return events[: max(1, min(limit, 200))]
+
     def _resolve_memory_path(self, relative_path: Path) -> Path:
         target = (self.root_path / relative_path).resolve()
         root = self.root_path.resolve()
@@ -140,6 +213,15 @@ class FileMemoryStore:
         except ValueError as exc:
             raise ValueError("memory path escapes store root") from exc
         return target
+
+    def _safe_relative_path(self, value: str) -> Path:
+        raw = str(value or "").replace("\\", "/").strip().lstrip("/")
+        if not raw or raw.startswith("../") or "/../" in raw or raw == "..":
+            raise ValueError("invalid memory path")
+        path = Path(raw)
+        if path.is_absolute() or path.suffix.lower() != ".md":
+            raise ValueError("invalid memory path")
+        return path
 
     def _initial_header(self, scope_id: str) -> str:
         return (
@@ -175,6 +257,26 @@ class FileMemoryStore:
         )
         with version_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(version, ensure_ascii=False, sort_keys=True) + "\n")
+
+    def _scope_from_path(self, relative_path: str) -> str:
+        parts = Path(relative_path).parts
+        if len(parts) >= 3 and parts[0] == "assets":
+            return f"asset:{parts[1]}"
+        if len(parts) >= 3 and parts[0] == "hosts":
+            return f"asset-host:{parts[1]}"
+        if len(parts) >= 3 and parts[0] == "asset_kinds":
+            return f"asset-kind:{parts[1]}"
+        if len(parts) >= 3 and parts[0] == "sessions":
+            return parts[1]
+        return "global"
+
+    def _preview(self, content: str) -> str:
+        lines = [
+            line.strip()
+            for line in str(content or "").splitlines()
+            if line.strip() and not line.startswith("- ") and not line.startswith("#")
+        ]
+        return "\n".join(lines[:4])[:360]
 
     def _parse_entries(self, scope_id: str, path: Path) -> list[dict[str, Any]]:
         content = path.read_text(encoding="utf-8")

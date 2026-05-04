@@ -1,4 +1,4 @@
-import type { ApiResponse, KnowledgeFile } from '@/types'
+import type { ApiResponse, KnowledgeFile, MemoryDetail, MemoryItem, MemoryVersion } from '@/types'
 import { apiUrl, authHeaders, request } from './http'
 
 export async function listKnowledgeDocuments() {
@@ -18,4 +18,20 @@ export async function uploadKnowledgeDocument(file: File) {
 
 export async function deleteKnowledgeDocument(filename: string) {
   return request(`/knowledge/${encodeURIComponent(filename)}`, { method: 'DELETE' })
+}
+
+export async function listMemoryItems() {
+  return request<{ items: MemoryItem[] }>('/knowledge/memory/list')
+}
+
+export async function readMemoryItem(path: string) {
+  return request<{ item: MemoryDetail }>(`/knowledge/memory/read?path=${encodeURIComponent(path)}`)
+}
+
+export async function deleteMemoryItem(path: string) {
+  return request(`/knowledge/memory?path=${encodeURIComponent(path)}`, { method: 'DELETE' })
+}
+
+export async function listMemoryVersions(limit = 50) {
+  return request<{ versions: MemoryVersion[] }>(`/knowledge/memory/versions?limit=${limit}`)
 }

@@ -61,6 +61,31 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertIn("Oracle", results[0]["summary"])
         self.assertEqual(len(results), 2)
 
+    def test_list_read_delete_and_versions_support_management_ui(self):
+        self.store.append_memory(
+            scope_id="asset-host:10.0.0.8",
+            summary="【核心记忆】巡检前先确认只读模式。",
+            source_session_id="sid-8",
+        )
+
+        items = self.store.list_memories()
+        detail = self.store.read_memory(items[0]["path"])
+        deleted = self.store.delete_memory(items[0]["path"], actor="tester")
+        versions = self.store.list_versions()
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["entries"], 1)
+        self.assertIn("只读模式", items[0]["preview"])
+        self.assertIn("只读模式", detail["content"])
+        self.assertEqual(deleted["operation"], "deleted")
+        operations = [version["operation"] for version in versions]
+        self.assertIn("deleted", operations)
+        deleted_versions = [
+            version for version in versions if version["operation"] == "deleted"
+        ]
+        self.assertEqual(deleted_versions[0]["metadata"]["actor"], "tester")
+        self.assertEqual(self.store.list_memories(), [])
+
     def test_memory_paths_are_scoped_and_sanitized(self):
         self.assertEqual(safe_memory_segment("../evil host"), "evil_host")
         self.assertEqual(

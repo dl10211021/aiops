@@ -72,6 +72,10 @@ from api.response_mappers.knowledge import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    memory_item_deleted_response_kwargs,
+    memory_item_response_kwargs,
+    memory_items_response_kwargs,
+    memory_versions_response_kwargs,
 )
 from api.response_mappers.notifications import (
     notification_channel_test_response_kwargs,

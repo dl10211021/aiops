@@ -578,6 +578,30 @@ export interface KnowledgeFile {
   chunks?: number
 }
 
+export interface MemoryItem {
+  path: string
+  scope_id: string
+  size: number
+  entries: number
+  updated_at: string
+  preview: string
+}
+
+export interface MemoryDetail extends MemoryItem {
+  content: string
+}
+
+export interface MemoryVersion {
+  timestamp: string
+  operation: 'created' | 'modified' | 'deleted' | string
+  path: string
+  scope_id: string
+  source_session_id?: string
+  content_sha256?: string
+  summary_sha256?: string
+  metadata?: Record<string, unknown>
+}
+
 export interface ApiResponse<T = Record<string, unknown>> {
   status: 'success' | 'error'
   data: T

@@ -2,21 +2,32 @@ import type { ChangeEvent } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import {
   deleteKnowledgeDocument,
+  deleteMemoryItem,
   listKnowledgeDocuments,
+  listMemoryItems,
+  listMemoryVersions,
+  readMemoryItem,
   uploadKnowledgeDocument,
 } from '@/api/knowledge'
 import { useStore } from '@/store'
-import type { KnowledgeFile } from '@/types'
+import type { KnowledgeFile, MemoryDetail, MemoryItem, MemoryVersion } from '@/types'
 import { isAcceptedKnowledgeFile } from './knowledgeBaseModel'
 
 export function useKnowledgeBaseData() {
   const addToast = useStore((s) => s.addToast)
   const [files, setFiles] = useState<KnowledgeFile[]>([])
+  const [memoryItems, setMemoryItems] = useState<MemoryItem[]>([])
+  const [memoryVersions, setMemoryVersions] = useState<MemoryVersion[]>([])
+  const [selectedMemory, setSelectedMemory] = useState<MemoryDetail | null>(null)
   const [uploading, setUploading] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeFile | null>(null)
+  const [memoryDeleteTarget, setMemoryDeleteTarget] = useState<MemoryItem | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [deletingMemory, setDeletingMemory] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [memoryLoading, setMemoryLoading] = useState(true)
   const [error, setError] = useState('')
+  const [memoryError, setMemoryError] = useState('')
 
   const loadFiles = useCallback(async () => {
     setLoading(true)
@@ -32,9 +43,33 @@ export function useKnowledgeBaseData() {
     }
   }, [addToast])
 
+  const loadMemories = useCallback(async () => {
+    setMemoryLoading(true)
+    setMemoryError('')
+    try {
+      const [itemsRes, versionsRes] = await Promise.all([
+        listMemoryItems(),
+        listMemoryVersions(30),
+      ])
+      setMemoryItems(itemsRes.data.items || [])
+      setMemoryVersions(versionsRes.data.versions || [])
+      setSelectedMemory((current) => {
+        if (!current) return current
+        const stillExists = (itemsRes.data.items || []).some((item) => item.path === current.path)
+        return stillExists ? current : null
+      })
+    } catch (e: unknown) {
+      setMemoryError(e instanceof Error ? e.message : '加载 AI 记忆失败')
+      addToast('加载 AI 记忆失败', 'error')
+    } finally {
+      setMemoryLoading(false)
+    }
+  }, [addToast])
+
   useEffect(() => {
     void loadFiles()
-  }, [loadFiles])
+    void loadMemories()
+  }, [loadFiles, loadMemories])
 
   const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files
@@ -82,16 +117,56 @@ export function useKnowledgeBaseData() {
     }
   }
 
+  const handleOpenMemory = async (item: MemoryItem) => {
+    setMemoryError('')
+    try {
+      const res = await readMemoryItem(item.path)
+      setSelectedMemory(res.data.item)
+    } catch (e: unknown) {
+      setMemoryError(e instanceof Error ? e.message : '读取 AI 记忆失败')
+      addToast('读取 AI 记忆失败', 'error')
+    }
+  }
+
+  const handleDeleteMemory = async () => {
+    if (!memoryDeleteTarget) return
+    const path = memoryDeleteTarget.path
+    setDeletingMemory(true)
+    try {
+      await deleteMemoryItem(path)
+      setMemoryItems((current) => current.filter((item) => item.path !== path))
+      setSelectedMemory((current) => (current?.path === path ? null : current))
+      setMemoryDeleteTarget(null)
+      await loadMemories()
+      addToast('AI 记忆已删除', 'success')
+    } catch {
+      addToast('删除 AI 记忆失败', 'error')
+    } finally {
+      setDeletingMemory(false)
+    }
+  }
+
   return {
     deleteTarget,
+    deletingMemory,
     deleting,
     error,
     files,
     handleDelete,
+    handleDeleteMemory,
+    handleOpenMemory,
     handleUpload,
     loadFiles,
+    loadMemories,
     loading,
+    memoryDeleteTarget,
+    memoryError,
+    memoryItems,
+    memoryLoading,
+    memoryVersions,
+    selectedMemory,
     setDeleteTarget,
+    setMemoryDeleteTarget,
     uploading,
   }
 }
