@@ -104,6 +104,7 @@ def _ensure_vault_skeleton(vault_dir: Path) -> None:
         "wiki/runbooks",
         "wiki/incidents",
         "wiki/profiles",
+        "wiki/articles",
         "wiki/candidates",
         "wiki/canvases",
         "state",
@@ -323,6 +324,33 @@ def _candidate_note_path(root: Path, record: dict[str, Any]) -> Path:
     return root / "wiki" / "candidates" / f"{base}.md"
 
 
+def _article_note_path(root: Path, record: dict[str, Any]) -> Path:
+    base = _markdown_note_name(str(record.get("filename") or record.get("id") or "article"))
+    return root / "wiki" / "articles" / f"{base}.md"
+
+
+def _replace_frontmatter_value(content: str, key: str, value: str) -> str:
+    lines = content.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return content
+    end_index = None
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            end_index = index
+            break
+    if end_index is None:
+        return content
+    replaced = False
+    for index in range(1, end_index):
+        if lines[index].startswith(f"{key}:"):
+            lines[index] = f'{key}: "{_safe_markdown_value(value)}"'
+            replaced = True
+            break
+    if not replaced:
+        lines.insert(end_index, f'{key}: "{_safe_markdown_value(value)}"')
+    return "\n".join(lines) + ("\n" if content.endswith("\n") else "")
+
+
 async def _generate_candidate_with_model(record: dict[str, Any], source_preview: str) -> str:
     from core.assistant_model_config import assistant_thinking_mode, resolve_assistant_model_id
     from core.llm_execution import execute_chat_stream
@@ -466,6 +494,68 @@ async def compile_vault_source_candidate(
     _write_manifest(root, records)
     _write_vault_index(root, records)
     _append_vault_log(root, "compile-candidate", f"{record.get('original_filename')} -> {updated_record.get('candidate_path')}")
+    return updated_record
+
+
+def list_vault_candidates(vault_dir: str | os.PathLike[str] | None = None) -> list[dict[str, Any]]:
+    root = Path(vault_dir) if vault_dir is not None else _vault_root()
+    candidates: list[dict[str, Any]] = []
+    for item in _read_manifest(root):
+        candidate_path = item.get("candidate_path")
+        if not candidate_path:
+            continue
+        path = root / str(candidate_path)
+        candidates.append(
+            {
+                **item,
+                "candidate_exists": path.exists(),
+                "candidate_size": path.stat().st_size if path.exists() else 0,
+                "review_status": "pending" if item.get("compile_status") == "awaiting_review" else item.get("compile_status"),
+            }
+        )
+    return sorted(candidates, key=lambda item: str(item.get("compiled_at") or item.get("updated_at") or ""), reverse=True)
+
+
+def approve_vault_candidate(
+    identifier: str,
+    *,
+    vault_dir: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    root, record = _find_vault_record(identifier, vault_dir)
+    candidate_rel = record.get("candidate_path")
+    if not candidate_rel:
+        raise KnowledgeBaseServiceError(400, "该资料还没有候选 Wiki 页面")
+    candidate_path = root / str(candidate_rel)
+    if not candidate_path.exists():
+        raise KnowledgeBaseServiceError(404, "候选 Wiki 页面不存在")
+
+    article_path = _article_note_path(root, record)
+    article_path.parent.mkdir(parents=True, exist_ok=True)
+    content = candidate_path.read_text(encoding="utf-8")
+    content = _replace_frontmatter_value(content, "type", "wiki-article")
+    content = _replace_frontmatter_value(content, "review_status", "approved")
+    content = _replace_frontmatter_value(content, "approved_at", _utc_now_iso())
+    article_path.write_text(content, encoding="utf-8")
+
+    records = _read_manifest(root)
+    updated_record: dict[str, Any] | None = None
+    for item in records:
+        if item.get("id") == record.get("id"):
+            item.update(
+                {
+                    "compile_status": "approved",
+                    "compile_stage": "wiki_approved",
+                    "wiki_path": article_path.relative_to(root).as_posix(),
+                    "approved_at": _utc_now_iso(),
+                }
+            )
+            updated_record = item
+            break
+    if updated_record is None:
+        updated_record = record
+    _write_manifest(root, records)
+    _write_vault_index(root, records)
+    _append_vault_log(root, "approve-candidate", f"{record.get('original_filename')} -> {updated_record.get('wiki_path')}")
     return updated_record
 
 

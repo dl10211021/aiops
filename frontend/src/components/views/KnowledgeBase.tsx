@@ -16,6 +16,7 @@ import {
   MemoryStoresPanel,
   MemoryVersionsPanel,
   KnowledgeCompileQueuePanel,
+  KnowledgeCandidatePanel,
   type KnowledgeTab,
 } from './KnowledgeBaseParts'
 import { useKnowledgeBaseData } from './useKnowledgeBaseData'
@@ -31,9 +32,12 @@ export default function KnowledgeBase() {
     exportingMemory,
     files,
     compileQueueItems,
+    candidateItems,
     compilingSourceSession,
+    approvingSourceSession,
     handleDelete,
     handleCompileKnowledgeSource,
+    handleApproveKnowledgeCandidate,
     handleDeleteMemory,
     handleCreateMemory,
     handleExportMemory,
@@ -144,6 +148,13 @@ export default function KnowledgeBase() {
                 items={compileQueueItems}
                 onCompile={handleCompileKnowledgeSource}
               />
+              <div className="mt-4">
+                <KnowledgeCandidatePanel
+                  approvingSourceSession={approvingSourceSession}
+                  items={candidateItems}
+                  onApprove={handleApproveKnowledgeCandidate}
+                />
+              </div>
             </aside>
           </div>
         ) : activeTab === 'documents' && !loading ? (
@@ -153,6 +164,11 @@ export default function KnowledgeBase() {
               compilingSourceSession={compilingSourceSession}
               items={compileQueueItems}
               onCompile={handleCompileKnowledgeSource}
+            />
+            <KnowledgeCandidatePanel
+              approvingSourceSession={approvingSourceSession}
+              items={candidateItems}
+              onApprove={handleApproveKnowledgeCandidate}
             />
           </div>
         ) : null}

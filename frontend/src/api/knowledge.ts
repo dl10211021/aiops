@@ -9,12 +9,25 @@ export async function listKnowledgeVaultQueue() {
   return request<{ items: KnowledgeCompileQueueItem[] }>('/knowledge/vault/queue')
 }
 
+export async function listKnowledgeVaultCandidates() {
+  return request<{ items: KnowledgeCompileQueueItem[] }>('/knowledge/vault/candidates')
+}
+
 export async function compileKnowledgeVaultSource(sourceSessionId: string, useAi = true) {
   return request<{ item: KnowledgeCompileQueueItem }>('/knowledge/vault/compile', {
     method: 'POST',
     body: JSON.stringify({
       source_session_id: sourceSessionId,
       use_ai: useAi,
+    }),
+  })
+}
+
+export async function approveKnowledgeVaultCandidate(sourceSessionId: string) {
+  return request<{ item: KnowledgeCompileQueueItem }>('/knowledge/vault/approve', {
+    method: 'POST',
+    body: JSON.stringify({
+      source_session_id: sourceSessionId,
     }),
   })
 }

@@ -1,6 +1,7 @@
 import type { ChangeEvent } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import {
+  approveKnowledgeVaultCandidate,
   compileKnowledgeVaultSource,
   createMemoryItem,
   deleteKnowledgeDocument,
@@ -8,6 +9,7 @@ import {
   exportMemoryStore,
   confirmMemoryReview,
   listKnowledgeDocuments,
+  listKnowledgeVaultCandidates,
   listKnowledgeVaultQueue,
   listMemoryItems,
   listMemoryPendingConflicts,
@@ -30,6 +32,7 @@ export function useKnowledgeBaseData() {
   const addToast = useStore((s) => s.addToast)
   const [files, setFiles] = useState<KnowledgeFile[]>([])
   const [compileQueueItems, setCompileQueueItems] = useState<KnowledgeCompileQueueItem[]>([])
+  const [candidateItems, setCandidateItems] = useState<KnowledgeCompileQueueItem[]>([])
   const [memoryItems, setMemoryItems] = useState<MemoryItem[]>([])
   const [memoryStores, setMemoryStores] = useState<MemoryStoreInfo[]>([])
   const [memoryVersions, setMemoryVersions] = useState<MemoryVersion[]>([])
@@ -55,6 +58,7 @@ export function useKnowledgeBaseData() {
   const [redactingMemoryVersion, setRedactingMemoryVersion] = useState<string | null>(null)
   const [reviewingMemoryPath, setReviewingMemoryPath] = useState<string | null>(null)
   const [compilingSourceSession, setCompilingSourceSession] = useState<string | null>(null)
+  const [approvingSourceSession, setApprovingSourceSession] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [memoryLoading, setMemoryLoading] = useState(true)
   const [error, setError] = useState('')
@@ -65,9 +69,13 @@ export function useKnowledgeBaseData() {
     setError('')
     try {
       const res = await listKnowledgeDocuments()
-      const queueRes = await listKnowledgeVaultQueue()
+      const [queueRes, candidatesRes] = await Promise.all([
+        listKnowledgeVaultQueue(),
+        listKnowledgeVaultCandidates(),
+      ])
       setFiles(res.data.files || [])
       setCompileQueueItems(queueRes.data.items || [])
+      setCandidateItems(candidatesRes.data.items || [])
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '加载知识库失败')
       addToast('加载知识库失败', 'error')
@@ -171,6 +179,25 @@ export function useKnowledgeBaseData() {
       addToast(e instanceof Error ? e.message : '生成候选 Wiki 失败', 'error')
     } finally {
       setCompilingSourceSession(null)
+    }
+  }
+
+  const handleApproveKnowledgeCandidate = async (item: KnowledgeCompileQueueItem) => {
+    const sourceSessionId = item.source_session_id || item.id
+    if (!sourceSessionId) {
+      addToast('该候选缺少 source session，无法批准', 'error')
+      return
+    }
+    setApprovingSourceSession(sourceSessionId)
+    try {
+      const res = await approveKnowledgeVaultCandidate(sourceSessionId)
+      await loadFiles()
+      const wikiPath = res.data.item?.wiki_path
+      addToast(wikiPath ? `候选已入库：${wikiPath}` : '候选 Wiki 已批准入库', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '批准候选 Wiki 失败', 'error')
+    } finally {
+      setApprovingSourceSession(null)
     }
   }
 
@@ -351,9 +378,12 @@ export function useKnowledgeBaseData() {
     exportingMemory,
     files,
     compileQueueItems,
+    candidateItems,
     compilingSourceSession,
+    approvingSourceSession,
     handleDelete,
     handleCompileKnowledgeSource,
+    handleApproveKnowledgeCandidate,
     handleDeleteMemory,
     handleCreateMemory,
     handleExportMemory,

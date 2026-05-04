@@ -37,6 +37,8 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/list", paths)
         self.assertIn("/knowledge/vault/queue", paths)
         self.assertIn("/knowledge/vault/compile", paths)
+        self.assertIn("/knowledge/vault/candidates", paths)
+        self.assertIn("/knowledge/vault/approve", paths)
         self.assertIn("/knowledge/{filename}", paths)
 
     def test_upload_knowledge_document_preserves_response_shape(self):
@@ -88,6 +90,31 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(response.status, "success")
         self.assertEqual(response.message, "候选 Wiki 页面已生成")
         self.assertEqual(response.data, {"item": {"id": "src-1", "candidate_path": "wiki/candidates/runbook.md"}})
+
+    def test_list_and_approve_knowledge_vault_candidates_preserve_response_shape(self):
+        with patch(
+            "api.knowledge_routes.list_vault_candidates",
+            return_value=[{"id": "src-1", "candidate_path": "wiki/candidates/runbook.md"}],
+        ):
+            list_response = asyncio.run(knowledge_routes.list_knowledge_vault_candidates())
+
+        with patch(
+            "api.knowledge_routes.approve_vault_candidate",
+            return_value={"id": "src-1", "wiki_path": "wiki/articles/runbook.md"},
+        ):
+            approve_response = asyncio.run(
+                knowledge_routes.approve_knowledge_vault_candidate(
+                    knowledge_routes.KnowledgeVaultApproveRequest(
+                        source_session_id="source-session-1",
+                    )
+                )
+            )
+
+        self.assertEqual(list_response.status, "success")
+        self.assertEqual(list_response.data, {"items": [{"id": "src-1", "candidate_path": "wiki/candidates/runbook.md"}]})
+        self.assertEqual(approve_response.status, "success")
+        self.assertEqual(approve_response.message, "候选 Wiki 已批准入库")
+        self.assertEqual(approve_response.data, {"item": {"id": "src-1", "wiki_path": "wiki/articles/runbook.md"}})
 
     def test_delete_knowledge_document_preserves_response_shape(self):
         with patch(

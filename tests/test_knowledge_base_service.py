@@ -10,9 +10,11 @@ from unittest.mock import patch
 
 from core.knowledge_base_service import (
     KnowledgeBaseServiceError,
+    approve_vault_candidate,
     compile_vault_source_candidate,
     ingest_knowledge_document,
     list_vault_compile_queue,
+    list_vault_candidates,
     list_vault_source_records,
     list_knowledge_document_records,
     remove_knowledge_document_record,
@@ -179,3 +181,18 @@ class TestKnowledgeBaseService(unittest.TestCase):
         candidate_text = candidate_path.read_text(encoding="utf-8")
         self.assertIn("待人工确认", candidate_text)
         self.assertIn("CPU 正常", candidate_text)
+        candidates = list_vault_candidates(self.vault_dir)
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["review_status"], "pending")
+
+        approved = approve_vault_candidate(
+            record["source_session_id"],
+            vault_dir=self.vault_dir,
+        )
+        self.assertEqual(approved["compile_status"], "approved")
+        self.assertEqual(approved["compile_stage"], "wiki_approved")
+        self.assertTrue(approved["wiki_path"].startswith("wiki/articles/"))
+        article_text = (self.vault_dir / approved["wiki_path"]).read_text(encoding="utf-8")
+        self.assertIn('review_status: "approved"', article_text)
+        self.assertIn('type: "wiki-article"', article_text)
+        self.assertEqual(list_vault_compile_queue(self.vault_dir), [])

@@ -6,7 +6,9 @@ from api.response_mappers.knowledge import (
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
+    knowledge_vault_candidate_approved_response_kwargs,
     knowledge_vault_candidate_response_kwargs,
+    knowledge_vault_candidates_response_kwargs,
     knowledge_vault_queue_response_kwargs,
     memory_item_created_response_kwargs,
     memory_item_deleted_response_kwargs,
@@ -27,9 +29,11 @@ from api.response_mappers.knowledge import (
 from api.schema_models.common import ResponseModel
 from core.knowledge_base_service import (
     KnowledgeBaseServiceError,
+    approve_vault_candidate,
     compile_vault_source_candidate,
     ingest_knowledge_document,
     list_knowledge_document_records,
+    list_vault_candidates,
     list_vault_compile_queue,
     remove_knowledge_document_record,
 )
@@ -75,6 +79,10 @@ class MemoryReviewConfirmRequest(BaseModel):
 class KnowledgeVaultCompileRequest(BaseModel):
     source_session_id: str = Field(..., min_length=1, max_length=200)
     use_ai: bool = True
+
+
+class KnowledgeVaultApproveRequest(BaseModel):
+    source_session_id: str = Field(..., min_length=1, max_length=200)
 
 
 @router.get("/knowledge/memory/stores", response_model=ResponseModel)
@@ -306,6 +314,22 @@ async def compile_knowledge_vault_source(req: KnowledgeVaultCompileRequest):
     except KnowledgeBaseServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**knowledge_vault_candidate_response_kwargs(item))
+
+
+@router.get("/knowledge/vault/candidates", response_model=ResponseModel)
+async def list_knowledge_vault_candidates():
+    """列出等待人工确认或已批准的候选 Wiki 页面。"""
+    return ResponseModel(**knowledge_vault_candidates_response_kwargs(list_vault_candidates()))
+
+
+@router.post("/knowledge/vault/approve", response_model=ResponseModel)
+async def approve_knowledge_vault_candidate(req: KnowledgeVaultApproveRequest):
+    """批准候选 Wiki 页面，将其写入正式 wiki/articles。"""
+    try:
+        item = approve_vault_candidate(req.source_session_id)
+    except KnowledgeBaseServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**knowledge_vault_candidate_approved_response_kwargs(item))
 
 
 @router.delete("/knowledge/{filename}", response_model=ResponseModel)

@@ -631,9 +631,14 @@ export interface KnowledgeCompileQueueItem extends KnowledgeFile {
   compile_stage?: string
   status_label?: string
   candidate_path?: string
+  wiki_path?: string
   compiled_at?: string
+  approved_at?: string
   compile_model_status?: string
   compile_error?: string
+  review_status?: string
+  candidate_exists?: boolean
+  candidate_size?: number
 }
 
 export interface MemoryItem {

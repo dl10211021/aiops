@@ -206,6 +206,80 @@ export function KnowledgeCompileQueuePanel({
   )
 }
 
+export function KnowledgeCandidatePanel({
+  approvingSourceSession,
+  items,
+  onApprove,
+}: {
+  approvingSourceSession: string | null
+  items: KnowledgeCompileQueueItem[]
+  onApprove: (item: KnowledgeCompileQueueItem) => void
+}) {
+  return (
+    <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-ops-text">候选 Wiki</div>
+          <p className="mt-1 text-xs leading-5 text-ops-subtext">
+            候选页需要人工确认后才会进入正式 `wiki/articles/`，避免辅助模型把不确定内容直接沉淀成长期知识。
+          </p>
+        </div>
+        <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
+          {items.length}
+        </span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {items.length > 0 ? items.map((item) => {
+          const sourceSession = item.source_session_id || item.id
+          const approved = item.compile_stage === 'wiki_approved' || item.review_status === 'approved'
+          return (
+            <article key={`${item.id || item.filename}-candidate`} className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-semibold text-ops-text" title={item.original_filename || item.filename}>
+                    {item.original_filename || item.filename}
+                  </div>
+                  <div className="mt-1 font-mono text-[11px] text-ops-overlay">{sourceSession}</div>
+                </div>
+                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${approved ? 'border-ops-success/30 text-ops-success' : 'border-amber-300/35 text-amber-200'}`}>
+                  {approved ? '已入库' : '待确认'}
+                </span>
+              </div>
+              {item.candidate_path && (
+                <div className="mt-2 truncate rounded border border-ops-surface1/70 bg-ops-panel/40 px-2 py-1 font-mono text-[11px] text-ops-overlay" title={item.candidate_path}>
+                  candidate: {item.candidate_path}
+                </div>
+              )}
+              {item.wiki_path && (
+                <div className="mt-1 truncate rounded border border-ops-success/30 bg-ops-success/5 px-2 py-1 font-mono text-[11px] text-ops-success" title={item.wiki_path}>
+                  article: {item.wiki_path}
+                </div>
+              )}
+              <button
+                onClick={() => onApprove(item)}
+                disabled={Boolean(approvingSourceSession) || approved || !item.candidate_exists}
+                className="mt-2 w-full rounded-md border border-ops-success/40 px-3 py-1.5 text-xs font-semibold text-ops-success transition-colors hover:bg-ops-success/10 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {approvingSourceSession === sourceSession
+                  ? '批准中...'
+                  : approved
+                    ? '已批准入库'
+                    : item.candidate_exists === false
+                      ? '候选文件缺失'
+                      : '批准入正式 Wiki'}
+              </button>
+            </article>
+          )
+        }) : (
+          <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
+            暂无候选 Wiki。先在 AI 编译队列里生成候选页。
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 export function KnowledgeEmptyState({
   uploading,
   onUpload,
