@@ -112,7 +112,7 @@ export function KnowledgeFileCard({
           <span className="rounded-full border border-ops-accent/30 px-2 py-0.5 text-ops-accent">{knowledgeStatusLabel(file)}</span>
           <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-overlay">{vectorStatusLabel(file)}</span>
           {file.obsidian_compatible && (
-            <span className="rounded-full border border-ops-success/30 px-2 py-0.5 text-ops-success">Obsidian 兼容</span>
+            <span className="rounded-full border border-ops-success/30 px-2 py-0.5 text-ops-success">可导出</span>
           )}
           {file.size !== undefined && (
             <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-overlay">{(file.size / 1024).toFixed(1)} KB</span>
@@ -292,8 +292,8 @@ export function KnowledgeVaultSearchPanel({
             </div>
             <p className="mt-2 line-clamp-3 text-xs leading-5 text-ops-subtext">{item.snippet}</p>
             <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-ops-overlay">
-              {(item.source_session_id || item.id) && <span>source: {item.source_session_id || item.id}</span>}
-              {item.compile_stage && <span>stage: {item.compile_stage}</span>}
+              {(item.source_session_id || item.id) && <span>来源：{item.source_session_id || item.id}</span>}
+              {item.compile_stage && <span>状态：{item.compile_stage}</span>}
               <span>score: {item.score}</span>
             </div>
           </article>
@@ -333,9 +333,9 @@ export function KnowledgeVaultGraphPanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">Obsidian 知识图谱</div>
+          <div className="text-sm font-semibold text-ops-text">知识图谱</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            固定只展示正式 Wiki、候选 Wiki、`[[双链]]` 和内容提及关系，用来判断知识是否真正连接起来。
+            展示 Wiki 之间的关联和内容提及，用来判断知识是否真正连接起来。
           </p>
         </div>
         <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
@@ -385,11 +385,11 @@ export function KnowledgeVaultGraphPanel({
             <div className="mb-2 flex items-center justify-between text-xs">
               <span className="font-semibold text-ops-text">知识图谱</span>
               <span className="text-ops-subtext">
-                双链 {relationCounts.wikilink || 0} / 提及 {relationCounts.mention || 0}
+                关联 {relationCounts.wikilink || 0} / 提及 {relationCounts.mention || 0}
               </span>
             </div>
             {hasGraphLinks ? (
-              <svg viewBox="0 0 100 64" role="img" aria-label="Obsidian 风格知识图谱" className="h-72 w-full overflow-visible rounded-lg border border-ops-surface0 bg-ops-dark/45">
+              <svg viewBox="0 0 100 64" role="img" aria-label="知识图谱" className="h-72 w-full overflow-visible rounded-lg border border-ops-surface0 bg-ops-dark/45">
                 <defs>
                   <filter id="knowledgeGraphGlow" x="-40%" y="-40%" width="180%" height="180%">
                     <feGaussianBlur stdDeviation="1.8" result="coloredBlur" />
@@ -464,7 +464,7 @@ export function KnowledgeVaultGraphPanel({
                     {edge.label}: {source?.title || edge.source} {'->'} {target?.title || edge.target}
                   </div>
                 )
-              }) : <div className="text-xs text-ops-subtext">暂无关系，建议在 Wiki 中使用 `[[文章标题]]` 建立双链。</div>}
+              }) : <div className="text-xs text-ops-subtext">暂无关系，后续可在 Wiki 中补充关联。</div>}
             </div>
           </div>
         </div>
@@ -721,7 +721,7 @@ export function KnowledgeEmptyState({
       <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-6">
         <div className="text-sm font-semibold text-ops-text">知识库为空</div>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-ops-subtext">
-          上传巡检 SOP、故障处理记录、系统架构说明、变更规范、日志样例、表格、图片或 HTML 后，OpsCore 会先保存原始资料，再交给辅助模型编译成 Obsidian 双链知识页。
+          上传巡检 SOP、故障处理记录、系统架构说明、日志样例、表格、图片或 HTML 后，OpsCore 会先保存原始资料，需要时再让 AI 生成 Wiki。
         </p>
         <label className="mt-5 inline-flex cursor-pointer rounded-lg bg-ops-accent px-4 py-2 text-sm font-semibold text-ops-dark transition-colors hover:bg-ops-accent/85">
           上传第一份文档
@@ -732,7 +732,7 @@ export function KnowledgeEmptyState({
         {[
           ['支持格式', 'PDF、Markdown、TXT、Word、Excel、CSV、HTML、日志、图片'],
           ['资料留底', '原始文件不被 AI 修改，来源卡片记录路径和状态'],
-          ['生成 Wiki', '辅助模型后续生成 Runbook、资产画像、故障案例和双链索引'],
+          ['生成 Wiki', 'AI 后续生成 Runbook、资产画像、故障案例和关联索引'],
         ].map(([title, desc]) => (
           <div key={title} className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-4">
             <div className="text-sm font-semibold text-ops-text">{title}</div>
@@ -1466,7 +1466,7 @@ export function MemoryQualityPanel({
         <div>
           <div className="text-sm font-semibold text-ops-text">记忆质量仪表盘</div>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-ops-subtext">
-            按 Claude Managed Agents 的思路，把记忆拆成可审计、可压缩、可复核的文件库；这里先给治理建议，避免后台偷偷改掉 AI 的长期记忆。
+            把 AI 记忆保存成可查看、可整理、可回退的文件；这里先给出管理建议，避免旧经验影响新会话。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1638,3 +1638,4 @@ export function MemoryDeleteDialog({
     </div>
   )
 }
+

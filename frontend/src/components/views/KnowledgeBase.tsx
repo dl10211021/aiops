@@ -330,7 +330,7 @@ export default function KnowledgeBase() {
             <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-3">
               <div className="grid gap-2 md:grid-cols-4">
                 {([
-                  ['source', '1. 资料入库', `${files.length} 份原始资料`, '上传、导入、留底'],
+                  ['source', '资料库', `${files.length} 份资料`, '上传和查看资料'],
                   ['compile', '生成 Wiki', `${compileQueueItems.length} 个待处理`, '让 AI 生成 Wiki 草稿'],
                   ['review', 'Wiki 知识', `${candidateItems.length} 个草稿 / ${articleItems.length} 篇 Wiki`, '整理和查看 Wiki'],
                   ['discover', '搜索图谱', `${vaultSearchResults.length} 条命中`, '搜索资料和关联图谱'],
@@ -367,10 +367,10 @@ export default function KnowledgeBase() {
                 </section>
                 <aside className="space-y-3">
                   <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
-                    <div className="text-sm font-semibold text-ops-text">资料入库只做三件事</div>
+                    <div className="text-sm font-semibold text-ops-text">资料库说明</div>
                     <div className="mt-3 space-y-2 text-xs leading-5 text-ops-subtext">
-                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">保存原始资料，不让 AI 改原文。</div>
-                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">生成 source session，记录来源路径和状态。</div>
+                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">原始资料会保留，不会被 AI 修改。</div>
+                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">需要时让 AI 生成 Wiki 草稿。</div>
                       <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">后续再进入生成 Wiki，这里只负责保存资料。</div>
                     </div>
                     <button
@@ -657,3 +657,4 @@ export default function KnowledgeBase() {
     </div>
   )
 }
+
