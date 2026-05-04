@@ -92,7 +92,7 @@ export default function KnowledgeBase() {
       <div className="w-full max-w-none">
         <PageHeader
           title="知识库"
-          description="统一管理运维文档与 AI 长期记忆，支持检索、删除和审计。"
+          description="统一管理 Obsidian 兼容 Vault、原始资料、AI 编译队列与长期记忆，支持离线部署、审计和追溯。"
           actions={(
             <>
             {activeTab === 'documents' && (

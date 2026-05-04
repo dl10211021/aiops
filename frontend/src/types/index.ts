@@ -609,8 +609,20 @@ export interface AssetVerificationRun {
 
 export interface KnowledgeFile {
   filename: string
+  original_filename?: string
   size?: number
   chunks?: number
+  source_path?: string
+  note_path?: string
+  vault_path?: string
+  status?: string
+  compile_status?: string
+  vector_status?: string
+  vector_error?: string
+  obsidian_compatible?: boolean
+  created_at?: string
+  updated_at?: string
+  tags?: string[]
 }
 
 export interface MemoryItem {

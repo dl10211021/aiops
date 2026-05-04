@@ -1,5 +1,6 @@
 import asyncio
 import io
+import os
 import shutil
 import sys
 import unittest
@@ -10,8 +11,10 @@ from unittest.mock import patch
 from core.knowledge_base_service import (
     KnowledgeBaseServiceError,
     ingest_knowledge_document,
+    list_vault_source_records,
     list_knowledge_document_records,
     remove_knowledge_document_record,
+    remove_vault_source_record,
     safe_knowledge_filename,
 )
 
@@ -42,9 +45,15 @@ class FakeKnowledgeBase:
 
 
 class TestKnowledgeBaseService(unittest.TestCase):
+    def setUp(self):
+        self.vault_dir = Path.cwd() / "tests" / "tmp_knowledge_vault"
+        os.environ["OPSCORE_KNOWLEDGE_VAULT_DIR"] = str(self.vault_dir)
+
     def tearDown(self):
         for path in (Path.cwd() / "tests").glob("tmp_knowledge_base_service_*"):
             shutil.rmtree(path, ignore_errors=True)
+        shutil.rmtree(self.vault_dir, ignore_errors=True)
+        os.environ.pop("OPSCORE_KNOWLEDGE_VAULT_DIR", None)
 
     def test_safe_filename_rejects_unsupported_extension(self):
         with self.assertRaises(KnowledgeBaseServiceError) as ctx:
@@ -67,17 +76,32 @@ class TestKnowledgeBaseService(unittest.TestCase):
         self.assertEqual(written_path.read_bytes(), b"# hello")
         self.assertTrue(written_path.name.endswith(".md"))
         self.assertNotIn(" ", written_path.name)
+        vault_records = list_vault_source_records(self.vault_dir)
+        self.assertEqual(len(vault_records), 1)
+        self.assertEqual(vault_records[0]["original_filename"], "运维 runbook.md")
+        self.assertEqual(vault_records[0]["compile_status"], "pending_ai_compile")
+        self.assertTrue(vault_records[0]["source_path"].startswith("raw/uploads/"))
+        self.assertTrue(vault_records[0]["note_path"].startswith("wiki/sources/"))
+        self.assertTrue((self.vault_dir / vault_records[0]["source_path"]).exists())
+        self.assertTrue((self.vault_dir / vault_records[0]["note_path"]).exists())
+        self.assertTrue((self.vault_dir / "index.md").exists())
+        self.assertTrue((self.vault_dir / "log.md").exists())
+        self.assertTrue((self.vault_dir / "purpose.md").exists())
+        self.assertTrue((self.vault_dir / "schema.md").exists())
+        self.assertTrue((self.vault_dir / "state" / "compile_queue.json").exists())
 
-    def test_ingest_failure_maps_to_422(self):
+    def test_ingest_failure_keeps_vault_copy_for_offline_compile(self):
         kb = FakeKnowledgeBase("ingest_error", ingest_status="error", message="文档内容提取或向量化失败")
         upload = FakeUpload("runbook.txt", b"hello")
 
         with patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")):
-            with self.assertRaises(KnowledgeBaseServiceError) as ctx:
-                asyncio.run(ingest_knowledge_document(kb, upload))
+            message = asyncio.run(ingest_knowledge_document(kb, upload))
 
-        self.assertEqual(ctx.exception.status_code, 422)
-        self.assertEqual(ctx.exception.detail, "文档内容提取或向量化失败")
+        self.assertIn("已保存到 Obsidian Vault", message)
+        self.assertIn("向量注入失败", message)
+        vault_records = list_vault_source_records(self.vault_dir)
+        self.assertEqual(vault_records[0]["vector_status"], "failed")
+        self.assertEqual(vault_records[0]["vector_error"], "文档内容提取或向量化失败")
 
     def test_list_and_delete_documents_wrap_kb_manager(self):
         kb = FakeKnowledgeBase("records")
@@ -85,7 +109,7 @@ class TestKnowledgeBaseService(unittest.TestCase):
         files = asyncio.run(list_knowledge_document_records(kb))
         message = asyncio.run(remove_knowledge_document_record(kb, "runbook.txt"))
 
-        self.assertEqual(files, ["runbook.txt"])
+        self.assertEqual(files, [{"filename": "runbook.txt", "status": "legacy_vector"}])
         self.assertEqual(message, "已成功从知识库中移除 runbook.txt")
 
     def test_records_use_default_kb_manager_when_not_injected(self):
@@ -97,7 +121,7 @@ class TestKnowledgeBaseService(unittest.TestCase):
             files = asyncio.run(list_knowledge_document_records())
             message = asyncio.run(remove_knowledge_document_record("runbook.txt"))
 
-        self.assertEqual(files, ["runbook.txt"])
+        self.assertEqual(files, [{"filename": "runbook.txt", "status": "legacy_vector"}])
         self.assertEqual(message, "已成功从知识库中移除 runbook.txt")
 
     def test_delete_missing_document_maps_to_404(self):
@@ -110,3 +134,16 @@ class TestKnowledgeBaseService(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "知识库为空")
+
+    def test_remove_vault_source_record_deletes_source_and_note(self):
+        kb = FakeKnowledgeBase("remove_vault", message="注入成功")
+        upload = FakeUpload("Oracle 故障.docx", b"doc")
+
+        with patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")):
+            asyncio.run(ingest_knowledge_document(kb, upload))
+
+        record = list_vault_source_records(self.vault_dir)[0]
+        self.assertTrue(remove_vault_source_record(record["filename"], self.vault_dir))
+        self.assertEqual(list_vault_source_records(self.vault_dir), [])
+        self.assertFalse((self.vault_dir / record["source_path"]).exists())
+        self.assertFalse((self.vault_dir / record["note_path"]).exists())

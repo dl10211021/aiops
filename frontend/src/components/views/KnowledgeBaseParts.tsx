@@ -4,6 +4,21 @@ import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseMode
 
 export type KnowledgeTab = 'documents' | 'memory'
 
+function knowledgeStatusLabel(file: KnowledgeFile) {
+  if (file.compile_status === 'pending_ai_compile') return '待 AI 编译'
+  if (file.compile_status) return file.compile_status
+  if (file.status === 'legacy_vector') return '旧向量文档'
+  return file.status || '已保存'
+}
+
+function vectorStatusLabel(file: KnowledgeFile) {
+  if (file.vector_status === 'indexed') return '向量已注入'
+  if (file.vector_status === 'skipped') return '向量已跳过'
+  if (file.vector_status === 'failed') return '向量失败'
+  if (file.vector_status === 'pending') return '待向量注入'
+  return file.chunks !== undefined ? `${file.chunks} 个向量块` : 'Vault 原文'
+}
+
 export function KnowledgeTabs({
   activeTab,
   documentCount,
@@ -16,7 +31,7 @@ export function KnowledgeTabs({
   onChange: (tab: KnowledgeTab) => void
 }) {
   const tabs: Array<[KnowledgeTab, string, string]> = [
-    ['documents', '知识文档', `${documentCount} 个文件`],
+    ['documents', 'Vault 文档', `${documentCount} 个原始资料`],
     ['memory', 'AI 记忆', `${memoryCount} 条记忆文件`],
   ]
   return (
@@ -66,7 +81,7 @@ export function KnowledgeUploadButton({
 }) {
   return (
     <label className="bg-ops-accent text-ops-dark text-sm px-3 py-1.5 rounded-lg font-medium hover:bg-ops-accent/80 transition-colors cursor-pointer">
-      {uploading ? '上传中...' : '上传文档'}
+      {uploading ? '上传中...' : '上传资料'}
       <UploadInput disabled={uploading} onUpload={onUpload} />
     </label>
   )
@@ -80,14 +95,26 @@ export function KnowledgeFileCard({
   onDelete: (file: KnowledgeFile) => void
 }) {
   const kind = knowledgeFileKind(file.filename)
+  const title = file.original_filename || file.filename
   return (
-    <div className="bg-ops-panel border border-ops-surface0 rounded-lg px-4 py-3 flex items-center gap-3 hover:border-ops-accent/40 transition-colors">
+    <div className="bg-ops-panel border border-ops-surface0 rounded-lg px-4 py-3 flex items-start gap-3 hover:border-ops-accent/40 transition-colors">
       <span className={`grid h-9 w-12 shrink-0 place-items-center rounded border bg-ops-dark text-[11px] font-semibold ${kind.className}`}>{kind.label}</span>
       <div className="flex-1 min-w-0">
-        <div className="text-sm text-ops-text truncate">{file.filename}</div>
-        <div className="text-xs text-ops-overlay">
-          {file.chunks !== undefined && `${file.chunks} 个向量块`}
-          {file.size !== undefined && ` · ${(file.size / 1024).toFixed(1)} KB`}
+        <div className="text-sm font-semibold text-ops-text truncate" title={title}>{title}</div>
+        <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
+          <span className="rounded-full border border-ops-accent/30 px-2 py-0.5 text-ops-accent">{knowledgeStatusLabel(file)}</span>
+          <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-overlay">{vectorStatusLabel(file)}</span>
+          {file.obsidian_compatible && (
+            <span className="rounded-full border border-ops-success/30 px-2 py-0.5 text-ops-success">Obsidian 兼容</span>
+          )}
+          {file.size !== undefined && (
+            <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-overlay">{(file.size / 1024).toFixed(1)} KB</span>
+          )}
+        </div>
+        <div className="mt-2 space-y-1 text-[11px] leading-5 text-ops-overlay">
+          {file.source_path && <div className="truncate" title={file.source_path}>原文：{file.source_path}</div>}
+          {file.note_path && <div className="truncate" title={file.note_path}>来源卡片：{file.note_path}</div>}
+          {file.vector_error && <div className="line-clamp-2 text-ops-alert">向量提示：{file.vector_error}</div>}
         </div>
       </div>
       <button
@@ -113,7 +140,7 @@ export function KnowledgeEmptyState({
       <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-6">
         <div className="text-sm font-semibold text-ops-text">知识库为空</div>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-ops-subtext">
-          上传巡检 SOP、故障处理记录、系统架构说明、变更规范或日志样例后，AI 会在会话和巡检中引用这些资料。
+          上传巡检 SOP、故障处理记录、系统架构说明、变更规范、日志样例、表格、图片或 HTML 后，OpsCore 会先保存原始资料，再交给辅助模型编译成 Obsidian 双链知识页。
         </p>
         <label className="mt-5 inline-flex cursor-pointer rounded-lg bg-ops-accent px-4 py-2 text-sm font-semibold text-ops-dark transition-colors hover:bg-ops-accent/85">
           上传第一份文档
@@ -122,9 +149,9 @@ export function KnowledgeEmptyState({
       </section>
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
         {[
-          ['支持格式', 'PDF、Markdown、TXT、Word、日志文件'],
-          ['推荐内容', '排障手册、变更流程、资产说明、巡检标准'],
-          ['使用位置', 'AI 会话、自动巡检、告警分析、技能上下文'],
+          ['支持格式', 'PDF、Markdown、TXT、Word、Excel、CSV、HTML、日志、图片'],
+          ['Vault 留底', '原始文件不被 AI 修改，来源卡片记录路径、状态和审计日志'],
+          ['AI 编译', '辅助模型后续生成 Runbook、资产画像、故障案例和双链索引'],
         ].map(([title, desc]) => (
           <div key={title} className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-4">
             <div className="text-sm font-semibold text-ops-text">{title}</div>

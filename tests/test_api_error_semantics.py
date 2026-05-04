@@ -72,7 +72,7 @@ class TestApiErrorSemantics(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 415)
 
-    def test_knowledge_upload_ingest_failure_returns_422(self):
+    def test_knowledge_upload_ingest_failure_keeps_offline_vault_copy(self):
         class FakeKnowledgeBase:
             def __init__(self, kb_dir: str):
                 self.kb_dir = kb_dir
@@ -83,27 +83,35 @@ class TestApiErrorSemantics(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             upload = UploadFile(filename="runbook.txt", file=io.BytesIO(b"hello"))
             with (
+                patch.dict("os.environ", {"OPSCORE_KNOWLEDGE_VAULT_DIR": str(Path(tmp) / "vault")}),
                 patch("core.rag.kb_manager", FakeKnowledgeBase(tmp)),
                 patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
             ):
-                with self.assertRaises(HTTPException) as ctx:
-                    asyncio.run(knowledge_routes.upload_knowledge_document(upload))
+                response = asyncio.run(knowledge_routes.upload_knowledge_document(upload))
 
-        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(response.status, "success")
+        self.assertIn("已保存到 Obsidian Vault", response.message)
+        self.assertIn("向量注入失败", response.message)
 
     def test_knowledge_list_and_delete_errors_use_http_status(self):
         class FakeKnowledgeBase:
+            kb_dir = "unused"
+
             async def list_documents(self):
                 raise RuntimeError("lancedb unavailable")
 
             async def delete_document(self, _filename):
                 return {"status": "error", "message": "知识库为空"}
 
-        with patch("core.rag.kb_manager", FakeKnowledgeBase()):
-            with self.assertRaises(HTTPException) as list_ctx:
-                asyncio.run(knowledge_routes.list_knowledge_documents())
-            with self.assertRaises(HTTPException) as delete_ctx:
-                asyncio.run(knowledge_routes.delete_knowledge_document("missing.txt"))
+        with tempfile.TemporaryDirectory() as tmp:
+            with (
+                patch.dict("os.environ", {"OPSCORE_KNOWLEDGE_VAULT_DIR": str(Path(tmp) / "empty-vault")}),
+                patch("core.rag.kb_manager", FakeKnowledgeBase()),
+            ):
+                with self.assertRaises(HTTPException) as list_ctx:
+                    asyncio.run(knowledge_routes.list_knowledge_documents())
+                with self.assertRaises(HTTPException) as delete_ctx:
+                    asyncio.run(knowledge_routes.delete_knowledge_document("missing.txt"))
 
         self.assertEqual(list_ctx.exception.status_code, 500)
         self.assertEqual(delete_ctx.exception.status_code, 404)
