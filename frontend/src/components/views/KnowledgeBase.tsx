@@ -31,6 +31,7 @@ export default function KnowledgeBase() {
   const [activeTab, setActiveTab] = useState<KnowledgeTab>('documents')
   const [documentStep, setDocumentStep] = useState<'source' | 'compile' | 'review' | 'discover'>('source')
   const [memoryStep, setMemoryStep] = useState<'browse' | 'write' | 'govern'>('browse')
+  const [memoryFocusMessageId, setMemoryFocusMessageId] = useState<string | number | null>(null)
   const {
     deleteTarget,
     deletingMemory,
@@ -124,16 +125,19 @@ export default function KnowledgeBase() {
     const handleKnowledgeTarget = (event: Event) => {
       const detail = (event as CustomEvent<{
         tab?: KnowledgeTab
+        messageId?: string | number
         step?: 'browse' | 'write' | 'govern' | 'source' | 'compile' | 'review' | 'discover'
       }>).detail
       if (detail?.tab === 'memory') {
         setActiveTab('memory')
         setMemoryStep(detail.step === 'browse' || detail.step === 'write' || detail.step === 'govern' ? detail.step : 'govern')
+        setMemoryFocusMessageId(detail.messageId ?? null)
         void loadMemories()
         void loadSessionMemoryActivity()
       }
       if (detail?.tab === 'documents') {
         setActiveTab('documents')
+        setMemoryFocusMessageId(null)
         setDocumentStep(
           detail.step === 'source' || detail.step === 'compile' || detail.step === 'review' || detail.step === 'discover'
             ? detail.step
@@ -656,6 +660,7 @@ export default function KnowledgeBase() {
                 <section className="space-y-4">
                   <SessionMemoryActivityPanel
                     activity={sessionMemoryActivity}
+                    focusMessageId={memoryFocusMessageId}
                     loading={sessionMemoryActivityLoading}
                     onReload={() => void loadSessionMemoryActivity()}
                   />

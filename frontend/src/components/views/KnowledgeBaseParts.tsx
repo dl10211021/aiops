@@ -1097,14 +1097,24 @@ function feedbackPolicyLabel(rating: string, policy?: string) {
 
 export function SessionMemoryActivityPanel({
   activity,
+  focusMessageId,
   loading,
   onReload,
 }: {
   activity: SessionMemoryActivity | null
+  focusMessageId?: string | number | null
   loading: boolean
   onReload: () => void
 }) {
-  const feedbackRows = activity?.feedback.slice().reverse().slice(0, 6) || []
+  const focusKey = focusMessageId === undefined || focusMessageId === null ? '' : String(focusMessageId)
+  const allFeedbackRows = activity?.feedback.slice().reverse() || []
+  const focusedFeedbackRow = focusKey
+    ? allFeedbackRows.find((item) => String(item.message_id || '') === focusKey)
+    : undefined
+  const latestFeedbackRows = allFeedbackRows.slice(0, 6)
+  const feedbackRows = focusedFeedbackRow && !latestFeedbackRows.includes(focusedFeedbackRow)
+    ? [focusedFeedbackRow, ...latestFeedbackRows.slice(0, 5)]
+    : latestFeedbackRows
   const referencedRows = activity?.referenced.slice().reverse().slice(0, 4) || []
   const stats = [
     ['引用记忆', activity?.summary.referenced_count || 0],
@@ -1121,6 +1131,11 @@ export function SessionMemoryActivityPanel({
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
             把左侧会话里的记忆引用、点赞沉淀和点踩纠错集中到这里，方便审计“哪条回答影响了 AI 记忆”。
           </p>
+          {focusKey && (
+            <div className="mt-2 inline-flex rounded-full border border-ops-accent/35 px-2 py-0.5 font-mono text-[11px] text-ops-accent">
+              正在定位消息 {focusKey}
+            </div>
+          )}
         </div>
         <button
           type="button"
@@ -1151,14 +1166,27 @@ export function SessionMemoryActivityPanel({
             <div className="text-xs font-semibold text-ops-text">反馈记录</div>
             <div className="mt-2 space-y-2">
               {feedbackRows.length > 0 ? feedbackRows.map((item, index) => (
-                <article key={`${item.message_id || 'feedback'}-${index}`} className="rounded border border-ops-surface0 bg-ops-panel/55 px-3 py-2">
+                <article
+                  key={`${item.message_id || 'feedback'}-${index}`}
+                  className={`rounded border px-3 py-2 ${
+                    focusKey && String(item.message_id || '') === focusKey
+                      ? 'border-ops-accent bg-ops-accent/10 shadow-[0_0_0_1px_rgba(45,212,191,0.22)]'
+                      : 'border-ops-surface0 bg-ops-panel/55'
+                  }`}
+                >
                   <div className="flex flex-wrap items-center gap-2 text-[11px]">
                     <span className={`rounded-full px-2 py-0.5 ${item.rating === 'up' ? 'bg-ops-success/10 text-ops-success' : 'bg-ops-alert/10 text-ops-alert'}`}>
                       {item.rating === 'up' ? '好评' : '差评'}
                     </span>
+                    {focusKey && String(item.message_id || '') === focusKey && (
+                      <span className="rounded-full border border-ops-accent/45 px-2 py-0.5 text-ops-accent">
+                        当前定位
+                      </span>
+                    )}
                     <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-subtext">
                       {feedbackPolicyLabel(String(item.rating), item.memory_policy)}
                     </span>
+                    <span className="font-mono text-ops-overlay">消息 {item.message_id || '-'}</span>
                     <span className="font-mono text-ops-overlay">{item.created_at || '无时间'}</span>
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-ops-subtext">{item.message_preview}</p>

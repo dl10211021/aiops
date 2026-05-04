@@ -68,10 +68,11 @@ export function AssistantReportBubble({
   const assistantTime = formatMessageTime(message.timestamp)
   const feedbackRating = message.feedback?.rating
   const openMemoryActivity = () => {
+    const messageId = message.memoryId || message._memory_id || message.id
     setView('knowledge')
     window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent('opscore:knowledge-target', {
-        detail: { tab: 'memory', step: 'govern' },
+        detail: { tab: 'memory', step: 'govern', messageId },
       }))
     }, 60)
   }
