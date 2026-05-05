@@ -19,6 +19,7 @@ from core.knowledge_base_service import (
     create_vault_export_zip,
     ingest_knowledge_document,
     import_vault_archive,
+    get_knowledge_vector_store_status,
     list_vault_compile_queue,
     list_vault_candidates,
     list_vault_articles,
@@ -319,6 +320,19 @@ class TestKnowledgeBaseService(unittest.TestCase):
 
         self.assertEqual(result["vector_status"], "failed")
         self.assertIn("向量库初始化超过", result["message"])
+
+    def test_vector_store_status_reports_actionable_state(self):
+        with patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)):
+            status = get_knowledge_vector_store_status(
+                summary={"vector_counts": {"indexed": 2, "failed": 1, "skipped": 1, "pending": 3}},
+            )
+
+        self.assertEqual(status["status"], "needs_attention")
+        self.assertEqual(status["status_label"], "部分资料索引失败")
+        self.assertEqual(status["failed_count"], 1)
+        self.assertTrue(status["model_configured"])
+        self.assertIn("重建", status["recommended_action"])
+        self.assertGreaterEqual(status["reindex_timeout_seconds"], 0.1)
 
     def test_list_and_delete_documents_wrap_kb_manager(self):
         kb = FakeKnowledgeBase("records")

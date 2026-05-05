@@ -8,8 +8,8 @@ from core.lancedb_utils import ensure_lancedb_table, lancedb_table_names
 logger = logging.getLogger(__name__)
 
 class KnowledgeBaseManager:
-    def __init__(self, db_path="opscore_lancedb"):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        self.db_path = db_path or os.getenv("OPSCORE_LANCEDB_PATH") or "opscore_lancedb"
         self.kb_dir = "knowledge_base"
         os.makedirs(self.kb_dir, exist_ok=True)
         self.ldb = lancedb.connect(self.db_path)
@@ -175,4 +175,31 @@ class KnowledgeBaseManager:
             logger.error(f"删除文档失败: {e}")
             return {"status": "error", "message": str(e)}
 
-kb_manager = KnowledgeBaseManager()
+class LazyKnowledgeBaseManager:
+    """Delay LanceDB connection until a vector operation really needs it."""
+
+    def __init__(self):
+        self._manager = None
+
+    @property
+    def db_path(self):
+        if self._manager is not None:
+            return self._manager.db_path
+        return os.getenv("OPSCORE_LANCEDB_PATH") or "opscore_lancedb"
+
+    @property
+    def kb_dir(self):
+        if self._manager is not None:
+            return self._manager.kb_dir
+        return "knowledge_base"
+
+    def materialize(self):
+        if self._manager is None:
+            self._manager = KnowledgeBaseManager(self.db_path)
+        return self._manager
+
+    def __getattr__(self, name):
+        return getattr(self.materialize(), name)
+
+
+kb_manager = LazyKnowledgeBaseManager()

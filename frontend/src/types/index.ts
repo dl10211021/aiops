@@ -670,16 +670,28 @@ export interface KnowledgeListPagination {
 
 export interface KnowledgeVectorStoreStatus {
   status: string
+  status_label?: string
+  health?: string
   message: string
   embedding_model?: string
   embedding_dim?: number
+  model_configured?: boolean
   database?: string
   db_path?: string
   table?: string
   table_exists?: boolean
+  db_path_exists?: boolean
   table_names?: string[]
   chunk_count?: number
   source_count?: number
+  indexed_count?: number
+  skipped_count?: number
+  failed_count?: number
+  pending_count?: number
+  reindex_timeout_seconds?: number
+  action_label?: string
+  recommended_action?: string
+  diagnostics?: string[]
   error?: string
 }
 

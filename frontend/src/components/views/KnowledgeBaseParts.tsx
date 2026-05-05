@@ -182,7 +182,20 @@ export function KnowledgeLibraryControls({
     ? 'border-ops-success/35 text-ops-success'
     : vectorStore?.status === 'missing_embedding_model'
       ? 'border-amber-300/35 text-amber-200'
+      : vectorStore?.status === 'needs_attention'
+        ? 'border-ops-alert/35 text-ops-alert'
       : 'border-ops-surface1 text-ops-overlay'
+  const vectorHealthText = vectorStore?.status_label || (
+    vectorStore?.status === 'ready'
+      ? 'RAG 可用'
+      : vectorStore?.status === 'missing_embedding_model'
+        ? '缺少向量模型'
+        : vectorStore?.status === 'needs_attention'
+          ? '需要处理'
+          : '状态待确认'
+  )
+  const vectorDiagnostics = vectorStore?.diagnostics || []
+  const vectorTimeout = vectorStore?.reindex_timeout_seconds || 10
 
   return (
     <section className="rounded-xl border border-ops-surface0 bg-ops-panel/65 p-4">
@@ -292,10 +305,21 @@ export function KnowledgeLibraryControls({
             <span className="text-xs font-semibold">向量化模型</span>
             <span className="rounded-full border border-current/35 px-2 py-0.5 text-[10px]">{vectorStore?.status || 'unknown'}</span>
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-current/30 px-2 py-0.5 text-[11px] font-semibold">{vectorHealthText}</span>
+            <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[11px] text-ops-subtext">
+              重建超时 {vectorTimeout} 秒
+            </span>
+          </div>
           <div className="mt-2 text-xs leading-5 text-ops-subtext">
             模型：{vectorStore?.embedding_model || '未配置'} · 维度：{vectorStore?.embedding_dim || '-'}
           </div>
           <div className="mt-1 text-[11px] leading-5 text-ops-overlay">{vectorStore?.message || '暂无向量化状态。'}</div>
+          {vectorStore?.recommended_action && (
+            <div className="mt-2 rounded-md border border-current/20 bg-ops-panel/35 px-3 py-2 text-[11px] leading-5">
+              下一步：{vectorStore.recommended_action}
+            </div>
+          )}
         </div>
         <div className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -306,12 +330,23 @@ export function KnowledgeLibraryControls({
           </div>
           <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
             <span className="rounded border border-ops-surface1/70 px-2 py-1 text-ops-subtext">表：{vectorStore?.table || '-'}</span>
-            <span className="rounded border border-ops-surface1/70 px-2 py-1 text-ops-subtext">块：{vectorStore?.chunk_count || 0}</span>
-            <span className="rounded border border-ops-surface1/70 px-2 py-1 text-ops-subtext">来源：{vectorStore?.source_count || 0}</span>
+            <span className="rounded border border-ops-surface1/70 px-2 py-1 text-ops-subtext">目录：{vectorStore?.db_path_exists ? '存在' : '未创建'}</span>
+            <span className="rounded border border-ops-surface1/70 px-2 py-1 text-ops-subtext">表状态：{vectorStore?.table_exists ? '可见' : '未确认'}</span>
+          </div>
+          <div className="mt-2 grid grid-cols-4 gap-2 text-[11px]">
+            <span className="rounded border border-ops-success/25 px-2 py-1 text-ops-success">就绪 {vectorStore?.indexed_count ?? vectorCounts.indexed ?? 0}</span>
+            <span className="rounded border border-amber-300/25 px-2 py-1 text-amber-200">原文 {vectorStore?.skipped_count ?? vectorCounts.skipped ?? 0}</span>
+            <span className="rounded border border-ops-alert/25 px-2 py-1 text-ops-alert">失败 {vectorStore?.failed_count ?? vectorCounts.failed ?? 0}</span>
+            <span className="rounded border border-ops-surface1 px-2 py-1 text-ops-subtext">待处理 {vectorStore?.pending_count ?? vectorCounts.pending ?? 0}</span>
           </div>
           <div className="mt-2 truncate text-[11px] text-ops-overlay" title={vectorStore?.db_path || ''}>
             路径：{vectorStore?.db_path || '-'}
           </div>
+          {vectorDiagnostics.length > 0 && (
+            <div className="mt-2 space-y-1 text-[11px] leading-5 text-ops-overlay">
+              {vectorDiagnostics.map((item) => <div key={item}>说明：{item}</div>)}
+            </div>
+          )}
         </div>
       </div>
 

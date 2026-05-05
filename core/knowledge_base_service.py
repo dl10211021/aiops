@@ -1222,6 +1222,9 @@ def _resolve_kb_manager(kb_manager=None):
         return kb_manager
     from core.rag import kb_manager as default_kb_manager
 
+    materialize = getattr(default_kb_manager, "materialize", None)
+    if callable(materialize):
+        return materialize()
     return default_kb_manager
 
 
@@ -1411,35 +1414,83 @@ def _sort_knowledge_records(records: list[dict[str, Any]], sort: str) -> list[di
     return sorted(records, key=_document_timestamp, reverse=True)
 
 
-def get_knowledge_vector_store_status(kb_manager=None) -> dict[str, Any]:
+def get_knowledge_vector_store_status(kb_manager=None, *, summary: dict[str, Any] | None = None) -> dict[str, Any]:
     from core.embedding_config import get_embedding_config
 
     embedding_model, embedding_dim = get_embedding_config()
     db_path = str(getattr(kb_manager, "db_path", "") or os.getenv("OPSCORE_LANCEDB_PATH") or "opscore_lancedb")
-    table_exists = Path(db_path).exists()
+    db_path_exists = Path(db_path).exists()
+    table_exists = db_path_exists
+    vector_counts = dict((summary or {}).get("vector_counts") or {})
+    indexed_count = int(vector_counts.get("indexed") or 0)
+    skipped_count = int(vector_counts.get("skipped") or 0)
+    failed_count = int(vector_counts.get("failed") or 0)
+    pending_count = int(vector_counts.get("pending") or 0)
+    diagnostics = [
+        "资料列表只读取文件清单和状态，不扫描 LanceDB 大表。",
+        "点击单篇资料的重建向量时，才会连接向量库并调用向量模型。",
+    ]
 
     if not embedding_model:
         status = "missing_embedding_model"
+        status_label = "缺少向量模型"
+        health = "needs_model"
         message = "未配置向量化模型，资料会保存原文，但不会写入向量库。"
+        action_label = "配置向量模型"
+        recommended_action = "到模型配置里选择可用的 Embedding/向量化模型，然后回到资料列表重建向量。"
+    elif failed_count > 0:
+        status = "needs_attention"
+        status_label = "部分资料索引失败"
+        health = "warning"
+        message = f"当前有 {failed_count} 份资料向量索引失败，原文仍可查看；请先查看失败原因，再按需重建。"
+        action_label = "查看失败并重建"
+        recommended_action = "在资料列表筛选“失败”，查看每份资料的 RAG 提示；确认模型和 LanceDB 正常后逐个重建。"
     elif not table_exists:
         status = "empty"
+        status_label = "向量库未创建"
+        health = "empty"
         message = "LanceDB 目录尚未创建，上传并成功向量化后会自动创建。"
+        action_label = "上传资料"
+        recommended_action = "先上传资料；如果已上传但没有向量，请确认向量模型可用后重建。"
+    elif indexed_count > 0:
+        status = "ready"
+        status_label = "RAG 可用"
+        health = "ok"
+        message = f"已有 {indexed_count} 份资料完成向量化，可参与 RAG 召回。"
+        action_label = "继续维护"
+        recommended_action = "继续上传资料，或使用搜索/筛选检查未向量化和失败资料。"
     else:
         status = "configured"
+        status_label = "向量库已配置"
+        health = "configured"
         message = "LanceDB 目录存在；资料列表不会整表扫描向量库，避免大量资料时阻塞页面。"
+        action_label = "重建向量"
+        recommended_action = "选择需要参与 RAG 的资料，点击“重建向量”。"
 
     return {
         "status": status,
+        "status_label": status_label,
+        "health": health,
         "message": message,
         "embedding_model": embedding_model,
         "embedding_dim": embedding_dim,
+        "model_configured": bool(embedding_model),
         "database": "LanceDB",
         "db_path": db_path,
         "table": "knowledge_base",
         "table_exists": table_exists,
+        "db_path_exists": db_path_exists,
         "table_names": [],
         "chunk_count": None,
         "source_count": None,
+        "indexed_count": indexed_count,
+        "skipped_count": skipped_count,
+        "failed_count": failed_count,
+        "pending_count": pending_count,
+        "reindex_timeout_seconds": _knowledge_reindex_timeout_seconds(),
+        "action_label": action_label,
+        "recommended_action": recommended_action,
+        "diagnostics": diagnostics,
         "error": "",
     }
 
@@ -1491,7 +1542,7 @@ async def list_knowledge_document_page(
             "has_prev": safe_page > 1,
             "has_next": safe_page < page_count,
         },
-        "vector_store": get_knowledge_vector_store_status(kb_manager),
+        "vector_store": get_knowledge_vector_store_status(kb_manager, summary=summary),
     }
 
 
