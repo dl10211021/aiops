@@ -181,9 +181,9 @@ export function KnowledgeCompileQueuePanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">可选 Wiki 整理队列</div>
+          <div className="text-sm font-semibold text-ops-text">可选资料整理队列</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            RAG 主线已经保存原文和检索索引；这里只是把重要资料整理成可读 Wiki，方便人工维护和图谱追溯。
+            RAG 主线已经保存原文和检索索引；这里只是把重要资料整理成可读资料，方便人工维护和图谱追溯。
           </p>
         </div>
         <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-xs text-ops-accent">
@@ -216,7 +216,7 @@ export function KnowledgeCompileQueuePanel({
             )}
             {item.note_path && (
               <div className="mt-1 truncate rounded border border-ops-surface1/70 bg-ops-panel/40 px-2 py-1 font-mono text-[11px] text-ops-overlay" title={item.note_path}>
-                Wiki：{item.note_path}
+                资料：{ragDisplayPath(item.note_path)}
               </div>
             )}
             {item.candidate_path && (
@@ -233,12 +233,12 @@ export function KnowledgeCompileQueuePanel({
                 ? '整理中...'
                 : item.compile_stage === 'candidate_generated'
                   ? '草稿已生成'
-                  : '整理成 Wiki 草稿'}
+                  : '整理成资料草稿'}
             </button>
           </article>
         )) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
-            暂无需要整理的资料。RAG 检索不依赖这里，只有需要长期维护的资料才整理成 Wiki。
+            暂无需要整理的资料。RAG 检索不依赖这里，只有需要长期维护的资料才整理成可读资料。
           </div>
         )}
       </div>
@@ -690,9 +690,9 @@ export function KnowledgeCandidatePanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">候选 Wiki</div>
+          <div className="text-sm font-semibold text-ops-text">草稿资料</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            候选页需要人工确认后才会进入正式 `wiki/articles/`，避免辅助模型把不确定内容直接沉淀成长期知识。
+            草稿资料需要确认后才会进入整理资料区，避免辅助模型把不确定内容直接沉淀成长期知识。
           </p>
         </div>
         <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
@@ -723,7 +723,7 @@ export function KnowledgeCandidatePanel({
               )}
               {item.wiki_path && (
                 <div className="mt-1 truncate rounded border border-ops-success/30 bg-ops-success/5 px-2 py-1 font-mono text-[11px] text-ops-success" title={item.wiki_path}>
-                  article: {item.wiki_path}
+                  资料：{ragDisplayPath(item.wiki_path)}
                 </div>
               )}
               <div className="mt-2 grid grid-cols-2 gap-2">
@@ -752,7 +752,7 @@ export function KnowledgeCandidatePanel({
           )
         }) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
-            暂无候选 Wiki。先在 生成 Wiki队列里生成候选页。
+            暂无草稿资料。需要长期维护的内容会先整理成草稿。
           </div>
         )}
       </div>
@@ -776,9 +776,9 @@ export function KnowledgeCandidateEditor({
   if (!candidate) {
     return (
       <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
-        <div className="text-sm font-semibold text-ops-text">候选正文</div>
+        <div className="text-sm font-semibold text-ops-text">草稿正文</div>
         <p className="mt-1 text-xs leading-5 text-ops-subtext">
-          点击候选 Wiki 的“预览/编辑”，这里会显示 Markdown 正文。确认内容无误后再批准入Wiki 知识库。
+          点击草稿资料的“预览/编辑”，这里会显示 Markdown 正文。确认内容无误后再保存为整理资料。
         </p>
       </section>
     )
@@ -788,7 +788,7 @@ export function KnowledgeCandidateEditor({
       <div className="border-b border-ops-surface0 px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-xs font-semibold text-ops-accent">候选正文</div>
+            <div className="text-xs font-semibold text-ops-accent">草稿正文</div>
             <h2 className="mt-1 truncate text-sm font-bold text-ops-text" title={candidate.candidate_path || candidate.original_filename || candidate.filename}>
               {candidate.candidate_path || candidate.original_filename || candidate.filename}
             </h2>
@@ -798,7 +798,7 @@ export function KnowledgeCandidateEditor({
             disabled={saving || !draft.trim()}
             className="shrink-0 rounded-lg bg-ops-accent px-3 py-1.5 text-xs font-semibold text-ops-dark disabled:opacity-50"
           >
-            {saving ? '保存中...' : '保存候选'}
+            {saving ? '保存中...' : '保存草稿'}
           </button>
         </div>
         <div className="mt-1 text-xs text-ops-overlay">
@@ -827,9 +827,9 @@ export function KnowledgeArticlePanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">正式 Wiki</div>
+          <div className="text-sm font-semibold text-ops-text">整理资料</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            已批准的知识会进入 `wiki/articles/`，作为后续会话、画像和检索可引用的Wiki 知识。
+            已整理的资料会进入 RAG 资料库，作为后续会话、画像和检索可引用的长期知识。
           </p>
         </div>
         <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
@@ -854,7 +854,7 @@ export function KnowledgeArticlePanel({
               </div>
               {item.wiki_path && (
                 <div className="mt-2 truncate rounded border border-ops-success/30 bg-ops-success/5 px-2 py-1 font-mono text-[11px] text-ops-success" title={item.wiki_path}>
-                  article: {item.wiki_path}
+                  资料：{ragDisplayPath(item.wiki_path)}
                 </div>
               )}
               <button
@@ -862,13 +862,13 @@ export function KnowledgeArticlePanel({
                 disabled={Boolean(openingArticle) || item.article_exists === false}
                 className="mt-2 w-full rounded-md border border-ops-accent/40 px-3 py-1.5 text-xs font-semibold text-ops-accent transition-colors hover:bg-ops-accent/10 disabled:cursor-not-allowed disabled:opacity-45"
               >
-                {openingArticle === sourceSession ? '打开中...' : item.article_exists === false ? '文章缺失' : '打开正式 Wiki'}
+                {openingArticle === sourceSession ? '打开中...' : item.article_exists === false ? '资料缺失' : '打开整理资料'}
               </button>
             </article>
           )
         }) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
-            暂无正式 Wiki。批准候选页后，这里会出现可引用的长期知识。
+            暂无整理资料。草稿确认后，这里会出现可引用的长期知识。
           </div>
         )}
       </div>
@@ -882,7 +882,7 @@ export function KnowledgeArticleViewer({ article }: { article: KnowledgeCompileQ
       <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
         <div className="text-sm font-semibold text-ops-text">正式正文</div>
         <p className="mt-1 text-xs leading-5 text-ops-subtext">
-          点击正式 Wiki 的“打开正式 Wiki”，这里会以只读方式展示 Markdown 正文。
+          点击整理资料的“打开整理资料”，这里会以只读方式展示 Markdown 正文。
         </p>
       </section>
     )
@@ -890,16 +890,16 @@ export function KnowledgeArticleViewer({ article }: { article: KnowledgeCompileQ
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60">
       <div className="border-b border-ops-surface0 px-4 py-3">
-        <div className="text-xs font-semibold text-ops-success">正式正文</div>
+        <div className="text-xs font-semibold text-ops-success">整理正文</div>
         <h2 className="mt-1 truncate text-sm font-bold text-ops-text" title={article.wiki_path || article.original_filename || article.filename}>
-          {article.wiki_path || article.original_filename || article.filename}
+          {ragDisplayPath(article.wiki_path) || article.original_filename || article.filename}
         </h2>
         <div className="mt-1 text-xs text-ops-overlay">
           {article.source_session_id || article.id} · {article.content_sha256 ? `sha256 ${article.content_sha256.slice(0, 10)}` : '未计算哈希'}
         </div>
       </div>
       <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-5 text-ops-subtext">
-        {article.content || '该正式 Wiki 暂无正文'}
+        {article.content || '该整理资料暂无正文'}
       </pre>
     </section>
   )
@@ -1485,7 +1485,7 @@ export function SessionMemoryActivityPanel({
                   }`}>
                     写入状态：{feedbackPolicyLabel(String(item.rating), item.memory_policy)}。
                     {item.rating === 'up'
-                      ? ' 作为成功经验候选沉淀，后续会话可引用。'
+                      ? ' 作为成功经验待沉淀，后续会话可引用。'
                       : ' 已进入纠错治理队列，不会作为成功经验注入后续会话。'}
                   </div>
                 </article>
@@ -1653,7 +1653,7 @@ export function MemoryQualityPanel({
     ['健康分', `${healthScore}`, '按冲突、过期、重复和碎片化综合估算'],
     ['记忆条目', `${summary?.entry_count ?? 0}`, `${summary?.memory_count ?? 0} 个文件 / ${summary?.store_count ?? 0} 个库`],
     ['待治理', `${(summary?.pending_conflict_count ?? 0) + (summary?.stale_review_count ?? 0)}`, '冲突与过期复核需要人工确认'],
-    ['压缩候选', `${summary?.compression_candidate_count ?? 0}`, '只生成候选，不自动覆盖正式记忆'],
+    ['待压缩', `${summary?.compression_candidate_count ?? 0}`, '只生成待整理内容，不自动覆盖正式记忆'],
   ]
 
   return (
@@ -1687,7 +1687,7 @@ export function MemoryQualityPanel({
         <div className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-ops-text">记忆库分布</span>
-            <span className="text-[11px] text-ops-overlay">{report?.policy?.rule || '候选模式，人工确认后再整理。'}</span>
+            <span className="text-[11px] text-ops-overlay">{report?.policy?.rule || '确认模式，人工确认后再整理。'}</span>
           </div>
           <div className="mt-3 space-y-2">
             {stores.length > 0 ? stores.map((store) => (
@@ -1700,7 +1700,7 @@ export function MemoryQualityPanel({
                   <span>{store.memories} 文件</span>
                   <span>{store.entries} 条</span>
                   <span>{formatMemorySize(store.size)}</span>
-                  <span>{candidates.filter((candidate) => candidate.store_id === store.store_id).length} 候选</span>
+                  <span>{candidates.filter((candidate) => candidate.store_id === store.store_id).length} 待整理</span>
                 </div>
               </div>
             )) : (
@@ -1710,7 +1710,7 @@ export function MemoryQualityPanel({
         </div>
         <div className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-ops-text">压缩候选</span>
+            <span className="text-xs font-semibold text-ops-text">待压缩记忆</span>
             <span className="text-[11px] text-ops-overlay">不会自动压缩，先给人工审计</span>
           </div>
           <div className="mt-3 space-y-2">
