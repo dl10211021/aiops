@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import sys
+import time
 import unittest
 import zipfile
 from pathlib import Path
@@ -27,6 +28,7 @@ from core.knowledge_base_service import (
     read_knowledge_document_record,
     read_vault_article,
     read_vault_candidate,
+    reindex_knowledge_document_record,
     remove_knowledge_document_record,
     remove_vault_source_record,
     build_vault_rag_context_for_prompt,
@@ -60,6 +62,13 @@ class FakeKnowledgeBase:
 
     async def delete_document(self, filename):
         return {"status": "success", "message": f"已成功从知识库中移除 {filename}"}
+
+
+class SlowKnowledgeBase(FakeKnowledgeBase):
+    async def ingest_document(self, file_path, *_args):
+        self.ingested_path = file_path
+        await asyncio.sleep(0.2)
+        return {"status": "success", "message": "should not finish"}
 
 
 class TestKnowledgeBaseService(unittest.TestCase):
@@ -216,6 +225,100 @@ class TestKnowledgeBaseService(unittest.TestCase):
         self.assertEqual(page["files"][0]["original_filename"], "Oracle 说明.md")
         self.assertEqual(page["vector_store"]["status"], "missing_embedding_model")
         self.assertEqual(page["vector_store"]["database"], "LanceDB")
+
+    def test_reindex_knowledge_document_record_handles_missing_embedding_model(self):
+        kb = FakeKnowledgeBase("reindex_no_embedding", message="should not ingest")
+        upload = FakeUpload("runbook.txt", b"hello")
+
+        with patch("core.embedding_config.get_embedding_config", return_value=("", 3072)):
+            asyncio.run(ingest_knowledge_document(kb, upload))
+            record = list_vault_source_records(self.vault_dir)[0]
+            result = asyncio.run(
+                reindex_knowledge_document_record(
+                    record["filename"],
+                    kb,
+                    vault_dir=self.vault_dir,
+                )
+            )
+
+        self.assertEqual(result["vector_status"], "skipped")
+        self.assertIn("未配置向量模型", result["message"])
+
+    def test_reindex_knowledge_document_record_rebuilds_vector_index(self):
+        kb = FakeKnowledgeBase("reindex_success", message="注入成功")
+        upload = FakeUpload("runbook.txt", b"hello")
+
+        with patch("core.embedding_config.get_embedding_config", return_value=("", 3072)):
+            asyncio.run(ingest_knowledge_document(kb, upload))
+        record = list_vault_source_records(self.vault_dir)[0]
+
+        with (
+            patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)),
+            patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
+        ):
+            result = asyncio.run(
+                reindex_knowledge_document_record(
+                    record["filename"],
+                    kb,
+                    vault_dir=self.vault_dir,
+                )
+            )
+
+        self.assertEqual(result["vector_status"], "indexed")
+        self.assertEqual(result["message"], "注入成功")
+        self.assertEqual(kb.ingested_path, str(self.vault_dir / record["source_path"]))
+
+    def test_reindex_knowledge_document_record_times_out_slow_vector_rebuild(self):
+        kb = SlowKnowledgeBase("reindex_timeout", message="too slow")
+        upload = FakeUpload("runbook.txt", b"hello")
+
+        with patch("core.embedding_config.get_embedding_config", return_value=("", 3072)):
+            asyncio.run(ingest_knowledge_document(kb, upload))
+        record = list_vault_source_records(self.vault_dir)[0]
+
+        with (
+            patch.dict(os.environ, {"OPSCORE_KNOWLEDGE_REINDEX_TIMEOUT_SECONDS": "0.1"}),
+            patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)),
+            patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
+        ):
+            result = asyncio.run(
+                reindex_knowledge_document_record(
+                    record["filename"],
+                    kb,
+                    vault_dir=self.vault_dir,
+                )
+            )
+
+        self.assertEqual(result["vector_status"], "failed")
+        self.assertIn("向量重建超过", result["message"])
+
+    def test_reindex_knowledge_document_record_times_out_default_manager_resolution(self):
+        kb = FakeKnowledgeBase("reindex_manager_timeout", message="ok")
+        upload = FakeUpload("runbook.txt", b"hello")
+
+        with patch("core.embedding_config.get_embedding_config", return_value=("", 3072)):
+            asyncio.run(ingest_knowledge_document(kb, upload))
+        record = list_vault_source_records(self.vault_dir)[0]
+
+        def slow_resolve(_manager=None):
+            time.sleep(0.2)
+            return kb
+
+        with (
+            patch.dict(os.environ, {"OPSCORE_KNOWLEDGE_REINDEX_TIMEOUT_SECONDS": "0.1"}),
+            patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)),
+            patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
+            patch("core.knowledge_base_service._resolve_kb_manager", side_effect=slow_resolve),
+        ):
+            result = asyncio.run(
+                reindex_knowledge_document_record(
+                    record["filename"],
+                    vault_dir=self.vault_dir,
+                )
+            )
+
+        self.assertEqual(result["vector_status"], "failed")
+        self.assertIn("向量库初始化超过", result["message"])
 
     def test_list_and_delete_documents_wrap_kb_manager(self):
         kb = FakeKnowledgeBase("records")

@@ -1239,6 +1239,15 @@ def _resolve_knowledge_embedding_client_and_model():
     return get_embedding_client_and_model(model_id)
 
 
+def _knowledge_reindex_timeout_seconds() -> float:
+    raw_value = os.environ.get("OPSCORE_KNOWLEDGE_REINDEX_TIMEOUT_SECONDS", "10")
+    try:
+        seconds = float(raw_value)
+    except (TypeError, ValueError):
+        seconds = 10.0
+    return max(0.1, min(seconds, 600.0))
+
+
 def _friendly_vector_message(message: str) -> str:
     detail = str(message or "").strip()
     if not detail:
@@ -1483,6 +1492,118 @@ async def list_knowledge_document_page(
             "has_next": safe_page < page_count,
         },
         "vector_store": get_knowledge_vector_store_status(kb_manager),
+    }
+
+
+async def reindex_knowledge_document_record(
+    identifier: str,
+    kb_manager=None,
+    *,
+    vault_dir: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    root, record = _find_vault_record(identifier, vault_dir)
+    source_path = _resolve_vault_record_path(root, record.get("source_path"), "资料原文")
+    safe_filename = str(record.get("filename") or source_path.name)
+    embedding_config = _resolve_knowledge_embedding_client_and_model()
+    if embedding_config is None:
+        message = "未配置向量模型，无法重建向量索引；资料原文仍保留。"
+        _update_vault_record(safe_filename, vector_status="skipped", vector_error=message)
+        return {
+            **record,
+            "filename": safe_filename,
+            "vector_status": "skipped",
+            "vector_error": message,
+            "message": message,
+        }
+
+    client, embedding_model = embedding_config
+    timeout_seconds = _knowledge_reindex_timeout_seconds()
+    if kb_manager is None:
+        manager_timeout = min(timeout_seconds, 3.0)
+        try:
+            kb_manager = await asyncio.wait_for(
+                asyncio.to_thread(_resolve_kb_manager, None),
+                timeout=manager_timeout,
+            )
+        except asyncio.TimeoutError:
+            detail = (
+                f"向量库初始化超过 {manager_timeout:g} 秒仍未完成，已中止；"
+                "请检查 LanceDB 目录、文件锁或稍后重试。"
+            )
+            _update_vault_record(safe_filename, vector_status="failed", vector_error=detail)
+            return {
+                **record,
+                "filename": safe_filename,
+                "vector_status": "failed",
+                "vector_error": detail,
+                "message": f"重建向量索引失败：{detail}",
+            }
+        except Exception as exc:
+            detail = _friendly_vector_message(str(exc))
+            _update_vault_record(safe_filename, vector_status="failed", vector_error=detail)
+            return {
+                **record,
+                "filename": safe_filename,
+                "vector_status": "failed",
+                "vector_error": detail,
+                "message": f"重建向量索引失败：{detail}",
+            }
+    else:
+        kb_manager = _resolve_kb_manager(kb_manager)
+
+    try:
+        async def _run_reindex():
+            try:
+                await kb_manager.delete_document(safe_filename)
+            except Exception:
+                pass
+            return await kb_manager.ingest_document(str(source_path), client, embedding_model)
+
+        result = await asyncio.wait_for(_run_reindex(), timeout=timeout_seconds)
+    except asyncio.TimeoutError:
+        detail = (
+            f"向量重建超过 {timeout_seconds:g} 秒仍未完成，已中止；"
+            "请检查向量模型连通性、模型名称或稍后重试。"
+        )
+        _update_vault_record(safe_filename, vector_status="failed", vector_error=detail)
+        return {
+            **record,
+            "filename": safe_filename,
+            "vector_status": "failed",
+            "vector_error": detail,
+            "message": f"重建向量索引失败：{detail}",
+        }
+    except Exception as exc:
+        detail = _friendly_vector_message(str(exc))
+        _update_vault_record(safe_filename, vector_status="failed", vector_error=detail)
+        return {
+            **record,
+            "filename": safe_filename,
+            "vector_status": "failed",
+            "vector_error": detail,
+            "message": f"重建向量索引失败：{detail}",
+        }
+
+    raw_message = str(result.get("message") or "文档内容提取或向量化失败")
+    if result.get("status") == "success":
+        _update_vault_record(safe_filename, vector_status="indexed", vector_error="")
+        updated_record = read_knowledge_document_record(safe_filename, vault_dir=root)
+        return {
+            **updated_record,
+            "vector_status": "indexed",
+            "vector_error": "",
+            "message": raw_message or "资料向量索引已重建",
+        }
+
+    message = _friendly_vector_message(raw_message)
+    next_status = "skipped" if _should_skip_vector_index(raw_message) else "failed"
+    _update_vault_record(safe_filename, vector_status=next_status, vector_error=message)
+    return {
+        **record,
+        "filename": safe_filename,
+        "vector_status": next_status,
+        "vector_error": message,
+        "message": f"重建向量索引未完成：{message}",
     }
 
 

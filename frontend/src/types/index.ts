@@ -683,6 +683,10 @@ export interface KnowledgeVectorStoreStatus {
   error?: string
 }
 
+export interface KnowledgeReindexResult extends KnowledgeDocumentContent {
+  message?: string
+}
+
 export interface KnowledgeCompileQueueItem extends KnowledgeFile {
   id: string
   source_session_id?: string

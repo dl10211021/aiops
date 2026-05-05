@@ -26,6 +26,7 @@ import {
   readMemoryItem,
   readKnowledgeVaultCandidate,
   readKnowledgeVaultArticle,
+  reindexKnowledgeDocument,
   restoreMemoryVersion,
   resolveMemoryPendingConflict,
   searchKnowledgeVault,
@@ -98,6 +99,7 @@ export function useKnowledgeBaseData() {
   const [openingCandidate, setOpeningCandidate] = useState<string | null>(null)
   const [openingArticle, setOpeningArticle] = useState<string | null>(null)
   const [readingKnowledge, setReadingKnowledge] = useState(false)
+  const [reindexingKnowledge, setReindexingKnowledge] = useState<string | null>(null)
   const [savingCandidate, setSavingCandidate] = useState(false)
   const [searchingVault, setSearchingVault] = useState(false)
   const [loadingVaultGraph, setLoadingVaultGraph] = useState(false)
@@ -284,6 +286,21 @@ export function useKnowledgeBaseData() {
   const handleCloseKnowledgePreview = () => {
     setKnowledgePreviewTarget(null)
     setKnowledgePreview(null)
+  }
+
+  const handleReindexKnowledgeDocument = async (file: KnowledgeFile) => {
+    const filename = file.filename
+    setReindexingKnowledge(filename)
+    try {
+      const res = await reindexKnowledgeDocument(filename)
+      const item = res.data.item
+      addToast(item.message || '资料向量索引已处理', item.vector_status === 'indexed' ? 'success' : 'info')
+      await loadFiles()
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '重建向量索引失败', 'error')
+    } finally {
+      setReindexingKnowledge(null)
+    }
   }
 
   const handleCompileKnowledgeSource = async (item: KnowledgeCompileQueueItem) => {
@@ -648,6 +665,7 @@ export function useKnowledgeBaseData() {
     openingCandidate,
     openingArticle,
     readingKnowledge,
+    reindexingKnowledge,
     knowledgePreview,
     knowledgePreviewTarget,
     knowledgeVectorStore,
@@ -661,6 +679,7 @@ export function useKnowledgeBaseData() {
     handleApproveKnowledgeCandidate,
     handleOpenKnowledgeCandidate,
     handleOpenKnowledgeDocument,
+    handleReindexKnowledgeDocument,
     handleOpenKnowledgeArticle,
     handleLoadKnowledgeVaultGraph,
     handleSearchKnowledgeVault,

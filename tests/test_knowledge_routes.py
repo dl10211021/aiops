@@ -36,6 +36,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/upload", paths)
         self.assertIn("/knowledge/list", paths)
         self.assertIn("/knowledge/document", paths)
+        self.assertIn("/knowledge/document/reindex", paths)
         self.assertIn("/knowledge/vault/queue", paths)
         self.assertIn("/knowledge/vault/compile", paths)
         self.assertIn("/knowledge/vault/candidates", paths)
@@ -97,6 +98,21 @@ class TestKnowledgeRoutes(unittest.TestCase):
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, {"item": {"filename": "runbook.txt", "content": "CPU 正常", "preview_available": True}})
+
+    def test_reindex_knowledge_document_preserves_response_shape(self):
+        with patch(
+            "api.knowledge_routes.reindex_knowledge_document_record",
+            return_value={"filename": "runbook.txt", "vector_status": "indexed", "message": "资料向量索引已重建"},
+        ):
+            response = asyncio.run(
+                knowledge_routes.reindex_knowledge_document(
+                    knowledge_routes.KnowledgeDocumentReindexRequest(filename="runbook.txt")
+                )
+            )
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.message, "资料向量索引已重建")
+        self.assertEqual(response.data["item"]["vector_status"], "indexed")
 
     def test_list_knowledge_vault_queue_preserves_response_shape(self):
         with patch(

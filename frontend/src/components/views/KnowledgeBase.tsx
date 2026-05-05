@@ -64,6 +64,7 @@ export default function KnowledgeBase() {
     handleConfirmMemoryReview,
     handleOpenMemory,
     handleOpenKnowledgeDocument,
+    handleReindexKnowledgeDocument,
     handleRedactMemoryVersion,
     handleRestoreMemoryVersion,
     handleResolveMemoryConflict,
@@ -95,6 +96,7 @@ export default function KnowledgeBase() {
     memoryStores,
     memoryVersions,
     readingKnowledge,
+    reindexingKnowledge,
     savingMemory,
     selectedMemory,
     redactingMemoryVersion,
@@ -386,7 +388,14 @@ export default function KnowledgeBase() {
                   {files.length > 0 ? (
                     <div className="grid gap-2 2xl:grid-cols-2">
                       {files.map((file) => (
-                        <KnowledgeFileCard key={file.filename} file={file} onOpen={handleOpenKnowledgeDocument} onDelete={setDeleteTarget} />
+                        <KnowledgeFileCard
+                          key={file.filename}
+                          file={file}
+                          onOpen={handleOpenKnowledgeDocument}
+                          onReindex={handleReindexKnowledgeDocument}
+                          onDelete={setDeleteTarget}
+                          reindexing={reindexingKnowledge === file.filename}
+                        />
                       ))}
                     </div>
                   ) : (

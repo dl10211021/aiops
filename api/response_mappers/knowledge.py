@@ -37,6 +37,14 @@ def knowledge_document_content_response_kwargs(item: dict[str, Any]) -> dict[str
     }
 
 
+def knowledge_document_reindexed_response_kwargs(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": str(item.get("message") or "资料向量索引已处理"),
+        "data": {"item": item},
+    }
+
+
 def knowledge_vault_queue_response_kwargs(items: list[Any]) -> dict[str, Any]:
     return {
         "status": "success",

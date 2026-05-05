@@ -343,14 +343,19 @@ export function KnowledgeLibraryControls({
 export function KnowledgeFileCard({
   file,
   onOpen,
+  onReindex,
   onDelete,
+  reindexing,
 }: {
   file: KnowledgeFile
   onOpen: (file: KnowledgeFile) => void
+  onReindex: (file: KnowledgeFile) => void
   onDelete: (file: KnowledgeFile) => void
+  reindexing: boolean
 }) {
   const kind = knowledgeFileKind(file.filename)
   const title = file.original_filename || file.filename
+  const canReindex = file.vector_status !== 'indexed'
   return (
     <div className="bg-ops-panel border border-ops-surface0 rounded-lg px-4 py-3 flex items-start gap-3 hover:border-ops-accent/40 transition-colors">
       <span className={`grid h-9 w-12 shrink-0 place-items-center rounded border bg-ops-dark text-[11px] font-semibold ${kind.className}`}>{kind.label}</span>
@@ -379,6 +384,14 @@ export function KnowledgeFileCard({
           title="查看上传资料内容"
         >
           查看内容
+        </button>
+        <button
+          onClick={() => onReindex(file)}
+          disabled={reindexing || !canReindex}
+          className="rounded-lg border border-ops-success/35 px-2 py-1 text-xs font-semibold text-ops-success transition-colors hover:bg-ops-success/10 disabled:cursor-not-allowed disabled:opacity-45"
+          title={canReindex ? '使用当前向量化模型重建索引' : '该资料已完成向量化'}
+        >
+          {reindexing ? '重建中...' : '重建向量'}
         </button>
         <button
           onClick={() => onDelete(file)}

@@ -6,6 +6,7 @@ from api.errors import raise_http_error
 from api.response_mappers.knowledge import (
     knowledge_document_content_response_kwargs,
     knowledge_document_deleted_response_kwargs,
+    knowledge_document_reindexed_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
     knowledge_vault_candidate_approved_response_kwargs,
@@ -52,6 +53,7 @@ from core.knowledge_base_service import (
     read_knowledge_document_record,
     read_vault_article,
     read_vault_candidate,
+    reindex_knowledge_document_record,
     remove_knowledge_document_record,
     search_vault_knowledge,
     update_vault_candidate,
@@ -118,6 +120,10 @@ class KnowledgeVaultSearchRequest(BaseModel):
 
 class KnowledgeVaultGraphRequest(BaseModel):
     include_candidates: bool = True
+
+
+class KnowledgeDocumentReindexRequest(BaseModel):
+    filename: str = Field(..., min_length=1, max_length=260)
 
 
 @router.get("/knowledge/memory/stores", response_model=ResponseModel)
@@ -379,6 +385,16 @@ async def read_knowledge_document(filename: str = Query(..., min_length=1, max_l
     except KnowledgeBaseServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**knowledge_document_content_response_kwargs(item))
+
+
+@router.post("/knowledge/document/reindex", response_model=ResponseModel)
+async def reindex_knowledge_document(req: KnowledgeDocumentReindexRequest):
+    """对已登记资料重建向量索引。"""
+    try:
+        item = await reindex_knowledge_document_record(req.filename)
+    except KnowledgeBaseServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**knowledge_document_reindexed_response_kwargs(item))
 
 
 @router.get("/knowledge/vault/queue", response_model=ResponseModel)
