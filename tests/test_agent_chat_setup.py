@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from core.agent_chat_setup import prepare_chat_agent_run
 
@@ -90,20 +91,33 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
             }
         }
 
-        run = await prepare_chat_agent_run(
-            session_id="sid-1",
-            user_message="检查技能",
-            user_display_message="检查技能-展示",
-            model_name=None,
-            user_attachments=None,
-            active_sessions=active_sessions,
-            dispatcher=dispatcher,
-            memory_store=memory_store,
-            event_logger=FakeLogger(),
-            default_model_resolver=lambda: "default-model",
-            embedding_resolver=lambda model: (f"emb:{model}", "embedding-model"),
-            profile_loader=lambda profile: f"BASE:{profile}",
-        )
+        with patch(
+            "core.agent_chat_setup.build_vault_rag_context_for_prompt",
+            return_value={
+                "context": "RAG-CONTEXT",
+                "references": [
+                    {
+                        "source_type": "rag",
+                        "title": "巡检资料",
+                        "summary_preview": "CPU 正常",
+                    }
+                ],
+            },
+        ):
+            run = await prepare_chat_agent_run(
+                session_id="sid-1",
+                user_message="检查技能",
+                user_display_message="检查技能-展示",
+                model_name=None,
+                user_attachments=None,
+                active_sessions=active_sessions,
+                dispatcher=dispatcher,
+                memory_store=memory_store,
+                event_logger=FakeLogger(),
+                default_model_resolver=lambda: "default-model",
+                embedding_resolver=lambda model: (f"emb:{model}", "embedding-model"),
+                profile_loader=lambda profile: f"BASE:{profile}",
+            )
 
         self.assertEqual(run.model_name, "default-model")
         self.assertEqual(run.embedding_client, "emb:default-model")
@@ -128,6 +142,7 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("BASE:default", run.messages[0]["content"])
         self.assertIn("SKILL-INSTRUCTIONS", run.messages[0]["content"])
         self.assertIn("LTM-CONTEXT", run.messages[0]["content"])
+        self.assertIn("RAG-CONTEXT", run.messages[0]["content"])
         self.assertEqual(run.messages[1], {"role": "assistant", "content": "历史"})
         self.assertEqual(run.messages[-1], {"role": "user", "content": "检查技能"})
         self.assertEqual(
@@ -138,6 +153,7 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(dispatcher.instruction_requests, [(["skill-creator"], True)])
         self.assertEqual(run.tools, [{"name": "inspect"}])
         self.assertEqual(run.memory_references[0]["scope_id"], "sid-1")
+        self.assertEqual(run.memory_references[1]["source_type"], "rag")
         self.assertEqual(run.context["session_id"], "sid-1")
         self.assertEqual(run.context["active_skill_paths"], ["D:/skills/skill-creator"])
         self.assertEqual(dispatcher.tool_contexts, [run.context])

@@ -688,6 +688,94 @@ def search_vault_knowledge(
     return results[:limit]
 
 
+_SENSITIVE_FIELD_PATTERN = re.compile(
+    r"(?i)\b(password|passwd|pwd|token|secret|api[_-]?key|access[_-]?key|api_token|"
+    r"密码|口令|密钥|令牌)\b\s*[:=：]\s*([^\s,;，；]+)"
+)
+_SENSITIVE_TABLE_TOKENS = {
+    "password",
+    "passwd",
+    "pwd",
+    "token",
+    "secret",
+    "api_key",
+    "apikey",
+    "access_key",
+    "api_token",
+    "密码",
+    "口令",
+    "密钥",
+    "令牌",
+}
+
+
+def redact_sensitive_rag_text(text: str) -> str:
+    """Hide obvious credentials before RAG snippets are injected into model context."""
+    if not text:
+        return ""
+
+    def replace_field(match: re.Match[str]) -> str:
+        label = match.group(1)
+        separator = "：" if "：" in match.group(0) else ":"
+        return f"{label}{separator} [已隐藏]"
+
+    redacted = _SENSITIVE_FIELD_PATTERN.sub(replace_field, text)
+    safe_lines: list[str] = []
+    for line in redacted.splitlines():
+        parts = line.split()
+        hidden = False
+        for index, part in enumerate(parts):
+            normalized = part.strip(":：=").lower()
+            if normalized in _SENSITIVE_TABLE_TOKENS and index < len(parts) - 1:
+                safe_lines.append(" ".join(parts[: index + 1] + ["[已隐藏]"]))
+                hidden = True
+                break
+        if not hidden:
+            safe_lines.append(line)
+    return "\n".join(safe_lines)
+
+
+def build_vault_rag_context_for_prompt(
+    query: str,
+    *,
+    limit: int = 4,
+    vault_dir: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    """Build a compact, redacted RAG evidence block for chat prompt injection."""
+    results = search_vault_knowledge(query, scope="all", limit=max(1, limit), vault_dir=vault_dir)
+    references: list[dict[str, Any]] = []
+    lines = [
+        "[OpsCore RAG 证据上下文]",
+        "以下内容来自 OpsCore RAG 资料库，已做敏感字段脱敏。回答时优先引用这些证据；证据不足时必须明确说明，不要编造。",
+    ]
+    for index, item in enumerate(results, start=1):
+        title = redact_sensitive_rag_text(str(item.get("title") or "未命名资料"))
+        kind_label = str(item.get("kind_label") or item.get("kind") or "资料")
+        path = str(item.get("path") or "-")
+        snippet = redact_sensitive_rag_text(str(item.get("snippet") or "")).strip()
+        if not snippet:
+            continue
+        lines.append(f"{index}. {kind_label} | {title} | {path}")
+        lines.append(f"   证据摘要：{snippet}")
+        references.append(
+            {
+                "source_type": "rag",
+                "kind": item.get("kind"),
+                "kind_label": kind_label,
+                "title": title,
+                "path": path,
+                "source_session_id": item.get("source_session_id"),
+                "summary_preview": snippet[:240],
+                "score": item.get("score"),
+                "updated_at": item.get("updated_at"),
+            }
+        )
+
+    if not references:
+        return {"context": "", "references": []}
+    return {"context": "\n".join(lines), "references": references}
+
+
 def build_vault_knowledge_graph(
     *,
     include_candidates: bool = True,

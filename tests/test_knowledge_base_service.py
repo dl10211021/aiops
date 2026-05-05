@@ -26,6 +26,8 @@ from core.knowledge_base_service import (
     read_vault_candidate,
     remove_knowledge_document_record,
     remove_vault_source_record,
+    build_vault_rag_context_for_prompt,
+    redact_sensitive_rag_text,
     safe_knowledge_filename,
     search_vault_knowledge,
     update_vault_candidate,
@@ -190,6 +192,39 @@ class TestKnowledgeBaseService(unittest.TestCase):
         self.assertEqual(list_vault_source_records(self.vault_dir), [])
         self.assertFalse((self.vault_dir / record["source_path"]).exists())
         self.assertFalse((self.vault_dir / record["note_path"]).exists())
+
+    def test_rag_prompt_context_redacts_sensitive_values(self):
+        redacted = redact_sensitive_rag_text(
+            "CPU 正常\n密码: TopSecret123\napi_token=token-abc\nPasswordAuthentication yes"
+        )
+
+        self.assertIn("CPU 正常", redacted)
+        self.assertIn("PasswordAuthentication yes", redacted)
+        self.assertIn("[已隐藏]", redacted)
+        self.assertNotIn("TopSecret123", redacted)
+        self.assertNotIn("token-abc", redacted)
+
+    def test_build_vault_rag_context_for_prompt_returns_redacted_evidence(self):
+        kb = FakeKnowledgeBase("rag_context", message="注入成功")
+        upload = FakeUpload(
+            "账号巡检.txt",
+            "Linux CPU 正常\n账号 chroot\n密码: TopSecret123\n".encode("utf-8"),
+        )
+
+        with (
+            patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)),
+            patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
+        ):
+            asyncio.run(ingest_knowledge_document(kb, upload))
+
+        result = build_vault_rag_context_for_prompt("CPU", vault_dir=self.vault_dir)
+
+        self.assertIn("[OpsCore RAG 证据上下文]", result["context"])
+        self.assertIn("Linux CPU 正常", result["context"])
+        self.assertIn("[已隐藏]", result["context"])
+        self.assertNotIn("TopSecret123", result["context"])
+        self.assertGreaterEqual(len(result["references"]), 1)
+        self.assertEqual(result["references"][0]["source_type"], "rag")
 
     def test_compile_vault_source_candidate_writes_review_candidate(self):
         kb = FakeKnowledgeBase("compile_candidate", message="注入成功")

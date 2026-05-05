@@ -43,6 +43,7 @@ def render_chat_system_prompt(
     skill_instructions: str,
     ltm_context: str,
     asset_profile_prompt: str = "",
+    rag_context: str = "",
 ) -> str:
     permission_text = (
         "**高级读写修改权限**：可以执行修改系统的操作"
@@ -80,6 +81,8 @@ def render_chat_system_prompt(
 {skill_instructions}
 
 {asset_profile_prompt}
+
+{rag_context}
 
 {ltm_context}
 """

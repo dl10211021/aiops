@@ -11,6 +11,7 @@ from core.agent_prompts import render_chat_system_prompt
 from core.agent_session_context import AgentSessionContext, build_agent_session_context
 from core.agent_profiles import load_agent_profile_prompt
 from core.assistant_model_config import assistant_task_enabled
+from core.knowledge_base_service import build_vault_rag_context_for_prompt
 from core.session_profile import profile_to_system_prompt
 
 
@@ -97,6 +98,14 @@ async def prepare_chat_agent_run(
         memory_scope_ids=session_context.memory_scope_ids(),
         event_logger=event_logger,
     )
+    rag_context = ""
+    rag_references: list[dict[str, Any]] = []
+    try:
+        rag_result = build_vault_rag_context_for_prompt(user_message, limit=4)
+        rag_context = str(rag_result.get("context") or "")
+        rag_references = list(rag_result.get("references") or [])
+    except Exception as exc:
+        event_logger.error(f"RAG retrieve error: {exc}")
 
     system_prompt = render_chat_system_prompt(
         session_context=session_context,
@@ -111,6 +120,7 @@ async def prepare_chat_agent_run(
             if assistant_task_enabled("asset_profile_prompt") and hasattr(memory_store, "get_asset_profile")
             else None
         ),
+        rag_context=rag_context,
     )
     messages = build_chat_message_history(
         memory_store=memory_store,
@@ -132,5 +142,5 @@ async def prepare_chat_agent_run(
         messages=messages,
         context=context,
         tools=tools,
-        memory_references=ltm_result.references,
+        memory_references=ltm_result.references + rag_references,
     )
