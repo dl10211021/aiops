@@ -27,7 +27,7 @@ def knowledge_vault_queue_response_kwargs(items: list[Any]) -> dict[str, Any]:
 def knowledge_vault_candidate_response_kwargs(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "success",
-        "message": "候选 Wiki 页面已生成",
+        "message": "AI 摘要页面已生成",
         "data": {"item": item},
     }
 
@@ -42,7 +42,7 @@ def knowledge_vault_candidates_response_kwargs(items: list[Any]) -> dict[str, An
 def knowledge_vault_candidate_approved_response_kwargs(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "success",
-        "message": "候选 Wiki 已批准入库",
+        "message": "AI 摘要已批准入库",
         "data": {"item": item},
     }
 
@@ -57,7 +57,7 @@ def knowledge_vault_candidate_item_response_kwargs(item: dict[str, Any]) -> dict
 def knowledge_vault_candidate_updated_response_kwargs(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "success",
-        "message": "候选 Wiki 已保存",
+        "message": "AI 摘要已保存",
         "data": {"item": item},
     }
 

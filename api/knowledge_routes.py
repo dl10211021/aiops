@@ -355,7 +355,7 @@ async def list_knowledge_vault_queue():
 
 @router.post("/knowledge/vault/compile", response_model=ResponseModel)
 async def compile_knowledge_vault_source(req: KnowledgeVaultCompileRequest):
-    """把 source session 编译成待人工确认的候选 Wiki 页面。"""
+    """把 source session 编译成待确认的AI 摘要页面。"""
     try:
         item = await compile_vault_source_candidate(
             req.source_session_id,
@@ -368,13 +368,13 @@ async def compile_knowledge_vault_source(req: KnowledgeVaultCompileRequest):
 
 @router.get("/knowledge/vault/candidates", response_model=ResponseModel)
 async def list_knowledge_vault_candidates():
-    """列出等待人工确认或已批准的候选 Wiki 页面。"""
+    """列出等待确认或已批准的AI 摘要页面。"""
     return ResponseModel(**knowledge_vault_candidates_response_kwargs(list_vault_candidates()))
 
 
 @router.get("/knowledge/vault/candidate", response_model=ResponseModel)
 async def read_knowledge_vault_candidate(source_session_id: str = Query(..., min_length=1)):
-    """读取候选 Wiki Markdown 正文，供人工审阅和修订。"""
+    """读取 AI 摘要 Markdown 正文，供人工审阅和修订。"""
     try:
         item = read_vault_candidate(source_session_id)
     except KnowledgeBaseServiceError as exc:
@@ -384,7 +384,7 @@ async def read_knowledge_vault_candidate(source_session_id: str = Query(..., min
 
 @router.put("/knowledge/vault/candidate", response_model=ResponseModel)
 async def update_knowledge_vault_candidate(req: KnowledgeVaultCandidateUpdateRequest):
-    """保存人工修订后的候选 Wiki Markdown。"""
+    """保存人工修订后的 AI 摘要 Markdown。"""
     try:
         item = update_vault_candidate(
             req.source_session_id,
@@ -398,13 +398,13 @@ async def update_knowledge_vault_candidate(req: KnowledgeVaultCandidateUpdateReq
 
 @router.get("/knowledge/vault/articles", response_model=ResponseModel)
 async def list_knowledge_vault_articles():
-    """列出已批准入库的正式 Wiki 文章。"""
+    """列出已批准入库的 RAG 资料 文章。"""
     return ResponseModel(**knowledge_vault_articles_response_kwargs(list_vault_articles()))
 
 
 @router.get("/knowledge/vault/article", response_model=ResponseModel)
 async def read_knowledge_vault_article(source_session_id: str = Query(..., min_length=1)):
-    """读取正式 Wiki Markdown 正文。"""
+    """读取RAG 资料 Markdown 正文。"""
     try:
         item = read_vault_article(source_session_id)
     except KnowledgeBaseServiceError as exc:
@@ -414,7 +414,7 @@ async def read_knowledge_vault_article(source_session_id: str = Query(..., min_l
 
 @router.post("/knowledge/vault/search", response_model=ResponseModel)
 async def search_knowledge_vault(req: KnowledgeVaultSearchRequest):
-    """离线搜索 Vault 中的正式 Wiki、候选页、来源卡片和可读原文。"""
+    """离线搜索 Vault 中的 RAG 资料、AI 摘要、来源记录和可读原文。"""
     try:
         results = search_vault_knowledge(req.query, scope=req.scope, limit=req.limit)
     except KnowledgeBaseServiceError as exc:
@@ -465,7 +465,7 @@ async def import_knowledge_vault(file: UploadFile = File(...)):
 
 @router.post("/knowledge/vault/approve", response_model=ResponseModel)
 async def approve_knowledge_vault_candidate(req: KnowledgeVaultApproveRequest):
-    """批准候选 Wiki 页面，将其写入正式 wiki/articles。"""
+    """批准 AI 摘要，将其写入 RAG 资料区。"""
     try:
         item = approve_vault_candidate(req.source_session_id)
     except KnowledgeBaseServiceError as exc:

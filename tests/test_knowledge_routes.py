@@ -95,7 +95,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
             )
 
         self.assertEqual(response.status, "success")
-        self.assertEqual(response.message, "候选 Wiki 页面已生成")
+        self.assertEqual(response.message, "AI 摘要页面已生成")
         self.assertEqual(response.data, {"item": {"id": "src-1", "candidate_path": "wiki/candidates/runbook.md"}})
 
     def test_list_and_approve_knowledge_vault_candidates_preserve_response_shape(self):
@@ -120,7 +120,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(list_response.status, "success")
         self.assertEqual(list_response.data, {"items": [{"id": "src-1", "candidate_path": "wiki/candidates/runbook.md"}]})
         self.assertEqual(approve_response.status, "success")
-        self.assertEqual(approve_response.message, "候选 Wiki 已批准入库")
+        self.assertEqual(approve_response.message, "AI 摘要已批准入库")
         self.assertEqual(approve_response.data, {"item": {"id": "src-1", "wiki_path": "wiki/articles/runbook.md"}})
 
     def test_read_and_update_knowledge_vault_candidate_preserve_response_shape(self):
@@ -147,7 +147,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(read_response.status, "success")
         self.assertEqual(read_response.data, {"item": {"id": "src-1", "content": "# candidate", "content_sha256": "sha"}})
         self.assertEqual(update_response.status, "success")
-        self.assertEqual(update_response.message, "候选 Wiki 已保存")
+        self.assertEqual(update_response.message, "AI 摘要已保存")
         self.assertEqual(update_response.data, {"item": {"id": "src-1", "content": "# changed", "content_sha256": "sha2"}})
 
     def test_list_and_read_knowledge_vault_articles_preserve_response_shape(self):
@@ -176,7 +176,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
                     "id": "src-1",
                     "title": "Linux 巡检",
                     "kind": "articles",
-                    "kind_label": "正式 Wiki",
+                    "kind_label": "RAG 资料",
                     "path": "wiki/articles/linux.md",
                     "snippet": "CPU 正常",
                     "score": 2,
@@ -194,7 +194,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
             )
 
         self.assertEqual(response.status, "success")
-        self.assertEqual(response.data["results"][0]["kind_label"], "正式 Wiki")
+        self.assertEqual(response.data["results"][0]["kind_label"], "RAG 资料")
         self.assertEqual(response.data["results"][0]["snippet"], "CPU 正常")
 
     def test_graph_knowledge_vault_preserves_response_shape(self):

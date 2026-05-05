@@ -266,7 +266,7 @@ def _register_vault_source(
         "",
         "## AI 编译状态",
         "",
-        "等待辅助模型按两阶段流程处理：先分析实体、证据、风险和矛盾，再生成候选 Wiki 页面，人工确认后进入正式知识目录。",
+        "等待辅助模型按两阶段流程处理：先分析实体、证据、风险和矛盾，再生成AI 摘要页面，确认后进入 RAG 资料目录。",
         "",
         "## 来源说明",
         "",
@@ -362,26 +362,26 @@ def _sha256_text(content: str) -> str:
 def _resolve_candidate_file(root: Path, record: dict[str, Any]) -> Path:
     candidate_rel = record.get("candidate_path")
     if not candidate_rel:
-        raise KnowledgeBaseServiceError(400, "该资料还没有候选 Wiki 页面")
+        raise KnowledgeBaseServiceError(400, "该资料还没有 AI 摘要页面")
     path = (root / str(candidate_rel)).resolve()
     root_resolved = root.resolve()
     if root_resolved not in path.parents and path != root_resolved:
-        raise KnowledgeBaseServiceError(400, "候选 Wiki 路径非法")
+        raise KnowledgeBaseServiceError(400, "AI 摘要路径非法")
     if not path.exists():
-        raise KnowledgeBaseServiceError(404, "候选 Wiki 页面不存在")
+        raise KnowledgeBaseServiceError(404, "AI 摘要页面不存在")
     return path
 
 
 def _resolve_article_file(root: Path, record: dict[str, Any]) -> Path:
     article_rel = record.get("wiki_path")
     if not article_rel:
-        raise KnowledgeBaseServiceError(400, "该资料还没有正式 Wiki 页面")
+        raise KnowledgeBaseServiceError(400, "该资料还没有RAG 资料 页面")
     path = (root / str(article_rel)).resolve()
     root_resolved = root.resolve()
     if root_resolved not in path.parents and path != root_resolved:
-        raise KnowledgeBaseServiceError(400, "正式 Wiki 路径非法")
+        raise KnowledgeBaseServiceError(400, "RAG 资料路径非法")
     if not path.exists():
-        raise KnowledgeBaseServiceError(404, "正式 Wiki 页面不存在")
+        raise KnowledgeBaseServiceError(404, "RAG 资料 页面不存在")
     return path
 
 
@@ -432,7 +432,7 @@ async def _generate_candidate_with_model(record: dict[str, Any], source_preview:
         {
             "role": "user",
             "content": (
-                "请把下面 source session 编译成一个候选 Wiki 页面，只输出 Markdown 正文。\n\n"
+                "请把下面 source session 编译成一个 AI 摘要页面，只输出 Markdown 正文。\n\n"
                 f"source_session_id: {record.get('source_session_id')}\n"
                 f"original_filename: {record.get('original_filename')}\n"
                 f"source_path: {record.get('source_path')}\n"
@@ -460,8 +460,8 @@ def _fallback_candidate_markdown(record: dict[str, Any], source_preview: str, re
         "",
         "## 编译状态",
         "",
-        "- 状态：待人工确认",
-        "- 编译方式：OpsCore 离线兜底候选页",
+        "- 状态：待确认",
+        "- 编译方式：OpsCore 离线兜底摘要",
         f"- 编译时间：{now}",
     ]
     if reason:
@@ -473,11 +473,11 @@ def _fallback_candidate_markdown(record: dict[str, Any], source_preview: str, re
             "",
             f"- Source Session：`{record.get('source_session_id') or record.get('id')}`",
             f"- 原始文件：`{record.get('source_path') or '-'}`",
-            f"- 来源卡片：`{record.get('note_path') or '-'}`",
+            f"- 来源记录：`{record.get('note_path') or '-'}`",
             "",
             "## 初步摘要",
             "",
-            "该页面由 OpsCore 基于原始资料自动生成候选 Wiki，尚未经过辅助模型深度分析或人工确认。",
+            "该页面由 OpsCore 基于原始资料自动生成 AI 摘要，尚未经过辅助模型深度分析或确认。",
             "",
             "## 证据预览",
             "",
@@ -630,9 +630,9 @@ def search_vault_knowledge(
     scope = scope if scope in {"all", "articles", "candidates", "sources", "raw"} else "all"
     results: list[dict[str, Any]] = []
     searchable_fields = [
-        ("articles", "正式 Wiki", "wiki_path"),
-        ("candidates", "候选 Wiki", "candidate_path"),
-        ("sources", "来源卡片", "note_path"),
+        ("articles", "RAG 资料", "wiki_path"),
+        ("candidates", "AI 摘要", "candidate_path"),
+        ("sources", "来源记录", "note_path"),
         ("raw", "原始资料", "source_path"),
     ]
     for record in _read_manifest(root):
@@ -712,7 +712,7 @@ def build_vault_knowledge_graph(
             "id": str(rel_path),
             "title": str(title),
             "kind": kind,
-            "kind_label": "正式知识" if kind == "article" else "候选草稿",
+            "kind_label": "RAG 资料" if kind == "article" else "AI 摘要",
             "path": str(rel_path),
             "source_session_id": record.get("source_session_id") or record.get("id"),
             "compile_stage": record.get("compile_stage"),
@@ -900,12 +900,12 @@ def update_vault_candidate(
     vault_dir: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     if not content.strip():
-        raise KnowledgeBaseServiceError(400, "候选 Wiki 内容不能为空")
+        raise KnowledgeBaseServiceError(400, "AI 摘要内容不能为空")
     root, record = _find_vault_record(identifier, vault_dir)
     candidate_path = _resolve_candidate_file(root, record)
     current = candidate_path.read_text(encoding="utf-8")
     if content_sha256 and content_sha256 != _sha256_text(current):
-        raise KnowledgeBaseServiceError(409, "候选 Wiki 已被其他操作修改，请刷新后重试")
+        raise KnowledgeBaseServiceError(409, "AI 摘要已被其他操作修改，请刷新后重试")
     candidate_path.write_text(content, encoding="utf-8")
 
     records = _read_manifest(root)
@@ -937,10 +937,10 @@ def approve_vault_candidate(
     root, record = _find_vault_record(identifier, vault_dir)
     candidate_rel = record.get("candidate_path")
     if not candidate_rel:
-        raise KnowledgeBaseServiceError(400, "该资料还没有候选 Wiki 页面")
+        raise KnowledgeBaseServiceError(400, "该资料还没有 AI 摘要页面")
     candidate_path = root / str(candidate_rel)
     if not candidate_path.exists():
-        raise KnowledgeBaseServiceError(404, "候选 Wiki 页面不存在")
+        raise KnowledgeBaseServiceError(404, "AI 摘要页面不存在")
 
     article_path = _article_note_path(root, record)
     article_path.parent.mkdir(parents=True, exist_ok=True)

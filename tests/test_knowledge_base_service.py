@@ -216,7 +216,7 @@ class TestKnowledgeBaseService(unittest.TestCase):
         candidate_path = self.vault_dir / updated["candidate_path"]
         self.assertTrue(candidate_path.exists())
         candidate_text = candidate_path.read_text(encoding="utf-8")
-        self.assertIn("待人工确认", candidate_text)
+        self.assertIn("待确认", candidate_text)
         self.assertIn("CPU 正常", candidate_text)
         detail = read_vault_candidate(record["source_session_id"], vault_dir=self.vault_dir)
         self.assertIn("CPU 正常", detail["content"])
