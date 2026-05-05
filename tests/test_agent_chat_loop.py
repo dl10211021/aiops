@@ -1,6 +1,6 @@
 import unittest
 
-from core.agent_chat_loop import run_chat_agent_loop
+from core.agent_chat_loop import build_successful_execution_memory, run_chat_agent_loop
 from core.agent_sse import sse_event
 
 
@@ -66,6 +66,32 @@ async def collect_chat_loop_events(**overrides):
 
 
 class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
+    def test_successful_execution_memory_marks_assistant_self_confirmation_policy(self):
+        memory = build_successful_execution_memory(
+            session_id="sid-1",
+            context={
+                "asset_type": "linux",
+                "protocol": "ssh",
+                "host": "10.0.0.1",
+                "port": 22,
+                "allow_modifications": False,
+            },
+            exec_trace=[
+                {
+                    "tool": "linux_execute_command",
+                    "args": "uptime",
+                    "result": "load average: 0.01, 0.01, 0.00",
+                    "status": "done",
+                }
+            ],
+            assistant_content="系统负载正常。",
+        )
+
+        self.assertIsNotNone(memory)
+        self.assertEqual(memory["memory_type"], "successful_execution")
+        self.assertIn("辅助模型根据上下文自确认", memory["content"])
+        self.assertIn("无需用户每次点赞", memory["content"])
+
     async def test_streams_assistant_message_done_and_schedules_ltm(self):
         async def streamer(**kwargs):
             kwargs["state"].assistant_content = "完成"

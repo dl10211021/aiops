@@ -48,6 +48,34 @@ class ChatAgentDispatcher(Protocol):
         ...
 
 
+def _asset_key_for_session_context(session_context: AgentSessionContext) -> str:
+    asset_type = session_context.asset_type or "asset"
+    protocol = session_context.protocol or "unknown"
+    return f"{asset_type}:{protocol}:{session_context.host}:{session_context.port or ''}"
+
+
+def _load_asset_profile_for_prompt(
+    memory_store: ChatAgentMemoryStore,
+    session_id: str,
+    session_context: AgentSessionContext,
+) -> dict | None:
+    if not assistant_task_enabled("asset_profile_prompt"):
+        return None
+    exact_loader = getattr(memory_store, "get_asset_profile", None)
+    if callable(exact_loader):
+        profile = exact_loader(session_id)
+        if profile:
+            return profile
+    context_loader = getattr(memory_store, "get_asset_profile_for_session_context", None)
+    if callable(context_loader):
+        return context_loader(
+            session_id,
+            _asset_key_for_session_context(session_context),
+            session_context.host,
+        )
+    return None
+
+
 @dataclass(frozen=True)
 class ChatAgentRun:
     model_name: str
@@ -116,9 +144,7 @@ async def prepare_chat_agent_run(
         ),
         ltm_context=ltm_result.context,
         asset_profile_prompt=profile_to_system_prompt(
-            memory_store.get_asset_profile(session_id)
-            if assistant_task_enabled("asset_profile_prompt") and hasattr(memory_store, "get_asset_profile")
-            else None
+            _load_asset_profile_for_prompt(memory_store, session_id, session_context)
         ),
         rag_context=rag_context,
     )

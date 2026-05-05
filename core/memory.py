@@ -157,7 +157,7 @@ def build_asset_profile_memory_summary(
         lines.append("【证据摘要】" + "；".join(evidence_items[:6]))
     if profile_prompt:
         lines.append(f"【画像提示词】{profile_prompt}")
-    lines.append("【使用边界】画像是历史汇聚提示词，后续会话必须结合当前资产实时工具结果验证，不得盲目信任。")
+    lines.append("【使用边界】画像是历史汇聚提示词，不需要每轮人工确认；如果后续工具结果与画像冲突，以当前工具结果为准。")
     return sanitize_ltm_summary("\n".join(lines), max_chars=max_chars)
 
 
@@ -1148,3 +1148,4 @@ class MemoryDB:
 
 
 memory_db = MemoryDB()
+

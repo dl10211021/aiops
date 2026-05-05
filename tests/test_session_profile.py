@@ -1,4 +1,4 @@
-from core.session_profile import _fallback_profile, profile_to_markdown
+from core.session_profile import _fallback_profile, profile_to_markdown, profile_to_system_prompt
 
 
 def test_fallback_profile_marks_database_focus_area():
@@ -50,3 +50,14 @@ def test_fallback_profile_raises_risk_for_multiple_failed_checks():
     assert profile["role_category"] == "linux"
     assert profile["risk_level"] == "high"
     assert profile["confidence"] > 0
+
+
+def test_profile_prompt_is_reused_without_manual_realtime_confirmation_wording():
+    prompt = profile_to_system_prompt(
+        {
+            "profile_prompt": "这是核心 Linux 应用服务器，优先关注 Docker、SSH 和系统日志。",
+        }
+    )
+
+    assert "不需要每轮人工确认" in prompt
+    assert "实时工具结果验证" not in prompt

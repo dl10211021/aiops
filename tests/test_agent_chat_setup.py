@@ -9,6 +9,9 @@ class FakeMemoryStore:
         self.messages = [{"role": "assistant", "content": "历史"}]
         self.appended = []
         self.ltm_calls = []
+        self.asset_profile = None
+        self.asset_profile_for_context = None
+        self.asset_profile_context_calls = []
 
     def get_messages(self, session_id):
         self.read_session_id = session_id
@@ -46,6 +49,14 @@ class FakeMemoryStore:
             memory_scope_ids=memory_scope_ids,
         )
         return context, [{"scope_id": "sid-1", "summary_preview": "LTM-CONTEXT"}]
+
+    def get_asset_profile(self, session_id):
+        self.asset_profile_session_id = session_id
+        return self.asset_profile
+
+    def get_asset_profile_for_session_context(self, session_id, asset_key, host):
+        self.asset_profile_context_calls.append((session_id, asset_key, host))
+        return self.asset_profile_for_context
 
 
 class FakeDispatcher:
@@ -178,6 +189,46 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(run.model_name, "chosen-model")
         self.assertEqual(default_calls, [])
+
+    async def test_uses_latest_same_asset_profile_when_session_profile_missing(self):
+        memory_store = FakeMemoryStore()
+        memory_store.asset_profile_for_context = {
+            "profile_prompt": "同资产历史画像：这是 Linux 应用服务器，优先关注 SSH、Docker 和安全日志。"
+        }
+
+        with patch(
+            "core.agent_chat_setup.build_vault_rag_context_for_prompt",
+            return_value={"context": "", "references": []},
+        ):
+            run = await prepare_chat_agent_run(
+                session_id="sid-new",
+                user_message="继续巡检",
+                user_display_message=None,
+                model_name="model-a",
+                user_attachments=[],
+                active_sessions={
+                    "sid-new": {
+                        "info": {
+                            "asset_type": "linux",
+                            "protocol": "ssh",
+                            "host": "10.0.0.1",
+                            "port": 22,
+                        }
+                    }
+                },
+                dispatcher=FakeDispatcher(),
+                memory_store=memory_store,
+                event_logger=FakeLogger(),
+                default_model_resolver=lambda: "default-model",
+                embedding_resolver=lambda model: (f"emb:{model}", "embedding-model"),
+                profile_loader=lambda profile: f"BASE:{profile}",
+            )
+
+        self.assertIn("同资产历史画像", run.messages[0]["content"])
+        self.assertEqual(
+            memory_store.asset_profile_context_calls,
+            [("sid-new", "linux:ssh:10.0.0.1:22", "10.0.0.1")],
+        )
 
 
 if __name__ == "__main__":

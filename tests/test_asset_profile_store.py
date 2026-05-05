@@ -69,6 +69,33 @@ class AssetProfileStoreTest(unittest.TestCase):
         self.assertEqual(loaded["protocol"], "ssh")
         self.assertIn("updated_at", loaded)
 
+    def test_get_asset_profile_for_session_context_reuses_latest_same_asset(self):
+        self.store.save_asset_profile(
+            "sid-old",
+            "linux:ssh:10.0.0.1:22",
+            "10.0.0.1",
+            "linux",
+            "ssh",
+            {"profile_prompt": "旧画像"},
+        )
+        self.store.save_asset_profile(
+            "sid-latest",
+            "linux:ssh:10.0.0.1:22",
+            "10.0.0.1",
+            "linux",
+            "ssh",
+            {"profile_prompt": "最新同资产画像"},
+        )
+
+        loaded = self.store.get_asset_profile_for_session_context(
+            "sid-new",
+            "linux:ssh:10.0.0.1:22",
+            "10.0.0.1",
+        )
+
+        self.assertEqual(loaded["profile_prompt"], "最新同资产画像")
+        self.assertEqual(loaded["session_id"], "sid-latest")
+
 
 if __name__ == "__main__":
     unittest.main()

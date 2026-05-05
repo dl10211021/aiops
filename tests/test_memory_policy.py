@@ -129,7 +129,7 @@ class MemoryPolicyTests(unittest.TestCase):
 
         self.assertIn("【记忆类型】资产画像", summary)
         self.assertIn("画像提示词", summary)
-        self.assertIn("必须结合当前资产实时工具结果验证", summary)
+        self.assertIn("不需要每轮人工确认", summary)
 
     def test_retrieval_context_respects_context_budget(self):
         rows = [
@@ -391,3 +391,4 @@ class MemoryPolicyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
