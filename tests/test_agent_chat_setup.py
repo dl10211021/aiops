@@ -163,8 +163,10 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(dispatcher.skill_path_requests, [["skill-creator"]])
         self.assertEqual(dispatcher.instruction_requests, [(["skill-creator"], True)])
         self.assertEqual(run.tools, [{"name": "inspect"}])
-        self.assertEqual(run.memory_references[0]["scope_id"], "sid-1")
-        self.assertEqual(run.memory_references[1]["source_type"], "rag")
+        self.assertEqual(run.memory_references[0]["source_type"], "system_prompt")
+        self.assertEqual(run.memory_references[0]["kind_label"], "默认提示词")
+        self.assertEqual(run.memory_references[1]["scope_id"], "sid-1")
+        self.assertEqual(run.memory_references[2]["source_type"], "rag")
         self.assertEqual(run.context["session_id"], "sid-1")
         self.assertEqual(run.context["active_skill_paths"], ["D:/skills/skill-creator"])
         self.assertEqual(dispatcher.tool_contexts, [run.context])
@@ -229,6 +231,10 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
             memory_store.asset_profile_context_calls,
             [("sid-new", "linux:ssh:10.0.0.1:22", "10.0.0.1")],
         )
+        self.assertEqual(run.memory_references[0]["source_type"], "system_prompt")
+        self.assertEqual(run.memory_references[1]["source_type"], "asset_profile")
+        self.assertEqual(run.memory_references[1]["kind_label"], "资产画像")
+        self.assertIn("同资产历史画像", run.memory_references[1]["summary_preview"])
 
 
 if __name__ == "__main__":

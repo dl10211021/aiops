@@ -76,6 +76,66 @@ def _load_asset_profile_for_prompt(
     return None
 
 
+def _preview_text(text: Any, limit: int = 260) -> str:
+    preview = " ".join(str(text or "").split())
+    if len(preview) <= limit:
+        return preview
+    return preview[: limit - 1].rstrip() + "..."
+
+
+def _base_prompt_reference(
+    *,
+    session_id: str,
+    agent_profile: str,
+    base_prompt: str,
+) -> dict[str, Any] | None:
+    if not str(base_prompt or "").strip():
+        return None
+    return {
+        "source_type": "system_prompt",
+        "kind": "agent_profile",
+        "kind_label": "默认提示词",
+        "title": f"会话角色：{agent_profile or 'default'}",
+        "scope_id": session_id,
+        "source_session_id": session_id,
+        "summary_preview": _preview_text(base_prompt),
+    }
+
+
+def _asset_profile_reference(
+    *,
+    session_id: str,
+    session_context: AgentSessionContext,
+    profile: dict | None,
+) -> dict[str, Any] | None:
+    if not profile:
+        return None
+    title = (
+        profile.get("role_label")
+        or profile.get("remark")
+        or profile.get("host")
+        or session_context.host
+        or "资产画像"
+    )
+    summary = (
+        profile.get("profile_prompt")
+        or profile.get("source_summary")
+        or profile.get("purpose")
+        or ""
+    )
+    return {
+        "source_type": "asset_profile",
+        "kind": "asset_profile_prompt",
+        "kind_label": "资产画像",
+        "title": str(title),
+        "scope_id": session_id,
+        "source_session_id": profile.get("session_id") or session_id,
+        "updated_at": profile.get("updated_at"),
+        "summary_preview": _preview_text(summary),
+        "path": f"asset_profiles/{profile.get('session_id') or session_id}",
+    }
+
+
 @dataclass(frozen=True)
 class ChatAgentRun:
     model_name: str
@@ -117,6 +177,11 @@ async def prepare_chat_agent_run(
     agent_profile = session_context.agent_profile
 
     base_prompt = profile_loader(agent_profile)
+    base_prompt_ref = _base_prompt_reference(
+        session_id=session_id,
+        agent_profile=agent_profile,
+        base_prompt=base_prompt,
+    )
     ltm_result = await retrieve_ltm_context_with_references(
         memory_store=memory_store,
         session_id=session_id,
@@ -135,6 +200,12 @@ async def prepare_chat_agent_run(
     except Exception as exc:
         event_logger.error(f"RAG retrieve error: {exc}")
 
+    asset_profile = _load_asset_profile_for_prompt(memory_store, session_id, session_context)
+    asset_profile_ref = _asset_profile_reference(
+        session_id=session_id,
+        session_context=session_context,
+        profile=asset_profile,
+    )
     system_prompt = render_chat_system_prompt(
         session_context=session_context,
         base_prompt=base_prompt,
@@ -143,9 +214,7 @@ async def prepare_chat_agent_run(
             allow_local_scripts=session_context.local_skill_scripts_allowed,
         ),
         ltm_context=ltm_result.context,
-        asset_profile_prompt=profile_to_system_prompt(
-            _load_asset_profile_for_prompt(memory_store, session_id, session_context)
-        ),
+        asset_profile_prompt=profile_to_system_prompt(asset_profile),
         rag_context=rag_context,
     )
     messages = build_chat_message_history(
@@ -168,5 +237,9 @@ async def prepare_chat_agent_run(
         messages=messages,
         context=context,
         tools=tools,
-        memory_references=ltm_result.references + rag_references,
+        memory_references=[
+            ref
+            for ref in [base_prompt_ref, asset_profile_ref, *ltm_result.references, *rag_references]
+            if ref
+        ],
     )

@@ -206,10 +206,28 @@ export function AssistantReportBubble({
   )
 }
 
-function referenceSourceType(ref: MemoryReference) {
+type ReferenceSourceType = 'rag' | 'memory' | 'asset_profile' | 'system_prompt'
+
+function referenceSourceType(ref: MemoryReference): ReferenceSourceType {
   const sourceType = String(ref.source_type || '').toLowerCase()
   const kind = String(ref.kind || '').toLowerCase()
   const kindLabel = String(ref.kind_label || '')
+  if (
+    sourceType === 'asset_profile'
+    || sourceType === 'profile'
+    || kind === 'asset_profile_prompt'
+    || kindLabel.includes('资产画像')
+  ) {
+    return 'asset_profile'
+  }
+  if (
+    sourceType === 'system_prompt'
+    || sourceType === 'prompt'
+    || kind === 'agent_profile'
+    || kindLabel.includes('默认提示词')
+  ) {
+    return 'system_prompt'
+  }
   if (sourceType === 'rag' || kindLabel.includes('RAG') || ['articles', 'candidates', 'sources', 'raw'].includes(kind)) {
     return 'rag'
   }
@@ -217,7 +235,14 @@ function referenceSourceType(ref: MemoryReference) {
 }
 
 function referenceBadge(ref: MemoryReference) {
-  if (referenceSourceType(ref) === 'rag') {
+  const sourceType = referenceSourceType(ref)
+  if (sourceType === 'asset_profile') {
+    return ref.kind_label || '资产画像'
+  }
+  if (sourceType === 'system_prompt') {
+    return ref.kind_label || '默认提示词'
+  }
+  if (sourceType === 'rag') {
     return ref.kind_label || 'RAG 资料'
   }
   return '长期记忆'
@@ -237,7 +262,14 @@ function referenceMeta(ref: MemoryReference) {
 }
 
 function referenceReason(ref: MemoryReference) {
-  if (referenceSourceType(ref) === 'rag') {
+  const sourceType = referenceSourceType(ref)
+  if (sourceType === 'asset_profile') {
+    return '来自当前资产画像提示词，用于帮助 AI 理解资产角色、风险边界和排查优先级；若与实时工具结果冲突，以实时证据为准。'
+  }
+  if (sourceType === 'system_prompt') {
+    return '来自当前会话的默认角色提示词，只说明 AI 的工作方式和基础角色，不替代用户指令、安全策略或实时证据。'
+  }
+  if (sourceType === 'rag') {
     return '来自 RAG 检索命中的资料证据，已做敏感字段脱敏；用于辅助回答引用，不替代当前会话的实时巡检结果。'
   }
   return '来自长期记忆或会话经验，回答时需要结合当前证据复核，不能直接当作事实替代实时巡检结果。'
@@ -252,14 +284,26 @@ function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
   const refs = message.memoryRefs || message.memory_refs || []
   if (!refs.length) return null
   const ragCount = refs.filter((ref) => referenceSourceType(ref) === 'rag').length
-  const memoryCount = refs.length - ragCount
+  const profileCount = refs.filter((ref) => referenceSourceType(ref) === 'asset_profile').length
+  const promptCount = refs.filter((ref) => referenceSourceType(ref) === 'system_prompt').length
+  const memoryCount = refs.length - ragCount - profileCount - promptCount
   const openReference = (ref: MemoryReference) => {
-    if (referenceSourceType(ref) === 'rag') {
+    const sourceType = referenceSourceType(ref)
+    if (sourceType === 'rag') {
       const query = referenceSearchQuery(ref)
       setView('knowledge')
       window.setTimeout(() => {
         window.dispatchEvent(new CustomEvent('opscore:knowledge-target', {
           detail: { tab: 'documents', step: 'discover', query, scope: ref.kind || 'all' },
+        }))
+      }, 60)
+      return
+    }
+    if (sourceType === 'asset_profile') {
+      setView('chat')
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('opscore:session-profile-focus', {
+          detail: { sessionId: ref.source_session_id || ref.scope_id },
         }))
       }, 60)
       return
@@ -275,11 +319,13 @@ function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
     <details open className="border-b border-ops-accent/25 bg-[linear-gradient(135deg,rgba(45,212,191,0.13),rgba(37,99,235,0.08))] px-4 py-2 text-[11px] text-ops-subtext">
       <summary className="cursor-pointer select-none font-semibold text-ops-accent">
         本轮引用来源：{refs.length} 条
+        {profileCount > 0 ? ` · 资产画像 ${profileCount}` : ''}
+        {promptCount > 0 ? ` · 默认提示词 ${promptCount}` : ''}
         {ragCount > 0 ? ` · RAG 资料 ${ragCount}` : ''}
         {memoryCount > 0 ? ` · 长期记忆 ${memoryCount}` : ''}
       </summary>
       <p className="mt-1 leading-5 text-ops-overlay">
-        这里展示本轮回答使用过的资料和记忆。RAG 资料来自知识库检索，长期记忆来自会话经验；两者都只做辅助依据，最终仍以当前资产实时证据为准。
+        这里展示本轮回答使用过的画像、默认提示词、资料和记忆。它们都只做辅助上下文，最终仍以当前用户要求、安全策略和资产实时证据为准。
       </p>
       <div className="mt-2 grid gap-1.5">
         {refs.map((ref, index) => (
@@ -288,6 +334,10 @@ function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
             className={`rounded-md border px-2.5 py-1.5 ${
               referenceSourceType(ref) === 'rag'
                 ? 'border-ops-accent/35 bg-ops-accent/10'
+                : referenceSourceType(ref) === 'asset_profile'
+                  ? 'border-cyan-400/35 bg-cyan-400/10'
+                  : referenceSourceType(ref) === 'system_prompt'
+                    ? 'border-amber-300/35 bg-amber-300/10'
                 : 'border-ops-surface1/60 bg-ops-panel/60'
             }`}
           >
@@ -295,6 +345,10 @@ function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
               <span className={`rounded-full border px-2 py-0.5 ${
                 referenceSourceType(ref) === 'rag'
                   ? 'border-ops-accent/45 text-ops-accent'
+                  : referenceSourceType(ref) === 'asset_profile'
+                    ? 'border-cyan-400/45 text-cyan-200'
+                    : referenceSourceType(ref) === 'system_prompt'
+                      ? 'border-amber-300/45 text-amber-200'
                   : 'border-ops-surface1 text-ops-subtext'
               }`}>
                 {referenceBadge(ref)}
@@ -313,7 +367,13 @@ function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
               onClick={() => openReference(ref)}
               className="mt-1.5 rounded-full border border-ops-accent/35 px-2 py-0.5 text-[10px] font-semibold text-ops-accent hover:bg-ops-accent/10"
             >
-              {referenceSourceType(ref) === 'rag' ? '查看资料证据' : '查看记忆管理'}
+              {referenceSourceType(ref) === 'rag'
+                ? '查看资料证据'
+                : referenceSourceType(ref) === 'asset_profile'
+                  ? '查看会话画像'
+                  : referenceSourceType(ref) === 'system_prompt'
+                    ? '查看配置来源'
+                    : '查看记忆管理'}
             </button>
           </div>
         ))}
