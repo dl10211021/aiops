@@ -8,7 +8,7 @@ function knowledgeStatusLabel(file: KnowledgeFile) {
   if (file.compile_status === 'pending_ai_compile') return '已进入 RAG 库'
   if (file.compile_status === 'approved') return 'RAG 资料'
   if (file.compile_status === 'awaiting_review') return '待归档资料'
-  if (file.compile_status === 'candidate_generated') return '资料摘录'
+  if (file.compile_status === 'candidate_generated') return 'AI 摘要'
   if (file.compile_status === 'analysis_ready') return '已分析资料'
   if (file.compile_status) return file.compile_status
   if (file.status === 'legacy_vector') return '旧版 RAG 资料'
@@ -39,7 +39,7 @@ function ragKindLabel(label?: string) {
   const text = String(label || '证据')
   return text
     .replace(/正式\s*Wiki|Wiki\s*知识|正式知识/g, 'RAG 资料')
-    .replace(/候选\s*Wiki|Wiki\s*草稿|候选草稿/g, '资料摘录')
+    .replace(/候选\s*Wiki|Wiki\s*草稿|候选草稿/g, 'AI 摘要')
     .replace(/Source\s*卡片|source\s*session/gi, '来源记录')
 }
 
@@ -47,7 +47,7 @@ function ragDisplayPath(path?: string) {
   const text = String(path || '')
   return text
     .replace(/^wiki\/articles\//, 'RAG资料/')
-    .replace(/^wiki\/candidates\//, '资料摘录/')
+    .replace(/^wiki\/candidates\//, 'AI摘要/')
     .replace(/^wiki\/sources\//, '来源记录/')
     .replace(/^raw\/uploads\//, '原文/')
 }
@@ -181,9 +181,9 @@ export function KnowledgeCompileQueuePanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">RAG 摘录队列</div>
+          <div className="text-sm font-semibold text-ops-text">AI 摘要队列</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            RAG 主线已经保存原文和检索索引；这里仅把重要内容摘成可读资料，方便后续会话引用和图谱追溯。
+            RAG 主线已经保存原文和检索索引；这里把重要内容生成摘要，方便后续会话引用和图谱追溯。
           </p>
         </div>
         <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-xs text-ops-accent">
@@ -221,7 +221,7 @@ export function KnowledgeCompileQueuePanel({
             )}
             {item.candidate_path && (
               <div className="mt-1 truncate rounded border border-ops-success/30 bg-ops-success/5 px-2 py-1 font-mono text-[11px] text-ops-success" title={item.candidate_path}>
-                摘录：{ragDisplayPath(item.candidate_path)}
+                摘要：{ragDisplayPath(item.candidate_path)}
               </div>
             )}
             <button
@@ -232,13 +232,13 @@ export function KnowledgeCompileQueuePanel({
               {compilingSourceSession === (item.source_session_id || item.id)
                 ? '整理中...'
                 : item.compile_stage === 'candidate_generated'
-                  ? '摘录已生成'
-                  : '生成资料摘录'}
+                  ? '摘要已生成'
+                  : '生成 AI 摘要'}
             </button>
           </article>
         )) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
-            暂无需要摘录的资料。RAG 检索会直接使用已入库原文。
+            暂无需要生成摘要的资料。RAG 检索会直接使用已入库原文。
           </div>
         )}
       </div>
@@ -264,9 +264,9 @@ export function KnowledgeVaultSearchPanel({
   onSearch: () => void
 }) {
   const scopes = [
-    ['all', '全部知识'],
+    ['all', '全部资料'],
     ['articles', 'RAG 资料'],
-    ['candidates', '资料摘录'],
+    ['candidates', 'AI 摘要'],
     ['sources', '来源记录'],
     ['raw', '原始资料'],
   ]
@@ -399,7 +399,7 @@ export function KnowledgeVaultGraphPanel({
             onChange={(event) => onIncludeCandidatesChange(event.target.checked)}
             className="accent-ops-accent"
           />
-          包含资料摘录
+          包含 AI 摘要
         </label>
         <button
           onClick={onLoad}
@@ -417,7 +417,7 @@ export function KnowledgeVaultGraphPanel({
               <div className="mt-1 text-lg font-semibold text-ops-text">{graph.summary.article_count}</div>
             </div>
             <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-2">
-              <div className="text-ops-overlay">资料摘录</div>
+              <div className="text-ops-overlay">AI 摘要</div>
               <div className="mt-1 text-lg font-semibold text-ops-text">{graph.summary.candidate_count}</div>
             </div>
             <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-2">
@@ -578,7 +578,7 @@ export function KnowledgeVaultGraphPanel({
                   </svg>
                   <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-2 text-[10px] text-ops-subtext">
                     <span className="rounded-full border border-ops-accent/30 bg-ops-dark/70 px-2 py-1">青色：RAG 资料</span>
-                    <span className="rounded-full border border-amber-300/30 bg-ops-dark/70 px-2 py-1">黄色：资料摘录</span>
+                    <span className="rounded-full border border-amber-300/30 bg-ops-dark/70 px-2 py-1">黄色：AI 摘要</span>
                     <span className="rounded-full border border-ops-surface1 bg-ops-dark/70 px-2 py-1">滚轮缩放，拖动移动</span>
                   </div>
                 </div>
@@ -597,7 +597,7 @@ export function KnowledgeVaultGraphPanel({
                       <div className="rounded-md border border-ops-accent/25 bg-ops-accent/10 px-3 py-2">
                         <div className="text-sm font-semibold text-ops-text">{selectedNode.title}</div>
                         <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-ops-subtext">
-                          <span>{selectedNode.kind === 'article' ? 'RAG 资料' : '资料摘录'}</span>
+                          <span>{selectedNode.kind === 'article' ? 'RAG 资料' : 'AI 摘要'}</span>
                           <span>{selectedNode.degree || 0} 个关系</span>
                         </div>
                       </div>
@@ -644,7 +644,7 @@ export function KnowledgeVaultGraphPanel({
             <div className="mt-2 flex flex-wrap gap-2">
               {topNodes.length > 0 ? topNodes.map((node) => (
                 <span key={node.id} className="max-w-full truncate rounded-full border border-ops-accent/25 px-2 py-1 text-[11px] text-ops-accent" title={node.path}>
-                  {node.kind === 'article' ? 'RAG 资料' : '资料摘录'} · {node.title} · {node.degree || 0} 连接
+                  {node.kind === 'article' ? 'RAG 资料' : 'AI 摘要'} · {node.title} · {node.degree || 0} 连接
                 </span>
               )) : <span className="text-xs text-ops-subtext">暂无节点</span>}
             </div>
@@ -690,9 +690,9 @@ export function KnowledgeCandidatePanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">资料摘录</div>
+          <div className="text-sm font-semibold text-ops-text">AI 摘要</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            资料摘录用于把重点内容变成更容易引用的 Markdown，不影响原文检索。
+            AI 摘要用于把重点内容变成更容易引用的 Markdown，不影响原文检索。
           </p>
         </div>
         <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
@@ -752,7 +752,7 @@ export function KnowledgeCandidatePanel({
           )
         }) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
-            暂无资料摘录。需要长期引用的内容可以先生成摘录。
+            暂无 AI 摘要。需要长期引用的内容可以先生成摘要。
           </div>
         )}
       </div>
@@ -776,9 +776,9 @@ export function KnowledgeCandidateEditor({
   if (!candidate) {
     return (
       <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
-        <div className="text-sm font-semibold text-ops-text">摘录正文</div>
+        <div className="text-sm font-semibold text-ops-text">摘要正文</div>
         <p className="mt-1 text-xs leading-5 text-ops-subtext">
-          点击资料摘录的“预览/编辑”，这里会显示 Markdown 正文，可直接修改后保存。
+          点击 AI 摘要的“预览/编辑”，这里会显示 Markdown 正文，可直接修改后保存。
         </p>
       </section>
     )
@@ -788,7 +788,7 @@ export function KnowledgeCandidateEditor({
       <div className="border-b border-ops-surface0 px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-xs font-semibold text-ops-accent">摘录正文</div>
+            <div className="text-xs font-semibold text-ops-accent">摘要正文</div>
             <h2 className="mt-1 truncate text-sm font-bold text-ops-text" title={candidate.candidate_path || candidate.original_filename || candidate.filename}>
               {candidate.candidate_path || candidate.original_filename || candidate.filename}
             </h2>
@@ -798,7 +798,7 @@ export function KnowledgeCandidateEditor({
             disabled={saving || !draft.trim()}
             className="shrink-0 rounded-lg bg-ops-accent px-3 py-1.5 text-xs font-semibold text-ops-dark disabled:opacity-50"
           >
-            {saving ? '保存中...' : '保存摘录'}
+            {saving ? '保存中...' : '保存摘要'}
           </button>
         </div>
         <div className="mt-1 text-xs text-ops-overlay">
