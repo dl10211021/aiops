@@ -438,7 +438,7 @@ export default function KnowledgeBase() {
                     <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-6">
                       <div className="text-sm font-semibold text-ops-text">暂无 AI 记忆</div>
                       <p className="mt-2 text-sm leading-6 text-ops-subtext">
-                        会话点赞、资产画像和人工确认经验沉淀后，会在这里形成 Claude 风格文件记忆。
+                        会话点赞、资产画像和有效经验沉淀后，会在这里形成 Claude 风格文件记忆。
                       </p>
                     </div>
                   )}

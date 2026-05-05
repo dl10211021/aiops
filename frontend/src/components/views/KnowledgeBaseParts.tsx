@@ -7,8 +7,8 @@ export type KnowledgeTab = 'documents' | 'memory'
 function knowledgeStatusLabel(file: KnowledgeFile) {
   if (file.compile_status === 'pending_ai_compile') return '已进入 RAG 库'
   if (file.compile_status === 'approved') return 'RAG 资料'
-  if (file.compile_status === 'awaiting_review') return '待整理资料'
-  if (file.compile_status === 'candidate_generated') return '草稿资料'
+  if (file.compile_status === 'awaiting_review') return '待归档资料'
+  if (file.compile_status === 'candidate_generated') return '资料摘录'
   if (file.compile_status === 'analysis_ready') return '已分析资料'
   if (file.compile_status) return file.compile_status
   if (file.status === 'legacy_vector') return '旧版 RAG 资料'
@@ -38,16 +38,16 @@ function ragErrorHint(message?: string) {
 function ragKindLabel(label?: string) {
   const text = String(label || '证据')
   return text
-    .replace(/正式\s*Wiki|Wiki\s*知识|正式知识/g, '整理资料')
-    .replace(/候选\s*Wiki|Wiki\s*草稿|候选草稿/g, '草稿资料')
+    .replace(/正式\s*Wiki|Wiki\s*知识|正式知识/g, 'RAG 资料')
+    .replace(/候选\s*Wiki|Wiki\s*草稿|候选草稿/g, '资料摘录')
     .replace(/Source\s*卡片|source\s*session/gi, '来源记录')
 }
 
 function ragDisplayPath(path?: string) {
   const text = String(path || '')
   return text
-    .replace(/^wiki\/articles\//, '整理资料/')
-    .replace(/^wiki\/candidates\//, '草稿资料/')
+    .replace(/^wiki\/articles\//, 'RAG资料/')
+    .replace(/^wiki\/candidates\//, '资料摘录/')
     .replace(/^wiki\/sources\//, '来源记录/')
     .replace(/^raw\/uploads\//, '原文/')
 }
@@ -181,9 +181,9 @@ export function KnowledgeCompileQueuePanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">可选资料整理队列</div>
+          <div className="text-sm font-semibold text-ops-text">RAG 摘录队列</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            RAG 主线已经保存原文和检索索引；这里只是把重要资料整理成可读资料，方便人工维护和图谱追溯。
+            RAG 主线已经保存原文和检索索引；这里仅把重要内容摘成可读资料，方便后续会话引用和图谱追溯。
           </p>
         </div>
         <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-xs text-ops-accent">
@@ -221,7 +221,7 @@ export function KnowledgeCompileQueuePanel({
             )}
             {item.candidate_path && (
               <div className="mt-1 truncate rounded border border-ops-success/30 bg-ops-success/5 px-2 py-1 font-mono text-[11px] text-ops-success" title={item.candidate_path}>
-                草稿：{item.candidate_path}
+                摘录：{ragDisplayPath(item.candidate_path)}
               </div>
             )}
             <button
@@ -232,13 +232,13 @@ export function KnowledgeCompileQueuePanel({
               {compilingSourceSession === (item.source_session_id || item.id)
                 ? '整理中...'
                 : item.compile_stage === 'candidate_generated'
-                  ? '草稿已生成'
-                  : '整理成资料草稿'}
+                  ? '摘录已生成'
+                  : '生成资料摘录'}
             </button>
           </article>
         )) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
-            暂无需要整理的资料。RAG 检索不依赖这里，只有需要长期维护的资料才整理成可读资料。
+            暂无需要摘录的资料。RAG 检索会直接使用已入库原文。
           </div>
         )}
       </div>
@@ -265,8 +265,8 @@ export function KnowledgeVaultSearchPanel({
 }) {
   const scopes = [
     ['all', '全部知识'],
-    ['articles', '整理资料'],
-    ['candidates', '草稿资料'],
+    ['articles', 'RAG 资料'],
+    ['candidates', '资料摘录'],
     ['sources', '来源记录'],
     ['raw', '原始资料'],
   ]
@@ -277,7 +277,7 @@ export function KnowledgeVaultSearchPanel({
         <div>
           <div className="text-sm font-semibold text-ops-text">RAG 检索</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            输入问题后，从原始资料、整理资料和来源记录中找证据；会话回答可以引用这里的命中内容。
+          输入问题后，从原始资料、RAG 资料和来源记录中找证据；会话回答可以引用这里的命中内容。
           </p>
         </div>
         <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-xs text-ops-accent">
@@ -399,7 +399,7 @@ export function KnowledgeVaultGraphPanel({
             onChange={(event) => onIncludeCandidatesChange(event.target.checked)}
             className="accent-ops-accent"
           />
-          包含草稿资料
+          包含资料摘录
         </label>
         <button
           onClick={onLoad}
@@ -417,7 +417,7 @@ export function KnowledgeVaultGraphPanel({
               <div className="mt-1 text-lg font-semibold text-ops-text">{graph.summary.article_count}</div>
             </div>
             <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-2">
-              <div className="text-ops-overlay">草稿资料</div>
+              <div className="text-ops-overlay">资料摘录</div>
               <div className="mt-1 text-lg font-semibold text-ops-text">{graph.summary.candidate_count}</div>
             </div>
             <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-2">
@@ -577,8 +577,8 @@ export function KnowledgeVaultGraphPanel({
                     })}
                   </svg>
                   <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap gap-2 text-[10px] text-ops-subtext">
-                    <span className="rounded-full border border-ops-accent/30 bg-ops-dark/70 px-2 py-1">青色：整理资料</span>
-                    <span className="rounded-full border border-amber-300/30 bg-ops-dark/70 px-2 py-1">黄色：草稿资料</span>
+                    <span className="rounded-full border border-ops-accent/30 bg-ops-dark/70 px-2 py-1">青色：RAG 资料</span>
+                    <span className="rounded-full border border-amber-300/30 bg-ops-dark/70 px-2 py-1">黄色：资料摘录</span>
                     <span className="rounded-full border border-ops-surface1 bg-ops-dark/70 px-2 py-1">滚轮缩放，拖动移动</span>
                   </div>
                 </div>
@@ -597,7 +597,7 @@ export function KnowledgeVaultGraphPanel({
                       <div className="rounded-md border border-ops-accent/25 bg-ops-accent/10 px-3 py-2">
                         <div className="text-sm font-semibold text-ops-text">{selectedNode.title}</div>
                         <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-ops-subtext">
-                          <span>{selectedNode.kind === 'article' ? '整理资料' : '草稿资料'}</span>
+                          <span>{selectedNode.kind === 'article' ? 'RAG 资料' : '资料摘录'}</span>
                           <span>{selectedNode.degree || 0} 个关系</span>
                         </div>
                       </div>
@@ -644,7 +644,7 @@ export function KnowledgeVaultGraphPanel({
             <div className="mt-2 flex flex-wrap gap-2">
               {topNodes.length > 0 ? topNodes.map((node) => (
                 <span key={node.id} className="max-w-full truncate rounded-full border border-ops-accent/25 px-2 py-1 text-[11px] text-ops-accent" title={node.path}>
-                  {node.kind === 'article' ? '整理资料' : '草稿资料'} · {node.title} · {node.degree || 0} 连接
+                  {node.kind === 'article' ? 'RAG 资料' : '资料摘录'} · {node.title} · {node.degree || 0} 连接
                 </span>
               )) : <span className="text-xs text-ops-subtext">暂无节点</span>}
             </div>
@@ -690,9 +690,9 @@ export function KnowledgeCandidatePanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">草稿资料</div>
+          <div className="text-sm font-semibold text-ops-text">资料摘录</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            草稿资料需要确认后才会进入整理资料区，避免辅助模型把不确定内容直接沉淀成长期知识。
+            资料摘录用于把重点内容变成更容易引用的 Markdown，不影响原文检索。
           </p>
         </div>
         <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
@@ -752,7 +752,7 @@ export function KnowledgeCandidatePanel({
           )
         }) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
-            暂无草稿资料。需要长期维护的内容会先整理成草稿。
+            暂无资料摘录。需要长期引用的内容可以先生成摘录。
           </div>
         )}
       </div>
@@ -776,9 +776,9 @@ export function KnowledgeCandidateEditor({
   if (!candidate) {
     return (
       <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
-        <div className="text-sm font-semibold text-ops-text">草稿正文</div>
+        <div className="text-sm font-semibold text-ops-text">摘录正文</div>
         <p className="mt-1 text-xs leading-5 text-ops-subtext">
-          点击草稿资料的“预览/编辑”，这里会显示 Markdown 正文。确认内容无误后再保存为整理资料。
+          点击资料摘录的“预览/编辑”，这里会显示 Markdown 正文，可直接修改后保存。
         </p>
       </section>
     )
@@ -788,7 +788,7 @@ export function KnowledgeCandidateEditor({
       <div className="border-b border-ops-surface0 px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-xs font-semibold text-ops-accent">草稿正文</div>
+            <div className="text-xs font-semibold text-ops-accent">摘录正文</div>
             <h2 className="mt-1 truncate text-sm font-bold text-ops-text" title={candidate.candidate_path || candidate.original_filename || candidate.filename}>
               {candidate.candidate_path || candidate.original_filename || candidate.filename}
             </h2>
@@ -798,7 +798,7 @@ export function KnowledgeCandidateEditor({
             disabled={saving || !draft.trim()}
             className="shrink-0 rounded-lg bg-ops-accent px-3 py-1.5 text-xs font-semibold text-ops-dark disabled:opacity-50"
           >
-            {saving ? '保存中...' : '保存草稿'}
+            {saving ? '保存中...' : '保存摘录'}
           </button>
         </div>
         <div className="mt-1 text-xs text-ops-overlay">
@@ -827,9 +827,9 @@ export function KnowledgeArticlePanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">整理资料</div>
+          <div className="text-sm font-semibold text-ops-text">RAG 资料</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            已整理的资料会进入 RAG 资料库，作为后续会话、画像和检索可引用的长期知识。
+            这里展示可长期引用的 RAG 资料，后续会话、画像和检索都可以使用。
           </p>
         </div>
         <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
@@ -862,13 +862,13 @@ export function KnowledgeArticlePanel({
                 disabled={Boolean(openingArticle) || item.article_exists === false}
                 className="mt-2 w-full rounded-md border border-ops-accent/40 px-3 py-1.5 text-xs font-semibold text-ops-accent transition-colors hover:bg-ops-accent/10 disabled:cursor-not-allowed disabled:opacity-45"
               >
-                {openingArticle === sourceSession ? '打开中...' : item.article_exists === false ? '资料缺失' : '打开整理资料'}
+                {openingArticle === sourceSession ? '打开中...' : item.article_exists === false ? '资料缺失' : '打开 RAG 资料'}
               </button>
             </article>
           )
         }) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
-            暂无整理资料。草稿确认后，这里会出现可引用的长期知识。
+            暂无 RAG 资料。资料入库后，这里会出现可引用的长期知识。
           </div>
         )}
       </div>
@@ -880,9 +880,9 @@ export function KnowledgeArticleViewer({ article }: { article: KnowledgeCompileQ
   if (!article) {
     return (
       <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
-        <div className="text-sm font-semibold text-ops-text">正式正文</div>
+        <div className="text-sm font-semibold text-ops-text">RAG 正文</div>
         <p className="mt-1 text-xs leading-5 text-ops-subtext">
-          点击整理资料的“打开整理资料”，这里会以只读方式展示 Markdown 正文。
+          点击 RAG 资料的“打开 RAG 资料”，这里会以只读方式展示 Markdown 正文。
         </p>
       </section>
     )
@@ -890,7 +890,7 @@ export function KnowledgeArticleViewer({ article }: { article: KnowledgeCompileQ
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60">
       <div className="border-b border-ops-surface0 px-4 py-3">
-        <div className="text-xs font-semibold text-ops-success">整理正文</div>
+        <div className="text-xs font-semibold text-ops-success">RAG 正文</div>
         <h2 className="mt-1 truncate text-sm font-bold text-ops-text" title={article.wiki_path || article.original_filename || article.filename}>
           {ragDisplayPath(article.wiki_path) || article.original_filename || article.filename}
         </h2>
@@ -899,7 +899,7 @@ export function KnowledgeArticleViewer({ article }: { article: KnowledgeCompileQ
         </div>
       </div>
       <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-5 text-ops-subtext">
-        {article.content || '该整理资料暂无正文'}
+        {article.content || '该 RAG 资料暂无正文'}
       </pre>
     </section>
   )
@@ -1485,8 +1485,8 @@ export function SessionMemoryActivityPanel({
                   }`}>
                     写入状态：{feedbackPolicyLabel(String(item.rating), item.memory_policy)}。
                     {item.rating === 'up'
-                      ? ' 作为成功经验待沉淀，后续会话可引用。'
-                      : ' 已进入纠错治理队列，不会作为成功经验注入后续会话。'}
+                      ? ' 作为成功经验保存，后续会话可引用。'
+                      : ' 已标记为不佳回答，不会作为成功经验注入后续会话。'}
                   </div>
                 </article>
               )) : (
@@ -1652,8 +1652,8 @@ export function MemoryQualityPanel({
   const qualityCards = [
     ['健康分', `${healthScore}`, '按冲突、过期、重复和碎片化综合估算'],
     ['记忆条目', `${summary?.entry_count ?? 0}`, `${summary?.memory_count ?? 0} 个文件 / ${summary?.store_count ?? 0} 个库`],
-    ['待治理', `${(summary?.pending_conflict_count ?? 0) + (summary?.stale_review_count ?? 0)}`, '冲突与过期复核需要人工确认'],
-    ['待压缩', `${summary?.compression_candidate_count ?? 0}`, '只生成待整理内容，不自动覆盖正式记忆'],
+    ['待处理', `${(summary?.pending_conflict_count ?? 0) + (summary?.stale_review_count ?? 0)}`, '冲突与过期内容建议复核'],
+    ['待压缩', `${summary?.compression_candidate_count ?? 0}`, '先生成摘要建议，不自动覆盖已保存记忆'],
   ]
 
   return (
@@ -1687,7 +1687,7 @@ export function MemoryQualityPanel({
         <div className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-ops-text">记忆库分布</span>
-            <span className="text-[11px] text-ops-overlay">{report?.policy?.rule || '确认模式，人工确认后再整理。'}</span>
+            <span className="text-[11px] text-ops-overlay">{report?.policy?.rule || '简单模式，先保存原文和摘要。'}</span>
           </div>
           <div className="mt-3 space-y-2">
             {stores.length > 0 ? stores.map((store) => (
@@ -1700,7 +1700,7 @@ export function MemoryQualityPanel({
                   <span>{store.memories} 文件</span>
                   <span>{store.entries} 条</span>
                   <span>{formatMemorySize(store.size)}</span>
-                  <span>{candidates.filter((candidate) => candidate.store_id === store.store_id).length} 待整理</span>
+                  <span>{candidates.filter((candidate) => candidate.store_id === store.store_id).length} 摘要建议</span>
                 </div>
               </div>
             )) : (
@@ -1711,7 +1711,7 @@ export function MemoryQualityPanel({
         <div className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-ops-text">待压缩记忆</span>
-            <span className="text-[11px] text-ops-overlay">不会自动压缩，先给人工审计</span>
+            <span className="text-[11px] text-ops-overlay">不会自动覆盖，先保留原文和摘要</span>
           </div>
           <div className="mt-3 space-y-2">
             {candidates.length > 0 ? candidates.map((candidate) => (
