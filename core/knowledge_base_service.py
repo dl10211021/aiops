@@ -1090,9 +1090,9 @@ def _resolve_knowledge_embedding_client_and_model():
 def _friendly_vector_message(message: str) -> str:
     detail = str(message or "").strip()
     if not detail:
-        return "检索索引未完成；资料已保存，Wiki 可正常生成。"
+        return "RAG 索引未完成；资料已保存，可用于原文检索。"
     if detail == "文档内容提取或向量化失败":
-        return "向量模型没有返回可用结果，请检查向量模型配置；资料已保存，Wiki 可正常生成。"
+        return "向量模型没有返回可用结果，请检查向量模型配置；资料已保存，可用于原文检索。"
     return detail
 
 
@@ -1113,9 +1113,9 @@ async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None)
         )
         embedding_config = _resolve_knowledge_embedding_client_and_model()
         if embedding_config is None:
-            message = "未配置向量模型，已跳过检索索引；资料已保存，Wiki 可正常生成。"
+            message = "未配置向量模型，已跳过 RAG 索引；资料已保存，可用于原文检索。"
             _update_vault_record(safe_filename, vector_status="skipped", vector_error=message)
-            return f"已保存到资料库，等待 AI 生成 Wiki；{message}"
+            return f"已保存到资料库（RAG 知识库）；{message}"
         client, embedding_model = embedding_config
         result = await kb_manager.ingest_document(file_path, client, embedding_model)
     except KnowledgeBaseServiceError:
@@ -1124,7 +1124,7 @@ async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None)
         detail = _friendly_vector_message(str(exc))
         if "vault_record" in locals():
             _update_vault_record(safe_filename, vector_status="skipped", vector_error=detail)
-            return f"已保存到资料库，等待 AI 生成 Wiki；检索索引跳过：{detail}"
+            return f"已保存到资料库（RAG 知识库）；RAG 索引跳过：{detail}"
         raise KnowledgeBaseServiceError(500, detail) from exc
 
     if result.get("status") == "success":
@@ -1132,7 +1132,7 @@ async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None)
         return str(result.get("message") or "")
     message = _friendly_vector_message(str(result.get("message") or "文档内容提取或向量化失败"))
     _update_vault_record(safe_filename, vector_status="failed", vector_error=message)
-    return f"已保存到资料库，等待 AI 生成 Wiki；检索索引未完成：{message}"
+    return f"已保存到资料库（RAG 知识库）；RAG 检索索引未完成：{message}"
 
 
 async def list_knowledge_document_records(kb_manager=None) -> list[Any]:
