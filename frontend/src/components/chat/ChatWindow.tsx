@@ -55,6 +55,7 @@ export default function ChatWindow() {
     return localStorage.getItem(rightPanelCollapsedStorageKey) === '1'
   })
   const [isResizing, setIsResizing] = useState(false)
+  const [profileFocusPulse, setProfileFocusPulse] = useState(false)
   const [selectedSlashCommandIndex, setSelectedSlashCommandIndex] = useState(0)
   const [orchestrationMode, setOrchestrationModeState] = useState<'single' | 'split'>(() => {
     if (typeof window === 'undefined') return 'single'
@@ -63,6 +64,8 @@ export default function ChatWindow() {
   const dragStartRef = useRef<{ startX: number; startWidth: number } | null>(null)
   const rightPanelWidthRef = useRef(defaultRightPanelWidth)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const profilePanelRef = useRef<HTMLDivElement>(null)
+  const profileFocusTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const inputDrafts = useChatInputDrafts(currentSessionId, textareaRef)
 
@@ -99,6 +102,38 @@ export default function ChatWindow() {
   useEffect(() => {
     setSelectedSlashCommandIndex(0)
   }, [input, visibleSlashCommands.length])
+
+  useEffect(() => {
+    const handleProfileFocus = () => {
+      setView('chat')
+      setRightPanelCollapsed(false)
+      localStorage.setItem(rightPanelCollapsedStorageKey, '0')
+      const nextWidth = Math.max(rightPanelWidthRef.current, defaultRightPanelWidth)
+      rightPanelWidthRef.current = nextWidth
+      setRightPanelWidth(nextWidth)
+      localStorage.setItem(rightPanelStorageKey, String(nextWidth))
+      if (!assetProfile.open && assetProfile.profile) {
+        assetProfile.toggle()
+      }
+      window.setTimeout(() => {
+        profilePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 80)
+      setProfileFocusPulse(true)
+      if (profileFocusTimeoutRef.current) {
+        window.clearTimeout(profileFocusTimeoutRef.current)
+      }
+      profileFocusTimeoutRef.current = window.setTimeout(() => {
+        setProfileFocusPulse(false)
+      }, 2200)
+    }
+    window.addEventListener('opscore:session-profile-focus', handleProfileFocus)
+    return () => {
+      window.removeEventListener('opscore:session-profile-focus', handleProfileFocus)
+      if (profileFocusTimeoutRef.current) {
+        window.clearTimeout(profileFocusTimeoutRef.current)
+      }
+    }
+  }, [assetProfile, setView])
 
   const { sendMessage, stopStreaming, hasActiveStream } = useChatStreaming({
     currentSessionId,
@@ -397,14 +432,21 @@ export default function ChatWindow() {
           </button>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <AssetProfilePanel
-              session={session}
-              profile={assetProfile.profile}
-              open={assetProfile.open}
-              busy={assetProfile.busy}
-              onToggle={assetProfile.toggle}
-              onGenerate={assetProfile.generate}
-            />
+            <div
+              ref={profilePanelRef}
+              className={`transition-[box-shadow,filter] duration-300 ${
+                profileFocusPulse ? 'ring-2 ring-ops-accent/70 drop-shadow-[0_0_18px_rgba(45,212,191,0.35)]' : ''
+              }`}
+            >
+              <AssetProfilePanel
+                session={session}
+                profile={assetProfile.profile}
+                open={assetProfile.open}
+                busy={assetProfile.busy}
+                onToggle={assetProfile.toggle}
+                onGenerate={assetProfile.generate}
+              />
+            </div>
             <AiThinkingChainPanel
               sessionId={currentSessionId}
               messages={messages}

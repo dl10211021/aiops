@@ -281,6 +281,7 @@ function referenceSearchQuery(ref: MemoryReference) {
 
 function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
   const setView = useStore((state) => state.setView)
+  const openModal = useStore((state) => state.openModal)
   const refs = message.memoryRefs || message.memory_refs || []
   if (!refs.length) return null
   const ragCount = refs.filter((ref) => referenceSourceType(ref) === 'rag').length
@@ -306,6 +307,10 @@ function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
           detail: { sessionId: ref.source_session_id || ref.scope_id },
         }))
       }, 60)
+      return
+    }
+    if (sourceType === 'system_prompt') {
+      openModal('llm-config')
       return
     }
     setView('knowledge')
