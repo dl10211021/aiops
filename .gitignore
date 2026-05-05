@@ -50,6 +50,10 @@ backend*.log
 .tmp/
 temp_sandbox/
 tmp*/
+.gitnexus/
+knowledge_base/*
+!knowledge_base/test.txt
+!knowledge_base/README.md
 tmp_knowledge_*.png
 oracle_client_*/
 tmp_history.json
