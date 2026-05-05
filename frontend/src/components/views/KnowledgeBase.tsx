@@ -346,7 +346,7 @@ export default function KnowledgeBase() {
               <div className="grid gap-2 md:grid-cols-4">
                 {([
                   ['source', '资料列表', `${files.length} 份资料`, '上传、查看、删除'],
-                  ['discover', '检索与图谱', `${vaultSearchResults.length} 条命中`, '查证据和关系'],
+                  ['discover', '召回测试', `${vaultSearchResults.length} 条命中`, '验证知识能否命中'],
                 ] as const).map(([id, label, count, desc]) => (
                   <button
                     key={id}
@@ -415,7 +415,7 @@ export default function KnowledgeBase() {
                       onClick={() => setDocumentStep('discover')}
                       className="mt-4 w-full rounded-md border border-ops-accent/45 px-3 py-2 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
                     >
-                      下一步：RAG 检索
+                      下一步：RAG 召回测试
                     </button>
                   </div>
                 </aside>

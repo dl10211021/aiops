@@ -542,19 +542,35 @@ export function KnowledgeVaultSearchPanel({
     ['sources', '来源记录'],
     ['raw', '原始资料'],
   ]
+  const sourceCount = new Set(results.map((item) => item.source_session_id || item.id || item.path).filter(Boolean)).size
+  const topScore = results.length > 0 ? Math.max(...results.map((item) => Number(item.score) || 0)) : 0
 
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">RAG 检索</div>
+          <div className="text-sm font-semibold text-ops-text">RAG 召回测试</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-          输入问题后，从原始资料、RAG 资料和来源记录中找证据；会话回答可以引用这里的命中内容。
+            输入一个准备问 AI 的问题，先看知识库能不能找到可追溯证据；这里只做召回验证，不做复杂评测系统。
           </p>
         </div>
         <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-xs text-ops-accent">
           {results.length}
         </span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+          <div className="text-[11px] text-ops-overlay">命中证据</div>
+          <div className="mt-1 text-lg font-black text-ops-text">{results.length}</div>
+        </div>
+        <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+          <div className="text-[11px] text-ops-overlay">来源数量</div>
+          <div className="mt-1 text-lg font-black text-ops-text">{sourceCount}</div>
+        </div>
+        <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+          <div className="text-[11px] text-ops-overlay">最高相关度</div>
+          <div className="mt-1 text-lg font-black text-ops-text">{topScore}</div>
+        </div>
       </div>
       <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_130px]">
         <input
@@ -563,7 +579,7 @@ export function KnowledgeVaultSearchPanel({
           onKeyDown={(event) => {
             if (event.key === 'Enter') onSearch()
           }}
-          placeholder="输入问题、资产、故障、命令、结论或关键词..."
+          placeholder="例如：172.17.8.131 的 SSH 风险是什么？"
           className="rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
         />
         <select
@@ -581,14 +597,14 @@ export function KnowledgeVaultSearchPanel({
         disabled={searching}
         className="mt-2 w-full rounded-md border border-ops-accent/40 px-3 py-1.5 text-xs font-semibold text-ops-accent transition-colors hover:bg-ops-accent/10 disabled:cursor-not-allowed disabled:opacity-45"
       >
-        {searching ? '检索中...' : '执行 RAG 检索'}
+        {searching ? '召回中...' : '执行召回测试'}
       </button>
       <div className="mt-3 space-y-2">
         {results.length > 0 ? results.map((item, index) => (
           <article key={`${item.path}-${index}`} className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <div className="truncate text-xs font-semibold text-ops-text" title={item.title}>{item.title}</div>
+                <div className="truncate text-xs font-semibold text-ops-text" title={item.title}>#{index + 1} {item.title}</div>
                 <div className="mt-1 truncate font-mono text-[11px] text-ops-overlay" title={item.path}>{ragDisplayPath(item.path)}</div>
               </div>
               <span className="shrink-0 rounded-full border border-ops-accent/30 px-2 py-0.5 text-[10px] text-ops-accent">
@@ -604,7 +620,7 @@ export function KnowledgeVaultSearchPanel({
           </article>
         )) : (
           <div className="rounded-md border border-dashed border-ops-surface1 p-3 text-xs leading-5 text-ops-subtext">
-            输入问题即可离线检索资料。即使 Embedding 暂不可用，原文仍可作为可追溯证据。
+            输入问题后会展示命中的资料、证据片段、来源和相关度。即使 Embedding 暂不可用，原文仍可作为可追溯证据。
           </div>
         )}
       </div>
