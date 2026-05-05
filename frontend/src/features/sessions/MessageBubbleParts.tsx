@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { useStore } from '@/store'
-import type { ChatMessage, ChatMessageAttachment } from '@/types'
+import type { ChatMessage, ChatMessageAttachment, MemoryReference } from '@/types'
 import { formatBytes } from './format'
 import { renderMarkdown } from './markdown'
 
@@ -206,35 +206,84 @@ export function AssistantReportBubble({
   )
 }
 
+function referenceSourceType(ref: MemoryReference) {
+  const sourceType = String(ref.source_type || '').toLowerCase()
+  const kind = String(ref.kind || '').toLowerCase()
+  const kindLabel = String(ref.kind_label || '')
+  if (sourceType === 'rag' || kindLabel.includes('RAG') || ['articles', 'candidates', 'sources', 'raw'].includes(kind)) {
+    return 'rag'
+  }
+  return 'memory'
+}
+
+function referenceBadge(ref: MemoryReference) {
+  if (referenceSourceType(ref) === 'rag') {
+    return ref.kind_label || 'RAG 资料'
+  }
+  return '长期记忆'
+}
+
+function referenceTitle(ref: MemoryReference) {
+  return ref.title || ref.scope_label || ref.path || ref.scope_id || '未命名引用'
+}
+
+function referenceMeta(ref: MemoryReference) {
+  return [
+    ref.source_session_id ? `会话 ${ref.source_session_id}` : '',
+    ref.path || ref.scope_id || '',
+    ref.updated_at || ref.timestamp || '',
+    ref.score !== undefined ? `命中分 ${ref.score}` : '',
+  ].filter(Boolean).join(' · ')
+}
+
+function referenceReason(ref: MemoryReference) {
+  if (referenceSourceType(ref) === 'rag') {
+    return '来自 RAG 检索命中的资料证据，已做敏感字段脱敏；用于辅助回答引用，不替代当前会话的实时巡检结果。'
+  }
+  return '来自长期记忆或会话经验，回答时需要结合当前证据复核，不能直接当作事实替代实时巡检结果。'
+}
+
 function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
   const refs = message.memoryRefs || message.memory_refs || []
   if (!refs.length) return null
+  const ragCount = refs.filter((ref) => referenceSourceType(ref) === 'rag').length
+  const memoryCount = refs.length - ragCount
   return (
-    <details open className="border-b border-ops-accent/25 bg-ops-accent/10 px-4 py-2 text-[11px] text-ops-subtext">
+    <details open className="border-b border-ops-accent/25 bg-[linear-gradient(135deg,rgba(45,212,191,0.13),rgba(37,99,235,0.08))] px-4 py-2 text-[11px] text-ops-subtext">
       <summary className="cursor-pointer select-none font-semibold text-ops-accent">
-        本轮 AI 已引用 {refs.length} 条历史记忆
+        本轮引用来源：{refs.length} 条
+        {ragCount > 0 ? ` · RAG 资料 ${ragCount}` : ''}
+        {memoryCount > 0 ? ` · 长期记忆 ${memoryCount}` : ''}
       </summary>
       <p className="mt-1 leading-5 text-ops-overlay">
-        命中解释：这些记忆按资产、会话范围、路径和摘要与本轮问题匹配后召回，只作为历史经验提示，最终仍以当前会话的真实工具结果为准。
+        这里展示本轮回答使用过的资料和记忆。RAG 资料来自知识库检索，长期记忆来自会话经验；两者都只做辅助依据，最终仍以当前资产实时证据为准。
       </p>
       <div className="mt-2 grid gap-1.5">
         {refs.map((ref, index) => (
           <div
-            key={`${ref.scope_id}-${ref.timestamp || index}-${index}`}
-            className="rounded-md border border-ops-surface1/60 bg-ops-panel/60 px-2.5 py-1.5"
+            key={`${ref.path || ref.scope_id || ref.title || ref.source_session_id || 'ref'}-${index}`}
+            className={`rounded-md border px-2.5 py-1.5 ${
+              referenceSourceType(ref) === 'rag'
+                ? 'border-ops-accent/35 bg-ops-accent/10'
+                : 'border-ops-surface1/60 bg-ops-panel/60'
+            }`}
           >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-ops-accent">
-                {ref.scope_label || ref.scope_id}
+              <span className={`rounded-full border px-2 py-0.5 ${
+                referenceSourceType(ref) === 'rag'
+                  ? 'border-ops-accent/45 text-ops-accent'
+                  : 'border-ops-surface1 text-ops-subtext'
+              }`}>
+                {referenceBadge(ref)}
               </span>
-              <span className="font-mono text-ops-overlay">{ref.timestamp || '未知时间'}</span>
-              {ref.path && <span className="truncate font-mono text-ops-overlay">{ref.path}</span>}
+              <span className="font-semibold text-ops-text">{referenceTitle(ref)}</span>
+              {referenceMeta(ref) && <span className="truncate font-mono text-ops-overlay">{referenceMeta(ref)}</span>}
             </div>
             <div className="mt-1 line-clamp-2 text-ops-subtext">
               {ref.summary_preview || '无摘要'}
             </div>
             <div className="mt-1 rounded border border-ops-surface0/80 bg-ops-dark/30 px-2 py-1 text-[10px] leading-4 text-ops-overlay">
-              引用理由：与本轮上下文相关，回答时需要结合当前证据复核，不能直接当作事实替代实时巡检结果。
+              引用说明：{referenceReason(ref)}
             </div>
           </div>
         ))}

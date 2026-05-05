@@ -161,8 +161,15 @@ export interface ChatMessage {
 }
 
 export interface MemoryReference {
-  scope_id: string
+  scope_id?: string
   scope_label?: string
+  source_type?: 'memory' | 'rag' | string
+  kind?: string
+  kind_label?: string
+  title?: string
+  source_session_id?: string
+  score?: number | string
+  updated_at?: string
   timestamp?: string
   summary_preview?: string
   path?: string
