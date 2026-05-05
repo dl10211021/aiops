@@ -1136,29 +1136,25 @@ async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None)
 
 
 async def list_knowledge_document_records(kb_manager=None) -> list[Any]:
-    kb_manager = _resolve_kb_manager(kb_manager)
     vault_records = []
     for item in list_vault_source_records():
         if isinstance(item, dict) and item.get("vector_error"):
             item = {**item, "vector_error": _friendly_vector_message(str(item.get("vector_error") or ""))}
         vault_records.append(item)
+    if vault_records:
+        return vault_records
+
+    kb_manager = _resolve_kb_manager(kb_manager)
     try:
         kb_records = await kb_manager.list_documents()
     except Exception as exc:
-        if vault_records:
-            return vault_records
         raise KnowledgeBaseServiceError(500, str(exc)) from exc
 
     merged: dict[str, Any] = {}
-    for item in vault_records:
-        if isinstance(item, dict) and item.get("filename"):
-            merged[str(item["filename"])] = item
     for item in kb_records:
         if isinstance(item, dict):
             filename = str(item.get("filename") or item.get("name") or "")
-            if filename and filename in merged:
-                merged[filename] = {**merged[filename], **item}
-            elif filename:
+            if filename:
                 merged[filename] = item
         else:
             filename = str(item)

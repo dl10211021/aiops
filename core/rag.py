@@ -128,9 +128,15 @@ class KnowledgeBaseManager:
             return []
         try:
             tbl = self.ldb.open_table("knowledge_base")
-            # 取出所有 source 字段去重
-            df = tbl.search().select(["source"]).limit(10000).to_pandas()
+            # 取出所有 source 字段去重。不要使用无查询向量的 search()，
+            # 新版 LanceDB 会等待有效查询并导致 /knowledge/list 卡住。
+            try:
+                df = tbl.to_pandas()
+            except AttributeError:
+                df = tbl.head(10000).to_pandas()
             if len(df) == 0:
+                return []
+            if "source" not in df.columns:
                 return []
             sources = df["source"].unique().tolist()
             return sources
