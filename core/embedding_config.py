@@ -4,9 +4,28 @@ import logging
 import os
 import sys
 
+from core.local_embedding import (
+    DEFAULT_LOCAL_EMBEDDING_DIM,
+    DEFAULT_LOCAL_EMBEDDING_MODEL,
+    local_embedding_model_available,
+)
 
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "")
-EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "3072"))
+def _initial_embedding_model() -> str:
+    configured = os.environ.get("EMBEDDING_MODEL", "").strip()
+    if configured:
+        return configured
+    if local_embedding_model_available():
+        return DEFAULT_LOCAL_EMBEDDING_MODEL
+    return ""
+
+
+EMBEDDING_MODEL = _initial_embedding_model()
+EMBEDDING_DIM = int(
+    os.environ.get(
+        "EMBEDDING_DIM",
+        str(DEFAULT_LOCAL_EMBEDDING_DIM if EMBEDDING_MODEL == DEFAULT_LOCAL_EMBEDDING_MODEL else 3072),
+    )
+)
 
 logger = logging.getLogger(__name__)
 

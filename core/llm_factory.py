@@ -159,9 +159,20 @@ def get_embedding_client_and_model(full_model_id: str | None = None):
     """Resolve the embedding client/model without falling back to hard-coded Gemini."""
     import os
 
-    model_id = os.environ.get("EMBEDDING_MODEL_ID") or full_model_id or get_default_model_id()
+    model_id = os.environ.get("EMBEDDING_MODEL_ID") or full_model_id or os.environ.get("EMBEDDING_MODEL") or get_default_model_id()
+    from core.local_embedding import (
+        get_local_embedding_client,
+        is_local_embedding_model_id,
+        normalize_local_embedding_model_id,
+    )
+
+    if is_local_embedding_model_id(model_id):
+        return get_local_embedding_client(model_id), normalize_local_embedding_model_id(model_id)
+
     client, config = get_client_for_model(model_id)
     embedding_model = os.environ.get("EMBEDDING_MODEL") or config["model"]
+    if is_local_embedding_model_id(embedding_model):
+        return get_local_embedding_client(embedding_model), normalize_local_embedding_model_id(embedding_model)
     return client, embedding_model
 
 def get_client_for_model(full_model_id: str):

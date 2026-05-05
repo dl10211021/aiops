@@ -36,6 +36,7 @@ cron_jobs.sqlite
 /opscore_lancedb/
 /memory/
 /data/
+/models/embeddings/
 
 # Logs
 server_out.log

@@ -39,7 +39,10 @@ from core.knowledge_base_service import (
     safe_knowledge_filename,
     search_vault_knowledge,
     update_vault_candidate,
+    _knowledge_reindex_timeout_seconds,
+    _knowledge_setup_timeout_seconds,
 )
+from core.local_embedding import DEFAULT_LOCAL_EMBEDDING_MODEL
 
 
 class FakeUpload:
@@ -307,17 +310,18 @@ class TestKnowledgeBaseService(unittest.TestCase):
             for upload in uploads:
                 asyncio.run(ingest_knowledge_document(kb, upload))
 
-        page = asyncio.run(
-            list_knowledge_document_page(
-                kb,
-                query="Oracle",
-                vector_status="skipped",
-                extension=".md",
-                page=1,
-                per_page=10,
-                sort="name_asc",
+        with patch("core.embedding_config.get_embedding_config", return_value=("", 3072)):
+            page = asyncio.run(
+                list_knowledge_document_page(
+                    kb,
+                    query="Oracle",
+                    vector_status="skipped",
+                    extension=".md",
+                    page=1,
+                    per_page=10,
+                    sort="name_asc",
+                )
             )
-        )
 
         self.assertEqual(page["pagination"]["total"], 1)
         self.assertEqual(page["summary"]["total"], 2)
@@ -344,6 +348,13 @@ class TestKnowledgeBaseService(unittest.TestCase):
 
         self.assertEqual(result["vector_status"], "skipped")
         self.assertIn("未配置向量模型", result["message"])
+
+    def test_local_embedding_default_reindex_timeout_allows_model_warmup(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("OPSCORE_KNOWLEDGE_REINDEX_TIMEOUT_SECONDS", None)
+            with patch("core.embedding_config.get_embedding_config", return_value=(DEFAULT_LOCAL_EMBEDDING_MODEL, 1024)):
+                self.assertGreaterEqual(_knowledge_reindex_timeout_seconds(), 180.0)
+                self.assertGreaterEqual(_knowledge_setup_timeout_seconds(180.0), 120.0)
 
     def test_reindex_knowledge_document_record_rebuilds_vector_index(self):
         kb = FakeKnowledgeBase("reindex_success", message="注入成功")

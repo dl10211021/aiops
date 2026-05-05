@@ -1265,13 +1265,31 @@ def _resolve_knowledge_embedding_client_and_model():
     return get_embedding_client_and_model(model_id)
 
 
-def _knowledge_reindex_timeout_seconds() -> float:
-    raw_value = os.environ.get("OPSCORE_KNOWLEDGE_REINDEX_TIMEOUT_SECONDS", "10")
+def _is_local_embedding_configured() -> bool:
     try:
-        seconds = float(raw_value)
+        from core.embedding_config import get_embedding_config
+        from core.local_embedding import is_local_embedding_model_id
+
+        embedding_model, _ = get_embedding_config()
+        return is_local_embedding_model_id(embedding_model)
+    except Exception:
+        return False
+
+
+def _knowledge_reindex_timeout_seconds() -> float:
+    default_seconds = 180.0 if _is_local_embedding_configured() else 10.0
+
+    raw_value = os.environ.get("OPSCORE_KNOWLEDGE_REINDEX_TIMEOUT_SECONDS")
+    try:
+        seconds = float(raw_value) if raw_value else default_seconds
     except (TypeError, ValueError):
-        seconds = 10.0
+        seconds = default_seconds
     return max(0.1, min(seconds, 600.0))
+
+
+def _knowledge_setup_timeout_seconds(timeout_seconds: float) -> float:
+    setup_cap = 120.0 if _is_local_embedding_configured() else 3.0
+    return min(timeout_seconds, setup_cap)
 
 
 def _run_knowledge_ingest_blocking(kb_manager, file_path: str, client: Any, embedding_model: str):
@@ -1330,7 +1348,7 @@ async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None,
             _update_vault_record(safe_filename, vector_status="pending", vector_error=message)
             return f"已保存到资料库（RAG 知识库）；{message}"
         timeout_seconds = _knowledge_reindex_timeout_seconds()
-        setup_timeout_seconds = min(timeout_seconds, 3.0)
+        setup_timeout_seconds = _knowledge_setup_timeout_seconds(timeout_seconds)
         try:
             embedding_config = await asyncio.wait_for(
                 asyncio.to_thread(_resolve_knowledge_embedding_client_and_model),
@@ -1480,11 +1498,13 @@ def _sort_knowledge_records(records: list[dict[str, Any]], sort: str) -> list[di
 
 def get_knowledge_vector_store_status(kb_manager=None, *, summary: dict[str, Any] | None = None) -> dict[str, Any]:
     from core.embedding_config import get_embedding_config
+    from core.knowledge_vector_config import knowledge_vector_table_name
 
     embedding_model, embedding_dim = get_embedding_config()
     db_path = str(getattr(kb_manager, "db_path", "") or os.getenv("OPSCORE_LANCEDB_PATH") or "opscore_lancedb")
     db_path_exists = Path(db_path).exists()
     table_exists = db_path_exists
+    table_name = knowledge_vector_table_name(embedding_dim)
     vector_counts = dict((summary or {}).get("vector_counts") or {})
     indexed_count = int(vector_counts.get("indexed") or 0)
     skipped_count = int(vector_counts.get("skipped") or 0)
@@ -1541,7 +1561,7 @@ def get_knowledge_vector_store_status(kb_manager=None, *, summary: dict[str, Any
         "model_configured": bool(embedding_model),
         "database": "LanceDB",
         "db_path": db_path,
-        "table": "knowledge_base",
+        "table": table_name,
         "table_exists": table_exists,
         "db_path_exists": db_path_exists,
         "table_names": [],
@@ -1634,7 +1654,7 @@ async def reindex_knowledge_document_record(
     client, embedding_model = embedding_config
     timeout_seconds = _knowledge_reindex_timeout_seconds()
     if kb_manager is None:
-        manager_timeout = min(timeout_seconds, 3.0)
+        manager_timeout = _knowledge_setup_timeout_seconds(timeout_seconds)
         try:
             kb_manager = await asyncio.wait_for(
                 asyncio.to_thread(_resolve_kb_manager, None),

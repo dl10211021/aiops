@@ -5,6 +5,7 @@ from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
 from core import llm_factory
 from core import assistant_model_config
+from core.local_embedding import DEFAULT_LOCAL_EMBEDDING_MODEL, LocalEmbeddingClient
 
 class TestLLMFactory(unittest.TestCase):
     def setUp(self):
@@ -82,6 +83,13 @@ class TestLLMFactory(unittest.TestCase):
 
     def test_default_model_id_uses_first_configured_provider_model(self):
         self.assertEqual(llm_factory.get_default_model_id(), "google|gemini-2.5-flash")
+
+    def test_embedding_factory_uses_local_embedding_client(self):
+        with patch.dict("os.environ", {"EMBEDDING_MODEL_ID": "", "EMBEDDING_MODEL": ""}):
+            client, model = llm_factory.get_embedding_client_and_model(DEFAULT_LOCAL_EMBEDDING_MODEL)
+
+        self.assertIsInstance(client, LocalEmbeddingClient)
+        self.assertEqual(model, DEFAULT_LOCAL_EMBEDDING_MODEL)
 
 if __name__ == '__main__':
     unittest.main()

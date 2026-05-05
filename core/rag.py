@@ -3,6 +3,7 @@ import lancedb
 import logging
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from core.knowledge_vector_config import knowledge_vector_table_name
 from core.lancedb_utils import ensure_lancedb_table, lancedb_table_names
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,9 @@ class KnowledgeBaseManager:
         except ImportError:
             return 3072
 
+    def _table_name(self):
+        return knowledge_vector_table_name(self._get_embedding_dim())
+
     async def ingest_document(self, file_path, client, embedding_model: str | None = None):
         """解析文档、分块、向量化并存入 LanceDB"""
         if not os.path.exists(file_path):
@@ -51,7 +55,7 @@ class KnowledgeBaseManager:
         if not splits:
             return {"status": "error", "message": "未提取到可用于检索索引的文本内容"}
         
-        table_name = "knowledge_base"
+        table_name = self._table_name()
         
         # 准备数据插入
         data = []
@@ -97,7 +101,8 @@ class KnowledgeBaseManager:
 
     async def search(self, query, client, embedding_model: str | None = None, limit=10):
         """根据问题检索最相关的知识片段"""
-        if "knowledge_base" not in lancedb_table_names(self.ldb):
+        table_name = self._table_name()
+        if table_name not in lancedb_table_names(self.ldb):
             return "当前企业知识库为空，无参考文档。"
             
         try:
@@ -124,10 +129,11 @@ class KnowledgeBaseManager:
 
     async def list_documents(self):
         """列出所有已注入的文档"""
-        if "knowledge_base" not in lancedb_table_names(self.ldb):
+        table_name = self._table_name()
+        if table_name not in lancedb_table_names(self.ldb):
             return []
         try:
-            tbl = self.ldb.open_table("knowledge_base")
+            tbl = self.ldb.open_table(table_name)
             # 取出所有 source 字段去重。不要使用无查询向量的 search()，
             # 新版 LanceDB 会等待有效查询并导致 /knowledge/list 卡住。
             try:
@@ -146,10 +152,11 @@ class KnowledgeBaseManager:
 
     async def delete_document(self, filename: str):
         """删除指定文档的所有块"""
-        if "knowledge_base" not in lancedb_table_names(self.ldb):
+        table_name = self._table_name()
+        if table_name not in lancedb_table_names(self.ldb):
             return {"status": "error", "message": "知识库为空"}
         try:
-            tbl = self.ldb.open_table("knowledge_base")
+            tbl = self.ldb.open_table(table_name)
             
             # 防御 SQL 注入 (LanceDB Delete Filter)
             safe_filename = filename.replace("'", "''")
@@ -166,7 +173,7 @@ class KnowledgeBaseManager:
             try:
                 tbl.cleanup_old_versions()
                 tbl.compact_files()
-                logger.info("LanceDB knowledge_base 整理和清理完成。")
+                logger.info("LanceDB %s 整理和清理完成。", table_name)
             except Exception as e:
                 logger.warning(f"LanceDB 整理报错: {e}")
                 
