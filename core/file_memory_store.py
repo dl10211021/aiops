@@ -10,49 +10,13 @@ from typing import Any
 
 DEFAULT_MEMORY_STORES = [
     {
-        "id": "global",
-        "name": "全局只读记忆",
-        "description": "平台规则、组织规范和长期参考资料。默认只读，避免被会话污染。",
-        "path_prefix": "global/",
-        "access": "read_only",
-        "lifecycle": "long_term",
-        "instructions": "仅作为高可信参考资料读取；不得由普通会话写入。遇到冲突时，以当前资产实时证据和用户最新确认优先。",
-    },
-    {
         "id": "sessions",
         "name": "会话记忆",
         "description": "单次会话产生的上下文、阶段性经验和反馈。",
         "path_prefix": "sessions/",
         "access": "read_write",
         "lifecycle": "session_scoped",
-        "instructions": "用于保存本会话被验证过的偏好、纠错和阶段结论；写入前必须压缩为小而准的中文记忆，避免流水账。",
-    },
-    {
-        "id": "assets",
-        "name": "资产记忆",
-        "description": "同一资产的画像、巡检经验、风险和纠错记录。",
-        "path_prefix": "assets/",
-        "access": "read_write",
-        "lifecycle": "asset_scoped",
-        "instructions": "用于同一资产跨会话复用；只保存经过原生协议工具验证的资产画像、风险例外、巡检经验和用户纠错。",
-    },
-    {
-        "id": "hosts",
-        "name": "主机记忆",
-        "description": "同一主机地址复用的运维经验。",
-        "path_prefix": "hosts/",
-        "access": "read_write",
-        "lifecycle": "host_scoped",
-        "instructions": "用于同一 IP/主机的长期经验；读取后必须结合当前时间、当前会话和实时巡检结果复核，不能直接当作事实执行。",
-    },
-    {
-        "id": "asset_kinds",
-        "name": "资产类型记忆",
-        "description": "同类协议或资产类型共享的通用经验。",
-        "path_prefix": "asset_kinds/",
-        "access": "read_write",
-        "lifecycle": "type_scoped",
-        "instructions": "用于 Linux、Windows、Oracle、交换机等同类资产的通用方法；仅提供操作思路，不覆盖具体资产证据。",
+        "instructions": "用于保存本会话被验证过的偏好、纠错和阶段结论；写入前必须压缩为小而准的中文记忆，避免流水账。知识库/RAG 可以共享，普通会话记忆不得跨 session 共享。",
     },
 ]
 

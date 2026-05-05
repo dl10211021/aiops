@@ -142,12 +142,7 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
                 "检查技能",
                 "emb:default-model",
                 "embedding-model",
-                [
-                    "sid-1",
-                    "asset:virtual:workspace:",
-                    "asset-host:workspace",
-                    "asset-kind:virtual:virtual",
-                ],
+                ["sid-1"],
             )],
         )
         self.assertIn("BASE:default", run.messages[0]["content"])
@@ -192,7 +187,7 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(run.model_name, "chosen-model")
         self.assertEqual(default_calls, [])
 
-    async def test_uses_latest_same_asset_profile_when_session_profile_missing(self):
+    async def test_does_not_use_same_asset_profile_when_session_profile_missing(self):
         memory_store = FakeMemoryStore()
         memory_store.asset_profile_for_context = {
             "profile_prompt": "同资产历史画像：这是 Linux 应用服务器，优先关注 SSH、Docker 和安全日志。"
@@ -226,15 +221,11 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
                 profile_loader=lambda profile: f"BASE:{profile}",
             )
 
-        self.assertIn("同资产历史画像", run.messages[0]["content"])
-        self.assertEqual(
-            memory_store.asset_profile_context_calls,
-            [("sid-new", "linux:ssh:10.0.0.1:22", "10.0.0.1")],
-        )
+        self.assertNotIn("同资产历史画像", run.messages[0]["content"])
+        self.assertEqual(memory_store.asset_profile_context_calls, [])
         self.assertEqual(run.memory_references[0]["source_type"], "system_prompt")
-        self.assertEqual(run.memory_references[1]["source_type"], "asset_profile")
-        self.assertEqual(run.memory_references[1]["kind_label"], "资产画像")
-        self.assertIn("同资产历史画像", run.memory_references[1]["summary_preview"])
+        self.assertEqual(run.memory_references[1]["scope_id"], "sid-1")
+        self.assertFalse(any(ref.get("source_type") == "asset_profile" for ref in run.memory_references))
 
 
 if __name__ == "__main__":

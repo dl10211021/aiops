@@ -53,7 +53,7 @@ async def collect_chat_loop_events(**overrides):
         "model_name": "model-a",
         "thinking_mode": "off",
         "messages": [],
-        "context": {"session_id": "sid-1", "memory_scope_ids": ["sid-1", "asset:ssh:10.0.0.1:22"]},
+        "context": {"session_id": "sid-1", "memory_scope_ids": ["sid-1"]},
         "tools": [{"name": "tool"}],
         "memory_store": memory_store,
         "dispatcher": object(),
@@ -135,6 +135,8 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(memory["memory_type"], "successful_execution")
         self.assertIn("辅助模型根据上下文自确认", memory["content"])
         self.assertIn("无需用户每次点赞", memory["content"])
+        self.assertIn("只可作为当前会话后续轮次", memory["content"])
+        self.assertNotIn("同类资产排查", memory["content"])
 
     async def test_streams_assistant_message_done_and_schedules_ltm(self):
         async def streamer(**kwargs):
@@ -160,7 +162,7 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(scheduler_calls[0]["emb_client"], "emb-client")
         self.assertEqual(
             scheduler_calls[0]["memory_scope_ids"],
-            ["sid-1", "asset:ssh:10.0.0.1:22"],
+            ["sid-1"],
         )
 
     async def test_cancel_before_streaming_resets_flag_and_schedules_ltm(self):

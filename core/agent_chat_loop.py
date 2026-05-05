@@ -737,7 +737,7 @@ def build_successful_execution_memory(
 会话：{session_id}
 资产：{context.get('asset_type')}/{context.get('protocol')} {context.get('host')}:{context.get('port')}
 模式：{'可修改' if context.get('allow_modifications') else '只读'}
-结论：本轮工具链全部执行成功，可作为后续同类资产排查的参考路径。
+结论：本轮工具链全部执行成功，只可作为当前会话后续轮次的参考路径，不得自动扩散到同资产、同主机或同类型资产。
 确认方式：辅助模型根据上下文自确认；未配置辅助模型时由主模型接管。无需用户每次点赞，但如果用户点踩对应回答，后续压缩必须否决正向沉淀。
 
 成功步骤：
@@ -746,7 +746,7 @@ def build_successful_execution_memory(
 AI 输出摘要：
 {assistant_content[:1200] or '-'}
 
-沉淀要求：后续长期记忆压缩时保留可复用的排查路径、命令模式、成功信号和注意事项；不要保存密码、Token、密钥或完整敏感连接串。
+沉淀要求：后续长期记忆压缩时只写入当前会话作用域，保留本会话内可复用的排查路径、命令模式、成功信号和注意事项；不要保存密码、Token、密钥或完整敏感连接串。
 """.strip()
     return {
         "role": "system",

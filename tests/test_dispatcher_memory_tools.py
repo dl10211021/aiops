@@ -20,7 +20,7 @@ class DispatcherMemoryToolsTest(unittest.TestCase):
             "port": 22,
             "protocol": "ssh",
             "asset_type": "linux",
-            "memory_scope_ids": ["sid-1", "asset-host:10.0.0.1"],
+            "memory_scope_ids": ["sid-1"],
         }
 
     def tearDown(self):
@@ -33,7 +33,7 @@ class DispatcherMemoryToolsTest(unittest.TestCase):
                     execute_memory_tool(
                         "memory_write",
                         {
-                            "scope": "current_host",
+                            "scope": "current_session",
                             "content": "【核心记忆】这台主机的 SSH 高频登录来自 OpsCore 本机采集，不作为异常。",
                         },
                         self.context,
@@ -71,6 +71,37 @@ class DispatcherMemoryToolsTest(unittest.TestCase):
         self.assertIn("OpsCore 本机采集", read_result["memory"]["content"])
         self.assertEqual(edit_result["version"]["operation"], "modified")
         self.assertEqual(delete_result["version"]["operation"], "deleted")
+
+    def test_memory_write_rejects_shared_asset_scopes(self):
+        with patch("core.memory.memory_db.file_memory_store", self.store):
+            result = json.loads(
+                asyncio.run(
+                    execute_memory_tool(
+                        "memory_write",
+                        {"scope": "current_host", "content": "不应写入共享主机记忆"},
+                        self.context,
+                    )
+                )
+            )
+
+        self.assertEqual(result["status"], "ERROR")
+        self.assertIn("严格隔离", result["error"])
+
+    def test_memory_read_rejects_other_session_path(self):
+        self.store.append_memory(
+            scope_id="sid-other",
+            summary="【核心记忆】其他会话记忆。",
+            source_session_id="sid-other",
+        )
+        other_path = self.store.list_memories()[0]["path"]
+
+        with patch("core.memory.memory_db.file_memory_store", self.store):
+            result = json.loads(
+                asyncio.run(execute_memory_tool("memory_read", {"path": other_path}, self.context))
+            )
+
+        self.assertEqual(result["status"], "ERROR")
+        self.assertIn("memory_scope_isolated", result["error"])
 
     def test_memory_list_without_query_is_context_scoped(self):
         self.store.append_memory(

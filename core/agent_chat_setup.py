@@ -66,13 +66,6 @@ def _load_asset_profile_for_prompt(
         profile = exact_loader(session_id)
         if profile:
             return profile
-    context_loader = getattr(memory_store, "get_asset_profile_for_session_context", None)
-    if callable(context_loader):
-        return context_loader(
-            session_id,
-            _asset_key_for_session_context(session_context),
-            session_context.host,
-        )
     return None
 
 

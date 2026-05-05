@@ -366,8 +366,8 @@ def _register_builtin_tools() -> None:
                 {
                     "scope": {
                         "type": "string",
-                        "enum": ["current_session", "current_asset", "current_host", "asset_kind"],
-                        "description": "写入范围，默认 current_session；成功经验可写 current_asset/current_host/asset_kind。",
+                        "enum": ["current_session"],
+                        "description": "写入范围固定为 current_session；会话记忆必须严格隔离，不能写入同资产、同主机或同类型资产。",
                     },
                     "content": {"type": "string", "description": "结构化中文记忆，建议包含来源、结论、适用条件、禁用条件。"},
                 },

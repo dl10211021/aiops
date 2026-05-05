@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from pathlib import PurePosixPath
 from typing import Any
 
 from core.file_memory_store import memory_scope_path
@@ -67,6 +68,7 @@ def _execute_memory_tool_sync(
 
     if tool_call_name == "memory_read":
         path = _required(args, "path")
+        _require_context_memory_path(path, context)
         detail = store.read_memory(path)
         return _json({"status": "SUCCESS", "memory": detail})
 
@@ -90,6 +92,7 @@ def _execute_memory_tool_sync(
 
     if tool_call_name == "memory_edit":
         path = _required(args, "path")
+        _require_context_memory_path(path, context)
         content = _required(args, "content")
         content_sha256 = str(args.get("content_sha256") or "").strip() or None
         version = store.update_memory(
@@ -103,6 +106,7 @@ def _execute_memory_tool_sync(
 
     if tool_call_name == "memory_delete":
         path = _required(args, "path")
+        _require_context_memory_path(path, context)
         version = store.delete_memory(path, actor="agent_memory_tool")
         logger.info("AI deleted memory path=%s", path)
         return _json({"status": "SUCCESS", "version": version})
@@ -115,20 +119,6 @@ def _context_scope_ids(context: dict[str, Any]) -> list[str]:
     session_id = str(context.get("session_id") or "").strip()
     if session_id:
         scope_ids.append(session_id)
-    for scope_id in context.get("memory_scope_ids") or []:
-        _append_unique(scope_ids, str(scope_id))
-
-    host = str(context.get("host") or "").strip()
-    if host:
-        _append_unique(scope_ids, f"asset-host:{host}")
-        protocol = str(context.get("protocol") or "").strip()
-        port = str(context.get("port") or "").strip()
-        if protocol and port:
-            _append_unique(scope_ids, f"asset:{protocol}:{host}:{port}")
-
-    asset_type = str(context.get("asset_type") or "").strip()
-    if asset_type:
-        _append_unique(scope_ids, f"asset-kind:{asset_type}")
     return scope_ids
 
 
@@ -139,30 +129,35 @@ def _filter_context_memories(items: list[dict[str, Any]], scope_ids: list[str]) 
     return [item for item in items if item.get("path") in allowed_paths]
 
 
+def _require_context_memory_path(path: str, context: dict[str, Any]) -> None:
+    normalized_path = _normalize_memory_path(path)
+    allowed_paths = {
+        memory_scope_path(scope_id).as_posix()
+        for scope_id in _context_scope_ids(context)
+    }
+    if normalized_path not in allowed_paths:
+        raise PermissionError("memory_scope_isolated: only current session memory can be read, edited or deleted")
+
+
+def _normalize_memory_path(path: str) -> str:
+    raw = str(path or "").replace("\\", "/").strip().strip("/")
+    parts: list[str] = []
+    for part in PurePosixPath(raw).parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            raise PermissionError("memory_path_traversal")
+        parts.append(part)
+    return "/".join(parts)
+
+
 def _resolve_write_scope(scope: str, context: dict[str, Any]) -> str:
-    if scope == "current_session":
-        session_id = str(context.get("session_id") or "").strip()
-        if not session_id:
-            raise ValueError("current_session scope requires session_id")
-        return session_id
-    if scope == "current_host":
-        host = str(context.get("host") or "").strip()
-        if not host:
-            raise ValueError("current_host scope requires host")
-        return f"asset-host:{host}"
-    if scope == "current_asset":
-        protocol = str(context.get("protocol") or "").strip()
-        host = str(context.get("host") or "").strip()
-        port = str(context.get("port") or "").strip()
-        if not protocol or not host or not port:
-            raise ValueError("current_asset scope requires protocol, host and port")
-        return f"asset:{protocol}:{host}:{port}"
-    if scope == "asset_kind":
-        asset_type = str(context.get("asset_type") or "").strip()
-        if not asset_type:
-            raise ValueError("asset_kind scope requires asset_type")
-        return f"asset-kind:{asset_type}"
-    raise ValueError(f"unsupported memory scope: {scope}")
+    if scope not in {"", "current_session"}:
+        raise ValueError("会话记忆已启用严格隔离，只允许写入 current_session")
+    session_id = str(context.get("session_id") or "").strip()
+    if not session_id:
+        raise ValueError("current_session scope requires session_id")
+    return session_id
 
 
 def _safe_limit(value: Any, *, default: int, maximum: int) -> int:

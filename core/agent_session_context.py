@@ -64,25 +64,14 @@ class AgentSessionContext:
         return context
 
     def memory_scope_ids(self) -> list[str]:
-        """Return Hermes-style isolated and reusable memory scopes.
+        """Return the only long-term memory scope allowed for this chat session.
 
-        The raw session id preserves strict conversation isolation. Additional
-        asset scopes allow the same managed asset to benefit from previous
-        sessions without leaking secrets or unrelated host context.
+        Knowledge base/RAG content is shared through its own retrieval path.
+        Conversation memory is intentionally isolated per session to prevent
+        another round, host, or asset-kind memory from affecting this session.
         """
-        scopes: list[str] = []
-
-        def add(value: Any) -> None:
-            raw = str(value or "").strip().lower()
-            if raw and raw not in scopes:
-                scopes.append(raw)
-
-        add(self.session_id)
-        if self.host:
-            add(f"asset:{self.protocol or self.asset_type}:{self.host}:{self.port or ''}")
-            add(f"asset-host:{self.host}")
-        add(f"asset-kind:{self.asset_type}:{self.protocol}")
-        return scopes
+        session_scope = str(self.session_id or "").strip().lower()
+        return [session_scope] if session_scope else []
 
 
 def build_agent_session_context(

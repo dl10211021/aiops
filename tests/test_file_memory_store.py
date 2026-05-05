@@ -112,7 +112,7 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertEqual(updated["operation"], "modified")
         self.assertIn("追加纠错", self.store.read_memory(item["path"])["content"])
         self.assertEqual(restored["operation"], "restored")
-        self.assertEqual(exported["stores"][0]["id"], "global")
+        self.assertEqual(exported["stores"][0]["id"], "sessions")
         self.assertTrue(exported["memories"])
         self.assertTrue(exported["versions"])
 
@@ -204,16 +204,11 @@ class FileMemoryStoreTests(unittest.TestCase):
             any(candidate["path"].endswith("memory.md") for candidate in quality["compression_candidates"])
         )
 
-    def test_delete_memory_rejects_read_only_store(self):
+    def test_default_memory_stores_only_expose_session_scope(self):
         self.store.initialize()
-        global_path = self.tmp_path / "global" / "memory.md"
-        global_path.parent.mkdir(parents=True, exist_ok=True)
-        global_path.write_text("# 全局只读记忆\n\n【核心记忆】平台级规则。", encoding="utf-8")
+        exported = self.store.export_store()
 
-        with self.assertRaisesRegex(PermissionError, "memory_store_read_only"):
-            self.store.delete_memory("global/memory.md", actor="tester")
-
-        self.assertTrue(global_path.exists())
+        self.assertEqual([store["id"] for store in exported["stores"]], ["sessions"])
 
     def test_memory_paths_are_scoped_and_sanitized(self):
         self.assertEqual(safe_memory_segment("../evil host"), "evil_host")

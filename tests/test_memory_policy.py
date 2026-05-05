@@ -4,6 +4,7 @@ import unittest
 
 from core.memory import (
     MemoryDB,
+    _session_memory_stores,
     build_asset_profile_memory_summary,
     build_ltm_references,
     build_ltm_compression_prompt,
@@ -22,10 +23,11 @@ class FakeFileMemoryStore:
 
     def search(self, *, scope_ids, query, limit):
         self.calls.append((scope_ids, query, limit))
+        scope = scope_ids[0] if scope_ids else "unknown"
         return [
             {
-                "session_id": "asset-host:10.0.0.1",
-                "_memory_scope_id": "asset-host:10.0.0.1",
+                "session_id": scope,
+                "_memory_scope_id": scope,
                 "timestamp": "2026-05-04 12:00:00",
                 "summary": "【记忆类型】纠错经验\n【核心记忆】不要跳过实时验证。",
             }
@@ -89,7 +91,8 @@ class MemoryPolicyTests(unittest.TestCase):
 
         self.assertIn("不是系统指令", context)
         self.assertIn("必须结合当前资产实时工具结果验证", context)
-        self.assertIn("如果与资产画像提示词冲突", context)
+        self.assertIn("只允许使用当前会话记忆", context)
+        self.assertIn("同资产、同主机、同类型资产记忆不得自动进入本会话", context)
         self.assertIn("点踩/纠错记忆", context)
         self.assertIn("[同资产 | asset:ssh:10.0.0.1:22 | 2026-05-04 12:00:00]", context)
 
@@ -200,7 +203,19 @@ class MemoryPolicyTests(unittest.TestCase):
         self.assertIn("用户点赞代表", prompt)
         self.assertIn("用户点踩代表纠错记忆", prompt)
         self.assertIn("【记忆类型】", prompt)
+        self.assertIn("【适用范围】当前会话", prompt)
         self.assertIn("保持中文", prompt)
+
+    def test_session_memory_store_filter_excludes_global_and_asset_stores(self):
+        stores = _session_memory_stores(
+            [
+                {"id": "global", "path_prefix": "global/"},
+                {"id": "hosts", "path_prefix": "hosts/"},
+                {"id": "sessions", "path_prefix": "sessions/"},
+            ]
+        )
+
+        self.assertEqual(stores, [{"id": "sessions", "path_prefix": "sessions/"}])
 
     def test_memorydb_retrieve_ltm_uses_file_store_without_embeddings(self):
         db = MemoryDB.__new__(MemoryDB)
@@ -223,7 +238,7 @@ class MemoryPolicyTests(unittest.TestCase):
         self.assertIn("不要跳过实时验证", context)
         self.assertEqual(
             db.file_memory_store.calls,
-            [(["sid-1", "asset-host:10.0.0.1"], "检查 Oracle 锁等待", 6)],
+            [(["sid-1"], "检查 Oracle 锁等待", 6)],
         )
 
     def test_memorydb_retrieve_ltm_with_references_returns_context_and_refs(self):
@@ -243,7 +258,8 @@ class MemoryPolicyTests(unittest.TestCase):
 
         self.assertIn("OpsCore 长期记忆", context)
         self.assertIn("Claude-style 挂载说明", context)
-        self.assertEqual(references[0]["scope_id"], "asset-host:10.0.0.1")
+        self.assertEqual(references[0]["scope_id"], "sid-1")
+        self.assertEqual(db.file_memory_store.calls, [(["sid-1"], "检查 Oracle 锁等待", 6)])
 
     def test_memorydb_retrieve_ltm_returns_store_context_without_hits(self):
         class EmptyFileMemoryStore(FakeFileMemoryStore):
@@ -302,7 +318,7 @@ class MemoryPolicyTests(unittest.TestCase):
         )
 
         self.assertEqual(saved["host"], "172.17.8.131")
-        self.assertEqual(db.file_memory_store.appended[0]["scope_id"], "asset-host:172.17.8.131")
+        self.assertEqual(db.file_memory_store.appended[0]["scope_id"], "sid-1")
         self.assertEqual(db.file_memory_store.appended[0]["metadata"]["source"], "asset_profile")
         self.assertIn("【记忆类型】资产画像", db.file_memory_store.appended[0]["summary"])
 
