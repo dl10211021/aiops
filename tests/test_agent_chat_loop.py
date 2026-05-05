@@ -1,6 +1,12 @@
 import unittest
+from unittest.mock import patch
 
-from core.agent_chat_loop import build_successful_execution_memory, run_chat_agent_loop
+from core.agent_chat_loop import (
+    _assistant_orchestration_labels,
+    _resolve_model_orchestration,
+    build_successful_execution_memory,
+    run_chat_agent_loop,
+)
 from core.agent_sse import sse_event
 
 
@@ -66,6 +72,44 @@ async def collect_chat_loop_events(**overrides):
 
 
 class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
+    def test_split_orchestration_labels_assistant_when_delegated(self):
+        with (
+            patch(
+                "core.agent_chat_loop.get_assistant_model_config",
+                return_value={"enabled": True, "model_id": "provider|assistant", "tasks": {}},
+            ),
+            patch("core.agent_chat_loop.resolve_assistant_model_id", return_value="provider|assistant"),
+            patch("core.agent_chat_loop.assistant_thinking_mode", return_value="high"),
+            patch("core.agent_chat_loop.assistant_task_enabled", return_value=False),
+        ):
+            orchestration = _resolve_model_orchestration("provider|main", "split")
+
+        self.assertTrue(orchestration["enabled"])
+        self.assertTrue(orchestration["assistant_delegated"])
+        labels = _assistant_orchestration_labels(orchestration)
+        self.assertIn("辅助模型随后负责选择工具", labels["intent"])
+        self.assertIn("辅助模型正在选择工具", labels["tool"])
+        self.assertIn("辅助模型正在整理最终回复", labels["final"])
+
+    def test_split_orchestration_labels_primary_takeover_without_assistant(self):
+        with (
+            patch(
+                "core.agent_chat_loop.get_assistant_model_config",
+                return_value={"enabled": False, "model_id": "provider|assistant", "tasks": {}},
+            ),
+            patch("core.agent_chat_loop.resolve_assistant_model_id", return_value="provider|main"),
+            patch("core.agent_chat_loop.assistant_thinking_mode", return_value="high"),
+            patch("core.agent_chat_loop.assistant_task_enabled", return_value=False),
+        ):
+            orchestration = _resolve_model_orchestration("provider|main", "split")
+
+        self.assertTrue(orchestration["enabled"])
+        self.assertFalse(orchestration["assistant_delegated"])
+        labels = _assistant_orchestration_labels(orchestration)
+        self.assertIn("接管辅助模型职责", labels["intent"])
+        self.assertIn("主模型正在接管工具选择", labels["tool"])
+        self.assertIn("主模型正在整理最终回复", labels["final"])
+
     def test_successful_execution_memory_marks_assistant_self_confirmation_policy(self):
         memory = build_successful_execution_memory(
             session_id="sid-1",

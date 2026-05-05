@@ -230,16 +230,34 @@ def _resolve_model_orchestration(primary_model_id: str, orchestration_mode: str 
     config = get_assistant_model_config()
     assistant_model_id = resolve_assistant_model_id(primary_model_id)
     mode = orchestration_mode if orchestration_mode in {"single", "split", "auto"} else "single"
-    enabled = mode == "split" or (mode == "auto" and bool(config.get("enabled") and config.get("model_id")))
+    assistant_configured = bool(config.get("enabled") and config.get("model_id"))
+    assistant_delegated = bool(assistant_configured and assistant_model_id != primary_model_id)
+    enabled = mode == "split" or (mode == "auto" and assistant_configured)
     return {
         "enabled": enabled,
         "mode": mode,
         "primary_model_id": primary_model_id,
         "assistant_model_id": assistant_model_id,
+        "assistant_delegated": assistant_delegated,
         "assistant_thinking_mode": assistant_thinking_mode(),
         "completion_check": assistant_task_enabled("completion_check"),
         "trace_review": assistant_task_enabled("trace_review"),
         "risk_advice": assistant_task_enabled("risk_advice"),
+    }
+
+
+def _assistant_orchestration_labels(orchestration: dict[str, Any]) -> dict[str, str]:
+    assistant_model_id = str(orchestration.get("assistant_model_id") or orchestration.get("primary_model_id") or "")
+    if orchestration.get("assistant_delegated"):
+        return {
+            "intent": f"🧭 主模型正在决定执行目标，辅助模型随后负责选择工具：{assistant_model_id}",
+            "tool": "🧠 辅助模型正在选择工具和下一步动作...",
+            "final": "📝 辅助模型正在整理最终回复...",
+        }
+    return {
+        "intent": f"🧭 主模型正在决定执行目标，并接管辅助模型职责：{assistant_model_id}",
+        "tool": "🧠 主模型正在接管工具选择和下一步动作...",
+        "final": "📝 主模型正在整理最终回复...",
     }
 
 
@@ -489,11 +507,12 @@ async def _run_split_model_chat_agent_loop(
     assistant_model_id = str(orchestration["assistant_model_id"] or model_name)
     assistant_mode = str(orchestration.get("assistant_thinking_mode") or "high")
     pending_memory_references = list(memory_references or [])
+    labels = _assistant_orchestration_labels(orchestration)
 
     yield sse_event(
         {
             "type": "status",
-            "content": f"🧭 主模型正在决定执行目标，辅助模型随后负责选择工具：{assistant_model_id}",
+            "content": labels["intent"],
         }
     )
     intent_text = ""
@@ -530,7 +549,7 @@ async def _run_split_model_chat_agent_loop(
             yield sse_event({"type": "done"})
             return
 
-        yield sse_event({"type": "status", "content": "🧠 辅助模型正在选择工具和下一步动作..."})
+        yield sse_event({"type": "status", "content": labels["tool"]})
 
         try:
             stream_state = await _collect_model_turn(
@@ -557,7 +576,7 @@ async def _run_split_model_chat_agent_loop(
                 safe_msg,
                 {"role": "system", "content": _build_final_writer_prompt(context)},
             ]
-            yield sse_event({"type": "status", "content": "📝 辅助模型正在整理最终回复..."})
+            yield sse_event({"type": "status", "content": labels["final"]})
             try:
                 final_text = await _collect_model_text(
                     model_name=assistant_model_id,
