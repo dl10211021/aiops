@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse
 
 from api.errors import raise_http_error
 from api.response_mappers.knowledge import (
+    knowledge_document_content_response_kwargs,
     knowledge_document_deleted_response_kwargs,
     knowledge_document_uploaded_response_kwargs,
     knowledge_documents_response_kwargs,
@@ -47,6 +48,7 @@ from core.knowledge_base_service import (
     list_vault_articles,
     list_vault_candidates,
     list_vault_compile_queue,
+    read_knowledge_document_record,
     read_vault_article,
     read_vault_candidate,
     remove_knowledge_document_record,
@@ -345,6 +347,16 @@ async def list_knowledge_documents():
     except KnowledgeBaseServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**knowledge_documents_response_kwargs(files))
+
+
+@router.get("/knowledge/document", response_model=ResponseModel)
+async def read_knowledge_document(filename: str = Query(..., min_length=1, max_length=260)):
+    """读取资料库中文档的安全文本预览。"""
+    try:
+        item = read_knowledge_document_record(filename)
+    except KnowledgeBaseServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**knowledge_document_content_response_kwargs(item))
 
 
 @router.get("/knowledge/vault/queue", response_model=ResponseModel)

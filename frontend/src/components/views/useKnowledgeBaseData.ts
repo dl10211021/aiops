@@ -22,6 +22,7 @@ import {
   listMemoryStores,
   listMemoryVersions,
   redactMemoryVersion,
+  readKnowledgeDocument,
   readMemoryItem,
   readKnowledgeVaultCandidate,
   readKnowledgeVaultArticle,
@@ -35,7 +36,7 @@ import {
 } from '@/api/knowledge'
 import { getSessionMemoryActivity } from '@/api/sessionHistory'
 import { useStore } from '@/store'
-import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeDocumentContent, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
 import { isAcceptedKnowledgeFile } from './knowledgeBaseModel'
 
 export function useKnowledgeBaseData() {
@@ -47,6 +48,8 @@ export function useKnowledgeBaseData() {
   const [articleItems, setArticleItems] = useState<KnowledgeCompileQueueItem[]>([])
   const [selectedCandidate, setSelectedCandidate] = useState<KnowledgeCompileQueueItem | null>(null)
   const [selectedArticle, setSelectedArticle] = useState<KnowledgeCompileQueueItem | null>(null)
+  const [knowledgePreviewTarget, setKnowledgePreviewTarget] = useState<KnowledgeFile | null>(null)
+  const [knowledgePreview, setKnowledgePreview] = useState<KnowledgeDocumentContent | null>(null)
   const [candidateDraft, setCandidateDraft] = useState('')
   const [vaultSearchQuery, setVaultSearchQuery] = useState('')
   const [vaultSearchScope, setVaultSearchScope] = useState('all')
@@ -85,6 +88,7 @@ export function useKnowledgeBaseData() {
   const [approvingSourceSession, setApprovingSourceSession] = useState<string | null>(null)
   const [openingCandidate, setOpeningCandidate] = useState<string | null>(null)
   const [openingArticle, setOpeningArticle] = useState<string | null>(null)
+  const [readingKnowledge, setReadingKnowledge] = useState(false)
   const [savingCandidate, setSavingCandidate] = useState(false)
   const [searchingVault, setSearchingVault] = useState(false)
   const [loadingVaultGraph, setLoadingVaultGraph] = useState(false)
@@ -237,6 +241,26 @@ export function useKnowledgeBaseData() {
     } finally {
       setDeleting(false)
     }
+  }
+
+  const handleOpenKnowledgeDocument = async (file: KnowledgeFile) => {
+    setKnowledgePreviewTarget(file)
+    setKnowledgePreview(null)
+    setReadingKnowledge(true)
+    try {
+      const res = await readKnowledgeDocument(file.filename)
+      setKnowledgePreview(res.data.item)
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '读取资料内容失败', 'error')
+      setKnowledgePreviewTarget(null)
+    } finally {
+      setReadingKnowledge(false)
+    }
+  }
+
+  const handleCloseKnowledgePreview = () => {
+    setKnowledgePreviewTarget(null)
+    setKnowledgePreview(null)
   }
 
   const handleCompileKnowledgeSource = async (item: KnowledgeCompileQueueItem) => {
@@ -592,14 +616,19 @@ export function useKnowledgeBaseData() {
     approvingSourceSession,
     openingCandidate,
     openingArticle,
+    readingKnowledge,
+    knowledgePreview,
+    knowledgePreviewTarget,
     savingCandidate,
     searchingVault,
     selectedCandidate,
     selectedArticle,
     handleDelete,
+    handleCloseKnowledgePreview,
     handleCompileKnowledgeSource,
     handleApproveKnowledgeCandidate,
     handleOpenKnowledgeCandidate,
+    handleOpenKnowledgeDocument,
     handleOpenKnowledgeArticle,
     handleLoadKnowledgeVaultGraph,
     handleSearchKnowledgeVault,

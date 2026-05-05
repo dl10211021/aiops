@@ -23,6 +23,7 @@ from core.knowledge_base_service import (
     list_vault_articles,
     list_vault_source_records,
     list_knowledge_document_records,
+    read_knowledge_document_record,
     read_vault_article,
     read_vault_candidate,
     remove_knowledge_document_record,
@@ -167,6 +168,22 @@ class TestKnowledgeBaseService(unittest.TestCase):
         vault_records = list_vault_source_records(self.vault_dir)
         self.assertEqual(vault_records[0]["vector_status"], "skipped")
         self.assertIn("未配置向量模型", vault_records[0]["vector_error"])
+
+    def test_read_knowledge_document_record_returns_safe_text_preview(self):
+        kb = FakeKnowledgeBase("read_preview", message="注入成功")
+        upload = FakeUpload("巡检记录.txt", "CPU 正常\n内存正常\n".encode("utf-8"))
+
+        with patch("core.embedding_config.get_embedding_config", return_value=("", 3072)):
+            asyncio.run(ingest_knowledge_document(kb, upload))
+
+        record = list_vault_source_records(self.vault_dir)[0]
+        preview = read_knowledge_document_record(record["filename"], vault_dir=self.vault_dir)
+
+        self.assertEqual(preview["filename"], record["filename"])
+        self.assertEqual(preview["content"], "CPU 正常\n内存正常\n")
+        self.assertTrue(preview["preview_available"])
+        self.assertFalse(preview["truncated"])
+        self.assertEqual(preview["content_type"], "text")
 
     def test_list_and_delete_documents_wrap_kb_manager(self):
         kb = FakeKnowledgeBase("records")

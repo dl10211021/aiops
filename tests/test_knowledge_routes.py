@@ -35,6 +35,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/memory/export", paths)
         self.assertIn("/knowledge/upload", paths)
         self.assertIn("/knowledge/list", paths)
+        self.assertIn("/knowledge/document", paths)
         self.assertIn("/knowledge/vault/queue", paths)
         self.assertIn("/knowledge/vault/compile", paths)
         self.assertIn("/knowledge/vault/candidates", paths)
@@ -69,6 +70,16 @@ class TestKnowledgeRoutes(unittest.TestCase):
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, {"files": ["runbook.txt"]})
+
+    def test_read_knowledge_document_preserves_response_shape(self):
+        with patch(
+            "api.knowledge_routes.read_knowledge_document_record",
+            return_value={"filename": "runbook.txt", "content": "CPU 正常", "preview_available": True},
+        ):
+            response = asyncio.run(knowledge_routes.read_knowledge_document("runbook.txt"))
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data, {"item": {"filename": "runbook.txt", "content": "CPU 正常", "preview_available": True}})
 
     def test_list_knowledge_vault_queue_preserves_response_shape(self):
         with patch(

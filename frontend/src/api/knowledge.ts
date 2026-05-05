@@ -1,8 +1,12 @@
-import type { ApiResponse, KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { ApiResponse, KnowledgeCompileQueueItem, KnowledgeDocumentContent, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { apiUrl, authHeaders, request } from './http'
 
 export async function listKnowledgeDocuments() {
   return request<{ files: KnowledgeFile[] }>('/knowledge/list')
+}
+
+export async function readKnowledgeDocument(filename: string) {
+  return request<{ item: KnowledgeDocumentContent }>(`/knowledge/document?filename=${encodeURIComponent(filename)}`)
 }
 
 export async function listKnowledgeVaultQueue() {

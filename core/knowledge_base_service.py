@@ -41,7 +41,9 @@ ALLOWED_KNOWLEDGE_EXTENSIONS = {
 MAX_KNOWLEDGE_UPLOAD_BYTES = 50 * 1024 * 1024
 UPLOAD_CHUNK_BYTES = 1024 * 1024
 MAX_SOURCE_PREVIEW_CHARS = 12000
+MAX_KNOWLEDGE_CONTENT_PREVIEW_CHARS = 60000
 DEFAULT_KNOWLEDGE_VAULT_DIR = Path("data") / "knowledge_vault"
+TEXT_PREVIEW_EXTENSIONS = {".txt", ".md", ".log", ".csv", ".html", ".htm", ".json", ".yml", ".yaml", ".xml"}
 
 
 def _utc_now_iso() -> str:
@@ -309,6 +311,18 @@ def _find_vault_record(identifier: str, vault_dir: str | os.PathLike[str] | None
     raise KnowledgeBaseServiceError(404, "待编译资料不存在")
 
 
+def _resolve_vault_record_path(root: Path, rel: str | None, label: str) -> Path:
+    if not rel:
+        raise KnowledgeBaseServiceError(404, f"{label}不存在")
+    path = (root / str(rel)).resolve()
+    root_resolved = root.resolve()
+    if root_resolved not in path.parents and path != root_resolved:
+        raise KnowledgeBaseServiceError(400, f"{label}路径非法")
+    if not path.exists() or not path.is_file():
+        raise KnowledgeBaseServiceError(404, f"{label}不存在")
+    return path
+
+
 def _read_source_preview(root: Path, record: dict[str, Any]) -> str:
     rel = record.get("source_path")
     if not rel:
@@ -321,6 +335,50 @@ def _read_source_preview(root: Path, record: dict[str, Any]) -> str:
     except OSError:
         return ""
     return text[:MAX_SOURCE_PREVIEW_CHARS]
+
+
+def read_knowledge_document_record(
+    identifier: str,
+    *,
+    vault_dir: str | os.PathLike[str] | None = None,
+) -> dict[str, Any]:
+    root, record = _find_vault_record(identifier, vault_dir)
+    source_path = _resolve_vault_record_path(root, record.get("source_path"), "资料原文")
+    extension = source_path.suffix.lower()
+    preview_available = extension in TEXT_PREVIEW_EXTENSIONS
+    content_type = "text" if preview_available else "metadata"
+    content = ""
+    truncated = False
+
+    if preview_available:
+        try:
+            raw_content = source_path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            raise KnowledgeBaseServiceError(500, "读取资料原文失败") from exc
+        truncated = len(raw_content) > MAX_KNOWLEDGE_CONTENT_PREVIEW_CHARS
+        content = raw_content[:MAX_KNOWLEDGE_CONTENT_PREVIEW_CHARS]
+    else:
+        note_content = _read_vault_text_file(root, record.get("note_path"))
+        if note_content:
+            content = note_content[:MAX_KNOWLEDGE_CONTENT_PREVIEW_CHARS]
+            truncated = len(note_content) > MAX_KNOWLEDGE_CONTENT_PREVIEW_CHARS
+            content_type = "source_note"
+        else:
+            content = (
+                f"该资料是 {extension or '未知'} 格式，当前页面暂不直接预览二进制或复杂格式原文。\n"
+                "文件已经保存在资料库，可用于后续解析、检索或导出备份。"
+            )
+
+    return {
+        **record,
+        "content": content,
+        "content_sha256": _sha256_text(content),
+        "content_type": content_type,
+        "preview_available": preview_available,
+        "truncated": truncated,
+        "preview_limit": MAX_KNOWLEDGE_CONTENT_PREVIEW_CHARS,
+        "extension": extension or record.get("extension"),
+    }
 
 
 def _candidate_note_path(root: Path, record: dict[str, Any]) -> Path:

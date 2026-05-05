@@ -3,6 +3,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import { useStore } from '@/store'
 import {
   KnowledgeDeleteDialog,
+  KnowledgeDocumentPreviewDialog,
   KnowledgeEmptyState,
   KnowledgeFileCard,
   KnowledgeTabs,
@@ -27,7 +28,7 @@ import { useKnowledgeBaseData } from './useKnowledgeBaseData'
 export default function KnowledgeBase() {
   const setView = useStore((state) => state.setView)
   const [activeTab, setActiveTab] = useState<KnowledgeTab>('documents')
-  const [documentStep, setDocumentStep] = useState<'source' | 'discover'>('discover')
+  const [documentStep, setDocumentStep] = useState<'source' | 'discover'>('source')
   const [memoryStep, setMemoryStep] = useState<'browse' | 'write' | 'govern'>('browse')
   const [memoryFocusMessageId, setMemoryFocusMessageId] = useState<string | number | null>(null)
   const {
@@ -43,6 +44,7 @@ export default function KnowledgeBase() {
     searchingVault,
     loadingVaultGraph,
     handleDelete,
+    handleCloseKnowledgePreview,
     handleLoadKnowledgeVaultGraph,
     handleSearchKnowledgeVault,
     handleDeleteMemory,
@@ -52,6 +54,7 @@ export default function KnowledgeBase() {
     handleImportKnowledgeVault,
     handleConfirmMemoryReview,
     handleOpenMemory,
+    handleOpenKnowledgeDocument,
     handleRedactMemoryVersion,
     handleRestoreMemoryVersion,
     handleResolveMemoryConflict,
@@ -63,6 +66,8 @@ export default function KnowledgeBase() {
     loadSessionMemoryActivity,
     loading,
     memoryDeleteTarget,
+    knowledgePreview,
+    knowledgePreviewTarget,
     memoryDraft,
     memoryError,
     memoryCreateScope,
@@ -79,6 +84,7 @@ export default function KnowledgeBase() {
     memorySearchScopes,
     memoryStores,
     memoryVersions,
+    readingKnowledge,
     savingMemory,
     selectedMemory,
     redactingMemoryVersion,
@@ -122,12 +128,14 @@ export default function KnowledgeBase() {
       if (detail?.tab === 'documents') {
         setActiveTab('documents')
         setMemoryFocusMessageId(null)
+        const query = detail.query?.trim()
         setDocumentStep(
           detail.step === 'source' || detail.step === 'discover'
             ? detail.step
-            : 'discover',
+            : query
+              ? 'discover'
+              : 'source',
         )
-        const query = detail.query?.trim()
         if (query) {
           const scope = detail.scope || 'all'
           setVaultSearchQuery(query)
@@ -171,11 +179,11 @@ export default function KnowledgeBase() {
   const friendlyError = visibleError === 'Not Found'
     ? '后台接口返回 Not Found，通常是服务未加载最新路由或需要重启。页面功能已保留，可先刷新或重启服务后再试。'
     : visibleError
-    const activeStepGuide = activeTab === 'documents'
+  const activeStepGuide = activeTab === 'documents'
     ? {
-      title: 'RAG 知识库',
-      body: '这里以 RAG 检索为主：资料上传后先保存原文并建立检索索引，会话回答优先从命中证据里引用。图谱只负责展示资料之间的关联。',
-      next: '先检索证据，再进入会话引用。',
+      title: '资料库',
+      body: '这里先解决最基础的问题：你上传了什么、内容是什么、向量状态怎么样、能不能删除。RAG 检索和知识图谱放在第二步，不再和上传列表混在一起。',
+      next: '默认先看资料列表：上次上传、内容、删除、向量状态都在这里。',
     }
     : {
       title: 'AI 记忆',
@@ -201,7 +209,7 @@ export default function KnowledgeBase() {
       <div className="w-full max-w-none">
         <PageHeader
           title="知识库"
-          description="统一管理 RAG 资料、检索证据、知识图谱和 AI 记忆，支持离线部署、引用和追溯。"
+          description="统一管理上传资料、内容预览、向量状态、RAG 检索、知识图谱和 AI 记忆。"
           actions={(
             <>
             {activeTab === 'documents' && (
@@ -211,10 +219,10 @@ export default function KnowledgeBase() {
                   disabled={exportingVault}
                   className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                {exportingVault ? '导出中...' : '导出 RAG 库'}
+                  {exportingVault ? '导出中...' : '导出备份'}
                 </button>
                 <label className={`cursor-pointer bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors ${importingVault ? 'pointer-events-none opacity-50' : ''}`}>
-                  {importingVault ? '导入中...' : '导入资料库'}
+                  {importingVault ? '导入中...' : '导入备份 ZIP'}
                   <input
                     type="file"
                     accept=".zip,application/zip"
@@ -319,8 +327,8 @@ export default function KnowledgeBase() {
             <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-3">
               <div className="grid gap-2 md:grid-cols-4">
                 {([
-                  ['discover', 'RAG 检索', `${vaultSearchResults.length} 条命中`, '先查证据再回答'],
-                  ['source', '资料入库', `${files.length} 份资料`, '上传和查看资料'],
+                  ['source', '资料列表', `${files.length} 份资料`, '上传、查看、删除'],
+                  ['discover', '检索与图谱', `${vaultSearchResults.length} 条命中`, '查证据和关系'],
                 ] as const).map(([id, label, count, desc]) => (
                   <button
                     key={id}
@@ -345,7 +353,7 @@ export default function KnowledgeBase() {
                   {files.length > 0 ? (
                     <div className="grid gap-2 2xl:grid-cols-2">
                       {files.map((file) => (
-                        <KnowledgeFileCard key={file.filename} file={file} onDelete={setDeleteTarget} />
+                        <KnowledgeFileCard key={file.filename} file={file} onOpen={handleOpenKnowledgeDocument} onDelete={setDeleteTarget} />
                       ))}
                     </div>
                   ) : (
@@ -356,9 +364,9 @@ export default function KnowledgeBase() {
                   <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
                     <div className="text-sm font-semibold text-ops-text">资料库说明</div>
                     <div className="mt-3 space-y-2 text-xs leading-5 text-ops-subtext">
-                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">原始资料会保留，不会被 AI 修改。</div>
-                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">上传后用于 RAG 检索和会话引用。</div>
-                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">图谱只展示资料之间的关联，不改变原文。</div>
+                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">你上次上传的资料就在左侧列表，点“查看内容”可以看原文或来源记录。</div>
+                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">向量状态只代表语义检索是否就绪；即使跳过向量，原文仍然保留。</div>
+                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">删除按钮会同步移除资料库记录和对应来源文件。</div>
                     </div>
                     <button
                       type="button"
@@ -557,6 +565,14 @@ export default function KnowledgeBase() {
           target={deleteTarget}
           onCancel={() => setDeleteTarget(null)}
           onConfirm={() => void handleDelete()}
+        />
+      )}
+      {knowledgePreviewTarget && (
+        <KnowledgeDocumentPreviewDialog
+          content={knowledgePreview}
+          loading={readingKnowledge}
+          target={knowledgePreviewTarget}
+          onClose={handleCloseKnowledgePreview}
         />
       )}
       {memoryDeleteTarget && (

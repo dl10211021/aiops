@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from 'react'
-import type { KnowledgeCompileQueueItem, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeDocumentContent, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
 export type KnowledgeTab = 'documents' | 'memory'
@@ -71,8 +71,8 @@ export function KnowledgeTabs({
   onChange: (tab: KnowledgeTab) => void
 }) {
   const tabs: Array<[KnowledgeTab, string, string]> = [
-    ['documents', 'RAG 知识库', `${documentCount} 个资料`],
-    ['memory', 'AI 记忆', `${memoryCount} 条记忆文件`],
+    ['documents', '资料库', `${documentCount} 个资料`],
+    ['memory', 'AI 记忆', `${memoryCount} 条记忆`],
   ]
   return (
     <div className="mb-4 flex flex-wrap gap-2 rounded-lg border border-ops-surface0 bg-ops-panel/55 p-1">
@@ -129,9 +129,11 @@ export function KnowledgeUploadButton({
 
 export function KnowledgeFileCard({
   file,
+  onOpen,
   onDelete,
 }: {
   file: KnowledgeFile
+  onOpen: (file: KnowledgeFile) => void
   onDelete: (file: KnowledgeFile) => void
 }) {
   const kind = knowledgeFileKind(file.filename)
@@ -142,8 +144,8 @@ export function KnowledgeFileCard({
       <div className="flex-1 min-w-0">
         <div className="text-sm font-semibold text-ops-text truncate" title={title}>{title}</div>
         <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
-          <span className="rounded-full border border-ops-accent/30 px-2 py-0.5 text-ops-accent">{knowledgeStatusLabel(file)}</span>
-          <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-overlay">{vectorStatusLabel(file)}</span>
+          <span className="rounded-full border border-ops-accent/30 px-2 py-0.5 text-ops-accent">资料状态：{knowledgeStatusLabel(file)}</span>
+          <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-overlay">向量状态：{vectorStatusLabel(file)}</span>
           {file.obsidian_compatible && (
             <span className="rounded-full border border-ops-success/30 px-2 py-0.5 text-ops-success">可导出</span>
           )}
@@ -157,13 +159,22 @@ export function KnowledgeFileCard({
           {file.vector_error && <div className="line-clamp-2 text-ops-muted">RAG 提示：{ragErrorHint(file.vector_error)}</div>}
         </div>
       </div>
-      <button
-        onClick={() => onDelete(file)}
-        className="rounded-lg px-2 py-1 text-xs text-ops-overlay transition-colors hover:bg-ops-alert/10 hover:text-ops-alert"
-        title="删除"
-      >
-        删除
-      </button>
+      <div className="flex shrink-0 flex-col gap-2">
+        <button
+          onClick={() => onOpen(file)}
+          className="rounded-lg border border-ops-accent/35 px-2 py-1 text-xs font-semibold text-ops-accent transition-colors hover:bg-ops-accent/10"
+          title="查看上传资料内容"
+        >
+          查看内容
+        </button>
+        <button
+          onClick={() => onDelete(file)}
+          className="rounded-lg px-2 py-1 text-xs text-ops-overlay transition-colors hover:bg-ops-alert/10 hover:text-ops-alert"
+          title="删除"
+        >
+          删除
+        </button>
+      </div>
     </div>
   )
 }
@@ -985,6 +996,62 @@ export function KnowledgeDeleteDialog({
           >
             {deleting ? '删除中...' : '确认删除'}
           </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+export function KnowledgeDocumentPreviewDialog({
+  content,
+  loading,
+  target,
+  onClose,
+}: {
+  content: KnowledgeDocumentContent | null
+  loading: boolean
+  target: KnowledgeFile
+  onClose: () => void
+}) {
+  const title = content?.original_filename || target.original_filename || target.filename
+  const body = content?.content || ''
+  const isSourceNote = content?.content_type === 'source_note'
+  const isMetadata = content?.content_type === 'metadata'
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onClick={() => !loading && onClose()}>
+      <section className="flex max-h-[88vh] w-full max-w-5xl flex-col rounded-lg border border-ops-surface1 bg-ops-panel shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="border-b border-ops-surface0 px-5 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-ops-accent">资料内容预览</div>
+              <h2 className="mt-1 truncate text-lg font-bold text-ops-text" title={title}>{title}</h2>
+              <p className="mt-1 text-sm leading-6 text-ops-subtext">
+                这里显示你上传到资料库的原文或来源记录；向量状态只说明能否语义检索，不影响原文留存。
+              </p>
+            </div>
+            <button onClick={onClose} disabled={loading} className="rounded-lg border border-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext hover:text-ops-text disabled:opacity-50">
+              关闭
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+            <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-overlay">文件：{target.filename}</span>
+            {content?.extension && <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-overlay">格式：{content.extension}</span>}
+            <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-overlay">向量状态：{vectorStatusLabel(content || target)}</span>
+            {content?.truncated && <span className="rounded-full border border-amber-300/35 px-2 py-0.5 text-amber-200">内容较长，已截取前 {content.preview_limit} 字符</span>}
+            {isSourceNote && <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-ops-accent">复杂文件，展示来源记录</span>}
+            {isMetadata && <span className="rounded-full border border-amber-300/35 px-2 py-0.5 text-amber-200">复杂文件暂不直接预览</span>}
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto p-5">
+          {loading ? (
+            <div className="rounded-lg border border-ops-surface0 bg-ops-dark/45 p-8 text-center text-sm text-ops-subtext">
+              正在读取资料内容...
+            </div>
+          ) : (
+            <pre className="min-h-[320px] whitespace-pre-wrap break-words rounded-lg border border-ops-surface0 bg-ops-dark/65 p-4 font-mono text-xs leading-6 text-ops-subtext">
+              {body || '没有可预览的内容。'}
+            </pre>
+          )}
         </div>
       </section>
     </div>

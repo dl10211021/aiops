@@ -621,6 +621,7 @@ export interface KnowledgeFile {
   original_filename?: string
   size?: number
   chunks?: number
+  extension?: string
   source_path?: string
   note_path?: string
   vault_path?: string
@@ -632,6 +633,15 @@ export interface KnowledgeFile {
   created_at?: string
   updated_at?: string
   tags?: string[]
+}
+
+export interface KnowledgeDocumentContent extends KnowledgeFile {
+  content: string
+  content_sha256?: string
+  content_type?: 'text' | 'source_note' | 'metadata' | string
+  preview_available?: boolean
+  truncated?: boolean
+  preview_limit?: number
 }
 
 export interface KnowledgeCompileQueueItem extends KnowledgeFile {
