@@ -336,15 +336,16 @@ export function useKnowledgeBaseData() {
     }
   }
 
-  const handleSearchKnowledgeVault = async () => {
-    const query = vaultSearchQuery.trim()
+  const handleSearchKnowledgeVault = async (override?: { query?: string; scope?: string }) => {
+    const query = (override?.query ?? vaultSearchQuery).trim()
+    const scope = override?.scope ?? vaultSearchScope
     if (!query) {
       addToast('请输入知识库搜索关键词', 'error')
       return
     }
     setSearchingVault(true)
     try {
-      const res = await searchKnowledgeVault(query, vaultSearchScope, 20)
+      const res = await searchKnowledgeVault(query, scope, 20)
       const results = res.data.results || []
       setVaultSearchResults(results)
       addToast(`RAG 检索到 ${results.length} 条证据`, 'success')

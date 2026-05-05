@@ -109,6 +109,8 @@ export default function KnowledgeBase() {
         tab?: KnowledgeTab
         messageId?: string | number
         step?: 'browse' | 'write' | 'govern' | 'source' | 'discover'
+        query?: string
+        scope?: string
       }>).detail
       if (detail?.tab === 'memory') {
         setActiveTab('memory')
@@ -125,13 +127,22 @@ export default function KnowledgeBase() {
             ? detail.step
             : 'discover',
         )
+        const query = detail.query?.trim()
+        if (query) {
+          const scope = detail.scope || 'all'
+          setVaultSearchQuery(query)
+          setVaultSearchScope(scope)
+          window.setTimeout(() => {
+            void handleSearchKnowledgeVault({ query, scope })
+          }, 80)
+        }
       }
     }
     window.addEventListener('opscore:knowledge-target', handleKnowledgeTarget)
     return () => {
       window.removeEventListener('opscore:knowledge-target', handleKnowledgeTarget)
     }
-  }, [loadMemories, loadSessionMemoryActivity])
+  }, [handleSearchKnowledgeVault, loadMemories, loadSessionMemoryActivity, setVaultSearchQuery, setVaultSearchScope])
 
   const handleRefresh = () => {
     if (activeTab === 'memory') {

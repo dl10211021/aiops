@@ -243,11 +243,34 @@ function referenceReason(ref: MemoryReference) {
   return '来自长期记忆或会话经验，回答时需要结合当前证据复核，不能直接当作事实替代实时巡检结果。'
 }
 
+function referenceSearchQuery(ref: MemoryReference) {
+  return (ref.title || ref.summary_preview || ref.path || ref.scope_id || '').trim()
+}
+
 function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
+  const setView = useStore((state) => state.setView)
   const refs = message.memoryRefs || message.memory_refs || []
   if (!refs.length) return null
   const ragCount = refs.filter((ref) => referenceSourceType(ref) === 'rag').length
   const memoryCount = refs.length - ragCount
+  const openReference = (ref: MemoryReference) => {
+    if (referenceSourceType(ref) === 'rag') {
+      const query = referenceSearchQuery(ref)
+      setView('knowledge')
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('opscore:knowledge-target', {
+          detail: { tab: 'documents', step: 'discover', query, scope: ref.kind || 'all' },
+        }))
+      }, 60)
+      return
+    }
+    setView('knowledge')
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('opscore:knowledge-target', {
+        detail: { tab: 'memory', step: 'govern' },
+      }))
+    }, 60)
+  }
   return (
     <details open className="border-b border-ops-accent/25 bg-[linear-gradient(135deg,rgba(45,212,191,0.13),rgba(37,99,235,0.08))] px-4 py-2 text-[11px] text-ops-subtext">
       <summary className="cursor-pointer select-none font-semibold text-ops-accent">
@@ -285,6 +308,13 @@ function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
             <div className="mt-1 rounded border border-ops-surface0/80 bg-ops-dark/30 px-2 py-1 text-[10px] leading-4 text-ops-overlay">
               引用说明：{referenceReason(ref)}
             </div>
+            <button
+              type="button"
+              onClick={() => openReference(ref)}
+              className="mt-1.5 rounded-full border border-ops-accent/35 px-2 py-0.5 text-[10px] font-semibold text-ops-accent hover:bg-ops-accent/10"
+            >
+              {referenceSourceType(ref) === 'rag' ? '查看资料证据' : '查看记忆管理'}
+            </button>
           </div>
         ))}
       </div>
