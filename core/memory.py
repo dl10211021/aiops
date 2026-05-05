@@ -678,7 +678,7 @@ class MemoryDB:
             rating,
             note,
         )
-        self._promote_positive_feedback_memory(session_id, message_id, rating, note, message)
+        self._persist_answer_feedback_memory(session_id, message_id, rating, note, message)
         return message
 
     def delete_message(self, session_id: str, message_id: int):
@@ -929,7 +929,7 @@ class MemoryDB:
             actor=f"memory_conflict:{normalized_action}",
         )
 
-    def _promote_positive_feedback_memory(
+    def _persist_answer_feedback_memory(
         self,
         session_id: str,
         message_id: int,
@@ -937,38 +937,54 @@ class MemoryDB:
         note: str | None,
         message: dict,
     ) -> None:
-        if str(rating or "").strip().lower() != "up":
+        normalized_rating = str(rating or "").strip().lower()
+        if normalized_rating not in {"up", "down"}:
             return
         if not self.ltm_enabled:
             return
         content = sanitize_ltm_summary(str(message.get("content") or ""), max_chars=1800)
-        if not content:
-            return
-        summary = "\n".join(
-            [
-                "【记忆类型】用户认可回答",
-                "【来源】用户点赞",
-                "【可信度】高：用户明确点击大拇指认可该回答。",
-                "【适用范围】当前会话，后续可由压缩任务提升到资产/主机范围。",
-                "【核心记忆】",
-                content,
-                "【使用提醒】后续使用前仍需结合当前资产实时工具结果验证。",
-                f"【用户备注】{str(note or '').strip() or '-'}",
-            ]
-        )
+        note_text = str(note or "").strip() or "-"
+        if normalized_rating == "up":
+            source = "answer_feedback_immediate"
+            summary = "\n".join(
+                [
+                    "【记忆类型】用户认可回答",
+                    "【来源】用户点赞",
+                    "【可信度】高：用户明确点击大拇指认可该回答。",
+                    "【适用范围】当前会话，后续可由压缩任务提升到资产/主机范围。",
+                    "【核心记忆】",
+                    content or "-",
+                    "【使用提醒】后续使用前仍需结合当前资产实时工具结果验证。",
+                    f"【用户备注】{note_text}",
+                ]
+            )
+        else:
+            source = "answer_feedback_correction"
+            summary = "\n".join(
+                [
+                    "【记忆类型】用户纠错反馈",
+                    "【来源】用户点踩",
+                    "【可信度】高：用户明确标记该回答较差或错误。",
+                    "【适用范围】当前会话，后续检索时仅作为反例和避错提醒。",
+                    "【错误回答摘要】",
+                    content or "-",
+                    "【使用提醒】禁止把这条回答当事实、建议或成功经验沉淀；后续遇到同类问题必须重新采集证据。",
+                    f"【用户备注】{note_text}",
+                ]
+            )
         try:
             self.file_memory_store.append_memory(
                 scope_id=session_id,
                 summary=summary,
                 source_session_id=session_id,
                 metadata={
-                    "source": "answer_feedback_immediate",
-                    "feedback_rating": "up",
+                    "source": source,
+                    "feedback_rating": normalized_rating,
                     "feedback_target_message_id": message_id,
                 },
             )
         except Exception as exc:
-            logger.warning(f"点赞记忆立即沉淀失败: {exc}")
+            logger.warning(f"用户反馈记忆立即沉淀失败: {exc}")
 
     async def compress_and_store_ltm(
         self,

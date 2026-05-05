@@ -329,7 +329,7 @@ class MemoryPolicyTests(unittest.TestCase):
             "answer_feedback_immediate",
         )
 
-    def test_negative_feedback_is_not_promoted_as_positive_memory(self):
+    def test_negative_feedback_is_persisted_as_correction_memory_only(self):
         class FakeSessionStore:
             def update_message_feedback(self, session_id, message_id, rating, note=None):
                 return {"role": "assistant", "content": "错误回答", "feedback": {"rating": rating}}
@@ -341,7 +341,15 @@ class MemoryPolicyTests(unittest.TestCase):
 
         MemoryDB.update_message_feedback(db, "sid-1", 7, "down", "不对")
 
-        self.assertEqual(db.file_memory_store.appended, [])
+        self.assertEqual(db.file_memory_store.appended[0]["scope_id"], "sid-1")
+        self.assertEqual(
+            db.file_memory_store.appended[0]["metadata"]["source"],
+            "answer_feedback_correction",
+        )
+        self.assertEqual(db.file_memory_store.appended[0]["metadata"]["feedback_rating"], "down")
+        self.assertIn("用户纠错反馈", db.file_memory_store.appended[0]["summary"])
+        self.assertIn("禁止把这条回答当事实、建议或成功经验沉淀", db.file_memory_store.appended[0]["summary"])
+        self.assertNotIn("用户认可回答", db.file_memory_store.appended[0]["summary"])
 
     def test_pending_memory_conflict_queue_and_resolution(self):
         class FakeConflictStore:
