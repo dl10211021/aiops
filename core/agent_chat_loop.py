@@ -125,14 +125,18 @@ async def run_chat_agent_loop(
 
         tool_calls = stream_state.tool_calls
         safe_msg = stream_state.assistant_message()
-        pending_memory_references = _attach_memory_references_if_visible(
-            safe_msg,
-            pending_memory_references,
-        )
+        if not tool_calls:
+            pending_memory_references = _attach_memory_references_if_visible(
+                safe_msg,
+                pending_memory_references,
+            )
         messages.append(safe_msg)
         assistant_memory_id = memory_store.append_message(session_id, safe_msg)
 
         if not tool_calls:
+            memory_ref_event = _memory_references_sse_event(safe_msg)
+            if memory_ref_event:
+                yield memory_ref_event
             yield sse_event({"type": "done"})
             break
 
@@ -614,13 +618,15 @@ async def _run_split_model_chat_agent_loop(
             for chunk in _split_text_for_sse(final_text):
                 yield sse_event({"type": "chunk", "content": chunk})
                 await sleep(0.01)
+            memory_ref_event = _memory_references_sse_event(final_msg)
+            if memory_ref_event:
+                yield memory_ref_event
             yield sse_event({"type": "done"})
             return
 
-        pending_memory_references = _attach_memory_references_if_visible(
-            safe_msg,
-            pending_memory_references,
-        )
+        # Keep memory/RAG references pending while the model is still calling tools.
+        # The user should see those references on the final answer, not on an
+        # intermediate planning message.
         messages.append(safe_msg)
         assistant_memory_id = memory_store.append_message(session_id, safe_msg)
         exec_trace: list[dict] = []
@@ -759,3 +765,10 @@ def _attach_memory_references_if_visible(
         message["memory_refs"] = pending_references
         return []
     return pending_references
+
+
+def _memory_references_sse_event(message: dict) -> str | None:
+    refs = message.get("memory_refs") or message.get("memoryRefs")
+    if isinstance(refs, list) and refs:
+        return sse_event({"type": "memory_refs", "refs": refs})
+    return None

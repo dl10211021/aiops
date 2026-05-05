@@ -1,4 +1,4 @@
-import type { ChatMessage, ExecTraceItem, ToolApproval, UserInteractionRequest } from '@/types'
+import type { ChatMessage, ExecTraceItem, MemoryReference, ToolApproval, UserInteractionRequest } from '@/types'
 import { resolveApprovalFromToolEnd } from './chatAttention'
 import { completeLastTrace } from './traceUtils'
 
@@ -20,6 +20,13 @@ function streamString(value: unknown, fallback = '') {
 
 function streamArgs(value: unknown) {
   return typeof value === 'string' ? value : JSON.stringify(value || {})
+}
+
+function streamMemoryRefs(value: unknown): MemoryReference[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is MemoryReference => (
+    Boolean(item) && typeof item === 'object' && !Array.isArray(item)
+  ))
 }
 
 export function applyChatStreamEvent({
@@ -138,6 +145,17 @@ export function applyChatStreamEvent({
         content: nextMarkdown,
       }))
       return { done: false, accumulatedMarkdown: nextMarkdown }
+    }
+
+    case 'memory_refs': {
+      const refs = streamMemoryRefs(data.refs || data.memory_refs || data.memoryRefs)
+      if (!refs.length) return { done: false, accumulatedMarkdown }
+      updateLastAssistantMessage(sessionId, (message) => ({
+        ...message,
+        memoryRefs: refs,
+        memory_refs: refs,
+      }))
+      return { done: false, accumulatedMarkdown }
     }
 
     case 'error':

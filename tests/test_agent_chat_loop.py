@@ -198,8 +198,51 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertIn("stream-event", events)
+        self.assertIn(
+            sse_event(
+                {
+                    "type": "memory_refs",
+                    "refs": [{"scope_id": "sid-1", "summary_preview": "历史偏好"}],
+                }
+            ),
+            events,
+        )
         self.assertEqual(kwargs["messages"][0]["memory_refs"][0]["summary_preview"], "历史偏好")
         self.assertEqual(memory_store.appended[0][1]["memory_refs"][0]["scope_id"], "sid-1")
+
+    async def test_keeps_memory_references_for_final_answer_after_tool_calls(self):
+        turn = {"count": 0}
+
+        async def streamer(**kwargs):
+            turn["count"] += 1
+            if turn["count"] == 1:
+                kwargs["state"].assistant_content = "先查证据"
+                kwargs["state"].tool_calls = [{"id": "call-1"}]
+                return
+            kwargs["state"].assistant_content = "最终回答"
+            if False:
+                yield "unused"
+
+        async def tool_processor(**_kwargs):
+            if False:
+                yield "unused"
+
+        events, kwargs, memory_store, _cancel_flags, _scheduler_calls = (
+            await collect_chat_loop_events(
+                assistant_streamer=streamer,
+                tool_call_processor=tool_processor,
+                memory_references=[{"source_type": "rag", "title": "账号规范"}],
+                max_steps_resolver=lambda _mode: 2,
+            )
+        )
+
+        self.assertNotIn("memory_refs", kwargs["messages"][0])
+        self.assertEqual(kwargs["messages"][1]["memory_refs"][0]["title"], "账号规范")
+        self.assertEqual(memory_store.appended[1][1]["memory_refs"][0]["source_type"], "rag")
+        self.assertIn(
+            sse_event({"type": "memory_refs", "refs": [{"source_type": "rag", "title": "账号规范"}]}),
+            events,
+        )
 
     async def test_processes_tools_then_emits_step_limit_summary(self):
         async def streamer(**kwargs):
