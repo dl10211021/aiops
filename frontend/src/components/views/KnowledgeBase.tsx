@@ -182,15 +182,15 @@ export default function KnowledgeBase() {
     }
     : {
       title: 'AI 记忆',
-      body: '这里只保留三件事：看已有记忆、写入或搜索记忆、追踪本会话点赞/点踩反馈。',
-      next: '不做复杂审核流程；错误反馈会作为纠错记录，避免污染成功经验。',
+      body: '这里只保留当前会话的记忆：看本 session 已沉淀内容、写入或搜索当前会话记忆、追踪本会话点赞/点踩反馈。',
+      next: '知识库/RAG 可以全局共享；AI 会话记忆严格按 session 隔离，不会自动带入同资产或同主机的其他会话。',
     }
   return (
     <div className="flex-1 overflow-y-auto p-4 lg:p-5">
       <div className="w-full max-w-none">
         <PageHeader
           title="知识库"
-          description="统一管理上传资料、内容预览、向量状态、RAG 召回测试和 AI 记忆。"
+          description="资料库/RAG 用于全局共享知识；AI 会话记忆只属于当前 session，互不串用。"
           actions={(
             <>
             {activeTab === 'documents' && (
@@ -246,6 +246,23 @@ export default function KnowledgeBase() {
             }
           }}
         />
+
+        <section className="mb-4 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-lg border border-ops-success/25 bg-ops-success/5 px-4 py-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-ops-success/80">共享范围</div>
+            <div className="mt-1 text-sm font-semibold text-ops-text">知识库 / RAG 全局共享</div>
+            <p className="mt-1 text-xs leading-5 text-ops-subtext">
+              上传资料、原文预览、向量索引和 RAG 召回面向整个系统，所有会话都可以按权限检索这些资料。
+            </p>
+          </div>
+          <div className="rounded-lg border border-ops-accent/25 bg-ops-accent/5 px-4 py-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-ops-accent/80">隔离范围</div>
+            <div className="mt-1 text-sm font-semibold text-ops-text">AI 会话记忆按 session 隔离</div>
+            <p className="mt-1 text-xs leading-5 text-ops-subtext">
+              点赞、点踩、画像和成功经验只进入当前会话；同资产、同主机、同类型的其他会话不会自动引用。
+            </p>
+          </div>
+        </section>
 
 
         <section className="mb-4 rounded-lg border border-ops-accent/20 bg-gradient-to-r from-ops-accent/10 via-ops-panel/70 to-ops-dark/30 p-4">
@@ -409,9 +426,9 @@ export default function KnowledgeBase() {
             <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-3">
               <div className="grid gap-2 md:grid-cols-3">
                 {([
-                  ['browse', '记忆列表', `${memoryItems.length} 条文件记忆`, '查看、编辑、删除'],
-                  ['write', '新增/搜索', `${memorySearchResults.length} 条检索命中`, '新增和搜索记忆'],
-                  ['feedback', '反馈追踪', `${sessionMemoryActivity?.summary.promoted_count || 0}/${sessionMemoryActivity?.summary.rejected_count || 0}`, '点赞和点踩记录'],
+                  ['browse', '记忆列表', `${memoryItems.length} 条文件记忆`, '仅当前会话'],
+                  ['write', '新增/搜索', `${memorySearchResults.length} 条检索命中`, '写入当前 session'],
+                  ['feedback', '反馈追踪', `${sessionMemoryActivity?.summary.promoted_count || 0}/${sessionMemoryActivity?.summary.rejected_count || 0}`, '本会话反馈'],
                 ] as const).map(([id, label, count, desc]) => (
                   <button
                     key={id}
@@ -445,7 +462,7 @@ export default function KnowledgeBase() {
                     <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-6">
                       <div className="text-sm font-semibold text-ops-text">暂无 AI 记忆</div>
                       <p className="mt-2 text-sm leading-6 text-ops-subtext">
-                        会话点赞、资产画像和有效经验沉淀后，会在这里形成 Claude 风格文件记忆。
+                        当前会话的点赞、资产画像和有效经验沉淀后，会在这里形成可追溯的文件记忆。
                       </p>
                     </div>
                   )}
@@ -484,7 +501,7 @@ export default function KnowledgeBase() {
                 <aside className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
                   <div className="text-sm font-semibold text-ops-text">简单记忆规则</div>
                   <p className="mt-2 text-xs leading-5 text-ops-subtext">
-                    点赞代表这条回答值得沉淀；点踩代表这条回答不要作为成功经验，只作为“避免这样做”的纠错记忆。
+                    点赞代表这条回答值得沉淀到当前会话；点踩代表这条回答不要作为成功经验，只作为本会话“避免这样做”的纠错记忆。
                   </p>
                   <button
                     type="button"
@@ -510,8 +527,8 @@ export default function KnowledgeBase() {
                   <div className="text-sm font-semibold text-ops-text">反馈和会话输出怎么对应</div>
                   <div className="mt-3 space-y-2 text-xs leading-5 text-ops-subtext">
                     <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">点“定位输出”会回到会话里的对应 AI 回答。</div>
-                    <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">点赞会加强成功经验，点踩只保留为纠错提醒。</div>
-                    <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">没有点过赞踩也没关系，辅助模型仍会根据上下文沉淀已验证的成功经验。</div>
+                    <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">点赞会加强当前会话成功经验，点踩只保留为本会话纠错提醒。</div>
+                    <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">没有点过赞踩也没关系，辅助模型仍会根据当前会话上下文沉淀已验证的成功经验。</div>
                   </div>
                 </aside>
               </div>

@@ -455,7 +455,7 @@ export function KnowledgeCompileQueuePanel({
         <div>
           <div className="text-sm font-semibold text-ops-text">AI 摘要队列</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            RAG 主线已经保存原文和检索索引；这里把重要内容生成摘要，方便后续会话引用和图谱追溯。
+            RAG 主线已经保存原文和检索索引；这里把重要内容生成摘要，作为全局共享知识供后续会话检索和图谱追溯。
           </p>
         </div>
         <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-xs text-ops-accent">
@@ -1117,7 +1117,7 @@ export function KnowledgeArticlePanel({
         <div>
           <div className="text-sm font-semibold text-ops-text">RAG 资料</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            这里展示可长期引用的 RAG 资料，后续会话、画像和检索都可以使用。
+            这里展示可长期引用的 RAG 资料；它属于全局共享知识，后续会话、画像和检索都可以使用。
           </p>
         </div>
         <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
@@ -1829,8 +1829,8 @@ export function SessionMemoryActivityPanel({
                   }`}>
                     写入状态：{feedbackPolicyLabel(String(item.rating), item.memory_policy)}。
                     {item.rating === 'up'
-                      ? ' 作为成功经验保存，后续会话可引用。'
-                      : ' 已标记为不佳回答，不会作为成功经验注入后续会话。'}
+                      ? ' 作为当前会话成功经验保存，本会话后续轮次可引用。'
+                      : ' 已标记为不佳回答，不会作为成功经验注入本会话后续轮次。'}
                   </div>
                 </article>
               )) : (
@@ -1903,7 +1903,7 @@ export function MemoryReviewPanel({
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-ops-text">需要复核的记忆</div>
-          <p className="mt-1 text-xs text-ops-subtext">长期未更新的记忆会进入这里，避免旧经验静默影响新会话。</p>
+          <p className="mt-1 text-xs text-ops-subtext">长期未更新的记忆会进入这里，避免旧经验静默影响当前会话后续判断。</p>
         </div>
         <span className="rounded-full border border-amber-300/35 px-2 py-0.5 text-xs text-amber-200">
           {items.length}
@@ -1953,8 +1953,8 @@ export function MemoryReviewPanel({
 export function MemoryStoresPanel({ stores }: { stores: MemoryStoreInfo[] }) {
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
-      <div className="text-sm font-semibold text-ops-text">Memory Stores</div>
-      <p className="mt-1 text-xs text-ops-subtext">按 Claude 风格划分的记忆库权限和生命周期。</p>
+      <div className="text-sm font-semibold text-ops-text">记忆存储区</div>
+      <p className="mt-1 text-xs text-ops-subtext">会话记忆只保存在当前 session；知识库/RAG 才是全局共享资料。</p>
       <div className="mt-3 space-y-2">
         {stores.map((store) => (
           <div key={store.id} className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
@@ -2006,7 +2006,7 @@ export function MemoryQualityPanel({
         <div>
           <div className="text-sm font-semibold text-ops-text">记忆质量仪表盘</div>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-ops-subtext">
-            把 AI 记忆保存成可查看、可整理、可回退的文件；这里先给出管理建议，避免旧经验影响新会话。
+            把 AI 记忆保存成可查看、可整理、可回退的文件；这里先给出管理建议，避免旧经验影响当前会话后续判断。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -2079,7 +2079,7 @@ export function MemoryQualityPanel({
               </button>
             )) : (
               <div className="rounded-md border border-dashed border-ops-surface1 p-4 text-xs leading-5 text-ops-subtext">
-                当前没有明显需要压缩的记忆。后续如果某个资产、会话或用户偏好记忆过多，会先进入这里排队，再由你确认是否整理。
+                当前没有明显需要压缩的记忆。后续如果某个会话记忆过多，会先进入这里排队，再由你确认是否整理。
               </div>
             )}
           </div>
@@ -2158,7 +2158,7 @@ export function MemoryDeleteDialog({
           <div className="text-xs font-semibold text-ops-alert">删除 AI 记忆</div>
           <h2 className="mt-1 text-lg font-bold text-ops-text">确认删除</h2>
           <p className="mt-1 text-sm leading-6 text-ops-subtext">
-            删除后该记忆不会再参与后续会话检索，同时会写入删除版本审计。
+            删除后该记忆不会再参与当前会话后续检索，同时会写入删除版本审计。
           </p>
         </div>
         <div className="p-5">
