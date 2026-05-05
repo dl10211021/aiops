@@ -377,6 +377,17 @@ def profile_to_system_prompt(profile: dict[str, Any] | None) -> str:
             synthesized.append(f"业务用途：{purpose}")
         if risk_level or confidence is not None:
             synthesized.append(f"画像状态：风险等级 {risk_level or 'unknown'}，置信度 {confidence if confidence is not None else 'unknown'}。")
+        evidence_lines = []
+        for item in profile.get("evidence") or []:
+            if isinstance(item, dict):
+                label = str(item.get("label") or "证据").strip()
+                value = str(item.get("value") or "").strip()
+                source = str(item.get("source") or "").strip()
+                if value:
+                    suffix = f"（来源：{source}）" if source else ""
+                    evidence_lines.append(f"- {label}: {value}{suffix}")
+        if evidence_lines:
+            synthesized.append("画像证据：\n" + "\n".join(evidence_lines[:6]))
         focus_lines = []
         for item in profile.get("focus_areas") or []:
             if isinstance(item, dict):

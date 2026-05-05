@@ -54,7 +54,24 @@ class AgentPromptTests(unittest.TestCase):
         self.assertIn("[当前已加载专业技能说明 (Skills)]", prompt)
         self.assertIn("<INSTRUCTIONS>check</INSTRUCTIONS>", prompt)
         self.assertIn("LTM-CONTEXT", prompt)
+        self.assertIn("[上下文优先级]", prompt)
+        self.assertIn("资产画像提示词", prompt)
+        self.assertLess(prompt.index("LTM-CONTEXT"), prompt.index("[上下文优先级]"))
         protocol_tool_list.assert_called_once_with("ssh", False, "linux")
+
+    def test_chat_prompt_declares_profile_and_current_evidence_over_ltm(self):
+        prompt = render_chat_system_prompt(
+            session_context=self._session_context(),
+            base_prompt="BASE",
+            skill_instructions="SKILL",
+            asset_profile_prompt="[资产画像提示词]\n安全状态：UFW active",
+            ltm_context="历史记忆：UFW 未启用",
+        )
+
+        self.assertIn("长期记忆只是历史经验", prompt)
+        self.assertIn("当前原生协议工具结果", prompt)
+        self.assertIn("资产画像提示词", prompt)
+        self.assertLess(prompt.index("历史记忆：UFW 未启用"), prompt.index("[上下文优先级]"))
 
     @patch("core.agent_prompts.protocol_tool_list")
     @patch("core.agent_prompts.protocol_tool_guidance")

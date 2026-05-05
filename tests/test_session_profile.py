@@ -70,6 +70,9 @@ def test_profile_to_system_prompt_synthesizes_from_structured_profile_when_promp
             "purpose": "承载 ISO27001 合规审计平台的前后端容器服务。",
             "risk_level": "normal",
             "confidence": 92,
+            "evidence": [
+                {"label": "安全状态", "value": "UFW active, SSH active", "source": "session_service_health"}
+            ],
             "focus_areas": [
                 {
                     "priority": "P1",
@@ -81,5 +84,6 @@ def test_profile_to_system_prompt_synthesizes_from_structured_profile_when_promp
     )
 
     assert "ISO27001 合规审计系统后端服务器" in prompt
+    assert "UFW active" in prompt
     assert "SSH 访问控制" in prompt
     assert "不需要每轮人工确认" in prompt
