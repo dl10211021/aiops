@@ -18,13 +18,8 @@ import {
   SessionMemoryActivityPanel,
   MemoryStoresPanel,
   MemoryVersionsPanel,
-  KnowledgeCompileQueuePanel,
   KnowledgeVaultSearchPanel,
   KnowledgeVaultGraphPanel,
-  KnowledgeCandidatePanel,
-  KnowledgeCandidateEditor,
-  KnowledgeArticlePanel,
-  KnowledgeArticleViewer,
   type KnowledgeTab,
 } from './KnowledgeBaseParts'
 import { useKnowledgeBaseData } from './useKnowledgeBaseData'
@@ -32,7 +27,7 @@ import { useKnowledgeBaseData } from './useKnowledgeBaseData'
 export default function KnowledgeBase() {
   const setView = useStore((state) => state.setView)
   const [activeTab, setActiveTab] = useState<KnowledgeTab>('documents')
-  const [documentStep, setDocumentStep] = useState<'source' | 'compile' | 'review' | 'discover'>('source')
+  const [documentStep, setDocumentStep] = useState<'source' | 'discover'>('discover')
   const [memoryStep, setMemoryStep] = useState<'browse' | 'write' | 'govern'>('browse')
   const [memoryFocusMessageId, setMemoryFocusMessageId] = useState<string | number | null>(null)
   const {
@@ -45,27 +40,11 @@ export default function KnowledgeBase() {
     exportingVault,
     importingVault,
     files,
-    compileQueueItems,
-    candidateItems,
-    articleItems,
-    candidateDraft,
-    compilingSourceSession,
-    approvingSourceSession,
-    openingCandidate,
-    openingArticle,
-    savingCandidate,
     searchingVault,
     loadingVaultGraph,
-    selectedCandidate,
-    selectedArticle,
     handleDelete,
-    handleCompileKnowledgeSource,
-    handleApproveKnowledgeCandidate,
-    handleOpenKnowledgeCandidate,
-    handleOpenKnowledgeArticle,
     handleLoadKnowledgeVaultGraph,
     handleSearchKnowledgeVault,
-    handleSaveKnowledgeCandidate,
     handleDeleteMemory,
     handleCreateMemory,
     handleExportMemory,
@@ -109,7 +88,6 @@ export default function KnowledgeBase() {
     setMemoryCreateScope,
     setMemoryCreateSummary,
     setMemoryDraft,
-    setCandidateDraft,
     setVaultGraphIncludeCandidates,
     setVaultSearchQuery,
     setVaultSearchScope,
@@ -130,7 +108,7 @@ export default function KnowledgeBase() {
       const detail = (event as CustomEvent<{
         tab?: KnowledgeTab
         messageId?: string | number
-        step?: 'browse' | 'write' | 'govern' | 'source' | 'compile' | 'review' | 'discover'
+        step?: 'browse' | 'write' | 'govern' | 'source' | 'discover'
       }>).detail
       if (detail?.tab === 'memory') {
         setActiveTab('memory')
@@ -143,7 +121,7 @@ export default function KnowledgeBase() {
         setActiveTab('documents')
         setMemoryFocusMessageId(null)
         setDocumentStep(
-          detail.step === 'source' || detail.step === 'compile' || detail.step === 'review' || detail.step === 'discover'
+          detail.step === 'source' || detail.step === 'discover'
             ? detail.step
             : 'discover',
         )
@@ -184,9 +162,9 @@ export default function KnowledgeBase() {
     : visibleError
     const activeStepGuide = activeTab === 'documents'
     ? {
-      title: '资料库',
-      body: '这里管理上传资料、Wiki 知识和搜索图谱。资料先保存原文，需要时再让 AI 生成 Wiki。',
-      next: '简单管理资料和 Wiki。',
+      title: 'RAG 知识库',
+      body: '这里以 RAG 检索为主：资料上传后先保存原文并建立检索索引，会话回答优先从命中证据里引用。图谱只负责展示资料之间的关联。',
+      next: '先检索证据，再进入会话引用。',
     }
     : {
       title: 'AI 记忆',
@@ -194,10 +172,10 @@ export default function KnowledgeBase() {
       next: '查看、新增、管理记忆。',
     }
   const knowledgeHealth = [
-    ['原始资料', `${files.length}`, '保存原文，不被 AI 改写'],
-    ['待编译', `${compileQueueItems.length}`, '等待生成 Wiki 草稿'],
-    ['待整理', `${candidateItems.length}`, '人工确认后才能进入Wiki 知识'],
-    ['Wiki 知识', `${articleItems.length}`, '可搜索、可关联、可引用'],
+    ['资料', `${files.length}`, '保存原文，不被 AI 改写'],
+    ['待索引', `${files.filter((file) => file.vector_status === 'pending').length}`, '等待 RAG 索引完成'],
+    ['可检索', `${files.filter((file) => file.vector_status === 'indexed').length}`, '可被会话引用'],
+    ['命中证据', `${vaultSearchResults.length}`, '检索结果可追溯'],
   ]
   const memoryHealth = [
     ['记忆库', `${memoryStores.length}`, '按会话、资产、主机分类'],
@@ -212,7 +190,7 @@ export default function KnowledgeBase() {
       <div className="w-full max-w-none">
         <PageHeader
           title="知识库"
-          description="统一管理资料、Wiki 知识和 AI 记忆，支持离线部署、检索和追溯。"
+          description="统一管理 RAG 资料、检索证据、知识图谱和 AI 记忆，支持离线部署、引用和追溯。"
           actions={(
             <>
             {activeTab === 'documents' && (
@@ -222,7 +200,7 @@ export default function KnowledgeBase() {
                   disabled={exportingVault}
                   className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {exportingVault ? '导出中...' : '导出资料库'}
+                {exportingVault ? '导出中...' : '导出 RAG 库'}
                 </button>
                 <label className={`cursor-pointer bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors ${importingVault ? 'pointer-events-none opacity-50' : ''}`}>
                   {importingVault ? '导入中...' : '导入资料库'}
@@ -279,7 +257,7 @@ export default function KnowledgeBase() {
           onChange={(tab) => {
             setActiveTab(tab)
             if (tab === 'documents') {
-              setDocumentStep('source')
+              setDocumentStep('discover')
             } else {
               setMemoryStep('browse')
             }
@@ -330,10 +308,8 @@ export default function KnowledgeBase() {
             <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-3">
               <div className="grid gap-2 md:grid-cols-4">
                 {([
-                  ['source', '资料库', `${files.length} 份资料`, '上传和查看资料'],
-                  ['compile', '生成 Wiki', `${compileQueueItems.length} 个待处理`, '让 AI 生成 Wiki 草稿'],
-                  ['review', 'Wiki 知识', `${candidateItems.length} 个草稿 / ${articleItems.length} 篇 Wiki`, '整理和查看 Wiki'],
-                  ['discover', '搜索图谱', `${vaultSearchResults.length} 条命中`, '搜索资料和关联图谱'],
+                  ['discover', 'RAG 检索', `${vaultSearchResults.length} 条命中`, '先查证据再回答'],
+                  ['source', '资料入库', `${files.length} 份资料`, '上传和查看资料'],
                 ] as const).map(([id, label, count, desc]) => (
                   <button
                     key={id}
@@ -370,92 +346,18 @@ export default function KnowledgeBase() {
                     <div className="text-sm font-semibold text-ops-text">资料库说明</div>
                     <div className="mt-3 space-y-2 text-xs leading-5 text-ops-subtext">
                       <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">原始资料会保留，不会被 AI 修改。</div>
-                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">需要时让 AI 生成 Wiki 草稿。</div>
-                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">后续再进入生成 Wiki，这里只负责保存资料。</div>
+                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">上传后用于 RAG 检索和会话引用。</div>
+                      <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">图谱只展示资料之间的关联，不改变原文。</div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setDocumentStep('compile')}
+                      onClick={() => setDocumentStep('discover')}
                       className="mt-4 w-full rounded-md border border-ops-accent/45 px-3 py-2 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
                     >
-                      下一步：生成 Wiki
+                      下一步：RAG 检索
                     </button>
                   </div>
                 </aside>
-              </div>
-            )}
-
-            {documentStep === 'compile' && (
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-                <KnowledgeCompileQueuePanel
-                  compilingSourceSession={compilingSourceSession}
-                  items={compileQueueItems}
-                  onCompile={handleCompileKnowledgeSource}
-                />
-                <aside className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
-                  <div className="text-sm font-semibold text-ops-text">这一阶段只负责生成候选</div>
-                  <p className="mt-2 text-xs leading-5 text-ops-subtext">
-                    辅助模型把原始资料整理成候选 Wiki。候选不会直接进入长期知识，必须到下一步整理知识。
-                  </p>
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setDocumentStep('source')}
-                      className="rounded-md border border-ops-surface0 px-3 py-1.5 text-xs font-semibold text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
-                    >
-                      返回入库
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDocumentStep('review')}
-                      className="rounded-md border border-ops-accent/45 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
-                    >
-                      去整理知识
-                    </button>
-                  </div>
-                </aside>
-              </div>
-            )}
-
-            {documentStep === 'review' && (
-              <div className="grid gap-4 xl:grid-cols-[minmax(340px,0.55fr)_minmax(0,1fr)]">
-                <section className="space-y-4">
-                  <KnowledgeCandidatePanel
-                    approvingSourceSession={approvingSourceSession}
-                    items={candidateItems}
-                    openingCandidate={openingCandidate}
-                    onApprove={handleApproveKnowledgeCandidate}
-                    onOpen={handleOpenKnowledgeCandidate}
-                  />
-                  <KnowledgeArticlePanel
-                    items={articleItems}
-                    openingArticle={openingArticle}
-                    onOpen={handleOpenKnowledgeArticle}
-                  />
-                </section>
-                <section className="space-y-4">
-                  <KnowledgeCandidateEditor
-                    draft={candidateDraft}
-                    candidate={selectedCandidate}
-                    saving={savingCandidate}
-                    onDraftChange={setCandidateDraft}
-                    onSave={handleSaveKnowledgeCandidate}
-                  />
-                  <KnowledgeArticleViewer article={selectedArticle} />
-                  <div className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
-                    <div className="text-sm font-semibold text-ops-text">整理完成后做什么？</div>
-                    <p className="mt-2 text-xs leading-5 text-ops-subtext">
-                      Wiki 页面会进入检索和图谱，后续会话和记忆都能从这里追溯来源。
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setDocumentStep('discover')}
-                      className="mt-4 rounded-md border border-ops-accent/45 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
-                    >
-                      下一步：检索追溯
-                    </button>
-                  </div>
-                </section>
               </div>
             )}
 

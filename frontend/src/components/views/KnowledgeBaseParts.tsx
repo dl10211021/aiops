@@ -5,18 +5,30 @@ import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseMode
 export type KnowledgeTab = 'documents' | 'memory'
 
 function knowledgeStatusLabel(file: KnowledgeFile) {
-  if (file.compile_status === 'pending_ai_compile') return '待 生成 Wiki'
+  if (file.compile_status === 'pending_ai_compile') return '已进入 RAG 库'
   if (file.compile_status) return file.compile_status
-  if (file.status === 'legacy_vector') return '旧向量文档'
+  if (file.status === 'legacy_vector') return '旧版 RAG 资料'
   return file.status || '已保存'
 }
 
 function vectorStatusLabel(file: KnowledgeFile) {
-  if (file.vector_status === 'indexed') return '向量已注入'
-  if (file.vector_status === 'skipped') return '检索索引已跳过'
-  if (file.vector_status === 'failed') return '检索索引未完成'
-  if (file.vector_status === 'pending') return '等待检索索引'
-  return file.chunks !== undefined ? `${file.chunks} 个向量块` : '资料原文'
+  if (file.vector_status === 'indexed') return 'RAG 已就绪'
+  if (file.vector_status === 'skipped') return '仅原文可查'
+  if (file.vector_status === 'failed') return 'RAG 索引未完成'
+  if (file.vector_status === 'pending') return '正在建立 RAG 索引'
+  return file.chunks !== undefined ? `RAG 切片 ${file.chunks} 段` : '原文已保存'
+}
+
+function ragErrorHint(message?: string) {
+  if (!message) return ''
+  const lower = message.toLowerCase()
+  if (lower.includes('model not found') || lower.includes('404')) {
+    return 'Embedding 模型不存在或未配置。资料已经保存，可先用原文和关键词检索；配置可用 Embedding 模型后再重建 RAG 索引。'
+  }
+  if (lower.includes('timeout') || lower.includes('timed out')) {
+    return 'Embedding 请求超时。资料已经保存，可稍后刷新或重建 RAG 索引。'
+  }
+  return message
 }
 
 function formatMemorySize(size: number) {
@@ -38,7 +50,7 @@ export function KnowledgeTabs({
   onChange: (tab: KnowledgeTab) => void
 }) {
   const tabs: Array<[KnowledgeTab, string, string]> = [
-    ['documents', '资料库', `${documentCount} 个原始资料`],
+    ['documents', 'RAG 知识库', `${documentCount} 个资料`],
     ['memory', 'AI 记忆', `${memoryCount} 条记忆文件`],
   ]
   return (
@@ -121,7 +133,7 @@ export function KnowledgeFileCard({
         <div className="mt-2 space-y-1 text-[11px] leading-5 text-ops-overlay">
           {file.source_path && <div className="truncate" title={file.source_path}>原文：{file.source_path}</div>}
           {file.note_path && <div className="truncate" title={file.note_path}>来源卡片：{file.note_path}</div>}
-          {file.vector_error && <div className="line-clamp-2 text-ops-muted">检索索引提示：{file.vector_error}</div>}
+          {file.vector_error && <div className="line-clamp-2 text-ops-muted">RAG 提示：{ragErrorHint(file.vector_error)}</div>}
         </div>
       </div>
       <button
@@ -148,9 +160,9 @@ export function KnowledgeCompileQueuePanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">生成 Wiki队列</div>
+          <div className="text-sm font-semibold text-ops-text">可选 Wiki 整理队列</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            上传后的原始资料会先进入 source session，等待辅助模型做两阶段编译：分析证据，再生成候选 Wiki 页面。
+            RAG 主线已经保存原文和检索索引；这里只是把重要资料整理成可读 Wiki，方便人工维护和图谱追溯。
           </p>
         </div>
         <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-xs text-ops-accent">
@@ -166,7 +178,7 @@ export function KnowledgeCompileQueuePanel({
                   {item.original_filename || item.filename}
                 </div>
                 <div className="mt-1 font-mono text-[11px] text-ops-overlay">
-                  {item.source_session_id || item.id}
+              {item.source_session_id || item.id}
                 </div>
               </div>
               <span className="shrink-0 rounded-full border border-ops-accent/30 px-2 py-0.5 text-[10px] text-ops-accent">
@@ -178,17 +190,17 @@ export function KnowledgeCompileQueuePanel({
             </p>
             {item.source_path && (
               <div className="mt-2 truncate rounded border border-ops-surface1/70 bg-ops-panel/40 px-2 py-1 font-mono text-[11px] text-ops-overlay" title={item.source_path}>
-                raw: {item.source_path}
+                原文：{item.source_path}
               </div>
             )}
             {item.note_path && (
               <div className="mt-1 truncate rounded border border-ops-surface1/70 bg-ops-panel/40 px-2 py-1 font-mono text-[11px] text-ops-overlay" title={item.note_path}>
-                wiki: {item.note_path}
+                Wiki：{item.note_path}
               </div>
             )}
             {item.candidate_path && (
               <div className="mt-1 truncate rounded border border-ops-success/30 bg-ops-success/5 px-2 py-1 font-mono text-[11px] text-ops-success" title={item.candidate_path}>
-                candidate: {item.candidate_path}
+                草稿：{item.candidate_path}
               </div>
             )}
             <button
@@ -197,15 +209,15 @@ export function KnowledgeCompileQueuePanel({
               className="mt-2 w-full rounded-md border border-ops-accent/40 px-3 py-1.5 text-xs font-semibold text-ops-accent transition-colors hover:bg-ops-accent/10 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {compilingSourceSession === (item.source_session_id || item.id)
-                ? '生成候选中...'
+                ? '整理中...'
                 : item.compile_stage === 'candidate_generated'
-                  ? '候选已生成'
-                  : '生成候选 Wiki'}
+                  ? '草稿已生成'
+                  : '整理成 Wiki 草稿'}
             </button>
           </article>
         )) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-6 text-center text-xs leading-5 text-ops-overlay">
-            暂无待编译资料。上传文档后，这里会显示等待辅助模型处理的 source session。
+            暂无需要整理的资料。RAG 检索不依赖这里，只有需要长期维护的资料才整理成 Wiki。
           </div>
         )}
       </div>
@@ -231,10 +243,10 @@ export function KnowledgeVaultSearchPanel({
   onSearch: () => void
 }) {
   const scopes = [
-    ['all', '全部'],
-    ['articles', '正式 Wiki'],
-    ['candidates', '候选 Wiki'],
-    ['sources', 'Source 卡片'],
+    ['all', '全部知识'],
+    ['articles', '整理资料'],
+    ['candidates', '草稿资料'],
+    ['sources', '来源记录'],
     ['raw', '原始资料'],
   ]
 
@@ -242,9 +254,9 @@ export function KnowledgeVaultSearchPanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-ops-text">资料库搜索</div>
+          <div className="text-sm font-semibold text-ops-text">RAG 检索</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            在 Wiki、草稿、来源会话和原始资料中查找证据，方便快速追溯来源。
+            输入问题后，从原始资料、整理资料和来源记录中找证据；会话回答可以引用这里的命中内容。
           </p>
         </div>
         <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-xs text-ops-accent">
@@ -258,7 +270,7 @@ export function KnowledgeVaultSearchPanel({
           onKeyDown={(event) => {
             if (event.key === 'Enter') onSearch()
           }}
-          placeholder="搜索关键词、资产、命令、结论或 runbook..."
+          placeholder="输入问题、资产、故障、命令、结论或关键词..."
           className="rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
         />
         <select
@@ -276,7 +288,7 @@ export function KnowledgeVaultSearchPanel({
         disabled={searching}
         className="mt-2 w-full rounded-md border border-ops-accent/40 px-3 py-1.5 text-xs font-semibold text-ops-accent transition-colors hover:bg-ops-accent/10 disabled:cursor-not-allowed disabled:opacity-45"
       >
-        {searching ? '搜索中...' : '搜索资料库'}
+        {searching ? '检索中...' : '执行 RAG 检索'}
       </button>
       <div className="mt-3 space-y-2">
         {results.length > 0 ? results.map((item, index) => (
@@ -294,12 +306,12 @@ export function KnowledgeVaultSearchPanel({
             <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-ops-overlay">
               {(item.source_session_id || item.id) && <span>来源：{item.source_session_id || item.id}</span>}
               {item.compile_stage && <span>状态：{item.compile_stage}</span>}
-              <span>score: {item.score}</span>
+              <span>相关度：{item.score}</span>
             </div>
           </article>
         )) : (
           <div className="rounded-md border border-dashed border-ops-surface1 p-3 text-xs leading-5 text-ops-subtext">
-            输入关键词后即可离线搜索资料库。Wiki 知识来自整理后的资料内容。
+            输入问题即可离线检索资料。即使 Embedding 暂不可用，原文仍可作为可追溯证据。
           </div>
         )}
       </div>
@@ -351,7 +363,7 @@ export function KnowledgeVaultGraphPanel({
         <div>
           <div className="text-sm font-semibold text-ops-text">知识图谱</div>
           <p className="mt-1 text-xs leading-5 text-ops-subtext">
-            展示 Wiki 之间的关联和内容提及，用来判断知识是否真正连接起来。
+            RAG 负责检索证据，图谱负责看资料之间是否有关联。
           </p>
         </div>
         <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
@@ -366,7 +378,7 @@ export function KnowledgeVaultGraphPanel({
             onChange={(event) => onIncludeCandidatesChange(event.target.checked)}
             className="accent-ops-accent"
           />
-          包含候选 Wiki
+          包含草稿资料
         </label>
         <button
           onClick={onLoad}
@@ -380,11 +392,11 @@ export function KnowledgeVaultGraphPanel({
         <div className="mt-3 space-y-3">
           <div className="grid grid-cols-2 gap-2 text-xs lg:grid-cols-4">
             <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-2">
-              <div className="text-ops-overlay">正式文章</div>
+              <div className="text-ops-overlay">正式资料</div>
               <div className="mt-1 text-lg font-semibold text-ops-text">{graph.summary.article_count}</div>
             </div>
             <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-2">
-              <div className="text-ops-overlay">候选草稿</div>
+              <div className="text-ops-overlay">草稿资料</div>
               <div className="mt-1 text-lg font-semibold text-ops-text">{graph.summary.candidate_count}</div>
             </div>
             <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 p-2">
@@ -587,7 +599,7 @@ export function KnowledgeVaultGraphPanel({
                           )
                         }) : (
                           <div className="rounded-md border border-dashed border-ops-surface1 p-3 text-xs leading-5 text-ops-subtext">
-                            这个节点暂时没有关系，可以在 Wiki 内容里补充关联。
+                            这个节点暂时没有关系，可以在资料内容里补充关联。
                           </div>
                         )}
                       </div>
@@ -601,7 +613,7 @@ export function KnowledgeVaultGraphPanel({
               </div>
             ) : (
               <div className="rounded-lg border border-dashed border-ops-surface1 p-6 text-center text-xs leading-6 text-ops-subtext">
-                暂无可绘制节点。批准 Wiki 文章后，或在文章中加入 `[[文章标题]]`，这里会形成关系图。
+                暂无可绘制节点。资料之间出现相同主题、资产、命令或显式关联后，这里会形成关系图。
               </div>
             )}
           </div>
@@ -627,7 +639,7 @@ export function KnowledgeVaultGraphPanel({
                     {edge.label}: {source?.title || edge.source} {'->'} {target?.title || edge.target}
                   </div>
                 )
-              }) : <div className="text-xs text-ops-subtext">暂无关系，后续可在 Wiki 中补充关联。</div>}
+              }) : <div className="text-xs text-ops-subtext">暂无关系，后续可在资料中补充关联。</div>}
             </div>
           </div>
         </div>
@@ -884,7 +896,7 @@ export function KnowledgeEmptyState({
       <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-6">
         <div className="text-sm font-semibold text-ops-text">知识库为空</div>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-ops-subtext">
-          上传巡检 SOP、故障处理记录、系统架构说明、日志样例、表格、图片或 HTML 后，OpsCore 会先保存原始资料，需要时再让 AI 生成 Wiki。
+          上传巡检 SOP、故障处理记录、系统架构说明、日志样例、表格、图片或 HTML 后，OpsCore 会先保存原始资料并进入 RAG 检索。
         </p>
         <label className="mt-5 inline-flex cursor-pointer rounded-lg bg-ops-accent px-4 py-2 text-sm font-semibold text-ops-dark transition-colors hover:bg-ops-accent/85">
           上传第一份文档
@@ -895,7 +907,7 @@ export function KnowledgeEmptyState({
         {[
           ['支持格式', 'PDF、Markdown、TXT、Word、Excel、CSV、HTML、日志、图片'],
           ['资料留底', '原始文件不被 AI 修改，来源卡片记录路径和状态'],
-          ['生成 Wiki', 'AI 后续生成 Runbook、资产画像、故障案例和关联索引'],
+          ['RAG 检索', 'AI 后续可引用命中证据、资产画像、故障案例和关联索引'],
         ].map(([title, desc]) => (
           <div key={title} className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-4">
             <div className="text-sm font-semibold text-ops-text">{title}</div>

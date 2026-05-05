@@ -216,7 +216,7 @@ export function useKnowledgeBaseData() {
       }
     }
     if (successCount > 0) {
-      addToast(`成功上传 ${successCount} 个文档`, 'success')
+      addToast(`成功上传 ${successCount} 个资料，已进入 RAG 知识库`, 'success')
       await loadFiles()
     }
     setUploading(false)
@@ -347,7 +347,7 @@ export function useKnowledgeBaseData() {
       const res = await searchKnowledgeVault(query, vaultSearchScope, 20)
       const results = res.data.results || []
       setVaultSearchResults(results)
-      addToast(`搜索到 ${results.length} 条知识`, 'success')
+      addToast(`RAG 检索到 ${results.length} 条证据`, 'success')
     } catch (e: unknown) {
       addToast(e instanceof Error ? e.message : '搜索知识库失败', 'error')
     } finally {
@@ -378,9 +378,9 @@ export function useKnowledgeBaseData() {
       a.download = `opscore-knowledge-vault-${Date.now()}.zip`
       a.click()
       URL.revokeObjectURL(url)
-      addToast('Vault 已导出为 ZIP', 'success')
+      addToast('RAG 知识库已导出为 ZIP', 'success')
     } catch (e: unknown) {
-      addToast(e instanceof Error ? e.message : '导出 Vault 失败', 'error')
+      addToast(e instanceof Error ? e.message : '导出 RAG 知识库失败', 'error')
     } finally {
       setExportingVault(false)
     }
@@ -391,16 +391,16 @@ export function useKnowledgeBaseData() {
     event.target.value = ''
     if (!file) return
     if (!file.name.toLowerCase().endsWith('.zip')) {
-      addToast('Vault 导入仅支持 ZIP 文件', 'error')
+      addToast('RAG 知识库导入仅支持 ZIP 文件', 'error')
       return
     }
     setImportingVault(true)
     try {
       await importKnowledgeVault(file)
       await loadFiles()
-      addToast('Vault ZIP 已导入', 'success')
+      addToast('RAG 知识库 ZIP 已导入', 'success')
     } catch (e: unknown) {
-      addToast(e instanceof Error ? e.message : '导入 Vault 失败', 'error')
+      addToast(e instanceof Error ? e.message : '导入 RAG 知识库失败', 'error')
     } finally {
       setImportingVault(false)
     }
