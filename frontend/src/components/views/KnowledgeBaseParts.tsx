@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from 'react'
-import type { KnowledgeCompileQueueItem, KnowledgeDocumentContent, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeDocumentContent, KnowledgeFile, KnowledgeListPagination, KnowledgeListSummary, KnowledgeVaultGraph, KnowledgeVaultSearchResult, KnowledgeVectorStoreStatus, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
 export type KnowledgeTab = 'documents' | 'memory'
@@ -124,6 +124,219 @@ export function KnowledgeUploadButton({
       {uploading ? '上传中...' : '上传资料'}
       <UploadInput disabled={uploading} onUpload={onUpload} />
     </label>
+  )
+}
+
+export function KnowledgeLibraryControls({
+  extension,
+  pageSize,
+  pagination,
+  query,
+  sort,
+  summary,
+  vectorStatus,
+  vectorStore,
+  onExtensionChange,
+  onPageChange,
+  onPageSizeChange,
+  onQueryChange,
+  onRefresh,
+  onSortChange,
+  onVectorStatusChange,
+}: {
+  extension: string
+  pageSize: number
+  pagination: KnowledgeListPagination | null
+  query: string
+  sort: string
+  summary: KnowledgeListSummary | null
+  vectorStatus: string
+  vectorStore: KnowledgeVectorStoreStatus | null
+  onExtensionChange: (value: string) => void
+  onPageChange: (value: number) => void
+  onPageSizeChange: (value: number) => void
+  onQueryChange: (value: string) => void
+  onRefresh: () => void
+  onSortChange: (value: string) => void
+  onVectorStatusChange: (value: string) => void
+}) {
+  const vectorCounts = summary?.vector_counts || {}
+  const extensionCounts = summary?.extension_counts || {}
+  const extensionOptions = Object.keys(extensionCounts)
+    .filter((item) => item && item !== 'unknown')
+    .sort()
+  const indexedPercent = Math.round((summary?.indexed_ratio || 0) * 100)
+  const page = pagination?.page || 1
+  const pageCount = pagination?.page_count || 1
+  const total = summary?.total || 0
+  const filtered = summary?.filtered ?? total
+  const vectorStatusOptions = [
+    ['all', '全部向量状态'],
+    ['indexed', `已向量化 ${vectorCounts.indexed || 0}`],
+    ['skipped', `仅原文 ${vectorCounts.skipped || 0}`],
+    ['failed', `失败 ${vectorCounts.failed || 0}`],
+    ['pending', `待索引 ${vectorCounts.pending || 0}`],
+    ['unknown', `未知 ${vectorCounts.unknown || 0}`],
+  ]
+  const vectorTone = vectorStore?.status === 'ready'
+    ? 'border-ops-success/35 text-ops-success'
+    : vectorStore?.status === 'missing_embedding_model'
+      ? 'border-amber-300/35 text-amber-200'
+      : 'border-ops-surface1 text-ops-overlay'
+
+  return (
+    <section className="rounded-xl border border-ops-surface0 bg-ops-panel/65 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-ops-text">资料管理台</div>
+          <p className="mt-1 text-xs leading-5 text-ops-subtext">
+            面向大量资料：搜索、筛选、分页、看向量库状态；召回率不伪造百分比，先看检索命中和证据覆盖。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="rounded-md border border-ops-surface1 px-3 py-1.5 text-xs text-ops-subtext hover:border-ops-accent hover:text-ops-text"
+        >
+          刷新状态
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <div className="rounded-lg border border-ops-surface0 bg-ops-dark/45 p-3">
+          <div className="text-[11px] text-ops-overlay">资料总数</div>
+          <div className="mt-1 text-2xl font-black text-ops-text">{total}</div>
+          <div className="mt-1 text-[11px] text-ops-subtext">当前筛选 {filtered} 份</div>
+        </div>
+        <div className="rounded-lg border border-ops-surface0 bg-ops-dark/45 p-3">
+          <div className="text-[11px] text-ops-overlay">已向量化</div>
+          <div className="mt-1 text-2xl font-black text-ops-success">{vectorCounts.indexed || 0}</div>
+          <div className="mt-1 text-[11px] text-ops-subtext">覆盖率 {indexedPercent}%</div>
+        </div>
+        <div className="rounded-lg border border-ops-surface0 bg-ops-dark/45 p-3">
+          <div className="text-[11px] text-ops-overlay">仅原文/失败</div>
+          <div className="mt-1 text-2xl font-black text-amber-200">{(vectorCounts.skipped || 0) + (vectorCounts.failed || 0)}</div>
+          <div className="mt-1 text-[11px] text-ops-subtext">仍可查看原文和关键词检索</div>
+        </div>
+        <div className="rounded-lg border border-ops-surface0 bg-ops-dark/45 p-3">
+          <div className="text-[11px] text-ops-overlay">资料容量</div>
+          <div className="mt-1 text-2xl font-black text-ops-text">{formatMemorySize(summary?.total_size || 0)}</div>
+          <div className="mt-1 text-[11px] text-ops-subtext">原文留存大小</div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 lg:grid-cols-[minmax(240px,1fr)_170px_150px_150px_120px]">
+        <input
+          value={query}
+          onChange={(event) => {
+            onQueryChange(event.target.value)
+            onPageChange(1)
+          }}
+          placeholder="搜索文件名、来源、标签、状态..."
+          className="rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent"
+        />
+        <select
+          value={vectorStatus}
+          onChange={(event) => {
+            onVectorStatusChange(event.target.value)
+            onPageChange(1)
+          }}
+          className="rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+        >
+          {vectorStatusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+        <select
+          value={extension}
+          onChange={(event) => {
+            onExtensionChange(event.target.value)
+            onPageChange(1)
+          }}
+          className="rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+        >
+          <option value="all">全部类型</option>
+          {extensionOptions.map((item) => <option key={item} value={item}>{item} ({extensionCounts[item]})</option>)}
+        </select>
+        <select
+          value={sort}
+          onChange={(event) => {
+            onSortChange(event.target.value)
+            onPageChange(1)
+          }}
+          className="rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+        >
+          <option value="updated_desc">最近更新</option>
+          <option value="created_desc">最近上传</option>
+          <option value="name_asc">名称 A-Z</option>
+          <option value="name_desc">名称 Z-A</option>
+          <option value="size_desc">大文件优先</option>
+          <option value="size_asc">小文件优先</option>
+        </select>
+        <select
+          value={pageSize}
+          onChange={(event) => {
+            onPageSizeChange(Number(event.target.value))
+            onPageChange(1)
+          }}
+          className="rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+        >
+          <option value={20}>20/页</option>
+          <option value={50}>50/页</option>
+          <option value={100}>100/页</option>
+          <option value={200}>200/页</option>
+        </select>
+      </div>
+
+      <div className="mt-4 grid gap-3 xl:grid-cols-[1fr_1fr]">
+        <div className={`rounded-lg border bg-ops-dark/35 p-3 ${vectorTone}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-semibold">向量化模型</span>
+            <span className="rounded-full border border-current/35 px-2 py-0.5 text-[10px]">{vectorStore?.status || 'unknown'}</span>
+          </div>
+          <div className="mt-2 text-xs leading-5 text-ops-subtext">
+            模型：{vectorStore?.embedding_model || '未配置'} · 维度：{vectorStore?.embedding_dim || '-'}
+          </div>
+          <div className="mt-1 text-[11px] leading-5 text-ops-overlay">{vectorStore?.message || '暂无向量化状态。'}</div>
+        </div>
+        <div className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-ops-text">向量数据库</span>
+            <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-subtext">
+              {vectorStore?.database || 'LanceDB'}
+            </span>
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+            <span className="rounded border border-ops-surface1/70 px-2 py-1 text-ops-subtext">表：{vectorStore?.table || '-'}</span>
+            <span className="rounded border border-ops-surface1/70 px-2 py-1 text-ops-subtext">块：{vectorStore?.chunk_count || 0}</span>
+            <span className="rounded border border-ops-surface1/70 px-2 py-1 text-ops-subtext">来源：{vectorStore?.source_count || 0}</span>
+          </div>
+          <div className="mt-2 truncate text-[11px] text-ops-overlay" title={vectorStore?.db_path || ''}>
+            路径：{vectorStore?.db_path || '-'}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ops-surface0 bg-ops-dark/30 px-3 py-2 text-xs text-ops-subtext">
+        <div>第 {page} / {pageCount} 页 · 当前 {pagination?.total || 0} 条筛选结果</div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={!pagination?.has_prev}
+            onClick={() => onPageChange(Math.max(1, page - 1))}
+            className="rounded border border-ops-surface1 px-3 py-1 hover:border-ops-accent hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            上一页
+          </button>
+          <button
+            type="button"
+            disabled={!pagination?.has_next}
+            onClick={() => onPageChange(page + 1)}
+            className="rounded border border-ops-surface1 px-3 py-1 hover:border-ops-accent hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            下一页
+          </button>
+        </div>
+      </div>
+    </section>
   )
 }
 

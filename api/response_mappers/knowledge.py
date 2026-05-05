@@ -10,10 +10,23 @@ def knowledge_document_uploaded_response_kwargs(message: str) -> dict[str, Any]:
     }
 
 
-def knowledge_documents_response_kwargs(files: list[Any]) -> dict[str, Any]:
+def knowledge_documents_response_kwargs(
+    files: list[Any],
+    *,
+    summary: dict[str, Any] | None = None,
+    pagination: dict[str, Any] | None = None,
+    vector_store: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    data: dict[str, Any] = {"files": files}
+    if summary is not None:
+        data["summary"] = summary
+    if pagination is not None:
+        data["pagination"] = pagination
+    if vector_store is not None:
+        data["vector_store"] = vector_store
     return {
         "status": "success",
-        "data": {"files": files},
+        "data": data,
     }
 
 

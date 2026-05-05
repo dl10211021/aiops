@@ -1,8 +1,28 @@
-import type { ApiResponse, KnowledgeCompileQueueItem, KnowledgeDocumentContent, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type { ApiResponse, KnowledgeCompileQueueItem, KnowledgeDocumentContent, KnowledgeFile, KnowledgeListPagination, KnowledgeListSummary, KnowledgeVaultGraph, KnowledgeVaultSearchResult, KnowledgeVectorStoreStatus, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
 import { apiUrl, authHeaders, request } from './http'
 
-export async function listKnowledgeDocuments() {
-  return request<{ files: KnowledgeFile[] }>('/knowledge/list')
+export async function listKnowledgeDocuments(params?: {
+  query?: string
+  vectorStatus?: string
+  extension?: string
+  page?: number
+  perPage?: number
+  sort?: string
+}) {
+  const search = new URLSearchParams()
+  if (params?.query) search.set('q', params.query)
+  if (params?.vectorStatus) search.set('vector_status', params.vectorStatus)
+  if (params?.extension) search.set('extension', params.extension)
+  if (params?.page) search.set('page', String(params.page))
+  if (params?.perPage) search.set('per_page', String(params.perPage))
+  if (params?.sort) search.set('sort', params.sort)
+  const suffix = search.toString() ? `?${search.toString()}` : ''
+  return request<{
+    files: KnowledgeFile[]
+    summary?: KnowledgeListSummary
+    pagination?: KnowledgeListPagination
+    vector_store?: KnowledgeVectorStoreStatus
+  }>(`/knowledge/list${suffix}`)
 }
 
 export async function readKnowledgeDocument(filename: string) {

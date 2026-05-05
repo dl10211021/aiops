@@ -22,6 +22,7 @@ from core.knowledge_base_service import (
     list_vault_candidates,
     list_vault_articles,
     list_vault_source_records,
+    list_knowledge_document_page,
     list_knowledge_document_records,
     read_knowledge_document_record,
     read_vault_article,
@@ -184,6 +185,37 @@ class TestKnowledgeBaseService(unittest.TestCase):
         self.assertTrue(preview["preview_available"])
         self.assertFalse(preview["truncated"])
         self.assertEqual(preview["content_type"], "text")
+
+    def test_list_knowledge_document_page_filters_and_reports_vector_store(self):
+        kb = FakeKnowledgeBase("page", message="注入成功")
+        uploads = [
+            FakeUpload("Linux 巡检.txt", "CPU 正常\n".encode("utf-8")),
+            FakeUpload("Oracle 说明.md", "数据库连接正常\n".encode("utf-8")),
+        ]
+
+        with patch("core.embedding_config.get_embedding_config", return_value=("", 3072)):
+            for upload in uploads:
+                asyncio.run(ingest_knowledge_document(kb, upload))
+
+        page = asyncio.run(
+            list_knowledge_document_page(
+                kb,
+                query="Oracle",
+                vector_status="skipped",
+                extension=".md",
+                page=1,
+                per_page=10,
+                sort="name_asc",
+            )
+        )
+
+        self.assertEqual(page["pagination"]["total"], 1)
+        self.assertEqual(page["summary"]["total"], 2)
+        self.assertEqual(page["summary"]["filtered"], 1)
+        self.assertEqual(page["summary"]["vector_counts"]["skipped"], 2)
+        self.assertEqual(page["files"][0]["original_filename"], "Oracle 说明.md")
+        self.assertEqual(page["vector_store"]["status"], "missing_embedding_model")
+        self.assertEqual(page["vector_store"]["database"], "LanceDB")
 
     def test_list_and_delete_documents_wrap_kb_manager(self):
         kb = FakeKnowledgeBase("records")

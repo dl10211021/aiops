@@ -1341,6 +1341,151 @@ async def list_knowledge_document_records(kb_manager=None) -> list[Any]:
     return list(merged.values())
 
 
+def _document_timestamp(record: dict[str, Any]) -> str:
+    return str(record.get("updated_at") or record.get("created_at") or "")
+
+
+def _record_text(record: dict[str, Any]) -> str:
+    values = [
+        record.get("filename"),
+        record.get("original_filename"),
+        record.get("source_path"),
+        record.get("note_path"),
+        record.get("compile_status"),
+        record.get("vector_status"),
+        " ".join(str(tag) for tag in record.get("tags") or []),
+    ]
+    return " ".join(str(value or "") for value in values).lower()
+
+
+def _count_by(records: list[dict[str, Any]], key: str, default: str = "unknown") -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for record in records:
+        value = str(record.get(key) or default)
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
+def _knowledge_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
+    total_size = 0
+    for record in records:
+        try:
+            total_size += int(record.get("size") or 0)
+        except (TypeError, ValueError):
+            pass
+    vector_counts = _count_by(records, "vector_status", "unknown")
+    indexed = vector_counts.get("indexed", 0)
+    searchable = indexed + vector_counts.get("skipped", 0)
+    return {
+        "total": len(records),
+        "total_size": total_size,
+        "vector_counts": vector_counts,
+        "compile_counts": _count_by(records, "compile_status", "unknown"),
+        "extension_counts": _count_by(records, "extension", "unknown"),
+        "searchable_count": searchable,
+        "indexed_ratio": round(indexed / len(records), 4) if records else 0,
+        "latest_updated_at": max((_document_timestamp(record) for record in records), default=""),
+    }
+
+
+def _sort_knowledge_records(records: list[dict[str, Any]], sort: str) -> list[dict[str, Any]]:
+    if sort == "name_asc":
+        return sorted(records, key=lambda item: str(item.get("original_filename") or item.get("filename") or "").lower())
+    if sort == "name_desc":
+        return sorted(records, key=lambda item: str(item.get("original_filename") or item.get("filename") or "").lower(), reverse=True)
+    if sort == "size_desc":
+        return sorted(records, key=lambda item: int(item.get("size") or 0), reverse=True)
+    if sort == "size_asc":
+        return sorted(records, key=lambda item: int(item.get("size") or 0))
+    if sort == "created_desc":
+        return sorted(records, key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    return sorted(records, key=_document_timestamp, reverse=True)
+
+
+def get_knowledge_vector_store_status(kb_manager=None) -> dict[str, Any]:
+    from core.embedding_config import get_embedding_config
+
+    embedding_model, embedding_dim = get_embedding_config()
+    db_path = str(getattr(kb_manager, "db_path", "") or os.getenv("OPSCORE_LANCEDB_PATH") or "opscore_lancedb")
+    table_exists = Path(db_path).exists()
+
+    if not embedding_model:
+        status = "missing_embedding_model"
+        message = "未配置向量化模型，资料会保存原文，但不会写入向量库。"
+    elif not table_exists:
+        status = "empty"
+        message = "LanceDB 目录尚未创建，上传并成功向量化后会自动创建。"
+    else:
+        status = "configured"
+        message = "LanceDB 目录存在；资料列表不会整表扫描向量库，避免大量资料时阻塞页面。"
+
+    return {
+        "status": status,
+        "message": message,
+        "embedding_model": embedding_model,
+        "embedding_dim": embedding_dim,
+        "database": "LanceDB",
+        "db_path": db_path,
+        "table": "knowledge_base",
+        "table_exists": table_exists,
+        "table_names": [],
+        "chunk_count": None,
+        "source_count": None,
+        "error": "",
+    }
+
+
+async def list_knowledge_document_page(
+    kb_manager=None,
+    *,
+    query: str = "",
+    vector_status: str = "all",
+    extension: str = "all",
+    page: int = 1,
+    per_page: int = 50,
+    sort: str = "updated_desc",
+) -> dict[str, Any]:
+    raw_records = await list_knowledge_document_records(kb_manager)
+    records = [record if isinstance(record, dict) else {"filename": str(record), "status": "legacy_vector"} for record in raw_records]
+    summary = _knowledge_summary(records)
+    query_text = str(query or "").strip().lower()
+    filtered = records
+    if query_text:
+        filtered = [record for record in filtered if query_text in _record_text(record)]
+    if vector_status and vector_status != "all":
+        filtered = [record for record in filtered if str(record.get("vector_status") or "unknown") == vector_status]
+    if extension and extension != "all":
+        normalized_ext = extension if extension.startswith(".") else f".{extension}"
+        filtered = [record for record in filtered if str(record.get("extension") or Path(str(record.get("filename") or "")).suffix).lower() == normalized_ext.lower()]
+    sorted_records = _sort_knowledge_records(filtered, sort)
+    safe_per_page = max(10, min(int(per_page or 50), 200))
+    safe_page = max(1, int(page or 1))
+    total_filtered = len(sorted_records)
+    page_count = max(1, math.ceil(total_filtered / safe_per_page)) if total_filtered else 1
+    safe_page = min(safe_page, page_count)
+    start = (safe_page - 1) * safe_per_page
+    end = start + safe_per_page
+    return {
+        "files": sorted_records[start:end],
+        "summary": {
+            **summary,
+            "filtered": total_filtered,
+            "query": query,
+            "active_vector_status": vector_status,
+            "active_extension": extension,
+        },
+        "pagination": {
+            "page": safe_page,
+            "per_page": safe_per_page,
+            "total": total_filtered,
+            "page_count": page_count,
+            "has_prev": safe_page > 1,
+            "has_next": safe_page < page_count,
+        },
+        "vector_store": get_knowledge_vector_store_status(kb_manager),
+    }
+
+
 async def remove_knowledge_document_record(kb_manager_or_filename, filename: str | None = None) -> str:
     if filename is None:
         kb_manager = _resolve_kb_manager()

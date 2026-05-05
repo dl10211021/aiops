@@ -6,6 +6,7 @@ import {
   KnowledgeDocumentPreviewDialog,
   KnowledgeEmptyState,
   KnowledgeFileCard,
+  KnowledgeLibraryControls,
   KnowledgeTabs,
   KnowledgeUploadButton,
   MemoryCreatePanel,
@@ -33,6 +34,14 @@ export default function KnowledgeBase() {
   const [memoryFocusMessageId, setMemoryFocusMessageId] = useState<string | number | null>(null)
   const {
     deleteTarget,
+    documentExtension,
+    documentPage,
+    documentPageSize,
+    documentPagination,
+    documentQuery,
+    documentSort,
+    documentSummary,
+    documentVectorStatus,
     deletingMemory,
     creatingMemory,
     deleting,
@@ -68,6 +77,7 @@ export default function KnowledgeBase() {
     memoryDeleteTarget,
     knowledgePreview,
     knowledgePreviewTarget,
+    knowledgeVectorStore,
     memoryDraft,
     memoryError,
     memoryCreateScope,
@@ -91,6 +101,12 @@ export default function KnowledgeBase() {
     resolvingMemoryConflict,
     reviewingMemoryPath,
     setDeleteTarget,
+    setDocumentExtension,
+    setDocumentPage,
+    setDocumentPageSize,
+    setDocumentQuery,
+    setDocumentSort,
+    setDocumentVectorStatus,
     setMemoryCreateScope,
     setMemoryCreateSummary,
     setMemoryDraft,
@@ -350,6 +366,23 @@ export default function KnowledgeBase() {
             {documentStep === 'source' && (
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
                 <section className="space-y-3">
+                  <KnowledgeLibraryControls
+                    extension={documentExtension}
+                    pageSize={documentPageSize}
+                    pagination={documentPagination}
+                    query={documentQuery}
+                    sort={documentSort}
+                    summary={documentSummary}
+                    vectorStatus={documentVectorStatus}
+                    vectorStore={knowledgeVectorStore}
+                    onExtensionChange={setDocumentExtension}
+                    onPageChange={setDocumentPage}
+                    onPageSizeChange={setDocumentPageSize}
+                    onQueryChange={setDocumentQuery}
+                    onRefresh={() => void loadFiles()}
+                    onSortChange={setDocumentSort}
+                    onVectorStatusChange={setDocumentVectorStatus}
+                  />
                   {files.length > 0 ? (
                     <div className="grid gap-2 2xl:grid-cols-2">
                       {files.map((file) => (

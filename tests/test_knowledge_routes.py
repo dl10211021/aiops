@@ -63,13 +63,30 @@ class TestKnowledgeRoutes(unittest.TestCase):
 
     def test_list_knowledge_documents_preserves_response_shape(self):
         with patch(
-            "api.knowledge_routes.list_knowledge_document_records",
-            return_value=["runbook.txt"],
+            "api.knowledge_routes.list_knowledge_document_page",
+            return_value={
+                "files": [{"filename": "runbook.txt"}],
+                "summary": {"total": 1, "filtered": 1, "vector_counts": {"indexed": 1}},
+                "pagination": {"page": 1, "per_page": 50, "total": 1, "page_count": 1, "has_prev": False, "has_next": False},
+                "vector_store": {"status": "ready", "database": "LanceDB"},
+            },
         ):
-            response = asyncio.run(knowledge_routes.list_knowledge_documents())
+            response = asyncio.run(
+                knowledge_routes.list_knowledge_documents(
+                    q="",
+                    vector_status="all",
+                    extension="all",
+                    page=1,
+                    per_page=50,
+                    sort="updated_desc",
+                )
+            )
 
         self.assertEqual(response.status, "success")
-        self.assertEqual(response.data, {"files": ["runbook.txt"]})
+        self.assertEqual(response.data["files"], [{"filename": "runbook.txt"}])
+        self.assertEqual(response.data["summary"]["total"], 1)
+        self.assertEqual(response.data["pagination"]["page"], 1)
+        self.assertEqual(response.data["vector_store"]["database"], "LanceDB")
 
     def test_read_knowledge_document_preserves_response_shape(self):
         with patch(
@@ -384,11 +401,20 @@ class TestKnowledgeRoutes(unittest.TestCase):
 
     def test_knowledge_route_errors_keep_http_semantics(self):
         with patch(
-            "api.knowledge_routes.list_knowledge_document_records",
+            "api.knowledge_routes.list_knowledge_document_page",
             side_effect=KnowledgeBaseServiceError(404, "知识库为空"),
         ):
             with self.assertRaises(HTTPException) as ctx:
-                asyncio.run(knowledge_routes.list_knowledge_documents())
+                asyncio.run(
+                    knowledge_routes.list_knowledge_documents(
+                        q="",
+                        vector_status="all",
+                        extension="all",
+                        page=1,
+                        per_page=50,
+                        sort="updated_desc",
+                    )
+                )
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "知识库为空")

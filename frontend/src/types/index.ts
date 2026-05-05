@@ -644,6 +644,45 @@ export interface KnowledgeDocumentContent extends KnowledgeFile {
   preview_limit?: number
 }
 
+export interface KnowledgeListSummary {
+  total: number
+  filtered: number
+  total_size: number
+  vector_counts: Record<string, number>
+  compile_counts: Record<string, number>
+  extension_counts: Record<string, number>
+  searchable_count: number
+  indexed_ratio: number
+  latest_updated_at?: string
+  query?: string
+  active_vector_status?: string
+  active_extension?: string
+}
+
+export interface KnowledgeListPagination {
+  page: number
+  per_page: number
+  total: number
+  page_count: number
+  has_prev: boolean
+  has_next: boolean
+}
+
+export interface KnowledgeVectorStoreStatus {
+  status: string
+  message: string
+  embedding_model?: string
+  embedding_dim?: number
+  database?: string
+  db_path?: string
+  table?: string
+  table_exists?: boolean
+  table_names?: string[]
+  chunk_count?: number
+  source_count?: number
+  error?: string
+}
+
 export interface KnowledgeCompileQueueItem extends KnowledgeFile {
   id: string
   source_session_id?: string

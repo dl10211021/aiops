@@ -44,6 +44,7 @@ from core.knowledge_base_service import (
     create_vault_export_zip,
     import_vault_archive,
     ingest_knowledge_document,
+    list_knowledge_document_page,
     list_knowledge_document_records,
     list_vault_articles,
     list_vault_candidates,
@@ -340,13 +341,34 @@ async def upload_knowledge_document(file: UploadFile = File(...)):
 
 
 @router.get("/knowledge/list", response_model=ResponseModel)
-async def list_knowledge_documents():
+async def list_knowledge_documents(
+    q: str = Query("", max_length=200),
+    vector_status: str = Query("all", pattern="^(all|indexed|skipped|failed|pending|unknown)$"),
+    extension: str = Query("all", max_length=20),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=10, le=200),
+    sort: str = Query("updated_desc", pattern="^(updated_desc|created_desc|name_asc|name_desc|size_desc|size_asc)$"),
+):
     """【新功能】列出已注入知识库的文档列表"""
     try:
-        files = await list_knowledge_document_records()
+        page_data = await list_knowledge_document_page(
+            query=q,
+            vector_status=vector_status,
+            extension=extension,
+            page=page,
+            per_page=per_page,
+            sort=sort,
+        )
     except KnowledgeBaseServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(**knowledge_documents_response_kwargs(files))
+    return ResponseModel(
+        **knowledge_documents_response_kwargs(
+            page_data["files"],
+            summary=page_data["summary"],
+            pagination=page_data["pagination"],
+            vector_store=page_data["vector_store"],
+        )
+    )
 
 
 @router.get("/knowledge/document", response_model=ResponseModel)

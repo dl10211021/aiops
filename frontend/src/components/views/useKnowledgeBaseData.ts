@@ -36,13 +36,22 @@ import {
 } from '@/api/knowledge'
 import { getSessionMemoryActivity } from '@/api/sessionHistory'
 import { useStore } from '@/store'
-import type { KnowledgeCompileQueueItem, KnowledgeDocumentContent, KnowledgeFile, KnowledgeVaultGraph, KnowledgeVaultSearchResult, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
+import type { KnowledgeCompileQueueItem, KnowledgeDocumentContent, KnowledgeFile, KnowledgeListPagination, KnowledgeListSummary, KnowledgeVaultGraph, KnowledgeVaultSearchResult, KnowledgeVectorStoreStatus, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
 import { isAcceptedKnowledgeFile } from './knowledgeBaseModel'
 
 export function useKnowledgeBaseData() {
   const addToast = useStore((s) => s.addToast)
   const currentSessionId = useStore((s) => s.currentSessionId)
   const [files, setFiles] = useState<KnowledgeFile[]>([])
+  const [documentQuery, setDocumentQuery] = useState('')
+  const [documentVectorStatus, setDocumentVectorStatus] = useState('all')
+  const [documentExtension, setDocumentExtension] = useState('all')
+  const [documentSort, setDocumentSort] = useState('updated_desc')
+  const [documentPage, setDocumentPage] = useState(1)
+  const [documentPageSize, setDocumentPageSize] = useState(50)
+  const [documentSummary, setDocumentSummary] = useState<KnowledgeListSummary | null>(null)
+  const [documentPagination, setDocumentPagination] = useState<KnowledgeListPagination | null>(null)
+  const [knowledgeVectorStore, setKnowledgeVectorStore] = useState<KnowledgeVectorStoreStatus | null>(null)
   const [compileQueueItems, setCompileQueueItems] = useState<KnowledgeCompileQueueItem[]>([])
   const [candidateItems, setCandidateItems] = useState<KnowledgeCompileQueueItem[]>([])
   const [articleItems, setArticleItems] = useState<KnowledgeCompileQueueItem[]>([])
@@ -102,13 +111,23 @@ export function useKnowledgeBaseData() {
     setLoading(true)
     setError('')
     try {
-      const res = await listKnowledgeDocuments()
+      const res = await listKnowledgeDocuments({
+        query: documentQuery.trim(),
+        vectorStatus: documentVectorStatus,
+        extension: documentExtension,
+        page: documentPage,
+        perPage: documentPageSize,
+        sort: documentSort,
+      })
       const [queueRes, candidatesRes, articlesRes] = await Promise.all([
         listKnowledgeVaultQueue(),
         listKnowledgeVaultCandidates(),
         listKnowledgeVaultArticles(),
       ])
       setFiles(res.data.files || [])
+      setDocumentSummary(res.data.summary || null)
+      setDocumentPagination(res.data.pagination || null)
+      setKnowledgeVectorStore(res.data.vector_store || null)
       setCompileQueueItems(queueRes.data.items || [])
       setCandidateItems(candidatesRes.data.items || [])
       setArticleItems(articlesRes.data.items || [])
@@ -116,6 +135,9 @@ export function useKnowledgeBaseData() {
       const message = e instanceof Error ? e.message : '加载知识库失败'
       if (message === 'Not Found') {
         setFiles([])
+        setDocumentSummary(null)
+        setDocumentPagination(null)
+        setKnowledgeVectorStore(null)
         setCompileQueueItems([])
         setCandidateItems([])
         setArticleItems([])
@@ -126,7 +148,7 @@ export function useKnowledgeBaseData() {
     } finally {
       setLoading(false)
     }
-  }, [addToast])
+  }, [documentExtension, documentPage, documentPageSize, documentQuery, documentSort, documentVectorStatus])
 
   const loadMemories = useCallback(async () => {
     setMemoryLoading(true)
@@ -221,6 +243,7 @@ export function useKnowledgeBaseData() {
     }
     if (successCount > 0) {
       addToast(`成功上传 ${successCount} 个资料，已进入 RAG 知识库`, 'success')
+      setDocumentPage(1)
       await loadFiles()
     }
     setUploading(false)
@@ -601,6 +624,14 @@ export function useKnowledgeBaseData() {
 
   return {
     deleteTarget,
+    documentExtension,
+    documentPage,
+    documentPageSize,
+    documentPagination,
+    documentQuery,
+    documentSort,
+    documentSummary,
+    documentVectorStatus,
     deletingMemory,
     creatingMemory,
     deleting,
@@ -619,6 +650,7 @@ export function useKnowledgeBaseData() {
     readingKnowledge,
     knowledgePreview,
     knowledgePreviewTarget,
+    knowledgeVectorStore,
     savingCandidate,
     searchingVault,
     selectedCandidate,
@@ -675,6 +707,12 @@ export function useKnowledgeBaseData() {
     resolvingMemoryConflict,
     reviewingMemoryPath,
     setDeleteTarget,
+    setDocumentExtension,
+    setDocumentPage,
+    setDocumentPageSize,
+    setDocumentQuery,
+    setDocumentSort,
+    setDocumentVectorStatus,
     setMemoryCreateScope,
     setMemoryCreateSummary,
     setMemoryDraft,
