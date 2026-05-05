@@ -61,3 +61,25 @@ def test_profile_prompt_is_reused_without_manual_realtime_confirmation_wording()
 
     assert "不需要每轮人工确认" in prompt
     assert "实时工具结果验证" not in prompt
+
+
+def test_profile_to_system_prompt_synthesizes_from_structured_profile_when_prompt_missing():
+    prompt = profile_to_system_prompt(
+        {
+            "role_label": "ISO27001 合规审计系统后端服务器",
+            "purpose": "承载 ISO27001 合规审计平台的前后端容器服务。",
+            "risk_level": "normal",
+            "confidence": 92,
+            "focus_areas": [
+                {
+                    "priority": "P1",
+                    "title": "SSH 访问控制",
+                    "reason": "确认登录审计和密钥轮换策略。",
+                }
+            ],
+        }
+    )
+
+    assert "ISO27001 合规审计系统后端服务器" in prompt
+    assert "SSH 访问控制" in prompt
+    assert "不需要每轮人工确认" in prompt

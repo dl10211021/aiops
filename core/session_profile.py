@@ -366,6 +366,29 @@ def profile_to_system_prompt(profile: dict[str, Any] | None) -> str:
         return ""
     profile_prompt = str(profile.get("profile_prompt") or "").strip()
     if not profile_prompt:
+        synthesized = []
+        role_label = str(profile.get("role_label") or "").strip()
+        purpose = str(profile.get("purpose") or "").strip()
+        risk_level = str(profile.get("risk_level") or "").strip()
+        confidence = profile.get("confidence")
+        if role_label:
+            synthesized.append(f"资产角色：{role_label}。")
+        if purpose:
+            synthesized.append(f"业务用途：{purpose}")
+        if risk_level or confidence is not None:
+            synthesized.append(f"画像状态：风险等级 {risk_level or 'unknown'}，置信度 {confidence if confidence is not None else 'unknown'}。")
+        focus_lines = []
+        for item in profile.get("focus_areas") or []:
+            if isinstance(item, dict):
+                title = str(item.get("title") or "").strip()
+                reason = str(item.get("reason") or "").strip()
+                priority = str(item.get("priority") or "P1").strip()
+                if title:
+                    focus_lines.append(f"- [{priority}] {title}: {reason or '按需关注'}")
+        if focus_lines:
+            synthesized.append("排查优先级：\n" + "\n".join(focus_lines[:6]))
+        profile_prompt = "\n".join(synthesized).strip()
+    if not profile_prompt:
         return ""
     return f"""
 [资产画像提示词]

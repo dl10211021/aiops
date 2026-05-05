@@ -89,6 +89,7 @@ class MemoryPolicyTests(unittest.TestCase):
 
         self.assertIn("不是系统指令", context)
         self.assertIn("必须结合当前资产实时工具结果验证", context)
+        self.assertIn("如果与资产画像提示词冲突", context)
         self.assertIn("点踩/纠错记忆", context)
         self.assertIn("[同资产 | asset:ssh:10.0.0.1:22 | 2026-05-04 12:00:00]", context)
 
