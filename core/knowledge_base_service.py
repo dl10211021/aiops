@@ -789,19 +789,25 @@ def build_vault_knowledge_graph(
     edges: list[dict[str, Any]] = []
     by_path: dict[str, dict[str, Any]] = {}
     by_title: dict[str, dict[str, Any]] = {}
+    seen_node_ids: set[str] = set()
 
     for record in records:
         rel_path = record.get("wiki_path") or record.get("candidate_path")
         if not rel_path:
             continue
+        node_id = str(rel_path)
+        node_key = node_id.lower()
+        if node_key in seen_node_ids:
+            continue
+        seen_node_ids.add(node_key)
         title = record.get("original_filename") or record.get("filename") or Path(str(rel_path)).stem
         kind = "article" if record.get("wiki_path") else "candidate"
         node = {
-            "id": str(rel_path),
+            "id": node_id,
             "title": str(title),
             "kind": kind,
             "kind_label": "RAG 资料" if kind == "article" else "AI 摘要",
-            "path": str(rel_path),
+            "path": node_id,
             "source_session_id": record.get("source_session_id") or record.get("id"),
             "compile_stage": record.get("compile_stage"),
             "review_status": record.get("review_status"),
@@ -811,9 +817,9 @@ def build_vault_knowledge_graph(
             "links_out": 0,
         }
         nodes.append(node)
-        by_path[str(rel_path).lower()] = node
+        by_path[node_key] = node
         by_title[str(title).lower()] = node
-        by_title[Path(str(rel_path)).stem.lower()] = node
+        by_title[Path(node_id).stem.lower()] = node
 
     seen_edges: set[tuple[str, str, str]] = set()
 
@@ -1179,9 +1185,29 @@ def _friendly_vector_message(message: str) -> str:
     detail = str(message or "").strip()
     if not detail:
         return "RAG 索引未完成；资料已保存，可用于原文检索。"
+    lower_detail = detail.lower()
+    if (
+        "error code: 404" in lower_detail
+        or "model_not_found" in lower_detail
+        or "model not found" in lower_detail
+        or "向量模型调用失败" in detail
+    ):
+        return "向量模型不可用或名称不存在，已跳过向量索引；资料已保存，可用于原文检索和离线 RAG 检索。"
     if detail == "文档内容提取或向量化失败":
         return "向量模型没有返回可用结果，请检查向量模型配置；资料已保存，可用于原文检索。"
     return detail
+
+
+def _should_skip_vector_index(message: str) -> bool:
+    detail = str(message or "")
+    lower_detail = detail.lower()
+    return (
+        "error code: 404" in lower_detail
+        or "model_not_found" in lower_detail
+        or "model not found" in lower_detail
+        or "向量模型调用失败" in detail
+        or "未配置向量模型" in detail
+    )
 
 
 async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None) -> str:
@@ -1218,7 +1244,11 @@ async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None)
     if result.get("status") == "success":
         _update_vault_record(safe_filename, vector_status="indexed")
         return str(result.get("message") or "")
-    message = _friendly_vector_message(str(result.get("message") or "文档内容提取或向量化失败"))
+    raw_message = str(result.get("message") or "文档内容提取或向量化失败")
+    message = _friendly_vector_message(raw_message)
+    if _should_skip_vector_index(raw_message):
+        _update_vault_record(safe_filename, vector_status="skipped", vector_error=message)
+        return f"已保存到资料库（RAG 知识库）；RAG 索引跳过：{message}"
     _update_vault_record(safe_filename, vector_status="failed", vector_error=message)
     return f"已保存到资料库（RAG 知识库）；RAG 检索索引未完成：{message}"
 
@@ -1227,7 +1257,10 @@ async def list_knowledge_document_records(kb_manager=None) -> list[Any]:
     vault_records = []
     for item in list_vault_source_records():
         if isinstance(item, dict) and item.get("vector_error"):
-            item = {**item, "vector_error": _friendly_vector_message(str(item.get("vector_error") or ""))}
+            raw_error = str(item.get("vector_error") or "")
+            item = {**item, "vector_error": _friendly_vector_message(raw_error)}
+            if item.get("vector_status") == "failed" and _should_skip_vector_index(raw_error):
+                item["vector_status"] = "skipped"
         vault_records.append(item)
     if vault_records:
         return vault_records

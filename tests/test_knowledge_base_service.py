@@ -1,5 +1,6 @@
 import asyncio
 import io
+import json
 import os
 import shutil
 import sys
@@ -130,6 +131,28 @@ class TestKnowledgeBaseService(unittest.TestCase):
         self.assertIn("向量模型没有返回可用结果", vault_records[0]["vector_error"])
         records = asyncio.run(list_knowledge_document_records(kb))
         self.assertIn("向量模型没有返回可用结果", records[0]["vector_error"])
+
+    def test_ingest_embedding_model_not_found_skips_vector_index(self):
+        kb = FakeKnowledgeBase(
+            "model_not_found",
+            ingest_status="error",
+            message='向量模型调用失败：Error code: 404 - {"error":"model not found"}',
+        )
+        upload = FakeUpload("runbook.txt", b"hello")
+
+        with (
+            patch("core.embedding_config.get_embedding_config", return_value=("missing-embedding", 1024)),
+            patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "missing-embedding")),
+        ):
+            message = asyncio.run(ingest_knowledge_document(kb, upload))
+
+        self.assertIn("RAG 索引跳过", message)
+        self.assertIn("向量模型不可用", message)
+        vault_records = list_vault_source_records(self.vault_dir)
+        self.assertEqual(vault_records[0]["vector_status"], "skipped")
+        records = asyncio.run(list_knowledge_document_records(kb))
+        self.assertEqual(records[0]["vector_status"], "skipped")
+        self.assertIn("离线 RAG 检索", records[0]["vector_error"])
 
     def test_ingest_without_embedding_model_skips_vector_index(self):
         kb = FakeKnowledgeBase("no_embedding", message="should not ingest")
@@ -321,6 +344,16 @@ class TestKnowledgeBaseService(unittest.TestCase):
         )
         approve_vault_candidate(related_record["source_session_id"], vault_dir=self.vault_dir)
 
+        manifest_path = self.vault_dir / "state" / "sources.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest.append(
+            {
+                **manifest[0],
+                "id": "src-duplicate",
+                "source_session_id": "source-session-duplicate",
+            }
+        )
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         graph = build_vault_knowledge_graph(vault_dir=self.vault_dir)
         self.assertGreaterEqual(graph["summary"]["article_count"], 2)
         self.assertGreaterEqual(graph["summary"]["node_count"], 2)
@@ -328,6 +361,8 @@ class TestKnowledgeBaseService(unittest.TestCase):
         self.assertGreaterEqual(graph["summary"]["linked_node_count"], 2)
         self.assertEqual(graph["summary"]["relation_counts"]["wikilink"], 1)
         self.assertTrue(all("x" in node and "y" in node and "degree" in node for node in graph["nodes"]))
+        node_ids = [node["id"] for node in graph["nodes"]]
+        self.assertEqual(len(node_ids), len(set(node_ids)))
         archive_path = create_vault_export_zip(vault_dir=self.vault_dir)
         self.assertTrue(archive_path.exists())
         with zipfile.ZipFile(archive_path) as archive:
