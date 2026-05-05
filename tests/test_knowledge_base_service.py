@@ -20,6 +20,8 @@ from core.knowledge_base_service import (
     ingest_knowledge_document,
     import_vault_archive,
     get_knowledge_vector_store_status,
+    _resolve_kb_manager,
+    _KnowledgeUploadStorage,
     list_vault_compile_queue,
     list_vault_candidates,
     list_vault_articles,
@@ -143,6 +145,104 @@ class TestKnowledgeBaseService(unittest.TestCase):
         self.assertIn("向量模型没有返回可用结果", vault_records[0]["vector_error"])
         records = asyncio.run(list_knowledge_document_records(kb))
         self.assertIn("向量模型没有返回可用结果", records[0]["vector_error"])
+
+    def test_ingest_times_out_slow_vector_index_without_blocking_upload(self):
+        kb = SlowKnowledgeBase("upload_timeout", message="too slow")
+        upload = FakeUpload("runbook.txt", b"hello")
+
+        with (
+            patch.dict(os.environ, {"OPSCORE_KNOWLEDGE_REINDEX_TIMEOUT_SECONDS": "0.1"}),
+            patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)),
+            patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
+        ):
+            message = asyncio.run(ingest_knowledge_document(kb, upload))
+
+        self.assertIn("已保存到资料库", message)
+        self.assertIn("向量索引超过 0.1 秒", message)
+        vault_records = list_vault_source_records(self.vault_dir)
+        self.assertEqual(vault_records[0]["vector_status"], "failed")
+        self.assertIn("向量索引超过 0.1 秒", vault_records[0]["vector_error"])
+        self.assertTrue((self.vault_dir / vault_records[0]["source_path"]).exists())
+
+    def test_ingest_times_out_slow_vector_client_setup_without_blocking_upload(self):
+        kb = FakeKnowledgeBase("setup_timeout", message="should not ingest")
+        upload = FakeUpload("runbook.txt", b"hello")
+
+        def slow_embedding_client(_model_id):
+            time.sleep(0.2)
+            return object(), "fake-embedding"
+
+        with (
+            patch.dict(os.environ, {"OPSCORE_KNOWLEDGE_REINDEX_TIMEOUT_SECONDS": "0.1"}),
+            patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)),
+            patch("core.llm_factory.get_embedding_client_and_model", side_effect=slow_embedding_client),
+        ):
+            message = asyncio.run(ingest_knowledge_document(kb, upload))
+
+        self.assertIn("已保存到资料库", message)
+        self.assertIn("向量模型初始化超过 0.1 秒", message)
+        self.assertIsNone(kb.ingested_path)
+        vault_records = list_vault_source_records(self.vault_dir)
+        self.assertEqual(vault_records[0]["vector_status"], "failed")
+        self.assertIn("向量模型初始化超过 0.1 秒", vault_records[0]["vector_error"])
+
+    def test_ingest_can_defer_vector_index_for_api_upload(self):
+        kb = FakeKnowledgeBase("defer_index", message="should not ingest")
+        upload = FakeUpload("runbook.txt", b"hello")
+
+        message = asyncio.run(ingest_knowledge_document(kb, upload, index_now=False))
+
+        self.assertIn("已保存到资料库", message)
+        self.assertIn("向量索引未同步执行", message)
+        self.assertIsNone(kb.ingested_path)
+        vault_records = list_vault_source_records(self.vault_dir)
+        self.assertEqual(vault_records[0]["vector_status"], "pending")
+        self.assertIn("重建索引", vault_records[0]["vector_error"])
+
+    def test_ingest_deferred_default_upload_uses_lightweight_storage(self):
+        class ExplodingRagManager:
+            @property
+            def kb_dir(self):
+                raise AssertionError("deferred upload should not import RAG runtime")
+
+            def materialize(self):
+                raise AssertionError("deferred upload should not materialize LanceDB")
+
+        upload_dir = Path.cwd() / "tests" / "tmp_knowledge_base_service_default_upload"
+        fake_rag = ModuleType("core.rag")
+        fake_rag.kb_manager = ExplodingRagManager()
+
+        with (
+            patch.object(_KnowledgeUploadStorage, "kb_dir", str(upload_dir)),
+            patch.dict(sys.modules, {"core.rag": fake_rag}),
+        ):
+            message = asyncio.run(ingest_knowledge_document(FakeUpload("runbook.txt", b"hello"), index_now=False))
+
+        self.assertIn("向量索引未同步执行", message)
+        self.assertTrue(any(upload_dir.glob("runbook*.txt")))
+        vault_records = list_vault_source_records(self.vault_dir)
+        self.assertEqual(vault_records[0]["vector_status"], "pending")
+
+    def test_resolve_kb_manager_can_skip_lazy_materialization_for_upload(self):
+        class LazyManager:
+            kb_dir = "knowledge_base"
+
+            def __init__(self):
+                self.materialized = False
+
+            def materialize(self):
+                self.materialized = True
+                raise AssertionError("upload path should not materialize LanceDB before persisting")
+
+        lazy_manager = LazyManager()
+        fake_rag = ModuleType("core.rag")
+        fake_rag.kb_manager = lazy_manager
+
+        with patch.dict(sys.modules, {"core.rag": fake_rag}):
+            resolved = _resolve_kb_manager(materialize=False)
+
+        self.assertIs(resolved, lazy_manager)
+        self.assertFalse(lazy_manager.materialized)
 
     def test_ingest_embedding_model_not_found_skips_vector_index(self):
         kb = FakeKnowledgeBase(
@@ -336,12 +436,15 @@ class TestKnowledgeBaseService(unittest.TestCase):
 
     def test_list_and_delete_documents_wrap_kb_manager(self):
         kb = FakeKnowledgeBase("records")
+        legacy_copy = Path(kb.kb_dir) / "runbook.txt"
+        legacy_copy.write_text("legacy upload copy", encoding="utf-8")
 
         files = asyncio.run(list_knowledge_document_records(kb))
         message = asyncio.run(remove_knowledge_document_record(kb, "runbook.txt"))
 
         self.assertEqual(files, [{"filename": "runbook.txt", "status": "legacy_vector"}])
         self.assertEqual(message, "已成功从知识库中移除 runbook.txt")
+        self.assertFalse(legacy_copy.exists())
 
     def test_records_use_default_kb_manager_when_not_injected(self):
         kb = FakeKnowledgeBase("default")
@@ -350,10 +453,20 @@ class TestKnowledgeBaseService(unittest.TestCase):
 
         with patch.dict(sys.modules, {"core.rag": fake_rag}):
             files = asyncio.run(list_knowledge_document_records())
-            message = asyncio.run(remove_knowledge_document_record("runbook.txt"))
 
         self.assertEqual(files, [{"filename": "runbook.txt", "status": "legacy_vector"}])
-        self.assertEqual(message, "已成功从知识库中移除 runbook.txt")
+
+    def test_remove_default_document_uses_lightweight_storage(self):
+        upload_dir = Path.cwd() / "tests" / "tmp_knowledge_base_service_default_remove"
+
+        with patch.object(_KnowledgeUploadStorage, "kb_dir", str(upload_dir)):
+            asyncio.run(ingest_knowledge_document(FakeUpload("runbook.txt", b"hello"), index_now=False))
+            record = list_vault_source_records(self.vault_dir)[0]
+            message = asyncio.run(remove_knowledge_document_record(record["filename"]))
+
+        self.assertIn("资料库移除", message)
+        self.assertEqual(list_vault_source_records(self.vault_dir), [])
+        self.assertFalse((upload_dir / "runbook.txt").exists())
 
     def test_delete_missing_document_maps_to_404(self):
         class MissingKnowledgeBase(FakeKnowledgeBase):

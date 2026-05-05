@@ -13,15 +13,9 @@ import {
   MemoryDeleteDialog,
   MemoryDetailPanel,
   MemoryItemCard,
-  MemoryPendingConflictsPanel,
-  MemoryQualityPanel,
-  MemoryReviewPanel,
   MemorySearchPanel,
   SessionMemoryActivityPanel,
-  MemoryStoresPanel,
-  MemoryVersionsPanel,
   KnowledgeVaultSearchPanel,
-  KnowledgeVaultGraphPanel,
   type KnowledgeTab,
 } from './KnowledgeBaseParts'
 import { useKnowledgeBaseData } from './useKnowledgeBaseData'
@@ -30,7 +24,7 @@ export default function KnowledgeBase() {
   const setView = useStore((state) => state.setView)
   const [activeTab, setActiveTab] = useState<KnowledgeTab>('documents')
   const [documentStep, setDocumentStep] = useState<'source' | 'discover'>('source')
-  const [memoryStep, setMemoryStep] = useState<'browse' | 'write' | 'govern'>('browse')
+  const [memoryStep, setMemoryStep] = useState<'browse' | 'write' | 'feedback'>('browse')
   const [memoryFocusMessageId, setMemoryFocusMessageId] = useState<string | number | null>(null)
   const {
     deleteTarget,
@@ -47,27 +41,17 @@ export default function KnowledgeBase() {
     deleting,
     error,
     exportingMemory,
-    exportingVault,
-    importingVault,
     files,
     searchingVault,
-    loadingVaultGraph,
     handleDelete,
     handleCloseKnowledgePreview,
-    handleLoadKnowledgeVaultGraph,
     handleSearchKnowledgeVault,
     handleDeleteMemory,
     handleCreateMemory,
     handleExportMemory,
-    handleExportKnowledgeVault,
-    handleImportKnowledgeVault,
-    handleConfirmMemoryReview,
     handleOpenMemory,
     handleOpenKnowledgeDocument,
     handleReindexKnowledgeDocument,
-    handleRedactMemoryVersion,
-    handleRestoreMemoryVersion,
-    handleResolveMemoryConflict,
     handleSaveMemory,
     handleSearchMemory,
     handleUpload,
@@ -85,23 +69,15 @@ export default function KnowledgeBase() {
     memoryCreateSummary,
     memoryItems,
     memoryLoading,
-    memoryPendingConflicts,
-    memoryQuality,
-    memoryReviewItems,
     sessionMemoryActivity,
     sessionMemoryActivityLoading,
     memorySearchQuery,
     memorySearchResults,
     memorySearchScopes,
-    memoryStores,
-    memoryVersions,
     readingKnowledge,
     reindexingKnowledge,
     savingMemory,
     selectedMemory,
-    redactingMemoryVersion,
-    resolvingMemoryConflict,
-    reviewingMemoryPath,
     setDeleteTarget,
     setDocumentExtension,
     setDocumentPage,
@@ -112,15 +88,12 @@ export default function KnowledgeBase() {
     setMemoryCreateScope,
     setMemoryCreateSummary,
     setMemoryDraft,
-    setVaultGraphIncludeCandidates,
     setVaultSearchQuery,
     setVaultSearchScope,
     setMemoryDeleteTarget,
     setMemorySearchQuery,
     setMemorySearchScopes,
     searchingMemory,
-    vaultGraph,
-    vaultGraphIncludeCandidates,
     vaultSearchQuery,
     vaultSearchResults,
     vaultSearchScope,
@@ -132,13 +105,17 @@ export default function KnowledgeBase() {
       const detail = (event as CustomEvent<{
         tab?: KnowledgeTab
         messageId?: string | number
-        step?: 'browse' | 'write' | 'govern' | 'source' | 'discover'
+        step?: 'browse' | 'write' | 'feedback' | 'govern' | 'source' | 'discover'
         query?: string
         scope?: string
       }>).detail
       if (detail?.tab === 'memory') {
         setActiveTab('memory')
-        setMemoryStep(detail.step === 'browse' || detail.step === 'write' || detail.step === 'govern' ? detail.step : 'govern')
+        if (detail.step === 'browse' || detail.step === 'write' || detail.step === 'feedback') {
+          setMemoryStep(detail.step)
+        } else {
+          setMemoryStep(detail.messageId ? 'feedback' : 'browse')
+        }
         setMemoryFocusMessageId(detail.messageId ?? null)
         void loadMemories()
         void loadSessionMemoryActivity()
@@ -200,55 +177,24 @@ export default function KnowledgeBase() {
   const activeStepGuide = activeTab === 'documents'
     ? {
       title: '资料库',
-      body: '这里先解决最基础的问题：你上传了什么、内容是什么、向量状态怎么样、能不能删除。RAG 检索和知识图谱放在第二步，不再和上传列表混在一起。',
+      body: '这里先解决最基础的问题：你上传了什么、内容是什么、向量状态怎么样、能不能删除。召回测试单独放在第二步，不和上传列表混在一起。',
       next: '默认先看资料列表：上次上传、内容、删除、向量状态都在这里。',
     }
     : {
       title: 'AI 记忆',
-      body: '这里管理 AI 已经记住的经验、偏好和资产画像。好的回答可以沉淀，错误回答只做纠错记录。',
-      next: '查看、新增、管理记忆。',
+      body: '这里只保留三件事：看已有记忆、写入或搜索记忆、追踪本会话点赞/点踩反馈。',
+      next: '不做复杂审核流程；错误反馈会作为纠错记录，避免污染成功经验。',
     }
-  const knowledgeHealth = [
-    ['资料', `${files.length}`, '保存原文，不被 AI 改写'],
-    ['待索引', `${files.filter((file) => file.vector_status === 'pending').length}`, '等待 RAG 索引完成'],
-    ['可检索', `${files.filter((file) => file.vector_status === 'indexed').length}`, '可被会话引用'],
-    ['命中证据', `${vaultSearchResults.length}`, '检索结果可追溯'],
-  ]
-  const memoryHealth = [
-    ['记忆库', `${memoryStores.length}`, '按会话、资产、主机分类'],
-    ['文件记忆', `${memoryItems.length}`, '成功经验和用户确认事实'],
-    ['本会话反馈', `${sessionMemoryActivity?.summary.promoted_count || 0}/${sessionMemoryActivity?.summary.rejected_count || 0}`, '好评 / 差评，能追溯到输出'],
-    ['待治理', `${memoryPendingConflicts.length + memoryReviewItems.length}`, '冲突、过期、反馈待处理'],
-    ['历史版本', `${memoryVersions.length}`, '可恢复、可脱敏、可追溯'],
-  ]
-
   return (
     <div className="flex-1 overflow-y-auto p-4 lg:p-5">
       <div className="w-full max-w-none">
         <PageHeader
           title="知识库"
-          description="统一管理上传资料、内容预览、向量状态、RAG 检索、知识图谱和 AI 记忆。"
+          description="统一管理上传资料、内容预览、向量状态、RAG 召回测试和 AI 记忆。"
           actions={(
             <>
             {activeTab === 'documents' && (
               <>
-                <button
-                  onClick={handleExportKnowledgeVault}
-                  disabled={exportingVault}
-                  className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {exportingVault ? '导出中...' : '导出备份'}
-                </button>
-                <label className={`cursor-pointer bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors ${importingVault ? 'pointer-events-none opacity-50' : ''}`}>
-                  {importingVault ? '导入中...' : '导入备份 ZIP'}
-                  <input
-                    type="file"
-                    accept=".zip,application/zip"
-                    className="hidden"
-                    disabled={importingVault}
-                    onChange={handleImportKnowledgeVault}
-                  />
-                </label>
                 <KnowledgeUploadButton uploading={uploading} onUpload={handleUpload} />
               </>
             )}
@@ -270,10 +216,10 @@ export default function KnowledgeBase() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setMemoryStep('govern')}
+                  onClick={() => setMemoryStep('feedback')}
                   className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors"
                 >
-                  管理记忆
+                  反馈追踪
                 </button>
               </>
             )}
@@ -294,7 +240,7 @@ export default function KnowledgeBase() {
           onChange={(tab) => {
             setActiveTab(tab)
             if (tab === 'documents') {
-              setDocumentStep('discover')
+              setDocumentStep('source')
             } else {
               setMemoryStep('browse')
             }
@@ -343,7 +289,7 @@ export default function KnowledgeBase() {
         {activeTab === 'documents' && !loading ? (
           <div className="space-y-4">
             <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-3">
-              <div className="grid gap-2 md:grid-cols-4">
+              <div className="grid gap-2 md:grid-cols-2">
                 {([
                   ['source', '资料列表', `${files.length} 份资料`, '上传、查看、删除'],
                   ['discover', '召回测试', `${vaultSearchResults.length} 条命中`, '验证知识能否命中'],
@@ -433,13 +379,20 @@ export default function KnowledgeBase() {
                   onScopeChange={setVaultSearchScope}
                   onSearch={handleSearchKnowledgeVault}
                 />
-                <KnowledgeVaultGraphPanel
-                  graph={vaultGraph}
-                  includeCandidates={vaultGraphIncludeCandidates}
-                  loading={loadingVaultGraph}
-                  onIncludeCandidatesChange={setVaultGraphIncludeCandidates}
-                  onLoad={handleLoadKnowledgeVaultGraph}
-                />
+                <aside className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+                  <div className="text-sm font-semibold text-ops-text">召回测试怎么看</div>
+                  <div className="mt-3 space-y-2 text-xs leading-5 text-ops-subtext">
+                    <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">
+                      输入问题后，系统会返回命中的原文、摘要或来源记录。能看到来源，才算可追溯。
+                    </div>
+                    <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">
+                      召回率不伪造百分比，先看“命中数量、证据相关性、来源覆盖”。需要更准时，优先补资料或重建向量。
+                    </div>
+                    <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">
+                      如果资料已上传但没有命中，先回到资料列表确认向量状态，再点“重建向量”。
+                    </div>
+                  </div>
+                </aside>
               </div>
             )}
           </div>
@@ -458,7 +411,7 @@ export default function KnowledgeBase() {
                 {([
                   ['browse', '记忆列表', `${memoryItems.length} 条文件记忆`, '查看、编辑、删除'],
                   ['write', '新增/搜索', `${memorySearchResults.length} 条检索命中`, '新增和搜索记忆'],
-                  ['govern', '管理记忆', `${memoryPendingConflicts.length + memoryReviewItems.length} 项待处理`, '处理冲突和版本'],
+                  ['feedback', '反馈追踪', `${sessionMemoryActivity?.summary.promoted_count || 0}/${sessionMemoryActivity?.summary.rejected_count || 0}`, '点赞和点踩记录'],
                 ] as const).map(([id, label, count, desc]) => (
                   <button
                     key={id}
@@ -476,13 +429,6 @@ export default function KnowledgeBase() {
                 ))}
               </div>
             </section>
-
-            <MemoryQualityPanel
-              report={memoryQuality}
-              onGoGovern={() => setMemoryStep('govern')}
-              onOpen={handleOpenMemoryPath}
-              onRefresh={() => void loadMemories()}
-            />
 
             {memoryStep === 'browse' && (
               <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1fr)]">
@@ -513,19 +459,6 @@ export default function KnowledgeBase() {
                   onExport={() => void handleExportMemory()}
                   onSave={() => void handleSaveMemory()}
                 />
-                <aside className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
-                  <div className="text-sm font-semibold text-ops-text">没有找到合适记忆？</div>
-                  <p className="mt-2 text-xs leading-5 text-ops-subtext">
-                    进入写入与检索，把新的成功经验、用户偏好或资产画像沉淀成可审计文件。
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setMemoryStep('write')}
-                    className="mt-4 rounded-md border border-ops-accent/45 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
-                  >
-                    去写入/检索
-                  </button>
-                </aside>
               </div>
             )}
 
@@ -549,52 +482,37 @@ export default function KnowledgeBase() {
                   onSearch={() => void handleSearchMemory()}
                 />
                 <aside className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
-                  <div className="text-sm font-semibold text-ops-text">记忆写完后要治理</div>
+                  <div className="text-sm font-semibold text-ops-text">简单记忆规则</div>
                   <p className="mt-2 text-xs leading-5 text-ops-subtext">
-                    冲突、过期、失败反馈都集中到管理记忆，避免错误经验长期污染 AI。
+                    点赞代表这条回答值得沉淀；点踩代表这条回答不要作为成功经验，只作为“避免这样做”的纠错记忆。
                   </p>
                   <button
                     type="button"
-                    onClick={() => setMemoryStep('govern')}
+                    onClick={() => setMemoryStep('feedback')}
                     className="mt-4 rounded-md border border-ops-accent/45 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
                   >
-                    下一步：管理记忆
+                    查看本会话反馈
                   </button>
                 </aside>
               </div>
             )}
 
-            {memoryStep === 'govern' && (
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.75fr)]">
-                <section className="space-y-4">
-                  <SessionMemoryActivityPanel
-                    activity={sessionMemoryActivity}
-                    focusMessageId={memoryFocusMessageId}
-                    loading={sessionMemoryActivityLoading}
-                    onFocusMessage={handleFocusChatMessage}
-                    onReload={() => void loadSessionMemoryActivity()}
-                  />
-                  <MemoryPendingConflictsPanel
-                    items={memoryPendingConflicts}
-                    resolvingKey={resolvingMemoryConflict}
-                    onOpen={handleOpenMemoryPath}
-                    onResolve={(item, action) => void handleResolveMemoryConflict(item, action)}
-                  />
-                  <MemoryReviewPanel
-                    items={memoryReviewItems}
-                    reviewingPath={reviewingMemoryPath}
-                    onOpen={handleOpenMemoryPath}
-                    onReview={(item) => void handleConfirmMemoryReview(item)}
-                  />
-                </section>
-                <aside className="space-y-4">
-                  <MemoryStoresPanel stores={memoryStores} />
-                  <MemoryVersionsPanel
-                    versions={memoryVersions}
-                    redactingVersionId={redactingMemoryVersion}
-                    onRedact={(version) => void handleRedactMemoryVersion(version)}
-                    onRestore={(version) => void handleRestoreMemoryVersion(version)}
-                  />
+            {memoryStep === 'feedback' && (
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+                <SessionMemoryActivityPanel
+                  activity={sessionMemoryActivity}
+                  focusMessageId={memoryFocusMessageId}
+                  loading={sessionMemoryActivityLoading}
+                  onFocusMessage={handleFocusChatMessage}
+                  onReload={() => void loadSessionMemoryActivity()}
+                />
+                <aside className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
+                  <div className="text-sm font-semibold text-ops-text">反馈和会话输出怎么对应</div>
+                  <div className="mt-3 space-y-2 text-xs leading-5 text-ops-subtext">
+                    <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">点“定位输出”会回到会话里的对应 AI 回答。</div>
+                    <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">点赞会加强成功经验，点踩只保留为纠错提醒。</div>
+                    <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 p-3">没有点过赞踩也没关系，辅助模型仍会根据上下文沉淀已验证的成功经验。</div>
+                  </div>
                 </aside>
               </div>
             )}

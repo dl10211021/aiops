@@ -84,6 +84,7 @@ class TestApiErrorSemantics(unittest.TestCase):
             upload = UploadFile(filename="runbook.txt", file=io.BytesIO(b"hello"))
             with (
                 patch.dict("os.environ", {"OPSCORE_KNOWLEDGE_VAULT_DIR": str(Path(tmp) / "vault")}),
+                patch("core.knowledge_base_service._KnowledgeUploadStorage.kb_dir", str(Path(tmp) / "kb")),
                 patch("core.rag.kb_manager", FakeKnowledgeBase(tmp)),
                 patch("core.embedding_config.get_embedding_config", return_value=("fake-embedding", 1024)),
                 patch("core.llm_factory.get_embedding_client_and_model", return_value=(object(), "fake-embedding")),
@@ -92,7 +93,7 @@ class TestApiErrorSemantics(unittest.TestCase):
 
         self.assertEqual(response.status, "success")
         self.assertIn("已保存到资料库", response.message)
-        self.assertIn("检索索引未完成", response.message)
+        self.assertIn("向量索引未同步执行", response.message)
 
     def test_knowledge_list_and_delete_errors_use_http_status(self):
         class FakeKnowledgeBase:

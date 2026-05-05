@@ -340,7 +340,7 @@ async def export_memory_store():
 async def upload_knowledge_document(file: UploadFile = File(...)):
     """【新功能】上传运维文档并注入 LanceDB 知识库"""
     try:
-        message = await ingest_knowledge_document(file)
+        message = await ingest_knowledge_document(file, index_now=False)
     except KnowledgeBaseServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**knowledge_document_uploaded_response_kwargs(message))

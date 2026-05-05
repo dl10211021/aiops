@@ -8,6 +8,7 @@ import re
 import shutil
 import asyncio
 import hashlib
+import inspect
 import uuid
 import zipfile
 from datetime import datetime, timezone
@@ -44,6 +45,10 @@ MAX_SOURCE_PREVIEW_CHARS = 12000
 MAX_KNOWLEDGE_CONTENT_PREVIEW_CHARS = 60000
 DEFAULT_KNOWLEDGE_VAULT_DIR = Path("data") / "knowledge_vault"
 TEXT_PREVIEW_EXTENSIONS = {".txt", ".md", ".log", ".csv", ".html", ".htm", ".json", ".yml", ".yaml", ".xml"}
+
+
+class _KnowledgeUploadStorage:
+    kb_dir = "knowledge_base"
 
 
 def _utc_now_iso() -> str:
@@ -1182,6 +1187,24 @@ def remove_vault_source_record(filename: str, vault_dir: str | os.PathLike[str] 
     return True
 
 
+def remove_legacy_knowledge_upload_copy(kb_manager, filename: str) -> bool:
+    """Remove the compatibility copy under kb_manager.kb_dir after a document is deleted."""
+    kb_dir_value = getattr(kb_manager, "kb_dir", None)
+    if not kb_dir_value:
+        return False
+    try:
+        kb_dir = Path(kb_dir_value).resolve()
+        target = (kb_dir / filename).resolve()
+        if kb_dir not in target.parents or target == kb_dir:
+            return False
+        if not target.exists():
+            return False
+        target.unlink()
+        return True
+    except OSError:
+        return False
+
+
 def safe_knowledge_filename(original_filename: str | None) -> str:
     original_name = os.path.basename(original_filename or "")
     stem, ext = os.path.splitext(original_name)
@@ -1217,14 +1240,14 @@ def persist_knowledge_upload(upload_file, kb_dir: str | os.PathLike[str], safe_f
     return str(file_path)
 
 
-def _resolve_kb_manager(kb_manager=None):
+def _resolve_kb_manager(kb_manager=None, *, materialize: bool = True):
     if kb_manager is not None:
         return kb_manager
     from core.rag import kb_manager as default_kb_manager
 
-    materialize = getattr(default_kb_manager, "materialize", None)
-    if callable(materialize):
-        return materialize()
+    materialize_manager = getattr(default_kb_manager, "materialize", None)
+    if materialize and callable(materialize_manager):
+        return materialize_manager()
     return default_kb_manager
 
 
@@ -1249,6 +1272,13 @@ def _knowledge_reindex_timeout_seconds() -> float:
     except (TypeError, ValueError):
         seconds = 10.0
     return max(0.1, min(seconds, 600.0))
+
+
+def _run_knowledge_ingest_blocking(kb_manager, file_path: str, client: Any, embedding_model: str):
+    result = kb_manager.ingest_document(file_path, client, embedding_model)
+    if inspect.isawaitable(result):
+        return asyncio.run(result)
+    return result
 
 
 def _friendly_vector_message(message: str) -> str:
@@ -1280,9 +1310,9 @@ def _should_skip_vector_index(message: str) -> bool:
     )
 
 
-async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None) -> str:
+async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None, *, index_now: bool = True) -> str:
     if upload_file is None:
-        kb_manager = _resolve_kb_manager()
+        kb_manager = _resolve_kb_manager(materialize=False) if index_now else _KnowledgeUploadStorage()
         upload_file = kb_manager_or_upload_file
     else:
         kb_manager = _resolve_kb_manager(kb_manager_or_upload_file)
@@ -1295,13 +1325,47 @@ async def ingest_knowledge_document(kb_manager_or_upload_file, upload_file=None)
             original_filename=upload_file.filename,
             safe_filename=safe_filename,
         )
-        embedding_config = _resolve_knowledge_embedding_client_and_model()
+        if not index_now:
+            message = "资料已保存；向量索引未同步执行，可在资料列表中重建索引。"
+            _update_vault_record(safe_filename, vector_status="pending", vector_error=message)
+            return f"已保存到资料库（RAG 知识库）；{message}"
+        timeout_seconds = _knowledge_reindex_timeout_seconds()
+        setup_timeout_seconds = min(timeout_seconds, 3.0)
+        try:
+            embedding_config = await asyncio.wait_for(
+                asyncio.to_thread(_resolve_knowledge_embedding_client_and_model),
+                timeout=setup_timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            detail = (
+                f"向量模型初始化超过 {setup_timeout_seconds:g} 秒仍未完成，已中止；"
+                "资料已保存，可稍后重建。"
+            )
+            _update_vault_record(safe_filename, vector_status="failed", vector_error=detail)
+            return f"已保存到资料库（RAG 知识库）；RAG 检索索引未完成：{detail}"
         if embedding_config is None:
             message = "未配置向量模型，已跳过 RAG 索引；资料已保存，可用于原文检索。"
             _update_vault_record(safe_filename, vector_status="skipped", vector_error=message)
             return f"已保存到资料库（RAG 知识库）；{message}"
         client, embedding_model = embedding_config
-        result = await kb_manager.ingest_document(file_path, client, embedding_model)
+        try:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _run_knowledge_ingest_blocking,
+                    kb_manager,
+                    file_path,
+                    client,
+                    embedding_model,
+                ),
+                timeout=timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            detail = (
+                f"向量索引超过 {timeout_seconds:g} 秒仍未完成，已中止；"
+                "资料已保存，可稍后重建。"
+            )
+            _update_vault_record(safe_filename, vector_status="failed", vector_error=detail)
+            return f"已保存到资料库（RAG 知识库）；RAG 检索索引未完成：{detail}"
     except KnowledgeBaseServiceError:
         raise
     except Exception as exc:
@@ -1660,7 +1724,7 @@ async def reindex_knowledge_document_record(
 
 async def remove_knowledge_document_record(kb_manager_or_filename, filename: str | None = None) -> str:
     if filename is None:
-        kb_manager = _resolve_kb_manager()
+        kb_manager = _KnowledgeUploadStorage()
         filename = str(kb_manager_or_filename)
     else:
         kb_manager = _resolve_kb_manager(kb_manager_or_filename)
@@ -1669,13 +1733,19 @@ async def remove_knowledge_document_record(kb_manager_or_filename, filename: str
         result = await kb_manager.delete_document(filename)
     except Exception as exc:
         removed_from_vault = remove_vault_source_record(filename)
+        removed_legacy_copy = remove_legacy_knowledge_upload_copy(kb_manager, filename)
         if removed_from_vault:
-            return f"已从 Obsidian Vault 移除 {filename}"
+            return f"已从资料库移除 {filename}"
+        if removed_legacy_copy:
+            return f"已从兼容目录移除 {filename}"
+        if isinstance(kb_manager, _KnowledgeUploadStorage):
+            raise KnowledgeBaseServiceError(404, "知识库文档不存在") from exc
         raise KnowledgeBaseServiceError(500, str(exc)) from exc
 
     removed_from_vault = remove_vault_source_record(filename)
+    remove_legacy_knowledge_upload_copy(kb_manager, filename)
     if result.get("status") == "success":
         return str(result.get("message") or "")
     if removed_from_vault:
-        return f"已从 Obsidian Vault 移除 {filename}"
+        return f"已从资料库移除 {filename}"
     raise KnowledgeBaseServiceError(404, str(result.get("message") or "知识库文档不存在"))
