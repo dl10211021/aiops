@@ -129,10 +129,17 @@ class DispatcherMemoryToolsTest(unittest.TestCase):
             summary="【核心记忆】当前会话可见。",
             source_session_id="sid-1",
         )
-        self.store.append_memory(
-            scope_id="asset-host:10.0.0.1",
-            summary="【核心记忆】同主机共享记忆不应进入会话。",
-            source_session_id="sid-other",
+        legacy_path = self.tmp_path / "hosts" / "10.0.0.1" / "memory.md"
+        legacy_path.parent.mkdir(parents=True, exist_ok=True)
+        legacy_path.write_text(
+            "# OpsCore Memory Store\n\n"
+            "- scope_id: asset-host:10.0.0.1\n\n"
+            "## 2026-05-05 16:30:01\n"
+            "- scope_id: asset-host:10.0.0.1\n"
+            "- source_session_id: sid-other\n"
+            '- metadata: {"source": "legacy"}\n\n'
+            "【核心记忆】同主机共享记忆不应进入会话。\n",
+            encoding="utf-8",
         )
         context = dict(self.context)
         context["memory_scope_ids"] = ["sid-1", "asset-host:10.0.0.1", "asset:ssh:10.0.0.1:22"]

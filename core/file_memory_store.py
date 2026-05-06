@@ -20,11 +20,26 @@ DEFAULT_MEMORY_STORES = [
     },
 ]
 
+LEGACY_SHARED_MEMORY_STORE = {
+    "id": "legacy_shared",
+    "name": "历史共享记忆（只读归档）",
+    "description": "旧版本按资产、主机或资产类型沉淀的共享记忆。仅保留用于审计追溯，不再作为新会话上下文自动引用。",
+    "path_prefix": "assets/, hosts/, asset_kinds/",
+    "access": "read_only",
+    "lifecycle": "legacy_archived",
+    "instructions": "历史遗留共享记忆只允许读取和导出；新会话只能使用当前 session 记忆，不能继续写入 asset/asset-host/asset-kind 共享范围。",
+}
+
 
 def safe_memory_segment(value: str) -> str:
     segment = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value or "").strip())
     segment = segment.strip("._-")
     return segment[:96] or "default"
+
+
+def is_legacy_shared_memory_scope(scope_id: str) -> bool:
+    scope = str(scope_id or "").strip().lower()
+    return scope.startswith(("asset:", "asset-host:", "asset-kind:"))
 
 
 def memory_scope_path(scope_id: str) -> Path:
@@ -67,6 +82,8 @@ class FileMemoryStore:
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         self.initialize()
+        if is_legacy_shared_memory_scope(scope_id):
+            raise ValueError("历史共享记忆已归档，只允许写入当前会话记忆")
         relative_path = memory_scope_path(scope_id)
         target_path = self._resolve_memory_path(relative_path)
         target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -164,6 +181,7 @@ class FileMemoryStore:
             relative_path = path.relative_to(self.root_path).as_posix()
             store = self._store_for_path(relative_path)
             entries = self._parse_entries(self._scope_from_path(relative_path), path)
+            is_legacy = self._is_legacy_shared_path(relative_path)
             memories.append(
                 {
                     "path": relative_path,
@@ -171,6 +189,11 @@ class FileMemoryStore:
                     "store_id": store["id"],
                     "store_name": store["name"],
                     "access": store["access"],
+                    "lifecycle": store.get("lifecycle") or "",
+                    "archived": is_legacy,
+                    "legacy": is_legacy,
+                    "retrieval_enabled": not is_legacy,
+                    "usage_policy": store.get("instructions") or "",
                     "size": path.stat().st_size,
                     "entries": len(entries),
                     "updated_at": datetime.datetime.fromtimestamp(
@@ -354,7 +377,14 @@ class FileMemoryStore:
 
     def list_stores(self) -> list[dict[str, Any]]:
         self.initialize()
-        return self._load_store_registry()
+        stores = [
+            store
+            for store in self._load_store_registry()
+            if not self._store_is_legacy_shared(store)
+        ]
+        if self._has_legacy_shared_memory_files():
+            stores.append(dict(LEGACY_SHARED_MEMORY_STORE))
+        return stores if stores else list(DEFAULT_MEMORY_STORES)
 
     def read_memory(self, path: str) -> dict[str, Any]:
         self.initialize()
@@ -369,6 +399,11 @@ class FileMemoryStore:
             "store_id": self._store_for_path(relative_path.as_posix())["id"],
             "store_name": self._store_for_path(relative_path.as_posix())["name"],
             "access": self._store_for_path(relative_path.as_posix())["access"],
+            "lifecycle": self._store_for_path(relative_path.as_posix()).get("lifecycle") or "",
+            "archived": self._is_legacy_shared_path(relative_path.as_posix()),
+            "legacy": self._is_legacy_shared_path(relative_path.as_posix()),
+            "retrieval_enabled": not self._is_legacy_shared_path(relative_path.as_posix()),
+            "usage_policy": self._store_for_path(relative_path.as_posix()).get("instructions") or "",
             "content": content,
             "content_sha256": memory_content_sha256(content),
             "size": target.stat().st_size,
@@ -592,12 +627,35 @@ class FileMemoryStore:
 
     def _store_for_path(self, relative_path: str) -> dict[str, Any]:
         normalized = str(relative_path or "").replace("\\", "/").lstrip("/")
+        if self._is_legacy_shared_path(normalized):
+            return dict(LEGACY_SHARED_MEMORY_STORE)
         stores = self._load_store_registry()
         for store in stores:
+            if self._store_is_legacy_shared(store):
+                continue
             prefix = str(store.get("path_prefix") or "").lstrip("/")
             if prefix and normalized.startswith(prefix):
                 return store
-        return stores[0] if stores else DEFAULT_MEMORY_STORES[0]
+        active_stores = [store for store in stores if not self._store_is_legacy_shared(store)]
+        return active_stores[0] if active_stores else DEFAULT_MEMORY_STORES[0]
+
+    def _is_legacy_shared_path(self, relative_path: str | Path) -> bool:
+        parts = Path(str(relative_path or "").replace("\\", "/")).parts
+        return bool(parts) and parts[0] in {"assets", "hosts", "asset_kinds"}
+
+    def _store_is_legacy_shared(self, store: dict[str, Any]) -> bool:
+        prefix = str(store.get("path_prefix") or "").replace("\\", "/").lstrip("/")
+        store_id = str(store.get("id") or "")
+        return (
+            store_id in {"assets", "hosts", "asset_kinds", "legacy_shared"}
+            or prefix.startswith(("assets/", "hosts/", "asset_kinds/"))
+        )
+
+    def _has_legacy_shared_memory_files(self) -> bool:
+        for folder in ("assets", "hosts", "asset_kinds"):
+            if any((self.root_path / folder).glob("**/*.md")):
+                return True
+        return False
 
     def _version_id(self, timestamp: str, path: str, operation: str, content: str) -> str:
         digest = memory_content_sha256(f"{timestamp}\n{path}\n{operation}\n{content}")[:16]

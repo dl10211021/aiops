@@ -6,7 +6,12 @@ import os
 import time
 from pathlib import Path
 
-from core.file_memory_store import FileMemoryStore, memory_scope_path, safe_memory_segment
+from core.file_memory_store import (
+    FileMemoryStore,
+    is_legacy_shared_memory_scope,
+    memory_scope_path,
+    safe_memory_segment,
+)
 
 
 class FileMemoryStoreTests(unittest.TestCase):
@@ -19,18 +24,18 @@ class FileMemoryStoreTests(unittest.TestCase):
 
     def test_append_memory_writes_markdown_and_version_log(self):
         version = self.store.append_memory(
-            scope_id="asset:ssh:10.0.0.1:22",
+            scope_id="sid-1",
             summary="【记忆类型】纠错经验\n【核心记忆】不要直接建议 ufw enable。",
             source_session_id="sid-1",
             metadata={"source": "feedback"},
         )
 
-        memory_path = self.tmp_path / "assets" / "ssh_10.0.0.1_22" / "memory.md"
+        memory_path = self.tmp_path / "sessions" / "sid-1" / "memory.md"
         version_files = list((self.tmp_path / "versions").glob("*.jsonl"))
 
         self.assertTrue(memory_path.exists())
         self.assertEqual(version["operation"], "created")
-        self.assertEqual(version["path"], "assets/ssh_10.0.0.1_22/memory.md")
+        self.assertEqual(version["path"], "sessions/sid-1/memory.md")
         self.assertEqual(len(version_files), 1)
         self.assertIn("不要直接建议 ufw enable", memory_path.read_text(encoding="utf-8"))
 
@@ -48,24 +53,24 @@ class FileMemoryStoreTests(unittest.TestCase):
             source_session_id="sid-1",
         )
         self.store.append_memory(
-            scope_id="asset-host:10.0.0.1",
+            scope_id="sid-2",
             summary="【核心记忆】Oracle 资产优先检查活跃会话和锁等待。",
             source_session_id="sid-2",
         )
 
         results = self.store.search(
-            scope_ids=["sid-1", "asset-host:10.0.0.1"],
+            scope_ids=["sid-1", "sid-2"],
             query="Oracle 锁等待",
             limit=2,
         )
 
-        self.assertEqual(results[0]["_memory_scope_id"], "asset-host:10.0.0.1")
+        self.assertEqual(results[0]["_memory_scope_id"], "sid-2")
         self.assertIn("Oracle", results[0]["summary"])
         self.assertEqual(len(results), 2)
 
     def test_list_read_delete_and_versions_support_management_ui(self):
         self.store.append_memory(
-            scope_id="asset-host:10.0.0.8",
+            scope_id="sid-8",
             summary="【核心记忆】巡检前先确认只读模式。",
             source_session_id="sid-8",
         )
@@ -87,6 +92,57 @@ class FileMemoryStoreTests(unittest.TestCase):
         ]
         self.assertEqual(deleted_versions[0]["metadata"]["actor"], "tester")
         self.assertEqual(self.store.list_memories(), [])
+
+    def test_legacy_shared_scope_writes_are_rejected(self):
+        self.assertTrue(is_legacy_shared_memory_scope("asset-host:10.0.0.8"))
+        self.assertTrue(is_legacy_shared_memory_scope("asset-kind:linux:ssh"))
+        self.assertFalse(is_legacy_shared_memory_scope("sid-1"))
+
+        with self.assertRaisesRegex(ValueError, "历史共享记忆已归档"):
+            self.store.append_memory(
+                scope_id="asset-host:10.0.0.8",
+                summary="【核心记忆】不应继续写入共享主机记忆。",
+                source_session_id="sid-8",
+            )
+
+    def test_legacy_shared_files_are_read_only_archive(self):
+        self.store.initialize()
+        legacy_path = self.tmp_path / "asset_kinds" / "linux_ssh" / "memory.md"
+        legacy_path.parent.mkdir(parents=True, exist_ok=True)
+        legacy_path.write_text(
+            "# OpsCore Memory Store\n\n"
+            "- scope_id: asset-kind:linux:ssh\n"
+            "- access: read_write\n\n"
+            "## 2026-05-05 16:30:01\n"
+            "- scope_id: asset-kind:linux:ssh\n"
+            "- source_session_id: sid-old\n"
+            '- metadata: {"source": "legacy"}\n\n'
+            "【核心记忆】旧共享资产类型经验，仅保留审计。\n",
+            encoding="utf-8",
+        )
+
+        stores = self.store.list_stores()
+        item = self.store.list_memories()[0]
+        detail = self.store.read_memory(item["path"])
+
+        self.assertEqual(stores[-1]["id"], "legacy_shared")
+        self.assertEqual(stores[-1]["access"], "read_only")
+        self.assertEqual(item["store_id"], "legacy_shared")
+        self.assertEqual(item["access"], "read_only")
+        self.assertEqual(item["lifecycle"], "legacy_archived")
+        self.assertTrue(item["archived"])
+        self.assertFalse(item["retrieval_enabled"])
+        self.assertEqual(detail["store_id"], "legacy_shared")
+        self.assertTrue(detail["archived"])
+        self.assertFalse(detail["retrieval_enabled"])
+        with self.assertRaises(PermissionError):
+            self.store.update_memory(
+                item["path"],
+                content=detail["content"] + "\n新内容",
+                content_sha256=detail["content_sha256"],
+            )
+        with self.assertRaises(PermissionError):
+            self.store.delete_memory(item["path"], actor="tester")
 
     def test_update_restore_export_and_store_registry(self):
         self.store.append_memory(
@@ -183,7 +239,7 @@ class FileMemoryStoreTests(unittest.TestCase):
             )
         for index in range(12):
             self.store.append_memory(
-                scope_id="asset-host:10.0.0.8",
+                scope_id="sid-8",
                 summary=f"【核心记忆】巡检碎片 {index}。",
                 source_session_id="sid-8",
             )
