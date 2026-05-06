@@ -182,8 +182,8 @@ export default function KnowledgeBase() {
     }
     : {
       title: 'AI 记忆',
-      body: '这里只保留当前会话的记忆：看本 session 已沉淀内容、写入或搜索当前会话记忆、追踪本会话点赞/点踩反馈。',
-      next: '知识库/RAG 可以全局共享；AI 会话记忆严格按 session 隔离，不会自动带入同资产或同主机的其他会话。',
+      body: '这里采用 Hermes-style 保留逻辑：完整会话历史用于审计，文件记忆只展示当前 session 的会话状态、成功经验、错误反馈和资产画像。',
+      next: '知识库/RAG 可以全局共享；AI 会话记忆严格按 session 隔离，审计归档不会自动进入提示词。',
     }
   return (
     <div className="flex-1 overflow-y-auto p-4 lg:p-5">
@@ -257,10 +257,10 @@ export default function KnowledgeBase() {
           </div>
           <div className="rounded-lg border border-ops-accent/25 bg-ops-accent/5 px-4 py-3">
             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-ops-accent/80">隔离范围</div>
-            <div className="mt-1 text-sm font-semibold text-ops-text">AI 会话记忆按 session 隔离</div>
-            <p className="mt-1 text-xs leading-5 text-ops-subtext">
-              点赞、点踩、画像和成功经验只进入当前会话；同资产、同主机、同类型的其他会话不会自动引用。
-            </p>
+          <div className="mt-1 text-sm font-semibold text-ops-text">AI 会话记忆按 session 隔离</div>
+          <p className="mt-1 text-xs leading-5 text-ops-subtext">
+              点赞、点踩、画像和成功经验只进入当前会话；完整轨迹保留用于审计，压缩后的成功经验/错误反馈才会被当前会话召回。
+          </p>
           </div>
         </section>
 
@@ -426,7 +426,7 @@ export default function KnowledgeBase() {
             <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-3">
               <div className="grid gap-2 md:grid-cols-3">
                 {([
-                  ['browse', '记忆列表', `${memoryItems.length} 条文件记忆`, '仅当前会话'],
+                  ['browse', '记忆列表', `${memoryItems.length} 条文件记忆`, '状态/经验/反馈'],
                   ['write', '新增/搜索', `${memorySearchResults.length} 条检索命中`, '写入当前 session'],
                   ['feedback', '反馈追踪', `${sessionMemoryActivity?.summary.promoted_count || 0}/${sessionMemoryActivity?.summary.rejected_count || 0}`, '本会话反馈'],
                 ] as const).map(([id, label, count, desc]) => (

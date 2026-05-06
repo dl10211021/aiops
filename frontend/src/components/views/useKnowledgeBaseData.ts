@@ -75,10 +75,10 @@ export function useKnowledgeBaseData() {
   const [sessionMemoryActivity, setSessionMemoryActivity] = useState<SessionMemoryActivity | null>(null)
   const [selectedMemory, setSelectedMemory] = useState<MemoryDetail | null>(null)
   const [memoryDraft, setMemoryDraft] = useState('')
-  const [memoryCreateScope, setMemoryCreateScope] = useState('manual')
+  const [memoryCreateScope, setMemoryCreateScope] = useState(currentSessionId || '')
   const [memoryCreateSummary, setMemoryCreateSummary] = useState('')
   const [memorySearchQuery, setMemorySearchQuery] = useState('')
-  const [memorySearchScopes, setMemorySearchScopes] = useState('manual')
+  const [memorySearchScopes, setMemorySearchScopes] = useState(currentSessionId || '')
   const [memorySearchResults, setMemorySearchResults] = useState<MemorySearchResult[]>([])
   const [uploading, setUploading] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeFile | null>(null)
@@ -207,6 +207,12 @@ export function useKnowledgeBaseData() {
   useEffect(() => {
     void loadSessionMemoryActivity()
   }, [loadSessionMemoryActivity])
+
+  useEffect(() => {
+    if (!currentSessionId) return
+    setMemoryCreateScope((current) => (current.trim() && current !== 'manual' ? current : currentSessionId))
+    setMemorySearchScopes((current) => (current.trim() && current !== 'manual' ? current : currentSessionId))
+  }, [currentSessionId])
 
   useEffect(() => {
     const handleSessionMemoryActivityUpdated = (event: Event) => {
@@ -492,7 +498,7 @@ export function useKnowledgeBaseData() {
     }
     setCreatingMemory(true)
     try {
-      await createMemoryItem(scope, summary)
+      await createMemoryItem(scope, summary, currentSessionId || scope)
       setMemoryCreateSummary('')
       await loadMemories()
       addToast('AI 记忆已创建', 'success')

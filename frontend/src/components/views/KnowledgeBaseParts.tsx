@@ -59,6 +59,56 @@ function formatMemorySize(size: number) {
   return `${(size / 1024 / 1024).toFixed(1)} MiB`
 }
 
+function memoryKindLabel(kind?: string, fallback?: string) {
+  const key = String(kind || '').trim()
+  const labels: Record<string, string> = {
+    session_state: '会话状态',
+    success_experience: '成功经验',
+    error_feedback: '错误反馈',
+    asset_profile: '资产画像',
+    user_preference: '用户偏好',
+    platform_rule: '平台规则',
+    audit_archive: '审计归档',
+    session_trajectory: '会话轨迹',
+  }
+  return labels[key] || fallback || key || '会话状态'
+}
+
+function memoryKindTone(kind?: string) {
+  const key = String(kind || '').trim()
+  if (key === 'success_experience') return 'border-ops-success/35 bg-ops-success/10 text-ops-success'
+  if (key === 'error_feedback') return 'border-ops-alert/35 bg-ops-alert/10 text-ops-alert'
+  if (key === 'audit_archive' || key === 'session_trajectory') return 'border-amber-300/35 bg-amber-300/10 text-amber-200'
+  if (key === 'asset_profile') return 'border-ops-accent/35 bg-ops-accent/10 text-ops-accent'
+  return 'border-ops-surface1 bg-ops-dark/30 text-ops-subtext'
+}
+
+function memoryUsageLabel(item: Pick<MemoryItem, 'retrieval_enabled' | 'retrieval_entries' | 'audit_entries'>) {
+  if (item.retrieval_enabled === false) return '仅审计，不进上下文'
+  const retrieval = item.retrieval_entries ?? 0
+  const audit = item.audit_entries ?? 0
+  if (retrieval > 0 && audit > 0) return `可召回 ${retrieval} 条 / 审计 ${audit} 条`
+  if (retrieval > 0) return `会进入上下文 ${retrieval} 条`
+  if (audit > 0) return `仅审计 ${audit} 条`
+  return '等待分类'
+}
+
+function dominantMemoryKind(item: MemoryItem) {
+  const kinds = item.entry_kinds || {}
+  const ranked = Object.entries(kinds).sort((a, b) => b[1] - a[1])
+  return ranked[0]?.[0] || (item.archived ? 'audit_archive' : 'session_state')
+}
+
+function memoryKindChips(item: MemoryItem) {
+  const kinds = item.entry_kinds || {}
+  const entries = Object.entries(kinds).sort((a, b) => b[1] - a[1])
+  if (!entries.length) {
+    const kind = dominantMemoryKind(item)
+    return [{ kind, label: memoryKindLabel(kind), count: item.entries || 0 }]
+  }
+  return entries.map(([kind, count]) => ({ kind, label: memoryKindLabel(kind), count }))
+}
+
 export function KnowledgeTabs({
   activeTab,
   documentCount,
@@ -1353,11 +1403,12 @@ export function MemoryItemCard({
       : item.scope_id.startsWith('asset-kind:')
         ? '类型'
         : '会话'
+  const mainKind = dominantMemoryKind(item)
   return (
     <article className={`rounded-lg border bg-ops-panel px-4 py-3 transition-colors ${selected ? 'border-ops-accent/70' : 'border-ops-surface0 hover:border-ops-accent/35'}`}>
       <div className="flex items-start gap-3">
-        <span className="grid h-9 w-12 shrink-0 place-items-center rounded border border-ops-accent/35 bg-ops-dark text-[11px] font-semibold text-ops-accent">
-          {scopeLabel}
+        <span className={`grid h-10 w-16 shrink-0 place-items-center rounded border text-[11px] font-semibold ${memoryKindTone(mainKind)}`}>
+          {memoryKindLabel(mainKind)}
         </span>
         <div className="min-w-0 flex-1">
           <button
@@ -1367,8 +1418,21 @@ export function MemoryItemCard({
           >
             {item.path}
           </button>
-          <div className="mt-1 text-xs text-ops-overlay">
-            {item.entries} 条 · {(item.size / 1024).toFixed(1)} KB · {item.updated_at}
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-ops-overlay">
+            <span>{scopeLabel}作用域：{item.scope_id}</span>
+            <span>{item.entries} 条</span>
+            <span>{formatMemorySize(item.size)}</span>
+            <span>{item.updated_at}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className={`rounded-full border px-2 py-0.5 text-[10px] ${item.retrieval_enabled === false ? 'border-amber-300/35 text-amber-200' : 'border-ops-success/35 text-ops-success'}`}>
+              {memoryUsageLabel(item)}
+            </span>
+            {memoryKindChips(item).slice(0, 4).map((chip) => (
+              <span key={chip.kind} className={`rounded-full border px-2 py-0.5 text-[10px] ${memoryKindTone(chip.kind)}`}>
+                {chip.label} {chip.count}
+              </span>
+            ))}
           </div>
           {item.preview && (
             <p className="mt-2 line-clamp-2 text-xs leading-5 text-ops-subtext">{item.preview}</p>
@@ -1438,8 +1502,21 @@ export function MemoryDetailPanel({
             </button>
           </div>
         </div>
-        <div className="mt-1 text-xs text-ops-overlay">
-          {memory.store_name || memory.scope_id} · {memory.access === 'read_only' ? '只读' : '可写'} · {(memory.size / 1024).toFixed(1)} KB · {memory.updated_at}
+        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-ops-overlay">
+          <span className="rounded-full border border-ops-surface1 px-2 py-0.5">{memory.store_name || memory.scope_id}</span>
+          <span className="rounded-full border border-ops-surface1 px-2 py-0.5">{memory.access === 'read_only' ? '只读' : '可写'}</span>
+          <span className={`rounded-full border px-2 py-0.5 ${memory.retrieval_enabled === false ? 'border-amber-300/35 text-amber-200' : 'border-ops-success/35 text-ops-success'}`}>
+            {memoryUsageLabel(memory)}
+          </span>
+          <span className="rounded-full border border-ops-surface1 px-2 py-0.5">{formatMemorySize(memory.size)}</span>
+          <span className="rounded-full border border-ops-surface1 px-2 py-0.5">{memory.updated_at}</span>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {memoryKindChips(memory).slice(0, 6).map((chip) => (
+            <span key={chip.kind} className={`rounded-full border px-2 py-0.5 text-[10px] ${memoryKindTone(chip.kind)}`}>
+              {chip.label} {chip.count}
+            </span>
+          ))}
         </div>
       </div>
       <textarea
@@ -1471,19 +1548,19 @@ export function MemoryCreatePanel({
     <section className="rounded-lg border border-ops-accent/30 bg-ops-accent/5 p-4">
       <div className="text-sm font-semibold text-ops-text">新建 AI 记忆</div>
       <p className="mt-1 text-xs leading-5 text-ops-subtext">
-        手工写入明确规则、用户偏好或已验证经验。建议作用域使用 manual、asset-host:IP、asset-kind:oracle 这类稳定标识。
+        手工写入当前会话明确规则、用户偏好或已验证经验。默认作用域就是当前 session，不建议写 manual、asset-host 或 asset-kind，避免串到其他会话。
       </p>
       <input
         value={scope}
         onChange={(event) => onScopeChange(event.target.value)}
         className="mt-3 h-9 w-full rounded-md border border-ops-surface1 bg-ops-panel/70 px-3 text-xs text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent/60"
-        placeholder="作用域，例如 manual / asset-host:172.17.8.131"
+        placeholder="当前会话 ID，例如 5b39e8cc-..."
       />
       <textarea
         value={summary}
         onChange={(event) => onSummaryChange(event.target.value)}
         className="mt-2 min-h-28 w-full resize-y rounded-md border border-ops-surface1 bg-ops-panel/70 px-3 py-2 text-xs leading-5 text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent/60"
-        placeholder="写入要长期保留的核心记忆，最好包含：记忆类型、可信度、适用范围、使用提醒。"
+        placeholder="写入当前会话要保留的核心记忆，最好包含：记忆类型、可信度、保留方式、使用提醒。"
       />
       <button
         onClick={onCreate}
@@ -1517,13 +1594,13 @@ export function MemorySearchPanel({
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="text-sm font-semibold text-ops-text">记忆检索预览</div>
       <p className="mt-1 text-xs leading-5 text-ops-subtext">
-        输入问题后先预览会命中的长期记忆，用来检查“AI 为什么想起这条经验”。
+        输入问题后先预览当前 session 会命中的记忆，用来检查“AI 为什么想起这条经验”。审计归档不会自动召回。
       </p>
       <input
         value={scopes}
         onChange={(event) => onScopesChange(event.target.value)}
         className="mt-3 h-9 w-full rounded-md border border-ops-surface1 bg-ops-panel/70 px-3 text-xs text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent/60"
-        placeholder="作用域，多个用逗号分隔，例如 manual, asset-host:172.17.8.131"
+        placeholder="当前会话 ID，多个用逗号分隔"
       />
       <textarea
         value={query}
@@ -1544,6 +1621,19 @@ export function MemorySearchPanel({
             <div className="flex items-center justify-between gap-2 text-[11px] text-ops-overlay">
               <span className="truncate">{item._memory_scope_id || item.session_id || item.path || 'unknown'}</span>
               <span>{item.timestamp || '无时间'}</span>
+            </div>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] ${memoryKindTone(item.memory_kind)}`}>
+                {memoryKindLabel(item.memory_kind, item.memory_kind_label)}
+              </span>
+              <span className="rounded-full border border-ops-success/30 px-2 py-0.5 text-[10px] text-ops-success">
+                {item.retrieval_enabled === false ? '仅审计' : '会进入上下文'}
+              </span>
+              {item.usage_role && (
+                <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-overlay">
+                  {item.usage_role}
+                </span>
+              )}
             </div>
             <p className="mt-1 text-xs leading-5 text-ops-subtext">{item.summary || '该记忆没有摘要内容'}</p>
             {typeof item._distance === 'number' && (
@@ -1954,20 +2044,26 @@ export function MemoryStoresPanel({ stores }: { stores: MemoryStoreInfo[] }) {
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-4">
       <div className="text-sm font-semibold text-ops-text">记忆存储区</div>
-      <p className="mt-1 text-xs text-ops-subtext">会话记忆只保存在当前 session；知识库/RAG 才是全局共享资料。</p>
+      <p className="mt-1 text-xs text-ops-subtext">会话记忆只保存在当前 session；知识库/RAG 才是全局共享资料。这里展示的是 Hermes-style 的保留边界。</p>
       <div className="mt-3 space-y-2">
         {stores.map((store) => (
           <div key={store.id} className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-ops-text">{store.name}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] ${store.access === 'read_only' ? 'bg-ops-alert/10 text-ops-alert' : 'bg-ops-success/10 text-ops-success'}`}>
-                {store.access === 'read_only' ? '只读' : '可写'}
-              </span>
+              <div className="flex flex-wrap justify-end gap-1.5">
+                <span className={`rounded-full px-2 py-0.5 text-[10px] ${store.access === 'read_only' ? 'bg-ops-alert/10 text-ops-alert' : 'bg-ops-success/10 text-ops-success'}`}>
+                  {store.access === 'read_only' ? '只读' : '可写'}
+                </span>
+                <span className="rounded-full border border-ops-accent/30 px-2 py-0.5 text-[10px] text-ops-accent">
+                  {store.memory_model === 'hermes_style_session_retention' ? '轨迹+压缩' : store.memory_model || '文件记忆'}
+                </span>
+              </div>
             </div>
             <div className="mt-1 text-xs leading-5 text-ops-subtext">{store.description}</div>
             <div className="mt-2 rounded border border-ops-surface1/70 bg-ops-dark/30 px-2 py-1 text-[11px] leading-5 text-ops-overlay">
               <div>路径：{store.path_prefix || '/'}</div>
               <div>生命周期：{store.lifecycle || '未配置'}</div>
+              <div>保留逻辑：完整会话历史用于审计；压缩后的会话状态、成功经验、错误反馈才进入当前会话上下文。</div>
               <div>说明：{store.instructions || '按最小必要原则读取，写入前先验证。'}</div>
             </div>
           </div>

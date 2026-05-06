@@ -779,6 +779,15 @@ export interface MemoryItem {
   store_id?: string
   store_name?: string
   access?: 'read_only' | 'read_write' | string
+  lifecycle?: string
+  memory_model?: string
+  retrieval_enabled?: boolean
+  retrieval_entries?: number
+  audit_entries?: number
+  entry_kinds?: Record<string, number>
+  usage_policy?: string
+  archived?: boolean
+  legacy?: boolean
   size: number
   entries: number
   updated_at: string
@@ -868,6 +877,12 @@ export interface MemorySearchResult {
   _memory_scope_id?: string
   timestamp?: string
   summary?: string
+  memory_model?: string
+  memory_kind?: string
+  memory_kind_label?: string
+  retention_tier?: string
+  usage_role?: string
+  retrieval_enabled?: boolean
   _distance?: number
   path?: string
 }
@@ -879,6 +894,7 @@ export interface MemoryStoreInfo {
   path_prefix: string
   access: 'read_only' | 'read_write' | string
   lifecycle: string
+  memory_model?: string
   instructions?: string
 }
 
