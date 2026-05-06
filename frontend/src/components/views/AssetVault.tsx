@@ -80,6 +80,7 @@ export default function AssetVault() {
     deletingAsset,
     handleBatchImportConfirmed,
     handleConnect,
+    handleEditAsset,
     handleDeleteConfirmed,
     handleNormalizeAssets,
     handleNormalizeConfirmed,
@@ -146,6 +147,7 @@ export default function AssetVault() {
           matrixByAssetId={matrixByAssetId}
           onClearFilters={clearFilters}
           onConnect={handleConnect}
+          onEdit={handleEditAsset}
           onDelete={setDeleteTarget}
           onOpenVerification={(item) => void openVerification(item)}
           onRefresh={() => void loadAssets()}

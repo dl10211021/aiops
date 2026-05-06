@@ -51,7 +51,10 @@ export function useAssetVaultActions({
   const [normalizeDialog, setNormalizeDialog] = useState<{ rowsToUpdate: number; duplicatesToRemove: number } | null>(null)
   const [normalizingAssets, setNormalizingAssets] = useState(false)
 
-  const openCreateAsset = () => openModal('connect')
+  const openCreateAsset = () => {
+    sessionStorage.removeItem('asset_editing_id')
+    openModal('connect')
+  }
 
   const handleDeleteConfirmed = async () => {
     if (!deleteTarget) return
@@ -69,6 +72,13 @@ export function useAssetVaultActions({
   }
 
   const handleConnect = (asset: Asset) => {
+    sessionStorage.removeItem('asset_editing_id')
+    sessionStorage.setItem('prefill_asset', JSON.stringify(asset))
+    openModal('connect')
+  }
+
+  const handleEditAsset = (asset: Asset) => {
+    sessionStorage.setItem('asset_editing_id', String(asset.id))
     sessionStorage.setItem('prefill_asset', JSON.stringify(asset))
     openModal('connect')
   }
@@ -175,6 +185,7 @@ export function useAssetVaultActions({
     deletingAsset,
     handleBatchImportConfirmed,
     handleConnect,
+    handleEditAsset,
     handleDeleteConfirmed,
     handleNormalizeAssets,
     handleNormalizeConfirmed,

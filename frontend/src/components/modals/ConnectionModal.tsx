@@ -66,7 +66,9 @@ export default function ConnectionModal() {
       <div className="flex max-h-[94vh] w-[860px] max-w-[94vw] flex-col rounded-lg border border-ops-surface0 bg-ops-panel shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-ops-surface0 px-6 py-4">
           <div>
-            <h2 className="text-lg font-bold text-ops-text">新建连接</h2>
+            <h2 className="text-lg font-bold text-ops-text">
+              {typeof window !== 'undefined' && window.sessionStorage.getItem('asset_editing_id') ? '编辑资产' : '新建连接'}
+            </h2>
             <p className="mt-0.5 text-xs text-ops-subtext">选择资产类型后，系统会自动匹配协议、连接器和可用工具。</p>
           </div>
           <button onClick={closeModal} className="text-ops-subtext hover:text-ops-text text-sm">关闭</button>

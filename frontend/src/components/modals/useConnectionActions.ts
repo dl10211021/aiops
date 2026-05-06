@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { batchImportAssets, connectSession, getSavedAssets, inspectConnection, testConnection } from '@/api/client'
+import { batchImportAssets, updateAsset, connectSession, getSavedAssets, inspectConnection, testConnection } from '@/api/client'
 import { useStore } from '@/store'
 import {
   buildConnectSessionPayload,
@@ -165,9 +165,21 @@ export function useConnectionActions({
     }
     setConnecting(true)
     try {
-      await batchImportAssets([buildSavedAssetPayload(payloadArgsFor(target))])
+      const savedAssetPayload = buildSavedAssetPayload(payloadArgsFor(target))
+      const editingAssetId = Number(sessionStorage.getItem('asset_editing_id') || '')
+      const isEditingAsset = Number.isFinite(editingAssetId) && editingAssetId > 0
+
+      if (isEditingAsset) {
+        if (!String(savedAssetPayload.password || '').trim()) {
+          savedAssetPayload['password'] = '********'
+        }
+        await updateAsset(editingAssetId, savedAssetPayload)
+        sessionStorage.removeItem('asset_editing_id')
+      } else {
+        await batchImportAssets([savedAssetPayload])
+      }
       await refreshSavedAssets()
-      addToast(`已保存资产 ${form.remark || target.host}`, 'success')
+      addToast(`${isEditingAsset ? '已更新资产' : '已保存资产'} ${form.remark || target.host}`, 'success')
       closeModal()
       if (useStore.getState().currentView !== 'assets') {
         setView('assets')

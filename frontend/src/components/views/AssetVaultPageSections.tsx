@@ -33,6 +33,7 @@ export function AssetGroupSections({
   matrixByAssetId,
   protocolLabelForAsset,
   onConnect,
+  onEdit,
   onDelete,
   onOpenVerification,
 }: {
@@ -45,6 +46,7 @@ export function AssetGroupSections({
   matrixByAssetId: Map<number, AssetVerificationMatrix>
   protocolLabelForAsset: (asset: Asset, connector: string) => string
   onConnect: (asset: Asset) => void
+  onEdit: (asset: Asset) => void
   onDelete: (asset: Asset) => void
   onOpenVerification: (asset: Asset) => void
 }) {
@@ -70,6 +72,7 @@ export function AssetGroupSections({
                   protocolLabel={protocolLabelForAsset(asset, connector)}
                   typeLabel={assetTypeLabels[assetTypeKey(asset)] || asset.asset_type || '资产'}
                   onConnect={onConnect}
+                  onEdit={onEdit}
                   onDelete={onDelete}
                   onOpenVerification={onOpenVerification}
                 />
@@ -89,6 +92,7 @@ export function AssetTablePanel({
   matrixByAssetId,
   onClearFilters,
   onConnect,
+  onEdit,
   onDelete,
   onOpenVerification,
   onRefresh,
@@ -101,6 +105,7 @@ export function AssetTablePanel({
   matrixByAssetId: Map<number, AssetVerificationMatrix>
   onClearFilters: () => void
   onConnect: (asset: Asset) => void
+  onEdit: (asset: Asset) => void
   onDelete: (asset: Asset) => void
   onOpenVerification: (asset: Asset) => void
   onRefresh: () => void
@@ -189,6 +194,12 @@ export function AssetTablePanel({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1.5">
+                      <button
+                        onClick={() => onEdit(asset)}
+                        className="rounded-lg border border-ops-surface1 px-3 py-1.5 text-xs text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-accent"
+                      >
+                        编辑
+                      </button>
                       <button
                         onClick={() => onConnect(asset)}
                         className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-2.5 py-1 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"

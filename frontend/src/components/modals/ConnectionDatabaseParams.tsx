@@ -23,8 +23,10 @@ export default function ConnectionDatabaseParams({
           {subType === 'oracle'
             ? oracleConnectType === 'tns_alias'
               ? 'TNS Alias'
-              : 'SID / 服务名'
-            : '数据库名 / SID'}
+              : oracleConnectType === 'service_name'
+                ? '服务名'
+                : 'SID'
+            : '默认数据库 / Schema'}
         </label>
         <input
           value={(extraArgs.db_name as string) || (extraArgs.database as string) || ''}

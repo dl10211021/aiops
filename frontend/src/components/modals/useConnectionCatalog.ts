@@ -143,6 +143,7 @@ export function useConnectionCatalog({
         }
         sessionStorage.removeItem('prefill_asset')
       } else {
+        sessionStorage.removeItem('asset_editing_id')
         setSelectedSkills(autoSelectSkills(form.sub_type, loadedSkills))
       }
     })

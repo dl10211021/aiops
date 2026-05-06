@@ -19,6 +19,8 @@ export default function ConnectionActionBar({
   onSaveOnly,
   onTest,
 }: ConnectionActionBarProps) {
+  const isEditingAsset = typeof window !== 'undefined' && Boolean(window.sessionStorage.getItem('asset_editing_id'))
+
   return (
     <div className="flex shrink-0 justify-between border-t border-ops-surface0 bg-ops-panel px-6 py-4">
       <button
@@ -26,7 +28,7 @@ export default function ConnectionActionBar({
         disabled={connecting || !canSubmitAsset}
         className="rounded-lg bg-ops-surface0 px-4 py-2 text-sm text-ops-subtext transition-colors hover:text-ops-text disabled:opacity-40"
       >
-        保存资产
+        {isEditingAsset ? '保存修改' : '保存资产'}
       </button>
       <div className="flex gap-2">
         <button

@@ -11,6 +11,7 @@ export function AssetCard({
   protocolLabel,
   typeLabel,
   onConnect,
+  onEdit,
   onDelete,
   onOpenVerification,
 }: {
@@ -21,6 +22,7 @@ export function AssetCard({
   protocolLabel: string
   typeLabel: string
   onConnect: (asset: Asset) => void
+  onEdit: (asset: Asset) => void
   onDelete: (asset: Asset) => void
   onOpenVerification: (asset: Asset) => void
 }) {
@@ -58,7 +60,13 @@ export function AssetCard({
         </div>
       )}
       <div className="mt-3 flex gap-2">
-        <button onClick={() => onConnect(asset)} className="flex-1 rounded-lg bg-ops-accent/15 py-1.5 text-xs text-ops-accent transition-colors hover:bg-ops-accent/25">编辑 / 连接</button>
+        <button
+              onClick={() => onEdit(asset)}
+              className="rounded-lg border border-ops-surface1 px-3 py-1.5 text-xs text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-accent"
+            >
+              编辑
+            </button>
+            <button onClick={() => onConnect(asset)} className="flex-1 rounded-lg bg-ops-accent/15 py-1.5 text-xs text-ops-accent transition-colors hover:bg-ops-accent/25">连接</button>
         <button onClick={() => onOpenVerification(asset)} className="rounded-lg bg-ops-success/10 px-2.5 py-1.5 text-xs text-ops-success transition-colors hover:bg-ops-success/20">验证</button>
         <button onClick={() => onDelete(asset)} className="rounded-lg px-2 py-1.5 text-xs text-ops-overlay transition-colors hover:bg-ops-alert/10 hover:text-ops-alert">删除</button>
       </div>
