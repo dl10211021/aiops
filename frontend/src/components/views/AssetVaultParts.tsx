@@ -56,7 +56,7 @@ export function CategoryFilterRow({
 }) {
   const groups = groupFilterOptions(options)
   const [expanded, setExpanded] = useState(false)
-  const compactOptions = options.slice(0, 10)
+  const compactOptions = options.slice(0, 6)
   const selectedOption = options.find((option) => option.id === value)
   const visibleCompactOptions = selectedOption && value !== 'all' && !compactOptions.some((option) => option.id === value)
     ? [selectedOption, ...compactOptions]
@@ -72,6 +72,11 @@ export function CategoryFilterRow({
           全部
         </button>
         <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+          {!expanded && visibleCompactOptions.length > 0 && (
+            <span className="flex shrink-0 items-center rounded-lg border border-ops-surface1/70 px-2 py-1 text-[10px] text-ops-overlay">
+              常用
+            </span>
+          )}
           {!expanded && visibleCompactOptions.map((option) => (
             <button
               key={option.id}
@@ -88,7 +93,7 @@ export function CategoryFilterRow({
             onClick={() => setExpanded(!expanded)}
             className="ml-16 shrink-0 rounded-lg bg-ops-dark px-2.5 py-1 text-[11px] text-ops-overlay hover:text-ops-text md:ml-0"
           >
-            {expanded ? '收起分类' : `展开全部 ${options.length}`}
+            {expanded ? '收起分类' : `更多分类 ${options.length}`}
           </button>
         )}
       </div>
@@ -96,7 +101,10 @@ export function CategoryFilterRow({
         <div className="ml-16 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {groups.map((group) => (
             <div key={group.group} className="rounded-lg border border-ops-surface0 bg-ops-dark/20 p-2">
-              <div className="mb-1.5 text-[10px] font-semibold text-ops-overlay">{group.group}</div>
+              <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] font-semibold text-ops-overlay">
+                <span>{group.group}</span>
+                <span>{group.options.length} 类</span>
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {group.options.map((option) => (
                   <button
