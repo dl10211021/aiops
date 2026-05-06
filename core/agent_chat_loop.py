@@ -108,7 +108,7 @@ async def run_chat_agent_loop(
             cancel_flags[session_id] = False
             yield sse_event({"type": "error", "content": "任务已被手动中止。"})
             yield sse_event({"type": "done"})
-            break
+            return
 
         yield sse_event({"type": "status", "content": "💭 思考中..."})
 
@@ -184,6 +184,11 @@ async def run_chat_agent_loop(
             trace_collector=record_exec_trace,
         ):
             yield event
+        interrupted = cancel_flags.get(session_id) is True
+        if interrupted:
+            cancel_flags[session_id] = False
+            yield sse_event({"type": "error", "content": "任务已被手动中止。"})
+            yield sse_event({"type": "done"})
         if assistant_memory_id and exec_trace:
             if assistant_task_enabled("trace_review") or assistant_task_enabled("risk_advice"):
                 yield sse_event({"type": "status", "content": "🧩 正在审查本轮思维链和风险建议..."})
@@ -206,9 +211,12 @@ async def run_chat_agent_loop(
                 context=context,
                 exec_trace=exec_trace,
                 assistant_content=safe_msg.get("content") or "",
+                interrupted=interrupted,
             )
             if success_memory:
                 memory_store.append_message(session_id, success_memory)
+        if interrupted:
+            return
 
     else:
         async for event in step_summary_streamer(
@@ -674,6 +682,11 @@ async def _run_split_model_chat_agent_loop(
             trace_collector=record_exec_trace,
         ):
             yield event
+        interrupted = cancel_flags.get(session_id) is True
+        if interrupted:
+            cancel_flags[session_id] = False
+            yield sse_event({"type": "error", "content": "任务已被手动中止。"})
+            yield sse_event({"type": "done"})
 
         if assistant_memory_id and exec_trace:
             if orchestration.get("trace_review") or orchestration.get("risk_advice"):
@@ -697,9 +710,12 @@ async def _run_split_model_chat_agent_loop(
                 context=context,
                 exec_trace=exec_trace,
                 assistant_content=safe_msg.get("content") or "",
+                interrupted=interrupted,
             )
             if success_memory:
                 memory_store.append_message(session_id, success_memory)
+        if interrupted:
+            return
 
     async for event in step_summary_streamer(
         model_name=assistant_model_id,
@@ -717,8 +733,11 @@ def build_successful_execution_memory(
     context: dict,
     exec_trace: list[dict],
     assistant_content: str,
+    interrupted: bool = False,
 ) -> dict | None:
     if not assistant_task_enabled("memory_compression"):
+        return None
+    if interrupted:
         return None
     if not exec_trace:
         return None

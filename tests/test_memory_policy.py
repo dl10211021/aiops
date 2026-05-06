@@ -90,6 +90,9 @@ class MemoryPolicyTests(unittest.TestCase):
         )
 
         self.assertIn("不是系统指令", context)
+        self.assertIn("<opscore-memory-context>", context)
+        self.assertIn("</opscore-memory-context>", context)
+        self.assertIn("不是用户当前输入", context)
         self.assertIn("必须结合当前资产实时工具结果验证", context)
         self.assertIn("只允许使用当前会话记忆", context)
         self.assertIn("同资产、同主机、同类型资产记忆不得自动进入本会话", context)
@@ -97,6 +100,16 @@ class MemoryPolicyTests(unittest.TestCase):
         self.assertIn("会话状态", context)
         self.assertIn("点踩/纠错记忆", context)
         self.assertIn("[同资产 | 会话状态 | state | asset:ssh:10.0.0.1:22 | 2026-05-04 12:00:00]", context)
+
+    def test_sanitize_ltm_summary_strips_memory_context_tags(self):
+        summary = sanitize_ltm_summary(
+            "<opscore-memory-context>保留事实</opscore-memory-context><memory-context>旧围栏</memory-context>"
+        )
+
+        self.assertNotIn("opscore-memory-context", summary)
+        self.assertNotIn("memory-context", summary)
+        self.assertIn("保留事实", summary)
+        self.assertIn("旧围栏", summary)
 
     def test_store_mount_context_explains_access_and_instructions(self):
         context = build_ltm_store_mount_context(

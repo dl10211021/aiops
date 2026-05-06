@@ -139,6 +139,17 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("只可作为当前会话后续轮次", memory["content"])
         self.assertNotIn("同类资产排查", memory["content"])
 
+    def test_successful_execution_memory_skips_interrupted_turn(self):
+        memory = build_successful_execution_memory(
+            session_id="sid-1",
+            context={"asset_type": "linux", "protocol": "ssh", "host": "h", "port": 22},
+            exec_trace=[{"tool": "ssh", "args": "uptime", "result": "ok", "status": "done"}],
+            assistant_content="完成",
+            interrupted=True,
+        )
+
+        self.assertIsNone(memory)
+
     async def test_streams_assistant_message_done_and_schedules_ltm(self):
         async def streamer(**kwargs):
             kwargs["state"].assistant_content = "完成"
@@ -166,7 +177,7 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
             ["sid-1"],
         )
 
-    async def test_cancel_before_streaming_resets_flag_and_schedules_ltm(self):
+    async def test_cancel_before_streaming_resets_flag_without_ltm_schedule(self):
         async def streamer(**_kwargs):
             raise AssertionError("streamer should not run after cancellation")
 
@@ -186,7 +197,37 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
         self.assertFalse(cancel_flags["sid-1"])
-        self.assertEqual(len(scheduler_calls), 1)
+        self.assertEqual(scheduler_calls, [])
+
+    async def test_cancel_after_tool_processing_skips_success_memory_and_ltm_schedule(self):
+        flags = {"sid-1": False}
+
+        async def streamer(**kwargs):
+            state = kwargs["state"]
+            state.tool_calls = [{"id": "call-1", "function": {"name": "ssh", "arguments": "{}"}}]
+            yield "stream-event"
+
+        async def processor(**kwargs):
+            kwargs["trace_collector"]({"type": "tool_start", "tool": "ssh", "args": "uptime"})
+            kwargs["trace_collector"]({"type": "tool_end", "tool": "ssh", "result": "ok", "status": "done"})
+            flags[kwargs["session_id"]] = True
+            yield "tool-event"
+
+        events, _kwargs, memory_store, cancel_flags, scheduler_calls = (
+            await collect_chat_loop_events(
+                cancel_flags=flags,
+                assistant_streamer=streamer,
+                tool_call_processor=processor,
+            )
+        )
+
+        self.assertFalse(cancel_flags["sid-1"])
+        self.assertIn(sse_event({"type": "error", "content": "任务已被手动中止。"}), events)
+        self.assertEqual(scheduler_calls, [])
+        self.assertEqual(
+            [message.get("memory_type") for _sid, message in memory_store.appended],
+            [None],
+        )
 
     async def test_attaches_memory_references_to_visible_assistant_message(self):
         async def streamer(**kwargs):
