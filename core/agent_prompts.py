@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 
+from core.asset_protocols import get_asset_definition
 from core.agent_protocol_context import (
     format_extra_args_for_prompt,
     protocol_tool_guidance,
@@ -10,41 +11,118 @@ from core.agent_protocol_context import (
 from core.agent_session_context import AgentSessionContext
 
 
+_CATEGORY_LABELS = {
+    "os": "操作系统",
+    "db": "数据库",
+    "container": "容器/云原生",
+    "middleware": "中间件",
+    "network": "网络设备",
+    "monitor": "监控平台",
+    "monitoring": "监控平台",
+    "security": "安全设备/平台",
+    "storage": "存储",
+    "bigdata": "大数据",
+    "virtualization": "虚拟化/云平台",
+    "service": "网络服务探测",
+    "api": "API 服务",
+    "ai": "AI 平台",
+    "cicd": "CI/CD 平台",
+    "oob": "带外管理",
+    "discovery": "发现/资产管理",
+}
+
+
+_PROTOCOL_MODE_LABELS = {
+    "ssh": "SSH / Linux-Unix 终端会话",
+    "winrm": "WinRM / Windows 远程管理会话",
+    "virtual": "虚拟/本地技能研发会话",
+    "http_api": "HTTP API 资产会话",
+    "snmp": "SNMP 网络设备监控会话",
+    "network_cli": "网络设备 CLI 会话",
+    "k8s": "Kubernetes API 会话",
+}
+
+
+_SAFE_IDENTITY_ARG_KEYS = (
+    "category",
+    "sub_type",
+    "asset_sub_type",
+    "db_type",
+    "device_type",
+    "vendor",
+    "platform",
+    "engine",
+    "product",
+    "service_name",
+    "database",
+    "db_name",
+    "login_protocol",
+    "protocol",
+)
+
+
+def _clean_label(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _humanize_identifier(value: object) -> str:
+    raw = _clean_label(value)
+    if not raw:
+        return ""
+    text = raw.replace("_", " ").replace("-", " ").strip()
+    if text and text.isascii():
+        return " ".join(part.upper() if len(part) <= 4 else part.capitalize() for part in text.split())
+    return text
+
+
+def _category_label(value: object) -> str:
+    raw = _clean_label(value).lower()
+    return _CATEGORY_LABELS.get(raw) or _humanize_identifier(value)
+
+
+def _safe_identity_fields(extra_args: dict) -> str:
+    fields = []
+    for key in _SAFE_IDENTITY_ARG_KEYS:
+        value = extra_args.get(key)
+        if value is None or value == "":
+            continue
+        fields.append(f"{key}={value}")
+    return "；".join(fields)
+
+
 def _session_context_prompt(session_context: AgentSessionContext) -> str:
     protocol = str(session_context.protocol or "unknown").lower()
     asset_type = str(session_context.asset_type or "asset").lower()
-    protocol_labels = {
-        "ssh": "SSH / Linux-Unix 终端会话",
-        "winrm": "WinRM / Windows 远程管理会话",
-        "oracle": "Oracle 数据库会话",
-        "mysql": "MySQL 数据库会话",
-        "postgresql": "PostgreSQL 数据库会话",
-        "mssql": "SQL Server 数据库会话",
-        "snmp": "SNMP 网络设备监控会话",
-        "network_cli": "网络设备 CLI 会话",
-        "http_api": "HTTP API 资产会话",
-        "virtual": "虚拟/本地技能研发会话",
-    }
-    asset_labels = {
-        "linux": "Linux/Unix 系统资产",
-        "windows": "Windows 系统资产",
-        "oracle": "Oracle 数据库资产",
-        "mysql": "MySQL 数据库资产",
-        "postgresql": "PostgreSQL 数据库资产",
-        "mssql": "SQL Server 数据库资产",
-        "network": "网络设备资产",
-        "snmp": "SNMP 网络设备资产",
-        "http_api": "HTTP API 资产",
-        "virtual": "虚拟资产",
-    }
-    session_label = protocol_labels.get(protocol, f"{protocol.upper()} 协议会话")
-    asset_label = asset_labels.get(asset_type, f"{asset_type.upper()} 资产")
+    definition = get_asset_definition(asset_type) or {}
+    extra_args = session_context.extra_args or {}
+    category = definition.get("category") or extra_args.get("category") or ""
+    definition_label = _clean_label(definition.get("label"))
+    session_label = _PROTOCOL_MODE_LABELS.get(protocol)
+    if not session_label:
+        if category == "db" or extra_args.get("db_type"):
+            session_label = f"{_humanize_identifier(protocol)} 数据库会话"
+        elif category == "network" or extra_args.get("device_type") in {"network", "switch", "router", "firewall"}:
+            session_label = f"{_humanize_identifier(protocol)} 网络设备会话"
+        else:
+            session_label = f"{_humanize_identifier(protocol) or protocol.upper()} 协议会话"
+    asset_label = definition_label or _humanize_identifier(
+        extra_args.get("sub_type")
+        or extra_args.get("asset_sub_type")
+        or extra_args.get("db_type")
+        or extra_args.get("device_type")
+        or asset_type
+    )
+    category_text = _category_label(category) if category else "未分类/自定义"
+    identity_fields = _safe_identity_fields(extra_args)
+    identity_line = f"- 资产识别：{asset_label}（类型 {asset_type}，分类 {category_text}，协议 {protocol}）"
+    if identity_fields:
+        identity_line += f"\n- 识别字段：{identity_fields}"
     return f"""[当前会话上下文]
 - 会话类型：{session_label}
-- 资产类型：{asset_label}
+- {identity_line[2:]}
 - 目标：{session_context.host or "未指定"}:{session_context.port or "未指定"}
 - 登录身份：{session_context.username or "未指定"}
-- 重要约束：不要假设所有会话都是 SSH；必须按当前协议选择对应原生工具、命令、SQL、CLI 或 API。"""
+- 重要约束：不要假设所有会话都是 SSH，也不要把未知资产强行归类；必须按当前协议、资产识别字段和可用工具选择对应原生工具、命令、SQL、CLI 或 API。"""
 
 
 def _asset_credentials_prompt(session_context: AgentSessionContext) -> str:

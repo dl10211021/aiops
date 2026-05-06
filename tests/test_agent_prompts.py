@@ -50,7 +50,7 @@ class AgentPromptTests(unittest.TestCase):
 
         self.assertTrue(prompt.startswith("\nBASE\n\n[当前会话上下文]"))
         self.assertIn("会话类型：SSH / Linux-Unix 终端会话", prompt)
-        self.assertIn("资产类型：Linux/Unix 系统资产", prompt)
+        self.assertIn("资产识别：Linux / Unix（类型 linux，分类 操作系统，协议 ssh）", prompt)
         self.assertIn("不要假设所有会话都是 SSH", prompt)
         self.assertIn("一台通过SSH协议纳管的 LINUX 资产", prompt)
         self.assertIn("- api_token: (已托管，执行时自动注入)", prompt)
@@ -86,9 +86,46 @@ class AgentPromptTests(unittest.TestCase):
         )
 
         self.assertIn("会话类型：Oracle 数据库会话", prompt)
-        self.assertIn("资产类型：Oracle 数据库资产", prompt)
+        self.assertIn("资产识别：Oracle（类型 oracle，分类 数据库，协议 oracle）", prompt)
         self.assertIn("一台通过ORACLE协议纳管的 ORACLE 资产", prompt)
         self.assertNotIn("目前你正处于一个 SSH 终端会话", prompt)
+
+    def test_chat_prompt_preserves_custom_asset_identity_fields(self):
+        context = build_agent_session_context(
+            "sid-custom-asset",
+            {
+                "asset_type": "nebula_graph_cluster",
+                "protocol": "nebula_graph",
+                "host": "graph.local",
+                "port": 9669,
+                "username": "graph",
+                "allow_modifications": False,
+                "active_skills": [],
+                "extra_args": {
+                    "category": "db",
+                    "sub_type": "nebula_graph_cluster",
+                    "vendor": "vesoft",
+                    "engine": "graph",
+                    "token": "secret-token",
+                },
+            },
+            skill_path_resolver=lambda active_skills: [],
+        )
+
+        prompt = render_chat_system_prompt(
+            session_context=context,
+            base_prompt="BASE",
+            skill_instructions="",
+            ltm_context="",
+        )
+
+        self.assertIn("会话类型：Nebula Graph 数据库会话", prompt)
+        self.assertIn(
+            "资产识别：NebulaGraph集群（类型 nebula_graph_cluster，分类 数据库，协议 nebula_graph）",
+            prompt,
+        )
+        self.assertIn("识别字段：category=db；sub_type=nebula_graph_cluster；vendor=vesoft；engine=graph", prompt)
+        self.assertNotIn("secret-token", prompt)
 
     @patch("core.agent_prompts.protocol_tool_list")
     @patch("core.agent_prompts.protocol_tool_guidance")
