@@ -45,32 +45,31 @@ export function AssetEnterpriseCommandPanel({
   ]
 
   return (
-    <section className="mb-4 overflow-hidden rounded-xl border border-ops-surface1/80 bg-[linear-gradient(135deg,rgba(38,207,175,0.12),rgba(10,18,32,0.98)_42%,rgba(44,88,148,0.14))] shadow-[var(--ops-panel-shadow)]">
-      <div className="p-4">
+    <section className="mb-3 overflow-hidden rounded-xl border border-ops-surface1/80 bg-[linear-gradient(135deg,rgba(38,207,175,0.10),rgba(10,18,32,0.96)_48%,rgba(44,88,148,0.12))] shadow-[var(--ops-panel-shadow)]">
+      <div className="flex flex-col gap-3 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-ops-accent/35 bg-ops-accent/10 px-2.5 py-1 text-[11px] font-semibold text-ops-accent">
               资产总览
             </span>
-            <span className="rounded-full border border-ops-surface1 bg-ops-dark/45 px-2.5 py-1 text-[11px] text-ops-subtext">
-              查看、筛选、验证和维护
-            </span>
+            <h2 className="text-base font-bold tracking-tight text-ops-text">数据中心资产统一入口</h2>
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-ops-text md:text-2xl">
-            数据中心资产统一入口
-          </h2>
-          <p className="mt-2 max-w-3xl text-xs leading-6 text-ops-subtext">
-            集中查看资产规模、验证状态和当前筛选结果；具体筛选在下方完成，具体资产在列表中维护。
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-ops-subtext">
+            查看规模、验证状态和筛选结果；资产维护在下方列表完成。
           </p>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {stats.map((item) => (
-              <div key={item.label} className="rounded-lg border border-ops-surface1/80 bg-ops-dark/35 p-3">
-                <div className="text-[11px] text-ops-overlay">{item.label}</div>
-                <div className="mt-1 font-mono text-2xl font-bold text-ops-text">{item.value}</div>
-                <div className="mt-1 text-[10px] text-ops-subtext">{item.hint}</div>
-              </div>
-            ))}
-          </div>
+        </div>
+
+        <div className="grid min-w-0 grid-cols-2 gap-2 xl:min-w-[540px] xl:grid-cols-4">
+          {stats.map((item) => (
+            <div
+              key={item.label}
+              title={item.hint}
+              className="flex min-h-9 items-center justify-between gap-3 rounded-lg border border-ops-surface1/80 bg-ops-dark/35 px-3 py-2"
+            >
+              <div className="min-w-0 truncate text-[11px] text-ops-overlay">{item.label}</div>
+              <div className="shrink-0 font-mono text-lg font-bold leading-none text-ops-text">{item.value}</div>
+            </div>
+          ))}
         </div>
       </div>
     </section>
