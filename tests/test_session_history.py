@@ -129,6 +129,120 @@ class TestSessionHistory(unittest.TestCase):
         self.assertEqual(trace["resultMeta"]["output"], "Spooler Running")
         self.assertNotIn("exec_trace", messages[1])
 
+    def test_attach_legacy_exec_traces_covers_asset_tool_families(self):
+        tool_calls = [
+            ("call-linux", "linux_execute_command", '{"command": "uptime"}'),
+            ("call-db", "db_execute_query", '{"sql": "select 1 from dual"}'),
+            ("call-net", "network_cli_execute_command", '{"command": "show interface brief"}'),
+            ("call-winrm", "winrm_execute_command", '{"command": "Get-Process"}'),
+        ]
+        messages = [
+            {
+                "role": "assistant",
+                "content": "我会按资产协议执行只读检查。",
+                "tool_calls": [
+                    {
+                        "id": call_id,
+                        "type": "function",
+                        "function": {"name": tool_name, "arguments": arguments},
+                    }
+                    for call_id, tool_name, arguments in tool_calls
+                ],
+            }
+        ]
+        messages.extend(
+            {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": tool_name,
+                "content": '{"success": true, "output": "ok"}',
+            }
+            for call_id, tool_name, _arguments in tool_calls
+        )
+
+        hydrated = attach_legacy_exec_traces(messages)
+
+        traces = hydrated[0]["exec_trace"]
+        self.assertEqual(
+            [trace["tool"] for trace in traces],
+            [
+                "linux_execute_command",
+                "db_execute_query",
+                "network_cli_execute_command",
+                "winrm_execute_command",
+            ],
+        )
+        self.assertEqual([trace["status"] for trace in traces], ["done", "done", "done", "done"])
+
+    def test_attach_legacy_exec_traces_marks_blocked_or_failed_results(self):
+        messages = [
+            {
+                "role": "assistant",
+                "content": "执行检查。",
+                "tool_calls": [
+                    {
+                        "id": "call-blocked",
+                        "type": "function",
+                        "function": {
+                            "name": "linux_execute_command",
+                            "arguments": '{"command": "rm -rf /"}',
+                        },
+                    },
+                    {
+                        "id": "call-failed",
+                        "type": "function",
+                        "function": {
+                            "name": "db_execute_query",
+                            "arguments": '{"sql": "drop table t"}',
+                        },
+                    },
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call-blocked",
+                "content": '{"status": "blocked", "error": "安全策略阻止"}',
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call-failed",
+                "content": '{"success": false, "output": "", "error": "权限不足"}',
+            },
+        ]
+
+        hydrated = attach_legacy_exec_traces(messages)
+
+        self.assertEqual([trace["status"] for trace in hydrated[0]["exec_trace"]], ["error", "error"])
+
+    def test_attach_legacy_exec_traces_is_not_limited_to_known_tool_names(self):
+        messages = [
+            {
+                "role": "assistant",
+                "content": "执行自定义资产检查。",
+                "tool_calls": [
+                    {
+                        "id": "call-custom",
+                        "type": "function",
+                        "function": {
+                            "name": "custom_asset_protocol_probe",
+                            "arguments": '{"target": "asset-created-session"}',
+                        },
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call-custom",
+                "content": '{"success": true, "output": "custom ok"}',
+            },
+        ]
+
+        hydrated = attach_legacy_exec_traces(messages)
+
+        self.assertEqual(hydrated[0]["exec_trace"][0]["tool"], "custom_asset_protocol_probe")
+        self.assertEqual(hydrated[0]["exec_trace"][0]["status"], "done")
+        self.assertEqual(hydrated[0]["exec_trace"][0]["resultMeta"]["output"], "custom ok")
+
     def test_attach_legacy_exec_traces_preserves_existing_trace(self):
         messages = [
             {
