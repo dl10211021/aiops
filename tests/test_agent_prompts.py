@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+from core.asset_protocols import get_asset_catalog
 from core.agent_prompts import (
     render_chat_system_prompt,
     render_headless_system_prompt,
@@ -154,6 +155,47 @@ class AgentPromptTests(unittest.TestCase):
         self.assertIn("VIRTUAL-TOOLS", prompt)
         self.assertNotIn("[当前已加载专业技能说明 (Skills)]", prompt)
         protocol_tool_list.assert_called_once_with("virtual", True, "virtual")
+
+    def test_chat_prompt_supports_all_catalog_assets_without_ssh_fallback(self):
+        catalog = get_asset_catalog()
+        self.assertGreater(len(catalog), 20)
+
+        for item in catalog:
+            asset_type = item["id"]
+            protocol = item.get("protocol") or asset_type
+            with self.subTest(asset_type=asset_type, protocol=protocol):
+                context = build_agent_session_context(
+                    f"sid-{asset_type}",
+                    {
+                        "asset_type": asset_type,
+                        "protocol": protocol,
+                        "host": f"{asset_type}.example.local",
+                        "port": item.get("default_port") or 0,
+                        "username": "ops",
+                        "allow_modifications": False,
+                        "active_skills": [],
+                        "extra_args": {
+                            "category": item.get("category"),
+                            "sub_type": asset_type,
+                            "api_token": "secret-token",
+                        },
+                    },
+                    skill_path_resolver=lambda active_skills: [],
+                )
+
+                prompt = render_chat_system_prompt(
+                    session_context=context,
+                    base_prompt="BASE",
+                    skill_instructions="",
+                    ltm_context="",
+                )
+
+                self.assertIn("[当前会话上下文]", prompt)
+                self.assertIn(f"类型 {asset_type}", prompt)
+                self.assertIn(f"协议 {protocol}", prompt)
+                self.assertIn("不要假设所有会话都是 SSH", prompt)
+                self.assertNotIn("目前你正处于一个 SSH 终端会话", prompt)
+                self.assertNotIn("secret-token", prompt)
 
 
 if __name__ == "__main__":
