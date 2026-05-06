@@ -71,55 +71,95 @@ export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificatio
       )}
       <div className="space-y-2">
         {matrix.steps.map((step) => (
-          <div key={step.id} className="rounded-lg bg-ops-surface0/60 px-3 py-2">
+          <div key={step.id} title={step.description} className="rounded-lg bg-ops-surface0/60 px-3 py-2">
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-ops-text">{step.label}</span>
               <span className={`rounded px-2 py-0.5 text-[11px] ${step.status === 'supported' ? 'bg-ops-success/15 text-ops-success' : 'bg-ops-alert/15 text-ops-alert'}`}>
                 {statusLabel(step.status)}
               </span>
             </div>
-            <p className="mt-1 text-xs text-ops-overlay">{step.description}</p>
+            {step.status !== 'supported' && <p className="mt-1 text-xs text-ops-overlay">{step.description}</p>}
           </div>
         ))}
       </div>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {matrix.active_tools.slice(0, 12).map((tool) => (
-          <span key={tool} title={tool} className="rounded bg-ops-surface0 px-2 py-0.5 text-[10px] text-ops-subtext">{toolLabel(tool)}</span>
-        ))}
-      </div>
+      {matrix.active_tools.length > 0 && (
+        <details className="mt-3 rounded-lg border border-ops-surface0 bg-ops-panel/45 px-3 py-2">
+          <summary className="cursor-pointer text-[11px] font-semibold text-ops-subtext">
+            可用工具 {matrix.active_tools.length} 个
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {matrix.active_tools.map((tool) => (
+              <span key={tool} title={tool} className="rounded bg-ops-surface0 px-2 py-0.5 text-[10px] text-ops-subtext">{toolLabel(tool)}</span>
+            ))}
+          </div>
+        </details>
+      )}
     </section>
   )
 }
 
+function VerificationRunCard({ run, isLatest = false }: { run: AssetVerificationRun; isLatest?: boolean }) {
+  const abnormalSteps = run.steps.filter((step) => step.status !== 'success')
+  const shouldOpen = run.status !== 'success' || abnormalSteps.length > 0
+
+  return (
+    <div className="rounded-lg border border-ops-surface0 bg-ops-panel/70 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded px-2 py-0.5 text-[11px] ${run.status === 'success' ? 'bg-ops-success/15 text-ops-success' : 'bg-ops-alert/15 text-ops-alert'}`}>
+          {statusLabel(run.status)}
+        </span>
+        {isLatest && <span className="rounded bg-ops-accent/10 px-2 py-0.5 text-[10px] text-ops-accent">最新</span>}
+        <span className="font-mono text-[11px] text-ops-overlay">{run.id}</span>
+        <span className="ml-auto text-[11px] text-ops-overlay">{run.completed_at}</span>
+      </div>
+      <details className="mt-2" open={shouldOpen}>
+        <summary className="cursor-pointer rounded-lg bg-ops-dark/45 px-3 py-2 text-[11px] text-ops-subtext">
+          {abnormalSteps.length > 0 ? `查看 ${abnormalSteps.length} 个异常项` : `查看 ${run.steps.length} 项验证详情`}
+        </summary>
+        <div className="mt-2 grid gap-2">
+          {run.steps.map((step) => (
+            <div key={`${run.id}-${step.id}`} className="rounded-lg bg-ops-dark/45 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-ops-text">{step.label}</span>
+                <span className={`text-[11px] ${step.status === 'success' ? 'text-ops-success' : step.status === 'skipped' ? 'text-ops-overlay' : 'text-ops-alert'}`}>
+                  {statusLabel(step.status)}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] text-ops-overlay">{step.message}</p>
+            </div>
+          ))}
+        </div>
+      </details>
+    </div>
+  )
+}
+
 export function VerificationHistorySection({ runs }: { runs: AssetVerificationRun[] }) {
+  const latestRun = runs[0]
+  const olderRuns = runs.slice(1)
+
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-dark/30 p-4">
-      <h3 className="mb-3 text-sm font-bold text-ops-text">验证历史</h3>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-bold text-ops-text">验证历史</h3>
+        <span className="rounded-full bg-ops-surface0 px-2.5 py-1 font-mono text-[11px] text-ops-overlay">
+          {runs.length} 次
+        </span>
+      </div>
       <div className="space-y-3">
-        {runs.map((run) => (
-          <div key={run.id} className="rounded-lg border border-ops-surface0 bg-ops-panel/70 p-3">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className={`rounded px-2 py-0.5 text-[11px] ${run.status === 'success' ? 'bg-ops-success/15 text-ops-success' : 'bg-ops-alert/15 text-ops-alert'}`}>
-                {statusLabel(run.status)}
-              </span>
-              <span className="font-mono text-[11px] text-ops-overlay">{run.id}</span>
-              <span className="ml-auto text-[11px] text-ops-overlay">{run.completed_at}</span>
-            </div>
-            <div className="grid gap-2">
-              {run.steps.map((step) => (
-                <div key={`${run.id}-${step.id}`} className="rounded-lg bg-ops-dark/45 px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-ops-text">{step.label}</span>
-                    <span className={`text-[11px] ${step.status === 'success' ? 'text-ops-success' : step.status === 'skipped' ? 'text-ops-overlay' : 'text-ops-alert'}`}>
-                      {statusLabel(step.status)}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[11px] text-ops-overlay">{step.message}</p>
-                </div>
+        {latestRun && <VerificationRunCard run={latestRun} isLatest />}
+        {olderRuns.length > 0 && (
+          <details className="rounded-lg border border-ops-surface0 bg-ops-panel/45 px-3 py-2">
+            <summary className="cursor-pointer text-[11px] font-semibold text-ops-subtext">
+              更早历史 {olderRuns.length} 次
+            </summary>
+            <div className="mt-3 space-y-3">
+              {olderRuns.map((run) => (
+                <VerificationRunCard key={run.id} run={run} />
               ))}
             </div>
-          </div>
-        ))}
+          </details>
+        )}
         {runs.length === 0 && (
           <div className="py-8 text-center text-sm text-ops-subtext">暂无验证历史，点击“执行只读验证”开始。</div>
         )}
