@@ -41,12 +41,18 @@ class TestChatSessionService(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 401)
         self.assertEqual(ctx.exception.detail, "会话已过期或不存在，请重新连接")
 
-    def test_request_session_stop_sets_cancel_flag(self):
+    def test_request_session_stop_sets_cancel_flag_and_stops_run(self):
         cancel_flags = {}
+        stopped = []
 
-        request_session_stop("sid-1", cancel_flags=cancel_flags)
+        request_session_stop(
+            "sid-1",
+            cancel_flags=cancel_flags,
+            stop_run=lambda session_id: stopped.append(session_id) or True,
+        )
 
         self.assertTrue(cancel_flags["sid-1"])
+        self.assertEqual(stopped, ["sid-1"])
 
     def test_request_session_stop_uses_default_cancel_flags(self):
         cancel_flags = {}

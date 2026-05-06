@@ -1,6 +1,7 @@
 import unittest
 
 from core.session_history import (
+    attach_legacy_exec_traces,
     build_session_memory_activity,
     build_session_history_markdown,
     clear_session_history,
@@ -63,6 +64,67 @@ class TestSessionHistory(unittest.TestCase):
                 {"role": "user", "content": "hi"},
                 {"role": "assistant", "content": "hello"},
             ],
+        )
+
+    def test_attach_legacy_exec_traces_rebuilds_tool_results_for_ui(self):
+        messages = [
+            {"role": "user", "content": "检查 Windows 服务"},
+            {
+                "role": "assistant",
+                "content": "我来执行只读检查。",
+                "tool_calls": [
+                    {
+                        "id": "call-winrm",
+                        "type": "function",
+                        "function": {
+                            "name": "winrm_execute_command",
+                            "arguments": '{"command": "Get-Service"}',
+                        },
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call-winrm",
+                "name": "winrm_execute_command",
+                "content": '{"success": true, "output": "Spooler Running"}',
+            },
+        ]
+
+        hydrated = attach_legacy_exec_traces(messages)
+
+        trace = hydrated[1]["exec_trace"][0]
+        self.assertEqual(trace["tool"], "winrm_execute_command")
+        self.assertEqual(trace["args"], '{"command": "Get-Service"}')
+        self.assertEqual(trace["status"], "done")
+        self.assertEqual(trace["resultMeta"]["output"], "Spooler Running")
+        self.assertNotIn("exec_trace", messages[1])
+
+    def test_attach_legacy_exec_traces_preserves_existing_trace(self):
+        messages = [
+            {
+                "role": "assistant",
+                "content": "已有新格式轨迹",
+                "exec_trace": [{"tool": "db_execute_query", "status": "done"}],
+                "tool_calls": [
+                    {
+                        "id": "call-db",
+                        "function": {"name": "db_execute_query", "arguments": "{}"},
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call-db",
+                "content": '{"success": false, "error": "denied"}',
+            },
+        ]
+
+        hydrated = attach_legacy_exec_traces(messages)
+
+        self.assertEqual(
+            hydrated[0]["exec_trace"],
+            [{"tool": "db_execute_query", "status": "done"}],
         )
 
     def test_clear_update_and_delete_delegate_to_memory_db(self):

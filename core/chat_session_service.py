@@ -4,10 +4,11 @@ import time
 from collections.abc import AsyncIterator, Callable, MutableMapping
 from typing import Any
 
-from core.chat_runs import ChatRun, start_chat_run
+from core.chat_runs import ChatRun, cancel_chat_run, start_chat_run
 
 ChatStreamFactory = Callable[[], AsyncIterator[str]]
 StartChatRun = Callable[[str, ChatStreamFactory], ChatRun]
+StopChatRun = Callable[[str], bool]
 
 
 class ChatSessionServiceError(Exception):
@@ -40,5 +41,11 @@ def _resolve_cancel_flags(cancel_flags: MutableMapping[str, bool] | None = None)
     return default_cancel_flags
 
 
-def request_session_stop(session_id: str, cancel_flags: MutableMapping[str, bool] | None = None) -> None:
+def request_session_stop(
+    session_id: str,
+    cancel_flags: MutableMapping[str, bool] | None = None,
+    *,
+    stop_run: StopChatRun | None = None,
+) -> None:
     _resolve_cancel_flags(cancel_flags)[session_id] = True
+    (stop_run or cancel_chat_run)(session_id)

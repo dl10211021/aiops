@@ -24,6 +24,10 @@ class ChatRun:
     def done(self) -> bool:
         return self._task.done()
 
+    def cancel(self) -> None:
+        if not self._task.done():
+            self._task.cancel()
+
     async def _consume(self) -> None:
         try:
             async for event in self._source():
@@ -62,21 +66,36 @@ class ChatRun:
 
 
 _active_runs: dict[str, ChatRun] = {}
+_stop_requested_sessions: set[str] = set()
 
 
 def start_chat_run(session_id: str, source: Callable[[], AsyncIterator[str]]) -> ChatRun:
     run = _active_runs.get(session_id)
-    if run and not run.done:
+    if run and not run.done and session_id not in _stop_requested_sessions:
         return run
+    if run and not run.done:
+        run.cancel()
+    _stop_requested_sessions.discard(session_id)
     run = ChatRun(session_id, source)
     _active_runs[session_id] = run
     return run
 
 
 def is_chat_running(session_id: str) -> bool:
+    if session_id in _stop_requested_sessions:
+        return False
     run = _active_runs.get(session_id)
     return bool(run and not run.done)
 
 
 def get_chat_run(session_id: str) -> ChatRun | None:
     return _active_runs.get(session_id)
+
+
+def cancel_chat_run(session_id: str) -> bool:
+    _stop_requested_sessions.add(session_id)
+    run = _active_runs.get(session_id)
+    if run and not run.done:
+        run.cancel()
+        return True
+    return False

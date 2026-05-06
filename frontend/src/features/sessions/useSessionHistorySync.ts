@@ -15,7 +15,13 @@ export function useSessionHistorySync(
 
   useEffect(() => {
     const sessionId = currentSessionId
-    if (!sessionId || !session || session.historyLoaded || historyLoadingRef.current.has(sessionId)) return
+    if (
+      !sessionId
+      || !session
+      || session.historyLoaded
+      || historyLoadingRef.current.has(sessionId)
+      || hasActiveStream(sessionId)
+    ) return
 
     historyLoadingRef.current.add(sessionId)
     getSessionHistory(sessionId)
@@ -23,9 +29,7 @@ export function useSessionHistorySync(
         const messages = history.data.messages || []
         const current = useStore.getState().sessions[sessionId]
         if (!current) return
-        if ((current.messages || []).length === 0) {
-          setSessionMessages(sessionId, normalizeHistoryMessages(sessionId, messages))
-        }
+        setSessionMessages(sessionId, normalizeHistoryMessages(sessionId, messages))
         updateSession(sessionId, { historyLoaded: true })
       })
       .catch(() => {
@@ -34,7 +38,7 @@ export function useSessionHistorySync(
       .finally(() => {
         historyLoadingRef.current.delete(sessionId)
       })
-  }, [currentSessionId, session, session?.historyLoaded, setSessionMessages, updateSession])
+  }, [currentSessionId, hasActiveStream, session, session?.historyLoaded, setSessionMessages, updateSession])
 
   useEffect(() => {
     const sessionId = currentSessionId

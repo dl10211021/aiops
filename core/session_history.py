@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 
 from core.session_export import format_session_history_markdown
@@ -10,7 +11,89 @@ USER_VISIBLE_ROLES = {"user", "assistant"}
 
 def get_user_visible_session_history(memory_db, session_id: str) -> list[dict]:
     messages = memory_db.get_messages(session_id, for_ui=True)
+    messages = attach_legacy_exec_traces(messages)
     return [msg for msg in messages if msg.get("role") in USER_VISIBLE_ROLES]
+
+
+def attach_legacy_exec_traces(messages: list[dict]) -> list[dict]:
+    """Rebuild UI execution traces from legacy assistant/tool message pairs.
+
+    Older chat turns stored OpenAI-style ``tool_calls`` on assistant messages and
+    the corresponding tool result rows, but did not persist the derived
+    ``exec_trace`` list that the right-side AI thinking panel reads. Keep the
+    durable rows untouched and synthesize trace metadata only for UI/history
+    responses when it is missing.
+    """
+    tool_results = {
+        str(message.get("tool_call_id") or ""): message
+        for message in messages
+        if message.get("role") == "tool" and message.get("tool_call_id")
+    }
+    if not tool_results:
+        return messages
+
+    hydrated: list[dict] = []
+    for message in messages:
+        next_message = dict(message)
+        if (
+            next_message.get("role") == "assistant"
+            and not (next_message.get("exec_trace") or next_message.get("execTrace"))
+        ):
+            traces = _legacy_exec_traces_for_message(next_message, tool_results)
+            if traces:
+                next_message["exec_trace"] = traces
+        hydrated.append(next_message)
+    return hydrated
+
+
+def _legacy_exec_traces_for_message(
+    message: dict,
+    tool_results: dict[str, dict],
+) -> list[dict]:
+    traces: list[dict] = []
+    tool_calls = message.get("tool_calls") or []
+    if not isinstance(tool_calls, list):
+        return traces
+    for call in tool_calls:
+        if not isinstance(call, dict):
+            continue
+        call_id = str(call.get("id") or "")
+        function = call.get("function") if isinstance(call.get("function"), dict) else {}
+        tool_name = str(function.get("name") or call.get("name") or "unknown")
+        args = function.get("arguments") if function else call.get("arguments")
+        result_message = tool_results.get(call_id)
+        result = str((result_message or {}).get("content") or "")
+        result_meta = _legacy_result_meta(result)
+        traces.append(
+            {
+                "type": "tool_end",
+                "tool": tool_name,
+                "args": str(args or ""),
+                "result": result,
+                "resultMeta": result_meta,
+                "status": _legacy_trace_status(result_meta),
+            }
+        )
+    return traces
+
+
+def _legacy_result_meta(result: str) -> dict:
+    try:
+        parsed = json.loads(result)
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _legacy_trace_status(result_meta: dict) -> str:
+    raw_status = str(result_meta.get("status") or "").lower()
+    if raw_status in {"error", "failed", "blocked"}:
+        return "error"
+    if result_meta.get("success") is False or result_meta.get("has_error") is True:
+        return "error"
+    if result_meta.get("error") or result_meta.get("raw_error"):
+        return "error"
+    return "done"
 
 
 def clear_session_history(memory_db, session_id: str) -> None:
