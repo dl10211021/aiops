@@ -221,13 +221,27 @@ def build_asset_matrix(asset: dict[str, Any]) -> dict[str, Any]:
     has_native_tool = bool(active_tools)
     access_method = _access_method_label(asset_type, protocol)
     supported_protocols = _supported_protocols_for_asset(asset_type, protocol, safe_asset.get("extra_args") or {})
-    supported_protocol_summary = "、".join(
-        f"{item['label']}({item['protocol']})" for item in supported_protocols
+    operation_protocols = [
+        item for item in supported_protocols
+        if item.get("purpose") == "operation" and item.get("supported", True)
+    ]
+    auxiliary_protocols = [
+        item for item in supported_protocols
+        if item.get("purpose") in {"monitoring", "probe"} and item.get("supported", True)
+    ]
+    operation_summary = "、".join(
+        f"{item['label']}({item['protocol']})" for item in operation_protocols
     ) or f"{access_method}({protocol})"
+    auxiliary_summary = "、".join(
+        f"{item['label']}({item['protocol']})" for item in auxiliary_protocols
+    )
+    support_summary = f"支持运维接入：{operation_summary}"
+    if auxiliary_summary:
+        support_summary += f"；辅助采集/探测：{auxiliary_summary}"
     connection_description = (
-        f"资产目录支持：{supported_protocol_summary}。检查虚拟会话记录、托管上下文和可用工具；不代表真实网络连通。"
+        f"{support_summary}。检查虚拟会话记录、托管上下文和可用工具；不代表真实网络连通。"
         if protocol == "virtual"
-        else f"资产目录支持：{supported_protocol_summary}。当前使用 {access_method} 检查资产连通性和托管凭据。"
+        else f"{support_summary}。当前使用 {access_method} 检查资产连通性和托管凭据。"
     )
     probe_description = (
         "虚拟会话没有真实协议探测；此项确认上下文隔离和工具暴露能力。"

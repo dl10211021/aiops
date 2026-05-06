@@ -3,6 +3,15 @@ import { statusLabel, toolLabel } from '@/utils/assetDisplay'
 
 export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificationMatrix }) {
   const supportedProtocols = matrix.supported_protocols || []
+  const operationProtocols = supportedProtocols.filter((item) => item.purpose === 'operation')
+  const auxiliaryProtocols = supportedProtocols.filter((item) => item.purpose === 'monitoring' || item.purpose === 'probe')
+  const currentProtocol = supportedProtocols.find((item) => item.is_current)
+
+  const protocolChipClass = (item: (typeof supportedProtocols)[number]) => {
+    if (item.is_current) return 'border-ops-accent/50 bg-ops-accent/12 text-ops-accent'
+    if (item.security === 'not_recommended') return 'border-ops-alert/35 bg-ops-alert/10 text-ops-alert'
+    return 'border-ops-surface1 bg-ops-surface0 text-ops-subtext'
+  }
 
   return (
     <section className="mb-5 rounded-lg border border-ops-surface0 bg-ops-dark/30 p-4">
@@ -14,28 +23,50 @@ export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificatio
       </div>
       {supportedProtocols.length > 0 && (
         <div className="mb-3 rounded-lg border border-ops-surface0 bg-ops-panel/55 px-3 py-2">
-          <div className="mb-1 text-[11px] font-semibold text-ops-subtext">资产类型支持的接入协议</div>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="text-[11px] font-semibold text-ops-subtext">接入协议</div>
+            {currentProtocol && (
+              <span className="rounded-full bg-ops-accent/10 px-2 py-0.5 text-[10px] text-ops-accent">
+                当前：{currentProtocol.label}
+              </span>
+            )}
+          </div>
+          <div className="mb-2 text-[11px] text-ops-overlay">运维接入</div>
           <div className="flex flex-wrap gap-1.5">
-            {supportedProtocols.map((item) => (
+            {operationProtocols.map((item) => (
               <span
                 key={`${item.source}-${item.protocol}-${item.purpose || 'access'}`}
-                className={`rounded-lg border px-2 py-1 text-[11px] ${
-                  item.is_current
-                    ? 'border-ops-accent/50 bg-ops-accent/12 text-ops-accent'
-                    : item.security === 'not_recommended'
-                      ? 'border-ops-alert/35 bg-ops-alert/10 text-ops-alert'
-                    : 'border-ops-surface1 bg-ops-surface0 text-ops-subtext'
-                }`}
+                className={`rounded-lg border px-2 py-1 text-[11px] ${protocolChipClass(item)}`}
                 title={[item.source, item.description].filter(Boolean).join(' · ')}
               >
                 {item.label}
                 <span className="ml-1 font-mono opacity-70">{item.protocol}</span>
-                {item.purpose_label && <span className="ml-1 opacity-75">{item.purpose_label}</span>}
-                {item.role_label && <span className="ml-1 opacity-75">{item.role_label}</span>}
+                {item.is_default && <span className="ml-1 opacity-75">默认</span>}
                 {item.is_current && <span className="ml-1">当前</span>}
+                {item.security === 'not_recommended' && <span className="ml-1">不推荐</span>}
               </span>
             ))}
           </div>
+          {auxiliaryProtocols.length > 0 && (
+            <details className="mt-3 rounded-lg border border-ops-surface0 bg-ops-dark/30 px-3 py-2">
+              <summary className="cursor-pointer text-[11px] font-semibold text-ops-subtext">
+                辅助采集/探测 {auxiliaryProtocols.length} 项
+              </summary>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {auxiliaryProtocols.map((item) => (
+                  <span
+                    key={`${item.source}-${item.protocol}-${item.purpose || 'aux'}`}
+                    className={`rounded-lg border px-2 py-1 text-[11px] ${protocolChipClass(item)}`}
+                    title={[item.source, item.description].filter(Boolean).join(' · ')}
+                  >
+                    {item.label}
+                    <span className="ml-1 font-mono opacity-70">{item.protocol}</span>
+                    {item.purpose_label && <span className="ml-1 opacity-75">{item.purpose_label}</span>}
+                  </span>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
       )}
       <div className="space-y-2">
