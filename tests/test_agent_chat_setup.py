@@ -48,7 +48,7 @@ class FakeMemoryStore:
             embedding_model,
             memory_scope_ids=memory_scope_ids,
         )
-        return context, [{"scope_id": "sid-1", "summary_preview": "LTM-CONTEXT"}]
+        return context, [{"scope_id": session_id, "summary_preview": "LTM-CONTEXT"}]
 
     def get_asset_profile(self, session_id):
         self.asset_profile_session_id = session_id
@@ -224,8 +224,55 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("同资产历史画像", run.messages[0]["content"])
         self.assertEqual(memory_store.asset_profile_context_calls, [])
         self.assertEqual(run.memory_references[0]["source_type"], "system_prompt")
-        self.assertEqual(run.memory_references[1]["scope_id"], "sid-1")
+        self.assertEqual(run.memory_references[1]["scope_id"], "sid-new")
         self.assertFalse(any(ref.get("source_type") == "asset_profile" for ref in run.memory_references))
+
+    async def test_ltm_scope_is_session_only_even_for_database_assets(self):
+        memory_store = FakeMemoryStore()
+
+        with patch(
+            "core.agent_chat_setup.build_vault_rag_context_for_prompt",
+            return_value={"context": "", "references": []},
+        ):
+            run = await prepare_chat_agent_run(
+                session_id="SID-Oracle-A",
+                user_message="检查 Oracle 会话",
+                user_display_message=None,
+                model_name="model-a",
+                user_attachments=[],
+                active_sessions={
+                    "SID-Oracle-A": {
+                        "info": {
+                            "asset_type": "oracle",
+                            "protocol": "oracle",
+                            "host": "172.17.8.150",
+                            "port": 1521,
+                            "username": "system",
+                            "extra_args": {"service_name": "ORCL"},
+                        }
+                    }
+                },
+                dispatcher=FakeDispatcher(),
+                memory_store=memory_store,
+                event_logger=FakeLogger(),
+                default_model_resolver=lambda: "default-model",
+                embedding_resolver=lambda model: (f"emb:{model}", "embedding-model"),
+                profile_loader=lambda profile: f"BASE:{profile}",
+            )
+
+        self.assertEqual(
+            memory_store.ltm_calls,
+            [(
+                "SID-Oracle-A",
+                "检查 Oracle 会话",
+                "emb:model-a",
+                "embedding-model",
+                ["sid-oracle-a"],
+            )],
+        )
+        self.assertEqual(run.context["memory_scope_ids"], ["sid-oracle-a"])
+        self.assertFalse(any(scope.startswith("asset") for scope in run.context["memory_scope_ids"]))
+        self.assertEqual(run.memory_references[1]["scope_id"], "SID-Oracle-A")
 
 
 if __name__ == "__main__":

@@ -123,6 +123,29 @@ class DispatcherMemoryToolsTest(unittest.TestCase):
         self.assertEqual(len(previews), 1)
         self.assertIn("当前会话记忆", previews[0])
 
+    def test_memory_list_ignores_asset_scopes_in_tool_context(self):
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary="【核心记忆】当前会话可见。",
+            source_session_id="sid-1",
+        )
+        self.store.append_memory(
+            scope_id="asset-host:10.0.0.1",
+            summary="【核心记忆】同主机共享记忆不应进入会话。",
+            source_session_id="sid-other",
+        )
+        context = dict(self.context)
+        context["memory_scope_ids"] = ["sid-1", "asset-host:10.0.0.1", "asset:ssh:10.0.0.1:22"]
+
+        with patch("core.memory.memory_db.file_memory_store", self.store):
+            result = json.loads(asyncio.run(execute_memory_tool("memory_list", {}, context)))
+
+        previews = [item["preview"] for item in result["memories"]]
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(len(previews), 1)
+        self.assertIn("当前会话可见", previews[0])
+        self.assertNotIn("同主机共享记忆", "\n".join(previews))
+
 
 if __name__ == "__main__":
     unittest.main()

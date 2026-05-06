@@ -99,6 +99,29 @@ class AgentSessionContextTests(unittest.TestCase):
             },
         )
 
+    def test_memory_scope_ids_ignore_asset_identity_and_are_session_only(self):
+        session_context = build_agent_session_context(
+            "SID-Oracle-A",
+            {
+                "asset_type": "oracle",
+                "protocol": "oracle",
+                "host": "172.17.8.150",
+                "port": 1521,
+                "username": "system",
+                "extra_args": {
+                    "service_name": "ORCL",
+                    "asset_key": "oracle:172.17.8.150:1521",
+                },
+            },
+            skill_path_resolver=lambda active_skills: [],
+        )
+
+        self.assertEqual(session_context.memory_scope_ids(), ["sid-oracle-a"])
+        self.assertEqual(session_context.tool_context()["memory_scope_ids"], ["sid-oracle-a"])
+        self.assertFalse(
+            any(scope.startswith("asset") for scope in session_context.memory_scope_ids())
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
