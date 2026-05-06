@@ -348,6 +348,22 @@ export interface AssetParamDefinition {
   hide?: boolean
 }
 
+export interface AssetAccessProtocol {
+  protocol: string
+  label: string
+  purpose?: 'operation' | 'monitoring' | 'probe' | string
+  purpose_label?: string
+  role?: string
+  role_label?: string
+  source: string
+  default_port?: number
+  security?: string
+  description?: string
+  is_default?: boolean
+  is_current?: boolean
+  supported?: boolean
+}
+
 export interface AssetTypeDefinition {
   id: string
   label: string
@@ -358,6 +374,7 @@ export interface AssetTypeDefinition {
   source?: string
   hertzbeat_category?: string
   hertzbeat_protocols?: string[]
+  access_protocols?: AssetAccessProtocol[]
   params?: AssetParamDefinition[]
   category_meta?: AssetCategoryDefinition
   capability?: {
@@ -577,12 +594,7 @@ export interface AssetVerificationMatrix {
     extra_args: Record<string, unknown>
   }
   active_tools: string[]
-  supported_protocols?: Array<{
-    protocol: string
-    label: string
-    source: string
-    is_current: boolean
-  }>
+  supported_protocols?: AssetAccessProtocol[]
   steps: VerificationStep[]
   coverage: {
     total: number

@@ -21,6 +21,7 @@ from core.asset_protocols import (
     get_asset_catalog,
     resolve_asset_identity,
 )
+from core.asset_access_protocols import mark_current_protocol
 from core.tool_registry import tool_registry
 
 SECRET_KEYS = {
@@ -184,31 +185,32 @@ def _supported_protocols_for_asset(asset_type: str, protocol: str, extra_args: d
         ][:1]
 
     entries: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
-
-    def add_entry(candidate_protocol: str, label: str, source: str) -> None:
-        key = (candidate_protocol, source)
-        if not candidate_protocol or key in seen:
-            return
-        seen.add(key)
-        entries.append({
-            "protocol": candidate_protocol,
-            "label": label,
-            "source": source,
-            "is_current": candidate_protocol == protocol,
-        })
+    seen: set[str] = set()
 
     for item in matches:
-        item_protocol = str(item.get("protocol") or "")
-        item_asset_type = str(item.get("id") or asset_type)
-        add_entry(item_protocol, _access_method_label(item_asset_type, item_protocol), "资产目录接入")
-        for monitor_protocol in item.get("hertzbeat_protocols") or []:
-            add_entry(str(monitor_protocol), f"{monitor_protocol} 监控采集", "监控模板")
+        for protocol_entry in item.get("access_protocols") or []:
+            entry_protocol = str(protocol_entry.get("protocol") or "")
+            entry_purpose = str(protocol_entry.get("purpose") or "")
+            key = f"{entry_protocol}:{entry_purpose}"
+            if not entry_protocol or key in seen:
+                continue
+            seen.add(key)
+            entries.append(dict(protocol_entry))
 
-    if not any(entry["protocol"] == protocol for entry in entries):
-        add_entry(protocol, _access_method_label(asset_type, protocol), "当前资产")
+    if not entries:
+        entries.append({
+            "protocol": protocol,
+            "label": _access_method_label(asset_type, protocol),
+            "purpose": "operation",
+            "purpose_label": "运维接入",
+            "role": "default",
+            "role_label": "默认",
+            "source": "当前资产",
+            "is_default": True,
+            "supported": True,
+        })
 
-    return entries
+    return mark_current_protocol(entries, protocol)
 
 
 def build_asset_matrix(asset: dict[str, Any]) -> dict[str, Any]:

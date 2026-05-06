@@ -16,6 +16,7 @@ from core.asset_catalog_builder import (
     _merge_asset_catalog,
 )
 from core.asset_capabilities import enrich_asset_capability
+from core.asset_access_protocols import build_access_protocols
 
 from core.asset_protocol_constants import (
     AI_PLATFORM_API_ASSET_TYPES,
@@ -57,14 +58,21 @@ from core.asset_protocol_constants import (
 
 
 def get_asset_catalog() -> list[dict]:
-    return [enrich_asset_capability(item) for item in ASSET_CATALOG]
+    result = []
+    for item in ASSET_CATALOG:
+        enriched = enrich_asset_capability(item)
+        enriched["access_protocols"] = build_access_protocols(enriched)
+        result.append(enriched)
+    return result
 
 
 def get_asset_definition(asset_type: str | None) -> dict | None:
     subtype = canonical_asset_type(asset_type)
     for item in ASSET_CATALOG:
         if item["id"] == subtype:
-            return enrich_asset_capability(item)
+            enriched = enrich_asset_capability(item)
+            enriched["access_protocols"] = build_access_protocols(enriched)
+            return enriched
     return None
 
 

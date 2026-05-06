@@ -249,10 +249,58 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
         self.assertIn("网络设备 SSH CLI", descriptions)
         self.assertNotIn("Linux", descriptions)
         self.assertIn("network_cli_execute_command", matrix["active_tools"])
-        self.assertIn(
-            {"protocol": "ssh", "label": "网络设备 SSH CLI", "source": "资产目录接入", "is_current": True},
-            matrix["supported_protocols"],
-        )
+        self.assertTrue(any(
+            item["protocol"] == "ssh" and item["purpose"] == "operation" and item["is_current"]
+            for item in matrix["supported_protocols"]
+        ))
+        self.assertTrue(any(
+            item["protocol"] == "telnet"
+            and item["purpose"] == "operation"
+            and item["security"] == "not_recommended"
+            for item in matrix["supported_protocols"]
+        ))
+        self.assertTrue(any(
+            item["protocol"] == "snmp" and item["purpose"] == "monitoring"
+            for item in matrix["supported_protocols"]
+        ))
+
+    def test_asset_catalog_access_protocols_cover_all_types(self):
+        from core.asset_protocols import get_asset_catalog
+
+        catalog = get_asset_catalog()
+
+        self.assertGreaterEqual(len(catalog), 170)
+        self.assertTrue(all(item.get("access_protocols") for item in catalog))
+
+    def test_oracle_catalog_supports_native_and_jdbc_operation(self):
+        from core.asset_protocols import get_asset_definition
+
+        oracle = get_asset_definition("oracle")
+        protocols = oracle["access_protocols"]
+
+        self.assertTrue(any(
+            item["protocol"] == "oracle" and item["purpose"] == "operation" and item["role"] == "default"
+            for item in protocols
+        ))
+        self.assertTrue(any(
+            item["protocol"] == "jdbc" and item["purpose"] == "operation"
+            for item in protocols
+        ))
+
+    def test_linux_catalog_keeps_ssh_operation_default_and_snmp_monitoring(self):
+        from core.asset_protocols import get_asset_definition
+
+        linux = get_asset_definition("linux")
+        protocols = linux["access_protocols"]
+
+        self.assertTrue(any(
+            item["protocol"] == "ssh" and item["purpose"] == "operation" and item["role"] == "default"
+            for item in protocols
+        ))
+        self.assertTrue(any(
+            item["protocol"] == "snmp" and item["purpose"] == "monitoring"
+            for item in protocols
+        ))
 
     def test_virtual_matrix_says_it_is_not_real_network_connectivity(self):
         from core import protocol_verification
@@ -272,10 +320,7 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
 
         self.assertIn("不代表真实网络连通", descriptions)
         self.assertIn("虚拟会话", descriptions)
-        self.assertIn(
-            {"protocol": "virtual", "label": "虚拟会话能力", "source": "当前资产", "is_current": True},
-            matrix["supported_protocols"],
-        )
+        self.assertTrue(any(item["protocol"] == "virtual" and item["is_current"] for item in matrix["supported_protocols"]))
 
     def test_windows_verify_uses_native_winrm_probe(self):
         from core import protocol_verification

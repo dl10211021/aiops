@@ -44,6 +44,8 @@ export const STATUS_LABELS: Record<string, string> = {
 export const PROTOCOL_LABELS: Record<string, string> = {
   ssh: 'SSH',
   winrm: 'WinRM',
+  telnet: 'Telnet',
+  jdbc: 'JDBC',
   mysql: 'MySQL',
   oracle: 'Oracle',
   postgresql: 'PostgreSQL',
@@ -81,6 +83,7 @@ export const PROTOCOL_LABELS: Record<string, string> = {
   ipmi: 'IPMI',
   ldap: 'LDAP/AD',
   jmx: 'JMX',
+  prometheus: 'Prometheus',
   kafka: 'Kafka',
   k8s: 'Kubernetes',
   kubernetes: 'Kubernetes',
