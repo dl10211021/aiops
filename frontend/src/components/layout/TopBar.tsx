@@ -21,6 +21,7 @@ export default function TopBar() {
     togglePermission,
     toggleSidebar,
   } = useTopBarState()
+  const showGlobalActions = currentView !== 'assets'
 
   return (
     <header className="col-span-2 grid min-h-[52px] grid-cols-[256px_minmax(0,1fr)_auto] items-center gap-3 border-b border-ops-surface0/80 bg-ops-sidebar/92 px-3.5 backdrop-blur-xl">
@@ -62,24 +63,28 @@ export default function TopBar() {
           </div>
           <div className="flex min-w-0 items-center justify-end gap-2">
             <ThemeSelector value={theme} onChange={setTheme} />
-            <button
-              onClick={() => setView('approvals')}
-              className="h-8 rounded-lg border border-ops-surface1/70 bg-ops-surface0/65 px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/55 hover:text-ops-text"
-            >
-              审计
-            </button>
-            <button
-              onClick={() => openModal('connect')}
-              className="h-8 rounded-lg border border-ops-surface1/70 bg-ops-surface0/65 px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/55 hover:text-ops-text"
-            >
-              新建资产
-            </button>
-            <button
-              onClick={() => openModal('connect')}
-              className="h-8 rounded-lg bg-ops-accent px-3 text-xs font-bold text-ops-dark hover:bg-ops-accent/85"
-            >
-              新建会话
-            </button>
+            {showGlobalActions && (
+              <>
+                <button
+                  onClick={() => setView('approvals')}
+                  className="h-8 rounded-lg border border-ops-surface1/70 bg-ops-surface0/65 px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/55 hover:text-ops-text"
+                >
+                  审计
+                </button>
+                <button
+                  onClick={() => openModal('connect')}
+                  className="h-8 rounded-lg border border-ops-surface1/70 bg-ops-surface0/65 px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/55 hover:text-ops-text"
+                >
+                  新建资产
+                </button>
+                <button
+                  onClick={() => openModal('connect')}
+                  className="h-8 rounded-lg bg-ops-accent px-3 text-xs font-bold text-ops-dark hover:bg-ops-accent/85"
+                >
+                  新建会话
+                </button>
+              </>
+            )}
           </div>
         </>
       )}

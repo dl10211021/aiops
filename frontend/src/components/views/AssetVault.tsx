@@ -113,8 +113,8 @@ export default function AssetVault() {
     <div className="h-full min-h-0 overflow-y-auto">
       <div className="w-full max-w-none pb-4">
         <PageHeader
-          title="资产中心"
-          description="企业级资产台账：统一维护数据中心系统、数据库、网络、存储、虚拟化和平台类资产。"
+          title="资产台账"
+          description="统一维护数据中心系统、数据库、网络、存储、虚拟化和平台类资产。"
           actions={(
             <AssetVaultHeaderActions
               onBatchImport={() => setBatchImportOpen(true)}

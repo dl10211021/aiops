@@ -16,7 +16,7 @@ export function AssetVaultHeaderActions({
       <button onClick={onNormalize}
         className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text">规范化检查</button>
       <button onClick={onCreateAsset}
-        className="rounded-lg bg-ops-accent px-3 py-1.5 text-sm font-bold text-ops-dark transition-colors hover:bg-ops-accent/80">新增资产</button>
+        className="rounded-lg bg-ops-accent px-3 py-1.5 text-sm font-bold text-ops-dark transition-colors hover:bg-ops-accent/80">新建资产</button>
     </div>
   )
 }
