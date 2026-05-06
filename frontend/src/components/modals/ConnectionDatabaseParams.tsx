@@ -16,6 +16,28 @@ export default function ConnectionDatabaseParams({
   oracleThickDefaults: () => Record<string, unknown>
 }) {
   const oracleConnectType = ((extraArgs.oracle_connect_type as string) || 'sid')
+  const oracleIdentityField =
+    oracleConnectType === 'tns_alias'
+      ? 'tns_alias'
+      : oracleConnectType === 'service_name'
+        ? 'service_name'
+        : 'sid'
+  const primaryDatabaseValue = String(
+    subType === 'oracle'
+      ? extraArgs[oracleIdentityField] || extraArgs.db_name || extraArgs.database || extraArgs.SID || ''
+      : extraArgs.db_name || extraArgs.database || ''
+  )
+  const handlePrimaryDatabaseChange = (value: string) => {
+    if (subType === 'oracle') {
+      onExtraArgsChange({
+        [oracleIdentityField]: value,
+        db_name: value,
+      })
+      return
+    }
+    onExtraArgChange('db_name', value)
+  }
+
   return (
     <div className="grid grid-cols-2 gap-3">
       <div>
@@ -29,8 +51,8 @@ export default function ConnectionDatabaseParams({
             : '默认数据库 / Schema'}
         </label>
         <input
-          value={(extraArgs.db_name as string) || (extraArgs.database as string) || ''}
-          onChange={(event) => onExtraArgChange('db_name', event.target.value)}
+          value={primaryDatabaseValue}
+          onChange={(event) => handlePrimaryDatabaseChange(event.target.value)}
           className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
         />
       </div>

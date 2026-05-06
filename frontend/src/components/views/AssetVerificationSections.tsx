@@ -5,8 +5,10 @@ export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificatio
   return (
     <section className="mb-5 rounded-lg border border-ops-surface0 bg-ops-dark/30 p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-ops-text">验证矩阵</h3>
-        <span className="font-mono text-xs text-ops-overlay">{matrix.coverage.supported}/{matrix.coverage.total}</span>
+        <h3 className="text-sm font-bold text-ops-text">资产能力检查</h3>
+        <span className="font-mono text-xs text-ops-overlay">
+          {matrix.coverage.supported}/{matrix.coverage.total} 项可用
+        </span>
       </div>
       <div className="space-y-2">
         {matrix.steps.map((step) => (

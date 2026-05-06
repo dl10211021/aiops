@@ -143,24 +143,57 @@ def _active_tools(asset: dict[str, Any]) -> list[str]:
     ]
 
 
+def _access_method_label(asset_type: str, protocol: str) -> str:
+    if protocol == "virtual":
+        return "虚拟会话能力"
+    if protocol == "ssh" and asset_type in {"switch", "router", "firewall", "f5", "a10", "waf", "vpn"}:
+        return "网络设备 SSH CLI"
+    if protocol == "ssh":
+        return "SSH Shell"
+    if protocol == "winrm":
+        return "Windows WinRM / PowerShell"
+    if protocol in SNMP_PROTOCOLS:
+        return "SNMP 只读 OID"
+    if protocol in SQL_PROTOCOLS:
+        return f"{protocol.upper()} 原生数据库连接"
+    if protocol == "redis":
+        return "Redis 原生命令"
+    if protocol == "mongodb":
+        return "MongoDB 原生查询"
+    if protocol in API_PROTOCOLS:
+        return "HTTP/API 原生接口"
+    return f"{asset_type}/{protocol} 原生接入"
+
+
 def build_asset_matrix(asset: dict[str, Any]) -> dict[str, Any]:
     safe_asset = sanitize_asset(asset)
     active_tools = _active_tools(asset)
     protocol = safe_asset["protocol"]
     asset_type = safe_asset["asset_type"]
     has_native_tool = bool(active_tools)
+    access_method = _access_method_label(asset_type, protocol)
+    connection_description = (
+        "检查虚拟会话记录、托管上下文和可用工具；不代表真实网络连通。"
+        if protocol == "virtual"
+        else f"使用 {access_method} 检查资产连通性和托管凭据。"
+    )
+    probe_description = (
+        "虚拟会话没有真实协议探测；此项确认上下文隔离和工具暴露能力。"
+        if protocol == "virtual"
+        else f"通过 {access_method} 执行原生只读探测，避免只做资产登记。"
+    )
     steps = [
         {
             "id": "connection_test",
             "label": "连接测试",
             "status": "supported",
-            "description": f"使用 {protocol} 协议验证资产连通性和托管凭据。",
+            "description": connection_description,
         },
         {
             "id": "protocol_probe",
             "label": "协议原生探测",
             "status": "supported",
-            "description": f"通过 {asset_type}/{protocol} 对应的原生工具执行只读探测，避免只做虚拟登记。",
+            "description": probe_description,
         },
         {
             "id": "tool_catalog",
@@ -172,7 +205,7 @@ def build_asset_matrix(asset: dict[str, Any]) -> dict[str, Any]:
             "id": "readonly_inspection",
             "label": "只读巡检",
             "status": "supported",
-            "description": f"按 {asset_type}/{protocol} 执行只读巡检模板或内置巡检。",
+            "description": f"按 {access_method} 执行只读巡检模板或内置巡检。",
         },
         {
             "id": "scheduled_inspection",

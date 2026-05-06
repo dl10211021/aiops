@@ -47,6 +47,45 @@ class AssetCatalogBuilderTests(unittest.TestCase):
         self.assertIs(asset_protocols.BASE_ASSET_CATALOG, BASE_ASSET_CATALOG)
         self.assertIs(asset_protocols.ASSET_PROTOCOL_OVERRIDES, ASSET_PROTOCOL_OVERRIDES)
 
+    def test_high_frequency_asset_protocol_and_parameter_matrix(self):
+        catalog = {item["id"]: item for item in asset_protocols.get_asset_catalog()}
+
+        def fields(asset_id):
+            return {param["field"] for param in catalog[asset_id].get("params", [])}
+
+        self.assertEqual(len(catalog), len(asset_protocols.get_asset_catalog()))
+        self.assertEqual(catalog["linux"]["protocol"], "ssh")
+        self.assertEqual(catalog["linux"]["default_port"], 22)
+        self.assertEqual(catalog["windows"]["protocol"], "winrm")
+        self.assertEqual(catalog["windows"]["default_port"], 5985)
+        self.assertIn("transport", fields("windows"))
+
+        self.assertEqual(catalog["mysql"]["protocol"], "mysql")
+        self.assertEqual(catalog["mysql"]["default_port"], 3306)
+        self.assertFalse(fields("mysql") & {"sid", "service_name", "tns_alias", "oracle_connect_type"})
+
+        self.assertEqual(catalog["oracle"]["protocol"], "oracle")
+        self.assertEqual(catalog["oracle"]["default_port"], 1521)
+        self.assertTrue({"sid", "service_name", "tns_alias", "oracle_connect_type"}.issubset(fields("oracle")))
+
+        self.assertEqual(catalog["redis"]["capability"]["connector"], "native_kv")
+        self.assertIn("db_index", fields("redis"))
+        self.assertEqual(catalog["mongodb"]["capability"]["connector"], "native_document")
+        self.assertIn("auth_source", fields("mongodb"))
+
+        self.assertEqual(catalog["switch"]["protocol"], "ssh")
+        self.assertEqual(catalog["switch"]["capability"]["connector"], "ssh_network_cli")
+        self.assertIn("enable_pass", fields("switch"))
+        self.assertEqual(catalog["tplink_switch"]["protocol"], "snmp")
+        self.assertEqual(catalog["tplink_switch"]["default_port"], 161)
+
+    def test_protocol_alias_assets_are_normalized_but_preserved_in_catalog(self):
+        catalog = {item["id"]: item for item in asset_protocols.get_asset_catalog()}
+
+        self.assertEqual(catalog["sqlserver"]["protocol"], "mssql")
+        self.assertEqual(catalog["dm"]["protocol"], "dameng")
+        self.assertEqual(catalog["kubernetes"]["protocol"], "k8s")
+
 
 if __name__ == "__main__":
     unittest.main()

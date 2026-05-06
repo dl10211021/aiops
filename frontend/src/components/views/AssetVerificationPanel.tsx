@@ -9,7 +9,7 @@ export function VerificationStatusStrip({ matrix }: { matrix: AssetVerificationM
     <div className="mb-3 flex items-center justify-between rounded-lg border border-ops-surface0 bg-ops-dark/35 px-2.5 py-2">
       <div className="flex items-center gap-2">
         <span className={`h-2 w-2 rounded-full ${ready ? 'bg-ops-success' : 'bg-ops-alert'}`} />
-        <span className="text-[11px] text-ops-subtext">{ready ? '验证矩阵就绪' : '存在验证缺口'}</span>
+        <span className="text-[11px] text-ops-subtext">{ready ? '能力检查就绪' : '存在能力缺口'}</span>
       </div>
       <span className="font-mono text-[11px] text-ops-overlay">
         {matrix.coverage.supported}/{matrix.coverage.total}
@@ -46,7 +46,7 @@ export function VerificationPanel({
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-ops-accent">协议验证</p>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-ops-accent">资产能力验证</p>
             <h2 className="mt-1 text-xl font-black text-ops-text">{panel.asset.remark || panel.asset.host}</h2>
             <p className="mt-1 text-sm text-ops-subtext">{panel.asset.username}@{panel.asset.host}:{panel.asset.port}</p>
             <div className="mt-3 grid gap-2 text-[11px] text-ops-subtext sm:grid-cols-4">
@@ -75,7 +75,7 @@ export function VerificationPanel({
         </div>
 
         {panel.loading ? (
-          <div className="rounded-lg border border-ops-surface0 bg-ops-dark/30 p-6 text-sm text-ops-subtext">正在加载验证矩阵...</div>
+          <div className="rounded-lg border border-ops-surface0 bg-ops-dark/30 p-6 text-sm text-ops-subtext">正在加载资产能力检查...</div>
         ) : (
           <>
             {panel.matrix && <VerificationMatrixSection matrix={panel.matrix} />}

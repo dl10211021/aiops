@@ -21,6 +21,30 @@ interface ConnectionDedicatedParamsSectionProps {
   oracleThickDefaults: () => Record<string, unknown>
 }
 
+const SQL_DATABASE_SUB_TYPES = new Set([
+  'mysql',
+  'oracle',
+  'postgresql',
+  'mssql',
+  'sqlserver',
+  'tidb',
+  'oceanbase',
+  'kingbase',
+  'dameng',
+  'dm',
+  'db2',
+  'doris_fe',
+  'greenplum',
+  'greptime',
+  'hive',
+  'iotdb',
+  'mariadb',
+  'opengauss',
+  'starrocks_fe',
+  'vastbase',
+  'xugu',
+])
+
 export default function ConnectionDedicatedParamsSection({
   category,
   currentProtocol,
@@ -36,9 +60,11 @@ export default function ConnectionDedicatedParamsSection({
   onExtraArgsChange,
   oracleThickDefaults,
 }: ConnectionDedicatedParamsSectionProps) {
+  const shouldShowSqlDatabaseParams = category === 'db' && SQL_DATABASE_SUB_TYPES.has(subType)
+
   return (
     <>
-      {category === 'db' && (
+      {shouldShowSqlDatabaseParams && (
         <ConnectionDatabaseParams
           extraArgs={extraArgs}
           oracleClientConfig={oracleClientConfig}

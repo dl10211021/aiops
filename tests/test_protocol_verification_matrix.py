@@ -230,6 +230,45 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["details"]["tool"], "ssh_connect")
 
+    def test_switch_ssh_matrix_describes_network_cli_not_linux_shell(self):
+        from core import protocol_verification
+
+        matrix = protocol_verification.build_asset_matrix({
+            "id": 11,
+            "remark": "core-switch",
+            "host": "10.0.0.11",
+            "port": 22,
+            "username": "admin",
+            "password": "switch-secret",
+            "asset_type": "switch",
+            "protocol": "ssh",
+            "extra_args": {"category": "network", "sub_type": "switch"},
+        })
+        descriptions = " ".join(step["description"] for step in matrix["steps"])
+
+        self.assertIn("网络设备 SSH CLI", descriptions)
+        self.assertNotIn("Linux", descriptions)
+        self.assertIn("network_cli_execute_command", matrix["active_tools"])
+
+    def test_virtual_matrix_says_it_is_not_real_network_connectivity(self):
+        from core import protocol_verification
+
+        matrix = protocol_verification.build_asset_matrix({
+            "id": 12,
+            "remark": "virtual-control",
+            "host": "",
+            "port": 0,
+            "username": "",
+            "password": "",
+            "asset_type": "virtual",
+            "protocol": "virtual",
+            "extra_args": {"category": "other", "sub_type": "virtual"},
+        })
+        descriptions = " ".join(step["description"] for step in matrix["steps"])
+
+        self.assertIn("不代表真实网络连通", descriptions)
+        self.assertIn("虚拟会话", descriptions)
+
     def test_windows_verify_uses_native_winrm_probe(self):
         from core import protocol_verification
 
