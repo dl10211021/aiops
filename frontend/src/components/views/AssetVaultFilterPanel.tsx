@@ -1,10 +1,5 @@
 import { CategoryFilterRow, FilterRow, type FilterOption } from './AssetVaultParts'
 
-export interface AssetCategoryStat extends FilterOption {
-  assetCount: number
-  typeCount: number
-}
-
 export function AssetVaultHeaderActions({
   onBatchImport,
   onCreateAsset,
@@ -27,15 +22,12 @@ export function AssetVaultHeaderActions({
 }
 
 export function AssetVaultFilterPanel({
-  assetCount,
   assetTypeFilter,
   assetTypeLabels,
   availableAssetTypes,
   availableCategoryOptions,
   availableConnectors,
   categoryFilter,
-  categoryStats,
-  catalogTypeCount,
   connectorFilter,
   connectorLabels,
   hasActiveFilters,
@@ -44,15 +36,12 @@ export function AssetVaultFilterPanel({
   onClearFilters,
   onConnectorChange,
 }: {
-  assetCount: number
   assetTypeFilter: string
   assetTypeLabels: Record<string, string>
   availableAssetTypes: string[]
   availableCategoryOptions: FilterOption[]
   availableConnectors: string[]
   categoryFilter: string
-  categoryStats: AssetCategoryStat[]
-  catalogTypeCount: number
   connectorFilter: string
   connectorLabels: Record<string, string>
   hasActiveFilters: boolean
@@ -65,8 +54,8 @@ export function AssetVaultFilterPanel({
     <details open className="mb-3 rounded-xl border border-ops-surface1/70 bg-ops-panel">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
         <div>
-          <div className="text-xs font-semibold text-ops-text">分类治理与快速筛选</div>
-          <div className="text-[11px] text-ops-overlay">{catalogTypeCount} 类可接入资产 / 当前已保存 {assetCount} 条 / 支持按分类、类型、主接入定位</div>
+          <div className="text-xs font-semibold text-ops-text">筛选</div>
+          <div className="text-[11px] text-ops-overlay">按分类、类型、主接入快速定位资产。</div>
         </div>
         {hasActiveFilters && (
           <button
@@ -99,34 +88,6 @@ export function AssetVaultFilterPanel({
           options={availableConnectors.map((id) => ({ id, label: connectorLabels[id] || id.toUpperCase() }))}
           onChange={onConnectorChange}
         />
-        {categoryStats.length > 0 && (
-          <div className="mt-3 border-t border-ops-surface1/70 pt-3">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <span className="text-xs font-semibold text-ops-text">目录覆盖</span>
-              <span className="text-[11px] text-ops-overlay">面向上千资产管理 / 已保存 {assetCount}</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
-              {categoryStats.slice(0, 12).map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => onCategoryChange(item.id)}
-                  title={item.description || item.label}
-                  className={`rounded-lg border p-2 text-left transition-colors ${
-                    categoryFilter === item.id
-                      ? 'border-ops-accent bg-ops-accent/10'
-                      : 'border-ops-surface1 bg-ops-dark/25 hover:border-ops-accent/45'
-                  }`}
-                >
-                  <div className="truncate text-[11px] font-semibold text-ops-text">{item.label}</div>
-                  <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-ops-overlay">
-                    <span>{item.typeCount} 类</span>
-                    <span>已保存 {item.assetCount}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </details>
   )

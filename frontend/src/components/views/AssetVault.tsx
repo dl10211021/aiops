@@ -41,8 +41,6 @@ export default function AssetVault() {
     availableAssetTypes,
     availableCategoryOptions,
     availableConnectors,
-    categoryStats: catalogCategoryStats,
-    categoryForAsset,
     connectorForAssetTypeFilter,
     connectorLabels,
     displayForAsset,
@@ -109,12 +107,6 @@ export default function AssetVault() {
     setAssets,
   })
 
-  const savedCategoryCount = new Set(assets.map((asset) => categoryForAsset(asset))).size
-  const protocolCount = new Set(
-    assets
-      .map((asset) => String(asset.protocol || asset.asset_type || '').trim())
-      .filter(Boolean)
-  ).size
   const readyCount = verificationOverview?.summary.ready_assets || 0
 
   return (
@@ -136,21 +128,16 @@ export default function AssetVault() {
           assetCount={assets.length}
           catalogTypeCount={catalogTypes.length}
           filteredCount={filtered.length}
-          protocolCount={protocolCount}
           readyCount={readyCount}
-          savedCategoryCount={savedCategoryCount}
         />
 
         <AssetVaultFilterPanel
-          assetCount={assets.length}
           assetTypeFilter={assetTypeFilter}
           assetTypeLabels={assetTypeLabels}
           availableAssetTypes={availableAssetTypes}
           availableCategoryOptions={availableCategoryOptions}
           availableConnectors={availableConnectors}
           categoryFilter={categoryFilter}
-          categoryStats={catalogCategoryStats}
-          catalogTypeCount={catalogTypes.length}
           connectorFilter={connectorFilter}
           connectorLabels={connectorLabels}
           hasActiveFilters={hasActiveFilters}
