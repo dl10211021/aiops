@@ -195,12 +195,6 @@ export function AssetTablePanel({
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1.5">
                       <button
-                        onClick={() => onEdit(asset)}
-                        className="rounded-lg border border-ops-surface1 px-3 py-1.5 text-xs text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-accent"
-                      >
-                        编辑
-                      </button>
-                      <button
                         onClick={() => onConnect(asset)}
                         className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-2.5 py-1 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
                       >
@@ -212,12 +206,25 @@ export function AssetTablePanel({
                       >
                         验证
                       </button>
-                      <button
-                        onClick={() => onDelete(asset)}
-                        className="rounded-lg border border-ops-alert/30 bg-ops-alert/8 px-2.5 py-1 text-xs font-semibold text-ops-alert hover:bg-ops-alert/14"
-                      >
-                        删除
-                      </button>
+                      <details className="relative">
+                        <summary className="list-none rounded-lg border border-ops-surface1 px-2.5 py-1 text-xs text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text">
+                          维护
+                        </summary>
+                        <div className="absolute right-0 z-20 mt-2 w-24 overflow-hidden rounded-lg border border-ops-surface1 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
+                          <button
+                            onClick={() => onEdit(asset)}
+                            className="block w-full px-3 py-2 text-left text-xs text-ops-subtext transition-colors hover:bg-ops-surface0 hover:text-ops-accent"
+                          >
+                            编辑
+                          </button>
+                          <button
+                            onClick={() => onDelete(asset)}
+                            className="block w-full border-t border-ops-surface1 px-3 py-2 text-left text-xs text-ops-alert transition-colors hover:bg-ops-alert/10"
+                          >
+                            删除
+                          </button>
+                        </div>
+                      </details>
                     </div>
                   </td>
                 </tr>

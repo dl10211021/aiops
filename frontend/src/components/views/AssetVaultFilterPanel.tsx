@@ -15,14 +15,21 @@ export function AssetVaultHeaderActions({
   onNormalize: () => void
 }) {
   return (
-    <>
-      <button onClick={onBatchImport}
-        className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text">批量导入</button>
-      <button onClick={onNormalize}
-        className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text">规范化检查</button>
+    <div className="flex items-center gap-2">
+      <details className="relative">
+        <summary className="list-none rounded-lg border border-ops-surface1 bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text">
+          更多
+        </summary>
+        <div className="absolute right-0 z-20 mt-2 w-36 overflow-hidden rounded-lg border border-ops-surface1 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
+          <button onClick={onBatchImport}
+            className="block w-full px-3 py-2 text-left text-xs text-ops-subtext transition-colors hover:bg-ops-surface0 hover:text-ops-text">批量导入</button>
+          <button onClick={onNormalize}
+            className="block w-full border-t border-ops-surface1 px-3 py-2 text-left text-xs text-ops-subtext transition-colors hover:bg-ops-surface0 hover:text-ops-text">规范化检查</button>
+        </div>
+      </details>
       <button onClick={onCreateAsset}
         className="rounded-lg bg-ops-accent px-3 py-1.5 text-sm font-bold text-ops-dark transition-colors hover:bg-ops-accent/80">新增资产</button>
-    </>
+    </div>
   )
 }
 
