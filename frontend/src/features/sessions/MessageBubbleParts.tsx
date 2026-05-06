@@ -4,6 +4,9 @@ import type { ChatMessage, ChatMessageAttachment, MemoryReference } from '@/type
 import { formatBytes } from './format'
 import { renderMarkdown } from './markdown'
 
+type FeedbackRating = 'up' | 'down'
+type FeedbackDialogState = { rating: FeedbackRating; note: string } | null
+
 function formatMessageTime(timestamp: number) {
   return new Date(timestamp).toLocaleString('zh-CN', {
     year: 'numeric',
@@ -71,13 +74,14 @@ export function AssistantReportBubble({
   const feedbackRating = message.feedback?.rating
   const ownMessageId = String(message.memoryId || message._memory_id || message.id || '')
   const feedbackNote = message.feedback?.note?.trim()
-  const recordFeedback = (rating: 'up' | 'down') => {
-    const defaultNote = rating === 'up'
-      ? '这条回答好在哪里？可不填，例如：巡检结论准确、建议可执行。'
-      : '这条回答哪里不对？可不填，例如：误判风险、建议不适合当前环境。'
-    const note = window.prompt(defaultNote, feedbackNote || '')?.trim()
-    if (note === undefined) return
-    onFeedback?.(message, rating, note)
+  const [feedbackDialog, setFeedbackDialog] = useState<FeedbackDialogState>(null)
+  const openFeedbackDialog = (rating: FeedbackRating) => {
+    setFeedbackDialog({ rating, note: feedbackNote || '' })
+  }
+  const submitFeedback = () => {
+    if (!feedbackDialog) return
+    onFeedback?.(message, feedbackDialog.rating, feedbackDialog.note.trim())
+    setFeedbackDialog(null)
   }
   const openMemoryActivity = () => {
     setView('knowledge')
@@ -136,6 +140,7 @@ export function AssistantReportBubble({
   }
 
   return (
+    <>
     <article
       ref={bubbleRef}
       className={`w-full overflow-hidden rounded-lg border bg-ops-panel/85 shadow-[0_10px_28px_rgba(0,0,0,0.16)] transition-all ${
@@ -151,7 +156,7 @@ export function AssistantReportBubble({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => recordFeedback('up')}
+            onClick={() => openFeedbackDialog('up')}
             title="回答很好，写入会话成功经验记忆"
             className={`rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
               feedbackRating === 'up'
@@ -162,7 +167,7 @@ export function AssistantReportBubble({
             👍
           </button>
           <button
-            onClick={() => recordFeedback('down')}
+            onClick={() => openFeedbackDialog('down')}
             title="回答较差，只做纠错审计，不作为成功经验"
             className={`rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
               feedbackRating === 'down'
@@ -203,6 +208,101 @@ export function AssistantReportBubble({
         dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
       />
     </article>
+    <FeedbackNoteDialog
+      state={feedbackDialog}
+      onCancel={() => setFeedbackDialog(null)}
+      onChange={(note) => setFeedbackDialog((current) => current ? { ...current, note } : current)}
+      onSubmit={submitFeedback}
+    />
+    </>
+  )
+}
+
+function FeedbackNoteDialog({
+  state,
+  onCancel,
+  onChange,
+  onSubmit,
+}: {
+  state: FeedbackDialogState
+  onCancel: () => void
+  onChange: (note: string) => void
+  onSubmit: () => void
+}) {
+  if (!state) return null
+  const isPositive = state.rating === 'up'
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-ops-dark/75 px-4 backdrop-blur-sm">
+      <form
+        className="w-full max-w-lg overflow-hidden rounded-2xl border border-ops-accent/35 bg-ops-panel shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+        onSubmit={(event) => {
+          event.preventDefault()
+          onSubmit()
+        }}
+      >
+        <div className={`border-b px-5 py-4 ${
+          isPositive
+            ? 'border-ops-success/25 bg-ops-success/10'
+            : 'border-ops-alert/25 bg-ops-alert/10'
+        }`}>
+          <div className="flex items-center gap-3">
+            <span className={`flex h-10 w-10 items-center justify-center rounded-full border text-lg ${
+              isPositive
+                ? 'border-ops-success/50 bg-ops-success/15 text-ops-success'
+                : 'border-ops-alert/50 bg-ops-alert/15 text-ops-alert'
+            }`}>
+              {isPositive ? '👍' : '👎'}
+            </span>
+            <div>
+              <div className="text-sm font-semibold text-ops-text">
+                {isPositive ? '确认这条回答很好？' : '确认这条回答有问题？'}
+              </div>
+              <div className="mt-1 text-xs leading-5 text-ops-subtext">
+                {isPositive
+                  ? '好评会进入当前会话的成功经验记忆，后续回答可以参考，但仍会以实时证据为准。'
+                  : '差评只用于纠错和审计，不会沉淀为成功经验，后续会提醒 AI 避免同类错误。'}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-3 px-5 py-4">
+          <label className="block text-xs font-semibold text-ops-subtext">
+            {isPositive ? '补充好评原因，可不填' : '补充问题原因，可不填'}
+          </label>
+          <textarea
+            autoFocus
+            value={state.note}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder={isPositive
+              ? '例如：巡检结论准确、风险判断清楚、建议可执行'
+              : '例如：误判风险、证据不足、建议不适合当前环境'}
+            className="min-h-28 w-full resize-y rounded-xl border border-ops-surface1 bg-ops-dark/55 px-3 py-2 text-sm text-ops-text outline-none transition focus:border-ops-accent"
+          />
+          <div className="rounded-xl border border-ops-surface0 bg-ops-dark/35 px-3 py-2 text-[11px] leading-5 text-ops-overlay">
+            记忆边界：只记录当前会话，不跨会话写入；知识库仍可共享，回答时必须结合当前资产实时证据复核。
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-ops-surface0 px-5 py-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg border border-ops-surface1 px-3 py-1.5 text-sm text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            className={`rounded-lg px-3 py-1.5 text-sm font-semibold text-ops-dark ${
+              isPositive
+                ? 'bg-ops-success hover:bg-ops-success/90'
+                : 'bg-ops-alert hover:bg-ops-alert/90'
+            }`}
+          >
+            {isPositive ? '确认好评' : '确认差评'}
+          </button>
+        </div>
+      </form>
+    </div>
   )
 }
 
