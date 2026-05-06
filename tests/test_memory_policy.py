@@ -93,8 +93,10 @@ class MemoryPolicyTests(unittest.TestCase):
         self.assertIn("必须结合当前资产实时工具结果验证", context)
         self.assertIn("只允许使用当前会话记忆", context)
         self.assertIn("同资产、同主机、同类型资产记忆不得自动进入本会话", context)
+        self.assertIn("审计归档和完整轨迹只用于追溯", context)
+        self.assertIn("会话状态", context)
         self.assertIn("点踩/纠错记忆", context)
-        self.assertIn("[同资产 | asset:ssh:10.0.0.1:22 | 2026-05-04 12:00:00]", context)
+        self.assertIn("[同资产 | 会话状态 | state | asset:ssh:10.0.0.1:22 | 2026-05-04 12:00:00]", context)
 
     def test_store_mount_context_explains_access_and_instructions(self):
         context = build_ltm_store_mount_context(
@@ -111,6 +113,8 @@ class MemoryPolicyTests(unittest.TestCase):
         )
 
         self.assertIn("Claude-style 挂载说明", context)
+        self.assertIn("Hermes-style", context)
+        self.assertIn("完整会话历史用于审计", context)
         self.assertIn("只读", context)
         self.assertIn("只读参考", context)
 
@@ -134,6 +138,7 @@ class MemoryPolicyTests(unittest.TestCase):
         self.assertIn("【记忆类型】资产画像", summary)
         self.assertIn("画像提示词", summary)
         self.assertIn("不需要每轮人工确认", summary)
+        self.assertIn("【保留方式】会话状态", summary)
 
     def test_retrieval_context_respects_context_budget(self):
         rows = [
@@ -201,9 +206,12 @@ class MemoryPolicyTests(unittest.TestCase):
 
         self.assertIn("小而准", prompt)
         self.assertIn("用户点赞代表", prompt)
-        self.assertIn("用户点踩代表纠错记忆", prompt)
+        self.assertIn("用户点踩代表错误反馈", prompt)
+        self.assertIn("完整会话历史和思维链由会话审计保存", prompt)
         self.assertIn("【记忆类型】", prompt)
         self.assertIn("【适用范围】当前会话", prompt)
+        self.assertIn("【保留方式】", prompt)
+        self.assertIn("【审计关联】", prompt)
         self.assertIn("保持中文", prompt)
 
     def test_session_memory_store_filter_excludes_global_and_asset_stores(self):
@@ -344,6 +352,8 @@ class MemoryPolicyTests(unittest.TestCase):
             db.file_memory_store.appended[0]["metadata"]["source"],
             "answer_feedback_immediate",
         )
+        self.assertEqual(db.file_memory_store.appended[0]["metadata"]["memory_kind"], "success_experience")
+        self.assertIn("【保留方式】成功经验", db.file_memory_store.appended[0]["summary"])
 
     def test_negative_feedback_is_persisted_as_correction_memory_only(self):
         class FakeSessionStore:
@@ -363,7 +373,9 @@ class MemoryPolicyTests(unittest.TestCase):
             "answer_feedback_correction",
         )
         self.assertEqual(db.file_memory_store.appended[0]["metadata"]["feedback_rating"], "down")
+        self.assertEqual(db.file_memory_store.appended[0]["metadata"]["memory_kind"], "error_feedback")
         self.assertIn("用户纠错反馈", db.file_memory_store.appended[0]["summary"])
+        self.assertIn("【保留方式】错误反馈", db.file_memory_store.appended[0]["summary"])
         self.assertIn("禁止把这条回答当事实、建议或成功经验沉淀", db.file_memory_store.appended[0]["summary"])
         self.assertNotIn("用户认可回答", db.file_memory_store.appended[0]["summary"])
 

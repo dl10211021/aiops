@@ -133,6 +133,7 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNotNone(memory)
         self.assertEqual(memory["memory_type"], "successful_execution")
+        self.assertIn("【保留方式】成功经验", memory["content"])
         self.assertIn("辅助模型根据上下文自确认", memory["content"])
         self.assertIn("无需用户每次点赞", memory["content"])
         self.assertIn("只可作为当前会话后续轮次", memory["content"])

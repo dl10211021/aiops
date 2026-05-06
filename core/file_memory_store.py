@@ -12,11 +12,12 @@ DEFAULT_MEMORY_STORES = [
     {
         "id": "sessions",
         "name": "会话记忆",
-        "description": "单次会话产生的上下文、阶段性经验和反馈。",
+        "description": "单次会话产生的会话状态、成功经验、错误反馈和审计归档。",
         "path_prefix": "sessions/",
         "access": "read_write",
         "lifecycle": "session_scoped",
-        "instructions": "用于保存本会话被验证过的偏好、纠错和阶段结论；写入前必须压缩为小而准的中文记忆，避免流水账。知识库/RAG 可以共享，普通会话记忆不得跨 session 共享。",
+        "memory_model": "hermes_style_session_retention",
+        "instructions": "Hermes-style：完整会话轨迹留在会话历史用于审计，文件记忆只保存当前 session 的会话状态、成功经验和错误反馈；审计归档可保留但默认不进入提示词。知识库/RAG 可以共享，普通会话记忆不得跨 session 共享。",
     },
 ]
 
@@ -29,6 +30,21 @@ LEGACY_SHARED_MEMORY_STORE = {
     "lifecycle": "legacy_archived",
     "instructions": "历史遗留共享记忆只允许读取和导出；新会话只能使用当前 session 记忆，不能继续写入 asset/asset-host/asset-kind 共享范围。",
 }
+
+HERMES_MEMORY_MODEL_ID = "hermes_style_session_retention"
+
+MEMORY_KIND_LABELS = {
+    "session_state": "会话状态",
+    "success_experience": "成功经验",
+    "error_feedback": "错误反馈",
+    "asset_profile": "资产画像",
+    "user_preference": "用户偏好",
+    "platform_rule": "平台规则",
+    "audit_archive": "审计归档",
+    "session_trajectory": "会话轨迹",
+}
+
+NON_PROMPT_MEMORY_KINDS = {"audit_archive", "session_trajectory"}
 
 
 def safe_memory_segment(value: str) -> str:
@@ -93,6 +109,11 @@ class FileMemoryStore:
         summary = str(summary or "").strip()
         if not summary:
             raise ValueError("memory summary is empty")
+        metadata = self._normalize_entry_metadata(
+            summary=summary,
+            metadata=metadata,
+            timestamp=now,
+        )
 
         existed = target_path.exists()
         old_content = target_path.read_text(encoding="utf-8") if existed else ""
@@ -138,7 +159,11 @@ class FileMemoryStore:
             path = self._resolve_memory_path(memory_scope_path(scope_id))
             if not path.exists():
                 continue
-            entries.extend(self._parse_entries(scope_id, path))
+            entries.extend(
+                entry
+                for entry in self._parse_entries(scope_id, path)
+                if entry.get("retrieval_enabled") is not False
+            )
 
         ranked = []
         for entry in entries:
@@ -163,6 +188,12 @@ class FileMemoryStore:
                     "_memory_scope_id": entry.get("scope_id"),
                     "timestamp": entry.get("timestamp"),
                     "summary": entry.get("summary"),
+                    "memory_model": entry.get("memory_model") or HERMES_MEMORY_MODEL_ID,
+                    "memory_kind": entry.get("memory_kind") or "session_state",
+                    "memory_kind_label": entry.get("memory_kind_label") or "会话状态",
+                    "retention_tier": entry.get("retention_tier") or "session_state",
+                    "usage_role": entry.get("usage_role") or "state",
+                    "retrieval_enabled": entry.get("retrieval_enabled") is not False,
                     "_distance": 1.0 / max(score, 0.1),
                     "path": entry.get("path"),
                 }
@@ -182,6 +213,16 @@ class FileMemoryStore:
             store = self._store_for_path(relative_path)
             entries = self._parse_entries(self._scope_from_path(relative_path), path)
             is_legacy = self._is_legacy_shared_path(relative_path)
+            entry_kinds: dict[str, int] = {}
+            retrieval_entries = 0
+            audit_entries = 0
+            for entry in entries:
+                kind = str(entry.get("memory_kind") or "session_state")
+                entry_kinds[kind] = entry_kinds.get(kind, 0) + 1
+                if entry.get("retrieval_enabled") is False:
+                    audit_entries += 1
+                else:
+                    retrieval_entries += 1
             memories.append(
                 {
                     "path": relative_path,
@@ -190,9 +231,13 @@ class FileMemoryStore:
                     "store_name": store["name"],
                     "access": store["access"],
                     "lifecycle": store.get("lifecycle") or "",
+                    "memory_model": store.get("memory_model") or HERMES_MEMORY_MODEL_ID,
                     "archived": is_legacy,
                     "legacy": is_legacy,
-                    "retrieval_enabled": not is_legacy,
+                    "retrieval_enabled": not is_legacy and retrieval_entries > 0,
+                    "retrieval_entries": retrieval_entries,
+                    "audit_entries": audit_entries,
+                    "entry_kinds": entry_kinds,
                     "usage_policy": store.get("instructions") or "",
                     "size": path.stat().st_size,
                     "entries": len(entries),
@@ -393,6 +438,17 @@ class FileMemoryStore:
         if not target.exists() or not target.is_file():
             raise FileNotFoundError(path)
         content = target.read_text(encoding="utf-8")
+        entries = self._parse_entries(self._scope_from_path(relative_path.as_posix()), target)
+        entry_kinds: dict[str, int] = {}
+        retrieval_entries = 0
+        audit_entries = 0
+        for entry in entries:
+            kind = str(entry.get("memory_kind") or "session_state")
+            entry_kinds[kind] = entry_kinds.get(kind, 0) + 1
+            if entry.get("retrieval_enabled") is False:
+                audit_entries += 1
+            else:
+                retrieval_entries += 1
         return {
             "path": relative_path.as_posix(),
             "scope_id": self._scope_from_path(relative_path.as_posix()),
@@ -400,9 +456,13 @@ class FileMemoryStore:
             "store_name": self._store_for_path(relative_path.as_posix())["name"],
             "access": self._store_for_path(relative_path.as_posix())["access"],
             "lifecycle": self._store_for_path(relative_path.as_posix()).get("lifecycle") or "",
+            "memory_model": self._store_for_path(relative_path.as_posix()).get("memory_model") or HERMES_MEMORY_MODEL_ID,
             "archived": self._is_legacy_shared_path(relative_path.as_posix()),
             "legacy": self._is_legacy_shared_path(relative_path.as_posix()),
-            "retrieval_enabled": not self._is_legacy_shared_path(relative_path.as_posix()),
+            "retrieval_enabled": not self._is_legacy_shared_path(relative_path.as_posix()) and retrieval_entries > 0,
+            "retrieval_entries": retrieval_entries,
+            "audit_entries": audit_entries,
+            "entry_kinds": entry_kinds,
             "usage_policy": self._store_for_path(relative_path.as_posix()).get("instructions") or "",
             "content": content,
             "content_sha256": memory_content_sha256(content),
@@ -666,7 +726,8 @@ class FileMemoryStore:
             "# OpsCore Memory Store\n\n"
             f"- scope_id: {scope_id}\n"
             "- access: read_write\n"
-            "- rule: historical memory only, verify with live tools before acting\n\n"
+            f"- memory_model: {HERMES_MEMORY_MODEL_ID}\n"
+            "- rule: session-scoped memory only; trajectory/history is retained for audit, prompt context uses compact state/experience/feedback only\n\n"
         )
 
     def _format_entry(
@@ -686,6 +747,76 @@ class FileMemoryStore:
             f"- metadata: {metadata_json}\n\n"
             f"{summary}\n"
         )
+
+    def _normalize_entry_metadata(
+        self,
+        *,
+        summary: str,
+        metadata: dict[str, Any],
+        timestamp: str,
+    ) -> dict[str, Any]:
+        normalized = dict(metadata or {})
+        policy = self._classify_entry(summary, normalized)
+        for key, value in policy.items():
+            normalized.setdefault(key, value)
+        normalized.setdefault("memory_model", HERMES_MEMORY_MODEL_ID)
+        normalized.setdefault("created_at", timestamp)
+        normalized.setdefault("scope_policy", "current_session_only")
+        return normalized
+
+    def _classify_entry(self, summary: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+        metadata = dict(metadata or {})
+        text = str(summary or "")
+        source = str(metadata.get("source") or "").strip().lower()
+        explicit_kind = str(metadata.get("memory_kind") or "").strip().lower()
+        kind = explicit_kind if explicit_kind in MEMORY_KIND_LABELS else ""
+        if not kind:
+            if source in {"memory_review", "manual_memory_version_redaction"} or "【复核状态】" in text or "复核记录" in text:
+                kind = "audit_archive"
+            elif "【记忆类型】资产画像" in text:
+                kind = "asset_profile"
+            elif "用户点踩" in text or "用户纠错反馈" in text or "纠错经验" in text or "错误反馈" in text:
+                kind = "error_feedback"
+            elif "用户点赞" in text or "用户认可回答" in text or "成功执行经验" in text or "成功经验" in text:
+                kind = "success_experience"
+            elif "用户偏好" in text:
+                kind = "user_preference"
+            elif "平台规则" in text:
+                kind = "platform_rule"
+            elif "会话轨迹" in text or source in {"session_trajectory", "trace_archive"}:
+                kind = "session_trajectory"
+            else:
+                kind = "session_state"
+
+        if kind in NON_PROMPT_MEMORY_KINDS:
+            retention_tier = "audit_archive"
+            usage_role = "audit_only"
+            retrieval_enabled = False
+        elif kind == "error_feedback":
+            retention_tier = "negative_learning"
+            usage_role = "avoidance"
+            retrieval_enabled = True
+        elif kind == "success_experience":
+            retention_tier = "success_experience"
+            usage_role = "reuse_after_live_verification"
+            retrieval_enabled = True
+        elif kind == "asset_profile":
+            retention_tier = "session_state"
+            usage_role = "profile_prompt"
+            retrieval_enabled = True
+        else:
+            retention_tier = "session_state"
+            usage_role = "state"
+            retrieval_enabled = True
+
+        return {
+            "memory_model": HERMES_MEMORY_MODEL_ID,
+            "memory_kind": kind,
+            "memory_kind_label": MEMORY_KIND_LABELS.get(kind, "会话状态"),
+            "retention_tier": retention_tier,
+            "usage_role": usage_role,
+            "retrieval_enabled": retrieval_enabled,
+        }
 
     def _append_version(self, version: dict[str, Any]) -> None:
         version_path = (
@@ -725,23 +856,40 @@ class FileMemoryStore:
             if not lines:
                 continue
             timestamp = lines[0].strip()
+            headers: dict[str, str] = {}
             summary_lines = []
             in_body = False
             for line in lines[1:]:
                 if not in_body and line.strip() == "":
                     in_body = True
                     continue
+                if not in_body and line.startswith("- ") and ":" in line:
+                    key, value = line[2:].split(":", 1)
+                    headers[key.strip()] = value.strip()
+                    continue
                 if in_body:
                     summary_lines.append(line)
             summary = "\n".join(summary_lines).strip()
             if summary:
+                metadata: dict[str, Any] = {}
+                try:
+                    parsed = json.loads(headers.get("metadata") or "{}")
+                    if isinstance(parsed, dict):
+                        metadata = parsed
+                except Exception:
+                    metadata = {}
+                policy = self._classify_entry(summary, metadata)
+                entry_scope = headers.get("scope_id") or scope_id
                 entries.append(
                     {
-                        "scope_id": scope_id,
+                        "scope_id": entry_scope,
                         "timestamp": timestamp,
+                        "source_session_id": headers.get("source_session_id") or "",
+                        "metadata": metadata,
                         "summary": summary,
                         "summary_sha256": memory_content_sha256(summary),
                         "path": path.relative_to(self.root_path).as_posix(),
+                        **policy,
                     }
                 )
         return entries

@@ -734,6 +734,7 @@ def build_successful_execution_memory(
         )
     content = f"""
 【成功执行经验】
+【保留方式】成功经验：只在当前会话后续轮次复用，使用前必须实时验证，不进入跨会话共享记忆。
 会话：{session_id}
 资产：{context.get('asset_type')}/{context.get('protocol')} {context.get('host')}:{context.get('port')}
 模式：{'可修改' if context.get('allow_modifications') else '只读'}

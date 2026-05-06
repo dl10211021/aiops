@@ -45,6 +45,10 @@ class FileMemoryStoreTests(unittest.TestCase):
         ]
         self.assertEqual(events[0]["operation"], "created")
         self.assertEqual(events[0]["source_session_id"], "sid-1")
+        self.assertEqual(events[0]["metadata"]["memory_model"], "hermes_style_session_retention")
+        self.assertEqual(events[0]["metadata"]["memory_kind"], "error_feedback")
+        self.assertEqual(events[0]["metadata"]["retention_tier"], "negative_learning")
+        self.assertTrue(events[0]["metadata"]["retrieval_enabled"])
 
     def test_search_returns_relevant_scope_entries_without_duplicates(self):
         self.store.append_memory(
@@ -66,7 +70,35 @@ class FileMemoryStoreTests(unittest.TestCase):
 
         self.assertEqual(results[0]["_memory_scope_id"], "sid-2")
         self.assertIn("Oracle", results[0]["summary"])
+        self.assertEqual(results[0]["memory_model"], "hermes_style_session_retention")
+        self.assertEqual(results[0]["memory_kind"], "session_state")
         self.assertEqual(len(results), 2)
+
+    def test_search_excludes_audit_archive_entries_but_list_keeps_them(self):
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary="【记忆类型】会话状态\n【核心记忆】Oracle 锁等待排查继续看 v$session。",
+            source_session_id="sid-1",
+        )
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary="【记忆类型】复核记录\n【复核状态】已复核\n【核心记忆】仅用于审计。",
+            source_session_id="sid-1",
+            metadata={"source": "memory_review"},
+        )
+
+        results = self.store.search(scope_ids=["sid-1"], query="复核 审计 Oracle", limit=5)
+        item = self.store.list_memories()[0]
+        detail = self.store.read_memory(item["path"])
+
+        self.assertEqual(len(results), 1)
+        self.assertIn("Oracle", results[0]["summary"])
+        self.assertEqual(results[0]["memory_kind"], "session_state")
+        self.assertEqual(item["entries"], 2)
+        self.assertEqual(item["retrieval_entries"], 1)
+        self.assertEqual(item["audit_entries"], 1)
+        self.assertEqual(item["entry_kinds"]["audit_archive"], 1)
+        self.assertEqual(detail["audit_entries"], 1)
 
     def test_list_read_delete_and_versions_support_management_ui(self):
         self.store.append_memory(
@@ -82,6 +114,9 @@ class FileMemoryStoreTests(unittest.TestCase):
 
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["entries"], 1)
+        self.assertEqual(items[0]["memory_model"], "hermes_style_session_retention")
+        self.assertEqual(items[0]["retrieval_entries"], 1)
+        self.assertEqual(items[0]["entry_kinds"]["session_state"], 1)
         self.assertIn("只读模式", items[0]["preview"])
         self.assertIn("只读模式", detail["content"])
         self.assertEqual(deleted["operation"], "deleted")
