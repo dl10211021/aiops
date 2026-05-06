@@ -3,7 +3,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import { BatchImportAssetsDialog, DeleteAssetDialog, NormalizeAssetsDialog } from './AssetVaultDialogs'
 import { AssetVaultFilterPanel, AssetVaultHeaderActions } from './AssetVaultFilterPanel'
 import { VerificationPanel } from './AssetVerificationPanel'
-import { AssetAccessPrinciples, AssetTablePanel } from './AssetVaultPageSections'
+import { AssetEnterpriseCommandPanel, AssetTablePanel } from './AssetVaultPageSections'
 import { buildAssetVaultViewModel } from './assetVaultViewModel'
 import { useAssetVaultActions } from './useAssetVaultActions'
 import { useAssetVaultData } from './useAssetVaultData'
@@ -42,6 +42,7 @@ export default function AssetVault() {
     availableCategoryOptions,
     availableConnectors,
     categoryStats: catalogCategoryStats,
+    categoryForAsset,
     connectorForAssetTypeFilter,
     connectorLabels,
     displayForAsset,
@@ -106,12 +107,20 @@ export default function AssetVault() {
     setAssets,
   })
 
+  const savedCategoryCount = new Set(assets.map((asset) => categoryForAsset(asset))).size
+  const protocolCount = new Set(
+    assets
+      .map((asset) => String(asset.protocol || asset.asset_type || '').trim())
+      .filter(Boolean)
+  ).size
+  const readyCount = verificationOverview?.summary.ready_assets || 0
+
   return (
     <div className="h-full min-h-0 overflow-y-auto">
       <div className="w-full max-w-none pb-4">
         <PageHeader
           title="资产中心"
-          description="统一管理数据中心常规系统设备，支持新增、编辑、删除、搜索、批量导入和主接入验证。"
+          description="企业级资产台账：统一维护数据中心系统、数据库、网络、存储、虚拟化和平台类资产。"
           actions={(
             <AssetVaultHeaderActions
               onBatchImport={() => setBatchImportOpen(true)}
@@ -121,7 +130,14 @@ export default function AssetVault() {
           )}
         />
 
-        <AssetAccessPrinciples />
+        <AssetEnterpriseCommandPanel
+          assetCount={assets.length}
+          catalogTypeCount={catalogTypes.length}
+          filteredCount={filtered.length}
+          protocolCount={protocolCount}
+          readyCount={readyCount}
+          savedCategoryCount={savedCategoryCount}
+        />
 
         <AssetVaultFilterPanel
           assetCount={assets.length}

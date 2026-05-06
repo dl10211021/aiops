@@ -15,18 +15,11 @@ export function AssetVaultHeaderActions({
   onNormalize: () => void
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <details className="relative">
-        <summary className="list-none rounded-lg border border-ops-surface1 bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text">
-          更多
-        </summary>
-        <div className="absolute right-0 z-20 mt-2 w-36 overflow-hidden rounded-lg border border-ops-surface1 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
-          <button onClick={onBatchImport}
-            className="block w-full px-3 py-2 text-left text-xs text-ops-subtext transition-colors hover:bg-ops-surface0 hover:text-ops-text">批量导入</button>
-          <button onClick={onNormalize}
-            className="block w-full border-t border-ops-surface1 px-3 py-2 text-left text-xs text-ops-subtext transition-colors hover:bg-ops-surface0 hover:text-ops-text">规范化检查</button>
-        </div>
-      </details>
+    <div className="flex flex-wrap items-center gap-2">
+      <button onClick={onBatchImport}
+        className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text">批量导入</button>
+      <button onClick={onNormalize}
+        className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text">规范化检查</button>
       <button onClick={onCreateAsset}
         className="rounded-lg bg-ops-accent px-3 py-1.5 text-sm font-bold text-ops-dark transition-colors hover:bg-ops-accent/80">新增资产</button>
     </div>
@@ -69,11 +62,11 @@ export function AssetVaultFilterPanel({
   onConnectorChange: (value: string) => void
 }) {
   return (
-    <details className="mb-3 rounded-lg border border-ops-surface1/70 bg-ops-panel">
+    <details open className="mb-3 rounded-xl border border-ops-surface1/70 bg-ops-panel">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
         <div>
-          <div className="text-xs font-semibold text-ops-text">资产筛选</div>
-          <div className="text-[11px] text-ops-overlay">{catalogTypeCount} 类可接入资产 / 当前已保存 {assetCount} 条</div>
+          <div className="text-xs font-semibold text-ops-text">分类治理与快速筛选</div>
+          <div className="text-[11px] text-ops-overlay">{catalogTypeCount} 类可接入资产 / 当前已保存 {assetCount} 条 / 支持按分类、类型、主接入定位</div>
         </div>
         {hasActiveFilters && (
           <button

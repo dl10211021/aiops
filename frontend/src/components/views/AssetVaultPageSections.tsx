@@ -26,32 +26,83 @@ export function AssetOverviewGrid({
   )
 }
 
-export function AssetAccessPrinciples() {
+export function AssetEnterpriseCommandPanel({
+  assetCount,
+  catalogTypeCount,
+  filteredCount,
+  readyCount,
+  savedCategoryCount,
+  protocolCount,
+}: {
+  assetCount: number
+  catalogTypeCount: number
+  filteredCount: number
+  readyCount: number
+  savedCategoryCount: number
+  protocolCount: number
+}) {
   const items = [
-    { title: '主机系统', detail: 'Linux/Unix 用 SSH，Windows 用 WinRM' },
-    { title: '数据库/缓存', detail: 'Oracle、MySQL、Redis 等使用原生协议' },
-    { title: '平台/API', detail: 'vCenter、K8s、监控、安全平台走 API' },
-    { title: '网络/存储', detail: '交换机、防火墙、存储按 SSH/SNMP/API 建档' },
+    { title: '主机系统', detail: 'Linux/Unix SSH、Windows WinRM' },
+    { title: '数据服务', detail: '数据库、缓存、大数据使用原生协议或 API' },
+    { title: '平台设备', detail: '虚拟化、容器、监控、安全平台走 API' },
+    { title: '网络存储', detail: '交换机、防火墙、存储按 SSH/SNMP/API 建档' },
+  ]
+  const stats = [
+    { label: '已入库资产', value: assetCount, hint: '支持上千资产台账' },
+    { label: '当前筛选', value: filteredCount, hint: '搜索和筛选结果' },
+    { label: '验证就绪', value: readyCount, hint: '可直接进入会话' },
+    { label: '资产类型目录', value: catalogTypeCount, hint: '覆盖数据中心常规设备' },
   ]
 
   return (
-    <section className="mb-3 rounded-lg border border-ops-surface1/70 bg-ops-panel px-4 py-3">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-bold text-ops-text">AI 运维主接入</h2>
-          <p className="mt-0.5 text-[11px] text-ops-overlay">
-            覆盖数据中心常规系统设备，页面只突出最适合 AI 登录、查询、巡检和操作的入口。
-          </p>
-        </div>
-        <span className="rounded-full bg-ops-accent/10 px-2.5 py-1 text-[11px] text-ops-accent">多类型 · 简单接入</span>
-      </div>
-      <div className="grid gap-2 md:grid-cols-4">
-        {items.map((item) => (
-          <div key={item.title} className="rounded-lg border border-ops-surface0 bg-ops-dark/30 px-3 py-2">
-            <div className="text-xs font-semibold text-ops-text">{item.title}</div>
-            <div className="mt-1 text-[11px] leading-5 text-ops-subtext">{item.detail}</div>
+    <section className="mb-4 overflow-hidden rounded-xl border border-ops-surface1/80 bg-[linear-gradient(135deg,rgba(38,207,175,0.12),rgba(10,18,32,0.98)_42%,rgba(44,88,148,0.14))] shadow-[var(--ops-panel-shadow)]">
+      <div className="grid gap-4 p-4 xl:grid-cols-[1.25fr_1fr]">
+        <div className="min-w-0">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-ops-accent/35 bg-ops-accent/10 px-2.5 py-1 text-[11px] font-semibold text-ops-accent">
+              企业资产台账
+            </span>
+            <span className="rounded-full border border-ops-surface1 bg-ops-dark/45 px-2.5 py-1 text-[11px] text-ops-subtext">
+              分类 {savedCategoryCount} 类 · 主接入 {protocolCount} 种
+            </span>
           </div>
-        ))}
+          <h2 className="text-xl font-bold tracking-tight text-ops-text md:text-2xl">
+            数据中心资产接入、凭据、验证和会话入口统一管理
+          </h2>
+          <p className="mt-2 max-w-3xl text-xs leading-6 text-ops-subtext">
+            这里不是监控清单，而是 AI 运维的资产台账。每台设备都能保存主接入、凭据、标签和验证状态，后续会话、巡检、审批和技能执行都从这里进入。
+          </p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {stats.map((item) => (
+              <div key={item.label} className="rounded-lg border border-ops-surface1/80 bg-ops-dark/35 p-3">
+                <div className="text-[11px] text-ops-overlay">{item.label}</div>
+                <div className="mt-1 font-mono text-2xl font-bold text-ops-text">{item.value}</div>
+                <div className="mt-1 text-[10px] text-ops-subtext">{item.hint}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-ops-surface1/80 bg-ops-panel/70 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-bold text-ops-text">接入治理原则</div>
+              <div className="mt-0.5 text-[11px] text-ops-overlay">支持多类型，但每类只突出最清晰的主入口。</div>
+            </div>
+            <span className="rounded-full bg-ops-accent/10 px-2.5 py-1 text-[11px] text-ops-accent">多类型 · 简单接入</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {items.map((item) => (
+              <div key={item.title} className="rounded-lg border border-ops-surface0 bg-ops-dark/30 px-3 py-2">
+                <div className="text-xs font-semibold text-ops-text">{item.title}</div>
+                <div className="mt-1 text-[11px] leading-5 text-ops-subtext">{item.detail}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 rounded-lg border border-ops-surface0 bg-ops-dark/30 px-3 py-2 text-[11px] leading-5 text-ops-overlay">
+            企业化边界：资产负责建档、连接、验证、批量维护；具体巡检和操作进入会话后由协议工具和安全审批控制。
+          </div>
+        </div>
       </div>
     </section>
   )
@@ -160,10 +211,10 @@ export function AssetTablePanel({
   }, [search, hasActiveFilters, assets.length])
 
   return (
-    <section className="overflow-hidden rounded-lg border border-ops-surface1/80 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
-      <div className="flex min-h-[50px] flex-col gap-3 border-b border-ops-surface1/75 bg-ops-surface0/65 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+    <section className="overflow-hidden rounded-xl border border-ops-surface1/80 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
+      <div className="flex min-h-[58px] flex-col gap-3 border-b border-ops-surface1/75 bg-ops-surface0/65 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-2">
-          <h2 className="text-sm font-bold text-ops-text">接入资产</h2>
+          <h2 className="text-sm font-bold text-ops-text">企业资产台账</h2>
           <span className="rounded-lg border border-ops-surface1 bg-ops-panel px-2 py-0.5 text-[11px] text-ops-subtext">
             {assets.length} 条
           </span>
@@ -193,7 +244,7 @@ export function AssetTablePanel({
             onClick={onRefresh}
             className="h-8 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
           >
-            刷新
+            刷新台账
           </button>
         </div>
       </div>
