@@ -77,9 +77,11 @@ export default function AssetVault() {
   const {
     batchImportDraft,
     batchImportOpen,
+    bulkVerifyingAssets,
     deleteTarget,
     deletingAsset,
     handleBatchImportConfirmed,
+    handleBulkVerifyAssets,
     handleConnect,
     handleEditAsset,
     handleDeleteConfirmed,
@@ -163,7 +165,9 @@ export default function AssetVault() {
           displayForAsset={displayForAsset}
           hasActiveFilters={hasActiveFilters}
           matrixByAssetId={matrixByAssetId}
+          bulkVerifying={bulkVerifyingAssets}
           onClearFilters={clearFilters}
+          onBulkVerify={(selectedAssets) => void handleBulkVerifyAssets(selectedAssets)}
           onConnect={handleConnect}
           onEdit={handleEditAsset}
           onDelete={setDeleteTarget}

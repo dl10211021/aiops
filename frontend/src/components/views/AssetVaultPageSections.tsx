@@ -172,9 +172,11 @@ export function AssetGroupSections({
 
 export function AssetTablePanel({
   assets,
+  bulkVerifying,
   displayForAsset,
   hasActiveFilters,
   matrixByAssetId,
+  onBulkVerify,
   onClearFilters,
   onConnect,
   onEdit,
@@ -185,9 +187,11 @@ export function AssetTablePanel({
   search,
 }: {
   assets: Asset[]
+  bulkVerifying: boolean
   displayForAsset: (asset: Asset) => AssetDisplayMeta
   hasActiveFilters: boolean
   matrixByAssetId: Map<number, AssetVerificationMatrix>
+  onBulkVerify: (assets: Asset[]) => void
   onClearFilters: () => void
   onConnect: (asset: Asset) => void
   onEdit: (asset: Asset) => void
@@ -198,6 +202,7 @@ export function AssetTablePanel({
   search: string
 }) {
   const [page, setPage] = useState(1)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set())
   const pageCount = Math.max(1, Math.ceil(assets.length / ASSET_TABLE_PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
   const pageStart = (currentPage - 1) * ASSET_TABLE_PAGE_SIZE
@@ -209,6 +214,41 @@ export function AssetTablePanel({
   useEffect(() => {
     setPage(1)
   }, [search, hasActiveFilters, assets.length])
+
+  useEffect(() => {
+    setSelectedIds((current) => {
+      const availableIds = new Set(assets.map((asset) => asset.id))
+      const next = new Set(Array.from(current).filter((id) => availableIds.has(id)))
+      return next.size === current.size ? current : next
+    })
+  }, [assets])
+
+  const visibleIds = visibleAssets.map((asset) => asset.id)
+  const selectedAssets = assets.filter((asset) => selectedIds.has(asset.id))
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id))
+  const someVisibleSelected = visibleIds.some((id) => selectedIds.has(id))
+  const toggleVisibleSelection = () => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (allVisibleSelected) {
+        visibleIds.forEach((id) => next.delete(id))
+      } else {
+        visibleIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }
+  const toggleAssetSelection = (assetId: number) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (next.has(assetId)) {
+        next.delete(assetId)
+      } else {
+        next.add(assetId)
+      }
+      return next
+    })
+  }
 
   return (
     <section className="overflow-hidden rounded-xl border border-ops-surface1/80 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
@@ -248,10 +288,47 @@ export function AssetTablePanel({
           </button>
         </div>
       </div>
+      {selectedIds.size > 0 && (
+        <div className="flex flex-col gap-2 border-b border-ops-surface1/75 bg-ops-accent/10 px-4 py-3 text-xs text-ops-subtext lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-lg bg-ops-accent/15 px-2.5 py-1 font-semibold text-ops-accent">
+              已选择 {selectedIds.size} 条资产
+            </span>
+            <span className="text-ops-overlay">批量动作只针对已选择资产执行，避免误操作整库。</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => onBulkVerify(selectedAssets)}
+              disabled={bulkVerifying}
+              className="rounded-lg bg-ops-accent px-3 py-1.5 font-semibold text-ops-dark transition-colors hover:bg-ops-accent/80 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {bulkVerifying ? '验证中...' : '批量验证'}
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded-lg border border-ops-surface1 bg-ops-panel px-3 py-1.5 text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
+            >
+              清空选择
+            </button>
+          </div>
+        </div>
+      )}
       <div className="overflow-auto">
         <table className="min-w-full border-collapse text-left text-sm">
           <thead className="bg-ops-surface0/55 text-[11px] uppercase tracking-normal text-ops-overlay">
             <tr className="border-b border-ops-surface1/75">
+              <th className="w-10 px-4 py-3 font-semibold">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  ref={(node) => {
+                    if (node) node.indeterminate = !allVisibleSelected && someVisibleSelected
+                  }}
+                  onChange={toggleVisibleSelection}
+                  aria-label="选择当前页资产"
+                  className="h-4 w-4 rounded border-ops-surface1 bg-ops-dark text-ops-accent"
+                />
+              </th>
               <th className="px-4 py-3 font-semibold">名称</th>
               <th className="px-4 py-3 font-semibold">地址</th>
               <th className="px-4 py-3 font-semibold">类型</th>
@@ -269,6 +346,15 @@ export function AssetTablePanel({
               const tags = asset.tags?.length ? asset.tags : [display.categoryLabel]
               return (
                 <tr key={asset.id} className="border-b border-ops-surface1/55 hover:bg-ops-surface0/35">
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(asset.id)}
+                      onChange={() => toggleAssetSelection(asset.id)}
+                      aria-label={`选择资产 ${asset.remark || asset.host}`}
+                      className="h-4 w-4 rounded border-ops-surface1 bg-ops-dark text-ops-accent"
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <div className="max-w-[18rem] truncate font-semibold text-ops-text" title={asset.remark || asset.host}>
                       {asset.remark || asset.host}
@@ -335,7 +421,7 @@ export function AssetTablePanel({
             })}
             {assets.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-sm text-ops-subtext">
+                <td colSpan={8} className="px-4 py-12 text-center text-sm text-ops-subtext">
                   当前没有匹配的资产
                 </td>
               </tr>

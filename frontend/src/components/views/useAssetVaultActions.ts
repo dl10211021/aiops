@@ -50,6 +50,7 @@ export function useAssetVaultActions({
   const [importingAssets, setImportingAssets] = useState(false)
   const [normalizeDialog, setNormalizeDialog] = useState<{ rowsToUpdate: number; duplicatesToRemove: number } | null>(null)
   const [normalizingAssets, setNormalizingAssets] = useState(false)
+  const [bulkVerifyingAssets, setBulkVerifyingAssets] = useState(false)
 
   const openCreateAsset = () => {
     sessionStorage.removeItem('asset_editing_id')
@@ -178,12 +179,45 @@ export function useAssetVaultActions({
     }
   }
 
+  const handleBulkVerifyAssets = async (selectedAssets: Asset[]) => {
+    if (!selectedAssets.length) {
+      addToast('请先选择要验证的资产', 'error')
+      return
+    }
+    setBulkVerifyingAssets(true)
+    let successCount = 0
+    let reviewCount = 0
+    try {
+      for (const asset of selectedAssets) {
+        try {
+          const res = await verifyAsset(asset.id)
+          if (res.data.run.status === 'success') {
+            successCount += 1
+          } else {
+            reviewCount += 1
+          }
+        } catch {
+          reviewCount += 1
+        }
+      }
+      await refreshVerificationOverview()
+      addToast(
+        `批量验证完成：成功 ${successCount} 条，需复核 ${reviewCount} 条`,
+        reviewCount > 0 ? 'error' : 'success'
+      )
+    } finally {
+      setBulkVerifyingAssets(false)
+    }
+  }
+
   return {
     batchImportDraft,
     batchImportOpen,
+    bulkVerifyingAssets,
     deleteTarget,
     deletingAsset,
     handleBatchImportConfirmed,
+    handleBulkVerifyAssets,
     handleConnect,
     handleEditAsset,
     handleDeleteConfirmed,
