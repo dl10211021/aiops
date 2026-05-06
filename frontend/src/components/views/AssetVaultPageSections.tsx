@@ -1,8 +1,11 @@
 import type { Asset, AssetVerificationMatrix, ProtocolVerificationOverview } from '@/types'
+import { useEffect, useMemo, useState } from 'react'
 import { AssetCard } from './AssetVaultCards'
 import { OverviewCard, type AssetDisplayMeta } from './AssetVaultParts'
 import { assetTypeKey } from './assetVaultModel'
 import type { AssetVaultGroup } from './assetVaultViewModel'
+
+const ASSET_TABLE_PAGE_SIZE = 50
 
 export function AssetOverviewGrid({
   overview,
@@ -25,10 +28,10 @@ export function AssetOverviewGrid({
 
 export function AssetAccessPrinciples() {
   const items = [
-    { title: '主机', detail: 'Linux/Unix 用 SSH，Windows 用 WinRM' },
-    { title: '数据库', detail: 'MySQL、Oracle 等使用原生数据库协议' },
-    { title: '虚拟化', detail: 'vCenter 走 API，ESXi 主机走 SSH' },
-    { title: '网络设备', detail: '交换机/防火墙默认 SSH CLI' },
+    { title: '主机系统', detail: 'Linux/Unix 用 SSH，Windows 用 WinRM' },
+    { title: '数据库/缓存', detail: 'Oracle、MySQL、Redis 等使用原生协议' },
+    { title: '平台/API', detail: 'vCenter、K8s、监控、安全平台走 API' },
+    { title: '网络/存储', detail: '交换机、防火墙、存储按 SSH/SNMP/API 建档' },
   ]
 
   return (
@@ -36,9 +39,11 @@ export function AssetAccessPrinciples() {
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-bold text-ops-text">AI 运维主接入</h2>
-          <p className="mt-0.5 text-[11px] text-ops-overlay">每类资产只保留 1 个最常用入口，特殊场景再单独建专用资产。</p>
+          <p className="mt-0.5 text-[11px] text-ops-overlay">
+            覆盖数据中心常规系统设备，页面只突出最适合 AI 登录、查询、巡检和操作的入口。
+          </p>
         </div>
-        <span className="rounded-full bg-ops-accent/10 px-2.5 py-1 text-[11px] text-ops-accent">少而准</span>
+        <span className="rounded-full bg-ops-accent/10 px-2.5 py-1 text-[11px] text-ops-accent">多类型 · 简单接入</span>
       </div>
       <div className="grid gap-2 md:grid-cols-4">
         {items.map((item) => (
@@ -141,6 +146,19 @@ export function AssetTablePanel({
   onSearchChange: (value: string) => void
   search: string
 }) {
+  const [page, setPage] = useState(1)
+  const pageCount = Math.max(1, Math.ceil(assets.length / ASSET_TABLE_PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const pageStart = (currentPage - 1) * ASSET_TABLE_PAGE_SIZE
+  const visibleAssets = useMemo(
+    () => assets.slice(pageStart, pageStart + ASSET_TABLE_PAGE_SIZE),
+    [assets, pageStart]
+  )
+
+  useEffect(() => {
+    setPage(1)
+  }, [search, hasActiveFilters, assets.length])
+
   return (
     <section className="overflow-hidden rounded-lg border border-ops-surface1/80 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
       <div className="flex min-h-[50px] flex-col gap-3 border-b border-ops-surface1/75 bg-ops-surface0/65 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
@@ -149,6 +167,11 @@ export function AssetTablePanel({
           <span className="rounded-lg border border-ops-surface1 bg-ops-panel px-2 py-0.5 text-[11px] text-ops-subtext">
             {assets.length} 条
           </span>
+          {assets.length > ASSET_TABLE_PAGE_SIZE && (
+            <span className="rounded-lg border border-ops-surface1 bg-ops-panel px-2 py-0.5 text-[11px] text-ops-overlay">
+              每页 {ASSET_TABLE_PAGE_SIZE} 条
+            </span>
+          )}
           {hasActiveFilters && (
             <button
               onClick={onClearFilters}
@@ -161,7 +184,7 @@ export function AssetTablePanel({
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <input
             type="text"
-            placeholder="搜索资产、地址、账号、协议"
+            placeholder="搜索资产、地址、账号、类型、主接入"
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             className="h-8 min-w-64 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-xs text-ops-text outline-none focus:border-ops-accent"
@@ -188,7 +211,7 @@ export function AssetTablePanel({
             </tr>
           </thead>
           <tbody>
-            {assets.map((asset) => {
+            {visibleAssets.map((asset) => {
               const display = displayForAsset(asset)
               const matrix = matrixByAssetId.get(asset.id)
               const verification = verificationBadge(matrix)
@@ -269,6 +292,32 @@ export function AssetTablePanel({
           </tbody>
         </table>
       </div>
+      {assets.length > ASSET_TABLE_PAGE_SIZE && (
+        <div className="flex flex-col gap-2 border-t border-ops-surface1/75 bg-ops-surface0/35 px-4 py-3 text-xs text-ops-subtext sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            显示 {pageStart + 1}-{Math.min(pageStart + ASSET_TABLE_PAGE_SIZE, assets.length)} / {assets.length} 条
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+              disabled={currentPage <= 1}
+              className="rounded-lg border border-ops-surface1 px-3 py-1 disabled:cursor-not-allowed disabled:opacity-45 hover:border-ops-accent/50 hover:text-ops-text"
+            >
+              上一页
+            </button>
+            <span className="rounded-lg bg-ops-panel px-2.5 py-1 text-ops-overlay">
+              {currentPage} / {pageCount}
+            </span>
+            <button
+              onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+              disabled={currentPage >= pageCount}
+              className="rounded-lg border border-ops-surface1 px-3 py-1 disabled:cursor-not-allowed disabled:opacity-45 hover:border-ops-accent/50 hover:text-ops-text"
+            >
+              下一页
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

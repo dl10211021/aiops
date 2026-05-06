@@ -72,8 +72,8 @@ export function AssetVaultFilterPanel({
     <details className="mb-3 rounded-lg border border-ops-surface1/70 bg-ops-panel">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
         <div>
-          <div className="text-xs font-semibold text-ops-text">高级筛选</div>
-          <div className="text-[11px] text-ops-overlay">{catalogTypeCount} 类资产 / 当前 {assetCount} 条</div>
+          <div className="text-xs font-semibold text-ops-text">资产筛选</div>
+          <div className="text-[11px] text-ops-overlay">{catalogTypeCount} 类可接入资产 / 当前已保存 {assetCount} 条</div>
         </div>
         {hasActiveFilters && (
           <button
@@ -110,7 +110,7 @@ export function AssetVaultFilterPanel({
           <div className="mt-3 border-t border-ops-surface1/70 pt-3">
             <div className="mb-2 flex items-center justify-between gap-3">
               <span className="text-xs font-semibold text-ops-text">目录覆盖</span>
-              <span className="text-[11px] text-ops-overlay">{catalogTypeCount} 类资产 / 已保存 {assetCount}</span>
+              <span className="text-[11px] text-ops-overlay">面向上千资产管理 / 已保存 {assetCount}</span>
             </div>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
               {categoryStats.slice(0, 12).map((item) => (

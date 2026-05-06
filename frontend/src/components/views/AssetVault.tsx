@@ -111,7 +111,7 @@ export default function AssetVault() {
       <div className="w-full max-w-none pb-4">
         <PageHeader
           title="资产中心"
-          description="统一管理 AI 运维要登录、查询和巡检的主接入资产。"
+          description="统一管理数据中心常规系统设备，支持新增、编辑、删除、搜索、批量导入和主接入验证。"
           actions={(
             <AssetVaultHeaderActions
               onBatchImport={() => setBatchImportOpen(true)}
