@@ -101,7 +101,7 @@ export function AssetVaultFilterPanel({
           onChange={onAssetTypeChange}
         />
         <FilterRow
-          label="连接方式"
+          label="主接入"
           value={connectorFilter}
           options={availableConnectors.map((id) => ({ id, label: connectorLabels[id] || id.toUpperCase() }))}
           onChange={onConnectorChange}

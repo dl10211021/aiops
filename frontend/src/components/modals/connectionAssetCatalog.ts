@@ -58,7 +58,8 @@ export const ASSET_SUB_TYPES: Record<string, AssetSubType[]> = {
     { id: 'consul', label: 'Consul', asset_type: 'http_api', defaultPort: 8500 },
   ],
   virtualization: [
-    { id: 'vmware', label: 'VMware vCenter / ESXi', asset_type: 'vmware', defaultPort: 443 },
+    { id: 'vmware', label: 'VMware vCenter (API)', asset_type: 'vmware', defaultPort: 443 },
+    { id: 'esxi', label: 'VMware ESXi 主机 (SSH)', asset_type: 'ssh', defaultPort: 22 },
     { id: 'kvm', label: 'KVM / Libvirt 宿主机 (SSH)', asset_type: 'ssh', defaultPort: 22 },
     { id: 'openstack', label: 'OpenStack', asset_type: 'openstack', defaultPort: 5000 },
     { id: 'proxmox', label: 'Proxmox VE', asset_type: 'proxmox', defaultPort: 8006 },

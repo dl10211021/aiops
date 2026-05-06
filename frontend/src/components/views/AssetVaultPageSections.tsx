@@ -23,6 +23,35 @@ export function AssetOverviewGrid({
   )
 }
 
+export function AssetAccessPrinciples() {
+  const items = [
+    { title: '主机', detail: 'Linux/Unix 用 SSH，Windows 用 WinRM' },
+    { title: '数据库', detail: 'MySQL、Oracle 等使用原生数据库协议' },
+    { title: '虚拟化', detail: 'vCenter 走 API，ESXi 主机走 SSH' },
+    { title: '网络设备', detail: '交换机/防火墙默认 SSH CLI' },
+  ]
+
+  return (
+    <section className="mb-3 rounded-lg border border-ops-surface1/70 bg-ops-panel px-4 py-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-bold text-ops-text">AI 运维主接入</h2>
+          <p className="mt-0.5 text-[11px] text-ops-overlay">每类资产只保留 1 个最常用入口，特殊场景再单独建专用资产。</p>
+        </div>
+        <span className="rounded-full bg-ops-accent/10 px-2.5 py-1 text-[11px] text-ops-accent">少而准</span>
+      </div>
+      <div className="grid gap-2 md:grid-cols-4">
+        {items.map((item) => (
+          <div key={item.title} className="rounded-lg border border-ops-surface0 bg-ops-dark/30 px-3 py-2">
+            <div className="text-xs font-semibold text-ops-text">{item.title}</div>
+            <div className="mt-1 text-[11px] leading-5 text-ops-subtext">{item.detail}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export function AssetGroupSections({
   assetGroups,
   assetTypeLabels,
@@ -116,7 +145,7 @@ export function AssetTablePanel({
     <section className="overflow-hidden rounded-lg border border-ops-surface1/80 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
       <div className="flex min-h-[50px] flex-col gap-3 border-b border-ops-surface1/75 bg-ops-surface0/65 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-2">
-          <h2 className="text-sm font-bold text-ops-text">资产列表</h2>
+          <h2 className="text-sm font-bold text-ops-text">接入资产</h2>
           <span className="rounded-lg border border-ops-surface1 bg-ops-panel px-2 py-0.5 text-[11px] text-ops-subtext">
             {assets.length} 条
           </span>
@@ -152,9 +181,9 @@ export function AssetTablePanel({
               <th className="px-4 py-3 font-semibold">名称</th>
               <th className="px-4 py-3 font-semibold">地址</th>
               <th className="px-4 py-3 font-semibold">类型</th>
-              <th className="px-4 py-3 font-semibold">协议</th>
+              <th className="px-4 py-3 font-semibold">主接入</th>
               <th className="px-4 py-3 font-semibold">标签</th>
-              <th className="px-4 py-3 font-semibold">验证</th>
+              <th className="px-4 py-3 font-semibold">状态</th>
               <th className="px-4 py-3 text-right font-semibold">操作</th>
             </tr>
           </thead>

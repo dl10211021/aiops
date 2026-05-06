@@ -43,8 +43,8 @@ export function AssetCard({
       </div>
       <div className="mb-2 grid gap-1.5 rounded-lg border border-ops-surface0 bg-ops-dark/25 p-2 text-[11px]">
         <AssetMetaLine label="分类" value={categoryLabel} />
-        <AssetMetaLine label="接入" value={connectorLabel} />
-        <AssetMetaLine label="协议" value={protocolLabel} />
+        <AssetMetaLine label="工具" value={connectorLabel} />
+        <AssetMetaLine label="主接入" value={protocolLabel} />
       </div>
       <div className="mb-2 flex flex-wrap gap-1.5 text-[10px]">
         {(asset.tags || []).slice(0, 3).map((tag) => (
@@ -60,15 +60,27 @@ export function AssetCard({
         </div>
       )}
       <div className="mt-3 flex gap-2">
-        <button
+        <button onClick={() => onConnect(asset)} className="flex-1 rounded-lg bg-ops-accent/15 py-1.5 text-xs text-ops-accent transition-colors hover:bg-ops-accent/25">连接</button>
+        <button onClick={() => onOpenVerification(asset)} className="rounded-lg bg-ops-success/10 px-2.5 py-1.5 text-xs text-ops-success transition-colors hover:bg-ops-success/20">验证</button>
+        <details className="relative">
+          <summary className="list-none rounded-lg border border-ops-surface1 px-2.5 py-1.5 text-xs text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text">
+            维护
+          </summary>
+          <div className="absolute right-0 z-20 mt-2 w-24 overflow-hidden rounded-lg border border-ops-surface1 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
+            <button
               onClick={() => onEdit(asset)}
-              className="rounded-lg border border-ops-surface1 px-3 py-1.5 text-xs text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-accent"
+              className="block w-full px-3 py-2 text-left text-xs text-ops-subtext transition-colors hover:bg-ops-surface0 hover:text-ops-accent"
             >
               编辑
             </button>
-            <button onClick={() => onConnect(asset)} className="flex-1 rounded-lg bg-ops-accent/15 py-1.5 text-xs text-ops-accent transition-colors hover:bg-ops-accent/25">连接</button>
-        <button onClick={() => onOpenVerification(asset)} className="rounded-lg bg-ops-success/10 px-2.5 py-1.5 text-xs text-ops-success transition-colors hover:bg-ops-success/20">验证</button>
-        <button onClick={() => onDelete(asset)} className="rounded-lg px-2 py-1.5 text-xs text-ops-overlay transition-colors hover:bg-ops-alert/10 hover:text-ops-alert">删除</button>
+            <button
+              onClick={() => onDelete(asset)}
+              className="block w-full border-t border-ops-surface1 px-3 py-2 text-left text-xs text-ops-alert transition-colors hover:bg-ops-alert/10"
+            >
+              删除
+            </button>
+          </div>
+        </details>
       </div>
     </div>
   )

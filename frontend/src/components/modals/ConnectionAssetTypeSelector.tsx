@@ -56,9 +56,9 @@ export default function ConnectionAssetTypeSelector({
     <section className="rounded-lg border border-ops-surface0 bg-ops-dark/20 p-3">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-semibold text-ops-text">资产类型与接入方式</div>
+          <div className="text-xs font-semibold text-ops-text">资产类型与主接入方式</div>
           <div className="mt-0.5 text-[11px] text-ops-overlay">
-            当前分类 {subTypeOptions.length} 类资产，按真实连接方式分组展示。
+            当前分类 {subTypeOptions.length} 类资产，只展示 AI 运维最常用的登录、查询或 API 接入。
           </div>
         </div>
         <span className="rounded bg-ops-surface0 px-2 py-0.5 text-[10px] text-ops-subtext">
@@ -93,7 +93,7 @@ export default function ConnectionAssetTypeSelector({
           <input
             value={assetTypeSearch}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="搜索资产类型、协议或连接方式"
+            placeholder="搜索资产类型或主接入方式"
             className="mb-2 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
           />
           <select
@@ -145,13 +145,20 @@ export default function ConnectionAssetTypeSelector({
                 {selectedConnectionHint}
               </p>
             )}
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {(selectedTools.length > 0 ? selectedTools : ['待补工具']).map((tool) => (
-                <span key={tool} title={tool} className="rounded bg-ops-surface0 px-1.5 py-0.5 text-[10px] text-ops-subtext">
-                  {toolLabel(tool)}
-                </span>
-              ))}
-            </div>
+            {selectedTools.length > 0 && (
+              <details className="mt-2 rounded-lg border border-ops-surface1 bg-ops-panel/45 px-2.5 py-2">
+                <summary className="cursor-pointer text-[11px] font-semibold text-ops-subtext">
+                  AI 可用工具 {selectedTools.length} 个
+                </summary>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {selectedTools.map((tool) => (
+                    <span key={tool} title={tool} className="rounded bg-ops-surface0 px-1.5 py-0.5 text-[10px] text-ops-subtext">
+                      {toolLabel(tool)}
+                    </span>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         )}
       </div>

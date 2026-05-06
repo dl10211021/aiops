@@ -293,11 +293,19 @@ BASE_ASSET_CATALOG = [
     },
     {
         "id": "vmware",
-        "label": "VMware vCenter / ESXi",
+        "label": "VMware vCenter (API)",
         "category": "virtualization",
-        "protocol": "http_api",
+        "protocol": "vmware",
         "default_port": 443,
         "inspection_profile": "http_api",
+    },
+    {
+        "id": "esxi",
+        "label": "VMware ESXi 主机 (SSH)",
+        "category": "virtualization",
+        "protocol": "ssh",
+        "default_port": 22,
+        "inspection_profile": "linux",
     },
     {
         "id": "kvm",

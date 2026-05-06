@@ -16,7 +16,7 @@ export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificatio
   return (
     <section className="mb-5 rounded-lg border border-ops-surface0 bg-ops-dark/30 p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-ops-text">资产能力检查</h3>
+        <h3 className="text-sm font-bold text-ops-text">主接入检查</h3>
         <span className="font-mono text-xs text-ops-overlay">
           {matrix.coverage.supported}/{matrix.coverage.total} 项可用
         </span>
@@ -24,14 +24,14 @@ export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificatio
       {supportedProtocols.length > 0 && (
         <div className="mb-3 rounded-lg border border-ops-surface0 bg-ops-panel/55 px-3 py-2">
           <div className="mb-2 flex items-center justify-between gap-3">
-            <div className="text-[11px] font-semibold text-ops-subtext">接入协议</div>
+            <div className="text-[11px] font-semibold text-ops-subtext">主接入协议</div>
             {currentProtocol && (
               <span className="rounded-full bg-ops-accent/10 px-2 py-0.5 text-[10px] text-ops-accent">
                 当前：{currentProtocol.label}
               </span>
             )}
           </div>
-          <div className="mb-2 text-[11px] text-ops-overlay">运维接入</div>
+          <div className="mb-2 text-[11px] text-ops-overlay">AI 运维入口</div>
           <div className="flex flex-wrap gap-1.5">
             {operationProtocols.map((item) => (
               <span

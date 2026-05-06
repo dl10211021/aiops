@@ -173,6 +173,7 @@ class TestAssetProtocolLayer(unittest.TestCase):
             "grafana": "http_api",
             "zabbix": "http_api",
             "vmware": "vmware",
+            "esxi": "ssh",
             "kvm": "ssh",
             "openstack": "openstack",
             "proxmox": "proxmox",

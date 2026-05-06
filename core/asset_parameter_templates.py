@@ -171,6 +171,19 @@ SHARED_PARAMETER_TEMPLATES: dict[str, list[dict[str, Any]]] = {
             "group": "network_cli",
         }
     ],
+    "virtualization_shell": [
+        _select_parameter(
+            "shell",
+            "命令环境",
+            group="virtualization_shell",
+            default="sh",
+            options=[
+                ("ESXi Shell", "sh"),
+                ("Bash", "bash"),
+            ],
+        ),
+        _text_parameter("default_cli", "默认 CLI", group="virtualization_shell", default="esxcli"),
+    ],
     "winrm_powershell": [
         {
             "field": "transport",

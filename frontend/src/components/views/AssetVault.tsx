@@ -3,7 +3,7 @@ import PageHeader from '@/components/layout/PageHeader'
 import { BatchImportAssetsDialog, DeleteAssetDialog, NormalizeAssetsDialog } from './AssetVaultDialogs'
 import { AssetVaultFilterPanel, AssetVaultHeaderActions } from './AssetVaultFilterPanel'
 import { VerificationPanel } from './AssetVerificationPanel'
-import { AssetTablePanel } from './AssetVaultPageSections'
+import { AssetAccessPrinciples, AssetTablePanel } from './AssetVaultPageSections'
 import { buildAssetVaultViewModel } from './assetVaultViewModel'
 import { useAssetVaultActions } from './useAssetVaultActions'
 import { useAssetVaultData } from './useAssetVaultData'
@@ -111,7 +111,7 @@ export default function AssetVault() {
       <div className="w-full max-w-none pb-4">
         <PageHeader
           title="资产中心"
-          description="资产、协议、凭据、标签、验证矩阵。"
+          description="统一管理 AI 运维要登录、查询和巡检的主接入资产。"
           actions={(
             <AssetVaultHeaderActions
               onBatchImport={() => setBatchImportOpen(true)}
@@ -120,6 +120,8 @@ export default function AssetVault() {
             />
           )}
         />
+
+        <AssetAccessPrinciples />
 
         <AssetVaultFilterPanel
           assetCount={assets.length}
