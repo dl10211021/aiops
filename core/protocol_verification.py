@@ -18,6 +18,7 @@ from core.asset_protocols import (
     SNMP_PROTOCOLS,
     STORAGE_ASSET_TYPES,
     VIRTUALIZATION_ASSET_TYPES,
+    get_asset_catalog,
     resolve_asset_identity,
 )
 from core.tool_registry import tool_registry
@@ -165,6 +166,51 @@ def _access_method_label(asset_type: str, protocol: str) -> str:
     return f"{asset_type}/{protocol} 原生接入"
 
 
+def _supported_protocols_for_asset(asset_type: str, protocol: str, extra_args: dict[str, Any]) -> list[dict[str, Any]]:
+    catalog = get_asset_catalog()
+    lookup_ids = {
+        str(asset_type or ""),
+        str(extra_args.get("sub_type") or ""),
+        str(extra_args.get("raw_asset_type") or ""),
+    }
+    lookup_ids.discard("")
+    matches = [item for item in catalog if str(item.get("id") or "") in lookup_ids]
+
+    if not matches:
+        matches = [
+            item
+            for item in catalog
+            if item.get("protocol") == protocol and item.get("category") == extra_args.get("category")
+        ][:1]
+
+    entries: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add_entry(candidate_protocol: str, label: str, source: str) -> None:
+        key = (candidate_protocol, source)
+        if not candidate_protocol or key in seen:
+            return
+        seen.add(key)
+        entries.append({
+            "protocol": candidate_protocol,
+            "label": label,
+            "source": source,
+            "is_current": candidate_protocol == protocol,
+        })
+
+    for item in matches:
+        item_protocol = str(item.get("protocol") or "")
+        item_asset_type = str(item.get("id") or asset_type)
+        add_entry(item_protocol, _access_method_label(item_asset_type, item_protocol), "资产目录接入")
+        for monitor_protocol in item.get("hertzbeat_protocols") or []:
+            add_entry(str(monitor_protocol), f"{monitor_protocol} 监控采集", "监控模板")
+
+    if not any(entry["protocol"] == protocol for entry in entries):
+        add_entry(protocol, _access_method_label(asset_type, protocol), "当前资产")
+
+    return entries
+
+
 def build_asset_matrix(asset: dict[str, Any]) -> dict[str, Any]:
     safe_asset = sanitize_asset(asset)
     active_tools = _active_tools(asset)
@@ -172,10 +218,14 @@ def build_asset_matrix(asset: dict[str, Any]) -> dict[str, Any]:
     asset_type = safe_asset["asset_type"]
     has_native_tool = bool(active_tools)
     access_method = _access_method_label(asset_type, protocol)
+    supported_protocols = _supported_protocols_for_asset(asset_type, protocol, safe_asset.get("extra_args") or {})
+    supported_protocol_summary = "、".join(
+        f"{item['label']}({item['protocol']})" for item in supported_protocols
+    ) or f"{access_method}({protocol})"
     connection_description = (
-        "检查虚拟会话记录、托管上下文和可用工具；不代表真实网络连通。"
+        f"资产目录支持：{supported_protocol_summary}。检查虚拟会话记录、托管上下文和可用工具；不代表真实网络连通。"
         if protocol == "virtual"
-        else f"使用 {access_method} 检查资产连通性和托管凭据。"
+        else f"资产目录支持：{supported_protocol_summary}。当前使用 {access_method} 检查资产连通性和托管凭据。"
     )
     probe_description = (
         "虚拟会话没有真实协议探测；此项确认上下文隔离和工具暴露能力。"
@@ -218,6 +268,7 @@ def build_asset_matrix(asset: dict[str, Any]) -> dict[str, Any]:
     return {
         "asset": safe_asset,
         "active_tools": active_tools,
+        "supported_protocols": supported_protocols,
         "steps": steps,
         "coverage": {
             "total": len(steps),

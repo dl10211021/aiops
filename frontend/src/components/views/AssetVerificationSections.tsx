@@ -2,6 +2,8 @@ import type { AssetVerificationMatrix, AssetVerificationRun, InspectionRun } fro
 import { statusLabel, toolLabel } from '@/utils/assetDisplay'
 
 export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificationMatrix }) {
+  const supportedProtocols = matrix.supported_protocols || []
+
   return (
     <section className="mb-5 rounded-lg border border-ops-surface0 bg-ops-dark/30 p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -10,6 +12,28 @@ export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificatio
           {matrix.coverage.supported}/{matrix.coverage.total} 项可用
         </span>
       </div>
+      {supportedProtocols.length > 0 && (
+        <div className="mb-3 rounded-lg border border-ops-surface0 bg-ops-panel/55 px-3 py-2">
+          <div className="mb-1 text-[11px] font-semibold text-ops-subtext">资产目录支持的接入协议</div>
+          <div className="flex flex-wrap gap-1.5">
+            {supportedProtocols.map((item) => (
+              <span
+                key={`${item.source}-${item.protocol}`}
+                className={`rounded-lg border px-2 py-1 text-[11px] ${
+                  item.is_current
+                    ? 'border-ops-accent/50 bg-ops-accent/12 text-ops-accent'
+                    : 'border-ops-surface1 bg-ops-surface0 text-ops-subtext'
+                }`}
+                title={item.source}
+              >
+                {item.label}
+                <span className="ml-1 font-mono opacity-70">{item.protocol}</span>
+                {item.is_current && <span className="ml-1">当前</span>}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="space-y-2">
         {matrix.steps.map((step) => (
           <div key={step.id} className="rounded-lg bg-ops-surface0/60 px-3 py-2">

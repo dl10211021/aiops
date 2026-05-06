@@ -249,6 +249,10 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
         self.assertIn("网络设备 SSH CLI", descriptions)
         self.assertNotIn("Linux", descriptions)
         self.assertIn("network_cli_execute_command", matrix["active_tools"])
+        self.assertIn(
+            {"protocol": "ssh", "label": "网络设备 SSH CLI", "source": "资产目录接入", "is_current": True},
+            matrix["supported_protocols"],
+        )
 
     def test_virtual_matrix_says_it_is_not_real_network_connectivity(self):
         from core import protocol_verification
@@ -268,6 +272,10 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
 
         self.assertIn("不代表真实网络连通", descriptions)
         self.assertIn("虚拟会话", descriptions)
+        self.assertIn(
+            {"protocol": "virtual", "label": "虚拟会话能力", "source": "当前资产", "is_current": True},
+            matrix["supported_protocols"],
+        )
 
     def test_windows_verify_uses_native_winrm_probe(self):
         from core import protocol_verification

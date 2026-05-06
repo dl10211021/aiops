@@ -577,6 +577,12 @@ export interface AssetVerificationMatrix {
     extra_args: Record<string, unknown>
   }
   active_tools: string[]
+  supported_protocols?: Array<{
+    protocol: string
+    label: string
+    source: string
+    is_current: boolean
+  }>
   steps: VerificationStep[]
   coverage: {
     total: number
