@@ -9,11 +9,12 @@ from core.agent_session_context import build_agent_session_context
 
 
 class AgentPromptTests(unittest.TestCase):
-    def _session_context(self, protocol: str = "ssh"):
+    def _session_context(self, protocol: str = "ssh", asset_type: str | None = None):
+        resolved_asset_type = asset_type or ("virtual" if protocol == "virtual" else "linux")
         return build_agent_session_context(
             "sid-prompt",
             {
-                "asset_type": "virtual" if protocol == "virtual" else "linux",
+                "asset_type": resolved_asset_type,
                 "protocol": protocol,
                 "host": "ops.local",
                 "port": 22,
@@ -47,7 +48,10 @@ class AgentPromptTests(unittest.TestCase):
             ltm_context="LTM-CONTEXT",
         )
 
-        self.assertTrue(prompt.startswith("\nBASE\n\n[当前持有的资产凭证]"))
+        self.assertTrue(prompt.startswith("\nBASE\n\n[当前会话上下文]"))
+        self.assertIn("会话类型：SSH / Linux-Unix 终端会话", prompt)
+        self.assertIn("资产类型：Linux/Unix 系统资产", prompt)
+        self.assertIn("不要假设所有会话都是 SSH", prompt)
         self.assertIn("一台通过SSH协议纳管的 LINUX 资产", prompt)
         self.assertIn("- api_token: (已托管，执行时自动注入)", prompt)
         self.assertIn("**只读巡检模式**", prompt)
@@ -73,6 +77,19 @@ class AgentPromptTests(unittest.TestCase):
         self.assertIn("资产画像提示词", prompt)
         self.assertLess(prompt.index("历史记忆：UFW 未启用"), prompt.index("[上下文优先级]"))
 
+    def test_chat_prompt_uses_database_session_context_without_ssh_assumption(self):
+        prompt = render_chat_system_prompt(
+            session_context=self._session_context(protocol="oracle", asset_type="oracle"),
+            base_prompt="BASE",
+            skill_instructions="SKILL",
+            ltm_context="",
+        )
+
+        self.assertIn("会话类型：Oracle 数据库会话", prompt)
+        self.assertIn("资产类型：Oracle 数据库资产", prompt)
+        self.assertIn("一台通过ORACLE协议纳管的 ORACLE 资产", prompt)
+        self.assertNotIn("目前你正处于一个 SSH 终端会话", prompt)
+
     @patch("core.agent_prompts.protocol_tool_list")
     @patch("core.agent_prompts.protocol_tool_guidance")
     @patch("core.agent_prompts.format_extra_args_for_prompt")
@@ -92,7 +109,8 @@ class AgentPromptTests(unittest.TestCase):
             task_description="检查 Skills 工程结构",
         )
 
-        self.assertTrue(prompt.startswith("BASE\n\n[当前持有的资产凭证]"))
+        self.assertTrue(prompt.startswith("BASE\n\n[当前会话上下文]"))
+        self.assertIn("会话类型：虚拟/本地技能研发会话", prompt)
         self.assertIn("一台通过VIRTUAL协议纳管的 VIRTUAL 资产", prompt)
         self.assertIn("[上级指挥官委派的任务]", prompt)
         self.assertIn("检查 Skills 工程结构", prompt)

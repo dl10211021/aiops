@@ -10,6 +10,43 @@ from core.agent_protocol_context import (
 from core.agent_session_context import AgentSessionContext
 
 
+def _session_context_prompt(session_context: AgentSessionContext) -> str:
+    protocol = str(session_context.protocol or "unknown").lower()
+    asset_type = str(session_context.asset_type or "asset").lower()
+    protocol_labels = {
+        "ssh": "SSH / Linux-Unix 终端会话",
+        "winrm": "WinRM / Windows 远程管理会话",
+        "oracle": "Oracle 数据库会话",
+        "mysql": "MySQL 数据库会话",
+        "postgresql": "PostgreSQL 数据库会话",
+        "mssql": "SQL Server 数据库会话",
+        "snmp": "SNMP 网络设备监控会话",
+        "network_cli": "网络设备 CLI 会话",
+        "http_api": "HTTP API 资产会话",
+        "virtual": "虚拟/本地技能研发会话",
+    }
+    asset_labels = {
+        "linux": "Linux/Unix 系统资产",
+        "windows": "Windows 系统资产",
+        "oracle": "Oracle 数据库资产",
+        "mysql": "MySQL 数据库资产",
+        "postgresql": "PostgreSQL 数据库资产",
+        "mssql": "SQL Server 数据库资产",
+        "network": "网络设备资产",
+        "snmp": "SNMP 网络设备资产",
+        "http_api": "HTTP API 资产",
+        "virtual": "虚拟资产",
+    }
+    session_label = protocol_labels.get(protocol, f"{protocol.upper()} 协议会话")
+    asset_label = asset_labels.get(asset_type, f"{asset_type.upper()} 资产")
+    return f"""[当前会话上下文]
+- 会话类型：{session_label}
+- 资产类型：{asset_label}
+- 目标：{session_context.host or "未指定"}:{session_context.port or "未指定"}
+- 登录身份：{session_context.username or "未指定"}
+- 重要约束：不要假设所有会话都是 SSH；必须按当前协议选择对应原生工具、命令、SQL、CLI 或 API。"""
+
+
 def _asset_credentials_prompt(session_context: AgentSessionContext) -> str:
     extra_creds_str = format_extra_args_for_prompt(session_context.extra_args)
     return f"""[当前持有的资产凭证]
@@ -60,6 +97,8 @@ def render_chat_system_prompt(
     return f"""
 {base_prompt}
 
+{_session_context_prompt(session_context)}
+
 {_asset_credentials_prompt(session_context)}
 
 [已知安全模式]
@@ -104,6 +143,8 @@ def render_headless_system_prompt(
     task_description: str,
 ) -> str:
     return f"""{base_prompt}
+
+{_session_context_prompt(session_context)}
 
 {_asset_credentials_prompt(session_context)}
 
