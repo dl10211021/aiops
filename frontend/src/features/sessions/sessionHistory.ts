@@ -33,7 +33,7 @@ export function normalizeHistoryMessages(sessionId: string, messages: SessionHis
       id: message._memory_id ? `mem-${message._memory_id}` : `hist-${sessionId}-${index}`,
       memoryId: message._memory_id,
       _memory_id: message._memory_id,
-      role: message.role as 'user' | 'assistant',
+      role: message.role as ChatMessage['role'],
       content: message.content,
       attachments: message.attachments,
       feedback: message.feedback,
