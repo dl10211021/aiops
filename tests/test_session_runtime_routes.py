@@ -7,6 +7,15 @@ from api import routes, session_runtime_routes
 from api.schemas import HeartbeatUpdateRequest, PermissionUpdateRequest, SkillsUpdateRequest
 
 
+class FakeMemoryDB:
+    def __init__(self):
+        self.messages = []
+
+    def append_message(self, session_id, message):
+        self.messages.append((session_id, message))
+        return len(self.messages)
+
+
 class TestSessionRuntimeRoutes(unittest.TestCase):
     def tearDown(self):
         session_runtime_routes.ssh_manager.active_sessions.clear()
@@ -26,6 +35,27 @@ class TestSessionRuntimeRoutes(unittest.TestCase):
         self.assertIn("/tools/catalog", paths)
         self.assertIn("/session/{session_id}/tools", paths)
         self.assertIn("/session/{session_id}/commands", paths)
+
+    def test_stop_chat_session_records_visible_audit_message(self):
+        memory_db = FakeMemoryDB()
+        session_runtime_routes.ssh_manager.active_sessions["sid-1"] = {
+            "info": {"pending_messages": []}
+        }
+        original_memory_db = session_runtime_routes.memory_db
+        session_runtime_routes.memory_db = memory_db
+        try:
+            response = asyncio.run(session_runtime_routes.stop_chat_session("sid-1"))
+        finally:
+            session_runtime_routes.memory_db = original_memory_db
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.message, "已发送中止信号。")
+        pending = session_runtime_routes.ssh_manager.active_sessions["sid-1"]["info"]["pending_messages"]
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0]["role"], "system")
+        self.assertEqual(pending[0]["memory_type"], "manual_stop")
+        self.assertTrue(pending[0]["visible_to_user"])
+        self.assertEqual(memory_db.messages, [("sid-1", pending[0])])
 
     def test_update_session_permission_updates_existing_session(self):
         session_runtime_routes.ssh_manager.active_sessions["sid-1"] = {

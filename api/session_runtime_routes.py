@@ -31,6 +31,7 @@ from api.schema_models.sessions import (
 from connections.ssh_manager import ssh_manager
 from core.active_sessions_service import build_active_sessions_payload
 from core.chat_session_service import request_session_stop
+from core.memory import memory_db
 from core.session_commands import build_session_commands_payload_for_session
 from core.session_runtime import (
     SessionRuntimeError,
@@ -56,7 +57,12 @@ router = APIRouter()
 @router.post("/session/{session_id}/stop", response_model=ResponseModel)
 async def stop_chat_session(session_id: str):
     """【新功能】终止当前会话中正在生成的长流响应/执行任务"""
-    request_session_stop(session_id)
+    with ssh_manager._sessions_lock:
+        request_session_stop(
+            session_id,
+            active_sessions=ssh_manager.active_sessions,
+            memory_db=memory_db,
+        )
     return ResponseModel(**chat_stop_response_kwargs())
 
 

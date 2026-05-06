@@ -7,6 +7,7 @@ from core.session_history import (
     clear_session_history,
     delete_session_message,
     get_user_visible_session_history,
+    is_user_visible_history_message,
     session_history_export_title,
     update_session_message_feedback,
     update_session_message_content,
@@ -65,6 +66,34 @@ class TestSessionHistory(unittest.TestCase):
                 {"role": "assistant", "content": "hello"},
             ],
         )
+
+    def test_manual_stop_system_message_is_user_visible_for_audit(self):
+        memory_db = FakeMemoryDB()
+        memory_db.messages = [
+            {"role": "system", "content": "hidden"},
+            {
+                "role": "system",
+                "content": "本轮任务已手动停止。",
+                "memory_type": "manual_stop",
+                "visible_to_user": True,
+            },
+            {"role": "tool", "content": "hidden"},
+        ]
+
+        messages = get_user_visible_session_history(memory_db, "sid-1")
+
+        self.assertEqual(
+            messages,
+            [
+                {
+                    "role": "system",
+                    "content": "本轮任务已手动停止。",
+                    "memory_type": "manual_stop",
+                    "visible_to_user": True,
+                }
+            ],
+        )
+        self.assertTrue(is_user_visible_history_message(messages[0]))
 
     def test_attach_legacy_exec_traces_rebuilds_tool_results_for_ui(self):
         messages = [

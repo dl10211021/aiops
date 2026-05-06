@@ -9,6 +9,7 @@ from core.chat_runs import ChatRun, cancel_chat_run, start_chat_run
 ChatStreamFactory = Callable[[], AsyncIterator[str]]
 StartChatRun = Callable[[str, ChatStreamFactory], ChatRun]
 StopChatRun = Callable[[str], bool]
+STOP_AUDIT_MEMORY_TYPE = "manual_stop"
 
 
 class ChatSessionServiceError(Exception):
@@ -41,11 +42,56 @@ def _resolve_cancel_flags(cancel_flags: MutableMapping[str, bool] | None = None)
     return default_cancel_flags
 
 
+def _resolve_memory_db(memory_db: Any | None = None) -> Any:
+    if memory_db is not None:
+        return memory_db
+    from core.memory import memory_db as default_memory_db
+
+    return default_memory_db
+
+
+def build_manual_stop_audit_message(*, now: Callable[[], float] = time.time) -> dict[str, Any]:
+    return {
+        "role": "system",
+        "content": "本轮任务已手动停止。停止请求已记录，后台会尽快回收正在执行的模型或工具任务。",
+        "memory_type": STOP_AUDIT_MEMORY_TYPE,
+        "audit_event": "manual_stop",
+        "visible_to_user": True,
+        "timestamp": int(now() * 1000),
+    }
+
+
+def _record_stop_audit_message(
+    active_sessions: MutableMapping[str, dict[str, Any]] | None,
+    session_id: str,
+    *,
+    memory_db: Any | None = None,
+    now: Callable[[], float] = time.time,
+) -> dict[str, Any] | None:
+    if not active_sessions or session_id not in active_sessions:
+        return None
+    message = build_manual_stop_audit_message(now=now)
+    info = active_sessions[session_id].setdefault("info", {})
+    info.setdefault("pending_messages", []).append(message)
+    store = _resolve_memory_db(memory_db)
+    store.append_message(session_id, message)
+    return message
+
+
 def request_session_stop(
     session_id: str,
     cancel_flags: MutableMapping[str, bool] | None = None,
     *,
+    active_sessions: MutableMapping[str, dict[str, Any]] | None = None,
+    memory_db: Any | None = None,
+    now: Callable[[], float] = time.time,
     stop_run: StopChatRun | None = None,
-) -> None:
+) -> dict[str, Any] | None:
     _resolve_cancel_flags(cancel_flags)[session_id] = True
     (stop_run or cancel_chat_run)(session_id)
+    return _record_stop_audit_message(
+        active_sessions,
+        session_id,
+        memory_db=memory_db,
+        now=now,
+    )

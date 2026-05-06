@@ -7,12 +7,24 @@ from core.session_export import format_session_history_markdown
 
 
 USER_VISIBLE_ROLES = {"user", "assistant"}
+USER_VISIBLE_SYSTEM_MEMORY_TYPES = {"manual_stop"}
 
 
 def get_user_visible_session_history(memory_db, session_id: str) -> list[dict]:
     messages = memory_db.get_messages(session_id, for_ui=True)
     messages = attach_legacy_exec_traces(messages)
-    return [msg for msg in messages if msg.get("role") in USER_VISIBLE_ROLES]
+    return [msg for msg in messages if is_user_visible_history_message(msg)]
+
+
+def is_user_visible_history_message(message: Mapping) -> bool:
+    role = message.get("role")
+    if role in USER_VISIBLE_ROLES:
+        return True
+    return (
+        role == "system"
+        and bool(message.get("visible_to_user"))
+        and message.get("memory_type") in USER_VISIBLE_SYSTEM_MEMORY_TYPES
+    )
 
 
 def attach_legacy_exec_traces(messages: list[dict]) -> list[dict]:
