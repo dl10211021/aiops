@@ -8,6 +8,28 @@ from connections.db_execution_result import query_success, statement_success
 
 logger = logging.getLogger(__name__)
 
+_MSSQL_ODBC_DRIVER_PRIORITY = (
+    "ODBC Driver 17 for SQL Server",
+    "ODBC Driver 18 for SQL Server",
+    "SQL Server Native Client 11.0",
+    "SQL Server",
+)
+
+
+def _select_mssql_odbc_driver(pyodbc_module) -> str:
+    try:
+        installed = [str(name) for name in pyodbc_module.drivers()]
+    except Exception:
+        installed = []
+
+    for driver_name in _MSSQL_ODBC_DRIVER_PRIORITY:
+        if driver_name in installed:
+            return f"{{{driver_name}}}"
+    for driver_name in installed:
+        if "SQL Server" in driver_name:
+            return f"{{{driver_name}}}"
+    return "{ODBC Driver 17 for SQL Server}"
+
 
 def execute_mysql(host, port, user, password, database, sql) -> dict:
     import pymysql
@@ -66,11 +88,11 @@ def execute_mssql(host, port, user, password, database, sql) -> dict:
     except ImportError:
         return {
             "success": False,
-            "error": "缺少 pyodbc 依赖，请先安装 requirements.txt 中的 pyodbc，并确认系统已安装 SQL Server ODBC Driver。",
+            "error": "缺少 pyodbc 依赖，请先安装 requirements.txt 中的 pyodbc，并确认系统已安装 Microsoft ODBC Driver 17 for SQL Server。",
         }
 
     try:
-        driver = "{ODBC Driver 18 for SQL Server}"
+        driver = _select_mssql_odbc_driver(pyodbc)
         database_part = f"DATABASE={database};" if database else ""
         conn_str = (
             f"DRIVER={driver};SERVER={host},{int(port)};{database_part}"

@@ -28,6 +28,28 @@ def test_asset_type_templates_require_matching_protocol_guard():
     labels = labels_for({"asset_type": "oracle", "protocol": "http_api", "host": "db.local"})
 
     assert "/oracle-health 实例健康" not in labels
+    assert "/db-inspect 数据库巡检" not in labels
+
+
+def test_database_sessions_get_database_inspection_shortcuts():
+    context = {"asset_type": "dameng", "protocol": "dameng", "host": "db.local"}
+    commands = render_slash_commands(context, ["db_execute_query"])
+    labels = {item["label"] for item in commands}
+    db_inspect = next(item for item in commands if item["id"] == "database-inspect")
+
+    assert "/db-inspect 数据库巡检" in labels
+    assert "/db-slow 慢SQL分析" in labels
+    assert "/db-baseline 配置基线" in labels
+    assert "/db-index 索引健康" in labels
+    assert db_inspect["category"] == "数据库巡检"
+    assert "不要本地脚本" in db_inspect["prompt"]
+
+
+def test_database_inspection_shortcuts_do_not_pollute_linux_sessions():
+    labels = labels_for({"asset_type": "linux", "protocol": "ssh", "host": "10.0.0.1"})
+
+    assert "/db-inspect 数据库巡检" not in labels
+    assert "/db-slow 慢SQL分析" not in labels
 
 
 def test_builtin_template_override_replaces_default_command():

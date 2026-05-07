@@ -277,6 +277,8 @@ def test_database_driver_capabilities_group_core_database_connectors():
     assert drivers["dameng"]["test_sql"] == "SELECT 1"
     assert drivers["oracle"]["operation_profile"]["identity_label"] == "SID / Service Name / TNS Alias"
     assert drivers["mysql"]["operation_profile"]["identity_label"] == "Database Name"
+    assert drivers["mssql"]["external_client_name"] == "Microsoft ODBC Driver 17 for SQL Server"
+    assert "Driver 17" in drivers["mssql"]["install_hint"]
 
 
 def test_database_operation_profiles_normalize_compatible_engines():

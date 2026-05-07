@@ -49,6 +49,13 @@ DATABASE_DRIVER_ALIASES = {
     "apache_iotdb": "iotdb",
 }
 
+MSSQL_ODBC_DRIVER_PRIORITY = (
+    "ODBC Driver 17 for SQL Server",
+    "ODBC Driver 18 for SQL Server",
+    "SQL Server Native Client 11.0",
+    "SQL Server",
+)
+
 JDBC_DATABASE_DRIVERS: dict[str, dict[str, Any]] = {
     "dameng": {
         "label": "达梦数据库 DM",
@@ -174,7 +181,7 @@ DATABASE_OPERATION_PROFILES: dict[str, dict] = {
         ],
         "write_requires_approval": True,
         "hard_block_examples": ["DROP DATABASE"],
-        "operator_note": "SQL Server 资产使用 pyodbc 和 Microsoft ODBC Driver 原生连接。",
+        "operator_note": "SQL Server 资产使用 pyodbc + Microsoft ODBC Driver 17 原生连接；如环境已安装 Driver 18，OpsCore 会兼容使用。",
     },
     "redis": {
         "id": "redis",
@@ -374,10 +381,21 @@ def _mssql_odbc_drivers() -> list[str]:
         return []
 
 
+def _preferred_mssql_odbc_driver(drivers: list[str]) -> str:
+    for driver_name in MSSQL_ODBC_DRIVER_PRIORITY:
+        if driver_name in drivers:
+            return driver_name
+    for driver_name in drivers:
+        if "SQL Server" in driver_name:
+            return driver_name
+    return ""
+
+
 def get_database_driver_capabilities() -> dict:
     """Return database connector readiness and installation hints for the UI."""
     oracle_client = discover_oracle_client_lib_dir()
     mssql_drivers = _mssql_odbc_drivers()
+    preferred_mssql_driver = _preferred_mssql_odbc_driver(mssql_drivers)
     dameng_jdbc_driver = discover_jdbc_driver("dameng")
     dameng_native_ready = _dm_python_installed()
     dameng_jdbc_ready = _module_installed("jaydebeapi") and dameng_jdbc_driver["detected"]
@@ -446,14 +464,15 @@ def get_database_driver_capabilities() -> dict:
             "python_package_installed": _module_installed("pyodbc"),
             "external_client_required": True,
             "external_client_detected": bool(mssql_drivers),
-            "external_client_name": "Microsoft ODBC Driver 18 for SQL Server",
+            "external_client_name": "Microsoft ODBC Driver 17 for SQL Server",
             "status": (
                 "ready"
                 if _module_installed("pyodbc") and mssql_drivers
                 else "missing_external_client"
             ),
             "detected_drivers": mssql_drivers,
-            "install_hint": "除 pyodbc 外，运行机器还需要安装 Microsoft ODBC Driver 18 for SQL Server。",
+            "preferred_driver": preferred_mssql_driver or "ODBC Driver 17 for SQL Server",
+            "install_hint": "除 pyodbc 外，运行机器优先安装 Microsoft ODBC Driver 17 for SQL Server；如已有 Driver 18，OpsCore 会自动兼容。",
             "test_sql": "SELECT 1",
             "operation_profile": get_database_operation_profile("mssql"),
         },

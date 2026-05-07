@@ -5,6 +5,7 @@ import types
 from pathlib import Path
 
 from connections.db_manager import DatabaseExecutor
+from connections.native_sql_executor import _select_mssql_odbc_driver
 
 
 class NonQueryCursor:
@@ -114,7 +115,16 @@ def test_postgresql_non_query_statement_does_not_fetch(monkeypatch):
 
 def test_mssql_non_query_statement_does_not_fetch(monkeypatch):
     connection = ContextConnection()
-    fake_pyodbc = types.SimpleNamespace(connect=lambda *args, **kwargs: connection)
+    captured = {}
+
+    def connect(conn_str, *args, **kwargs):
+        captured["conn_str"] = conn_str
+        return connection
+
+    fake_pyodbc = types.SimpleNamespace(
+        connect=connect,
+        drivers=lambda: ["ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"],
+    )
     monkeypatch.setitem(sys.modules, "pyodbc", fake_pyodbc)
 
     result_text = DatabaseExecutor().execute_query(
@@ -129,6 +139,21 @@ def test_mssql_non_query_statement_does_not_fetch(monkeypatch):
     )
 
     _assert_non_query_result(result_text, connection)
+    assert "DRIVER={ODBC Driver 17 for SQL Server}" in captured["conn_str"]
+
+
+def test_mssql_driver_selection_prefers_odbc_driver_17():
+    fake_pyodbc = types.SimpleNamespace(
+        drivers=lambda: ["ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"]
+    )
+
+    assert _select_mssql_odbc_driver(fake_pyodbc) == "{ODBC Driver 17 for SQL Server}"
+
+
+def test_mssql_driver_selection_uses_driver_18_when_17_is_missing():
+    fake_pyodbc = types.SimpleNamespace(drivers=lambda: ["ODBC Driver 18 for SQL Server"])
+
+    assert _select_mssql_odbc_driver(fake_pyodbc) == "{ODBC Driver 18 for SQL Server}"
 
 
 def test_jdbc_non_query_statement_does_not_fetch(monkeypatch):
