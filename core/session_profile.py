@@ -135,10 +135,13 @@ def _fallback_relations(context: dict[str, Any], inspection: dict[str, Any] | No
     relations: list[dict[str, Any]] = []
     host = str(context.get("host") or "")
     protocol = str(context.get("protocol") or "")
+    asset_type = str(context.get("asset_type") or "")
     port = context.get("port")
+    role_label, role_category = _role_for(asset_type, protocol)
     checks = inspection.get("checks", []) if isinstance(inspection, dict) else []
     listen_evidence = ""
     outbound_evidence = ""
+    database_session_evidence = ""
     for check in checks:
         if not isinstance(check, dict):
             continue
@@ -150,6 +153,15 @@ def _fallback_relations(context: dict[str, Any], inspection: dict[str, Any] | No
             listen_evidence = output.strip().replace("\r", "")[:260]
         if not outbound_evidence and ("estab" in haystack or "established" in haystack or "连接" in title):
             outbound_evidence = output.strip().replace("\r", "")[:260]
+        if not database_session_evidence and (
+            "session" in haystack
+            or "processlist" in haystack
+            or "pg_stat_activity" in haystack
+            or "v$session" in haystack
+            or "dm_exec_sessions" in haystack
+            or "会话" in title
+        ):
+            database_session_evidence = output.strip().replace("\r", "")[:300]
     if host:
         relations.append(
             {
@@ -160,6 +172,18 @@ def _fallback_relations(context: dict[str, Any], inspection: dict[str, Any] | No
                 "protocol": protocol,
                 "evidence": "来自当前资产连接信息；业务上游需结合监听端口、访问日志和会话证据继续确认。",
                 "confidence": 70,
+            }
+        )
+    if database_session_evidence and role_category == "database":
+        relations.append(
+            {
+                "direction": "inbound",
+                "peer": "数据库客户端 / 业务连接池",
+                "peer_role": "上游应用或 DBA 会话",
+                "endpoint": "客户端主机 / 程序名见证据",
+                "protocol": protocol,
+                "evidence": database_session_evidence,
+                "confidence": 68,
             }
         )
     if listen_evidence:
@@ -187,6 +211,87 @@ def _fallback_relations(context: dict[str, Any], inspection: dict[str, Any] | No
             }
         )
     return relations[:6]
+
+
+def _relation_strategy_for(context: dict[str, Any]) -> list[dict[str, str]]:
+    asset_type = str(context.get("asset_type") or "").lower()
+    protocol = str(context.get("protocol") or "").lower()
+    role_label, role_category = _role_for(asset_type, protocol)
+
+    def item(direction: str, title: str, method: str, evidence: str, tool_hint: str) -> dict[str, str]:
+        return {
+            "direction": direction,
+            "title": title,
+            "method": method,
+            "evidence": evidence,
+            "tool_hint": tool_hint,
+        }
+
+    if role_category == "database":
+        if protocol == "oracle" or asset_type == "oracle":
+            return [
+                item("inbound", "业务到 Oracle 的连接", "查询 v$session/v$process/v$instance，按 MACHINE、PROGRAM、USERNAME、STATUS 汇总客户端来源。", "v$session、v$process、监听状态、会话状态分布", "database_execute_sql"),
+                item("outbound", "Oracle 对外依赖", "查询 DB Link、外部表、目录对象和调度作业，确认数据库主动访问的下游。", "DBA_DB_LINKS、DBA_EXTERNAL_TABLES、DBA_SCHEDULER_JOBS", "database_execute_sql"),
+            ]
+        if protocol in {"mysql", "mariadb", "tidb"} or asset_type in {"mysql", "mariadb", "tidb"}:
+            return [
+                item("inbound", "业务到 MySQL/TiDB 的连接", "读取 SHOW PROCESSLIST、performance_schema 连接与账号维度，按 Host/User/DB/Command 聚合。", "SHOW PROCESSLIST、performance_schema.threads、information_schema.processlist", "database_execute_sql"),
+                item("outbound", "复制与外部依赖", "检查主从/复制、Federated 表、事件调度和外部插件状态。", "SHOW SLAVE/REPLICA STATUS、SHOW EVENTS、information_schema", "database_execute_sql"),
+            ]
+        if protocol == "postgresql" or asset_type == "postgresql":
+            return [
+                item("inbound", "业务到 PostgreSQL 的连接", "读取 pg_stat_activity，按 client_addr/application_name/usename/state 聚合客户端来源。", "pg_stat_activity、pg_locks、pg_stat_database", "database_execute_sql"),
+                item("outbound", "复制/外部表依赖", "检查 FDW、订阅发布、复制槽和外部服务访问。", "pg_foreign_server、pg_stat_subscription、pg_replication_slots", "database_execute_sql"),
+            ]
+        if protocol in {"mssql", "sqlserver"} or asset_type in {"mssql", "sqlserver"}:
+            return [
+                item("inbound", "业务到 SQL Server 的连接", "读取 sys.dm_exec_sessions / sys.dm_exec_connections，按 host_name/program_name/login_name 聚合。", "sys.dm_exec_sessions、sys.dm_exec_connections、sys.dm_exec_requests", "database_execute_sql"),
+                item("outbound", "Linked Server/作业依赖", "检查 Linked Server、SQL Agent Job 和外部数据源。", "sys.servers、msdb.dbo.sysjobs、sys.external_data_sources", "database_execute_sql"),
+            ]
+        if protocol == "dameng" or asset_type == "dameng":
+            return [
+                item("inbound", "业务到达梦的连接", "读取 V$SESSIONS，按 CLNT_IP/USER_NAME/STATE 汇总客户端来源。", "V$SESSIONS、V$INSTANCE、会话状态", "database_execute_sql"),
+                item("outbound", "达梦外部依赖", "检查 DBLink、作业和外部对象配置。", "DBA_DB_LINKS、系统作业视图、外部对象视图", "database_execute_sql"),
+            ]
+        return [
+            item("inbound", f"业务到{role_label}的连接", "读取数据库原生活跃会话视图，按客户端地址、程序名、账号和库名汇总。", "活跃会话、连接数、客户端主机、程序名", "database_execute_sql"),
+            item("outbound", "数据库外部依赖", "检查复制、DBLink、外部表、调度作业和插件。", "复制状态、外部连接、调度任务", "database_execute_sql"),
+        ]
+
+    if role_category == "linux":
+        return [
+            item("inbound", "业务/用户到主机的连接", "通过 ss/netstat 读取监听端口和已建立连接，再结合 nginx/apache/ssh/docker 日志确认来源。", "ss -lntup、ss -tnp state established、last、journalctl、容器端口映射", "ssh_execute_command"),
+            item("outbound", "主机到下游服务", "通过 ss/lsof/进程环境/容器配置识别主动连接的数据库、API、中间件和远端端口。", "ss -tnp state established、lsof -i、docker inspect、进程命令行", "ssh_execute_command"),
+        ]
+
+    if role_category == "windows":
+        return [
+            item("inbound", "业务/用户到 Windows 的连接", "使用 Get-NetTCPConnection/netstat、事件日志和 IIS/RDP/WinRM 日志识别访问方。", "Get-NetTCPConnection、netstat -ano、Security Event、IIS logs", "winrm_execute_command"),
+            item("outbound", "Windows 到下游服务", "结合 TCP 连接、进程 PID、服务配置和计划任务确认主动访问的远端。", "Get-NetTCPConnection、Get-Process、Get-Service、ScheduledTask", "winrm_execute_command"),
+        ]
+
+    if role_category == "network":
+        return [
+            item("bidirectional", "网络邻居与上下联", "通过 CLI/SNMP 读取 LLDP/CDP、ARP、MAC 地址表、路由和接口错误，生成上下联关系。", "display/show lldp neighbors、arp、mac-address-table、route、ifTable", "network_cli_execute_command / snmp_get"),
+            item("inbound", "管理入口", "检查 SSH/Telnet/SNMP 管理会话和 ACL，区分运维入口与业务转发流量。", "show users、show ssh、snmp session、ACL/VTY 配置", "network_cli_execute_command"),
+        ]
+
+    if role_category == "virtualization":
+        return [
+            item("inbound", "平台管理与租户访问", "通过平台 API 读取管理连接、集群、宿主机、虚拟机和租户入口。", "vCenter/ESXi/云平台 API 会话、任务、事件", "virtualization_api_request"),
+            item("outbound", "虚拟化平台下游", "读取宿主机、存储、网络、备份和镜像仓库依赖。", "host/datastore/network/task/event API", "virtualization_api_request"),
+        ]
+
+    if role_category == "api":
+        return [
+            item("inbound", "业务到 API 的调用", "通过访问日志、网关日志、请求头和证书信息确认调用方。", "HTTP access log、gateway log、TLS cert、request headers", "service_probe_request / http_api_request"),
+            item("outbound", "API 到下游服务", "结合配置、健康检查、调用日志和依赖接口列表识别下游。", "配置只读读取、健康检查、应用日志、OpenAPI/Swagger", "http_api_request"),
+        ]
+
+    return [
+        item("inbound", "访问方识别", "先用当前协议只读探测监听、会话、日志或 API 事件，再按来源聚合访问方。", "协议原生只读巡检结果", "当前资产协议工具"),
+        item("outbound", "外部依赖识别", "先用当前协议只读探测远端连接、配置、任务或 API 依赖，再按目标聚合下游。", "远端连接、配置、任务、日志", "当前资产协议工具"),
+    ]
 
 
 def _normalize_relations(value: Any) -> list[dict[str, Any]]:
@@ -217,6 +322,34 @@ def _normalize_relations(value: Any) -> list[dict[str, Any]]:
                 "protocol": str(item.get("protocol") or "")[:80],
                 "evidence": str(item.get("evidence") or item.get("reason") or "")[:320],
                 "confidence": max(0, min(100, confidence)),
+            }
+        )
+    return normalized
+
+
+def _normalize_relation_strategies(value: Any, context: dict[str, Any]) -> list[dict[str, str]]:
+    source = value if isinstance(value, list) and value else _relation_strategy_for(context)
+    normalized: list[dict[str, str]] = []
+    allowed = {"inbound", "outbound", "bidirectional", "unknown"}
+    for item in source[:6]:
+        if not isinstance(item, dict):
+            continue
+        direction = str(item.get("direction") or "unknown").strip().lower()
+        if direction not in allowed:
+            direction = "unknown"
+        title = str(item.get("title") or item.get("name") or "").strip()
+        method = str(item.get("method") or item.get("description") or "").strip()
+        evidence = str(item.get("evidence") or item.get("source") or "").strip()
+        tool_hint = str(item.get("tool_hint") or item.get("tool") or "").strip()
+        if not title and not method:
+            continue
+        normalized.append(
+            {
+                "direction": direction,
+                "title": title[:120],
+                "method": method[:280],
+                "evidence": evidence[:180],
+                "tool_hint": tool_hint[:120],
             }
         )
     return normalized
@@ -279,6 +412,7 @@ def _fallback_profile(
             "evidence": evidence[:8],
             "focus_areas": focus_areas[:6],
             "relations": _fallback_relations(context, inspection),
+            "relation_strategies": _relation_strategy_for(context),
             "services": [],
             "tags": context.get("tags") or [],
             "source": source,
@@ -307,7 +441,8 @@ def _normalize_profile(profile: dict[str, Any], context: dict[str, Any]) -> dict
         "risk_level": str(profile.get("risk_level") or "watch"),
         "evidence": profile.get("evidence") if isinstance(profile.get("evidence"), list) else [],
         "focus_areas": profile.get("focus_areas") if isinstance(profile.get("focus_areas"), list) else [],
-        "relations": _normalize_relations(profile.get("relations")),
+        "relations": _normalize_relations(profile.get("relations")) or _fallback_relations(context, None),
+        "relation_strategies": _normalize_relation_strategies(profile.get("relation_strategies"), context),
         "services": profile.get("services") if isinstance(profile.get("services"), list) else [],
         "tags": profile.get("tags") if isinstance(profile.get("tags"), list) else context.get("tags") or [],
         "source": str(profile.get("source") or "ai"),
@@ -354,7 +489,7 @@ async def _generate_ai_profile(
 你是企业 AIOps 平台的资产画像分析器。请根据资产连接信息、只读巡检结果和最近会话内容，判断这是什么资产、可能承担什么业务角色、后续排查应该重点关注什么。
 
 只输出 JSON 对象，不要 Markdown，不要解释。字段：
-role_label, role_category, purpose, confidence, risk_level, evidence, focus_areas, relations, services, tags, source_summary, profile_prompt。
+role_label, role_category, purpose, confidence, risk_level, evidence, focus_areas, relations, relation_strategies, services, tags, source_summary, profile_prompt。
 
 要求：
 - role_label 用中文短语，例如“Oracle 数据库服务”“Linux 应用服务器”“Windows 主机”“网络交换设备”。
@@ -366,6 +501,8 @@ role_label, role_category, purpose, confidence, risk_level, evidence, focus_area
 - relations 最多 10 条，用于描述资产互联关系；每条含 direction,peer,peer_role,endpoint,protocol,evidence,confidence。
 - relations.direction 只能是 inbound/outbound/bidirectional/unknown；inbound 表示“哪些业务/系统/用户连接它”，outbound 表示“它主动连接哪些下游/数据库/API/中间件”，bidirectional 表示双向依赖，unknown 表示方向证据不足。
 - relations 必须基于监听端口、已建立连接、访问日志、进程、容器、数据库连接、会话上下文或巡检证据推断；不确定时写 unknown，不要编造业务名。
+- 额外输出 relation_strategies，用于说明不同资产类型应该如何继续采集互联证据；每条含 direction,title,method,evidence,tool_hint。
+- relation_strategies 必须协议感知：Linux/SSH 看 ss、lsof、日志、容器；Windows/WinRM 看 Get-NetTCPConnection、事件/IIS/RDP 日志；数据库看原生活跃会话和外部依赖视图；网络设备看 CLI/SNMP 的邻居、ARP、MAC、路由、接口；API/虚拟化看平台 API、访问日志和事件。
 - profile_prompt 是写给主会话模型的专业提示词，必须基于本资产画像汇聚生成，说明资产角色、业务用途、排查优先级、风险边界、工具使用注意事项；不要超过 900 字。
 - 不要输出密码、Token、密钥、完整敏感连接串。
 
@@ -433,7 +570,23 @@ async def generate_session_profile(
 
 
 def get_session_profile(session_id: str) -> dict[str, Any] | None:
-    return memory_db.get_asset_profile(session_id)
+    profile = memory_db.get_asset_profile(session_id)
+    if not profile:
+        return None
+    try:
+        context = session_asset_context(session_id)
+    except Exception:
+        context = {
+            "session_id": session_id,
+            "asset_key": profile.get("asset_key") or "",
+            "host": profile.get("host") or "",
+            "port": profile.get("port"),
+            "remark": profile.get("remark") or "",
+            "asset_type": profile.get("asset_type") or "",
+            "protocol": profile.get("protocol") or "",
+            "tags": profile.get("tags") or [],
+        }
+    return _normalize_profile(profile, context)
 
 
 def profile_to_markdown(profile: dict[str, Any]) -> str:
@@ -462,6 +615,18 @@ def profile_to_markdown(profile: dict[str, Any]) -> str:
                 f"{item.get('endpoint') or '-'} | "
                 f"{item.get('protocol') or '-'} | "
                 f"证据：{item.get('evidence') or '-'}"
+            )
+    strategies = profile.get("relation_strategies") or []
+    if strategies:
+        lines.append("")
+        lines.append("### 互联采集策略")
+        for item in strategies:
+            lines.append(
+                "- "
+                f"{item.get('direction') or 'unknown'} | "
+                f"{item.get('title') or '-'} | "
+                f"{item.get('method') or '-'} | "
+                f"证据源：{item.get('evidence') or '-'}"
             )
     lines.append("")
     lines.append("### 后续排查重点")
@@ -509,6 +674,17 @@ def profile_to_system_prompt(profile: dict[str, Any] | None) -> str:
                     relation_lines.append(f"- {direction}: {peer} {endpoint} {protocol}，证据：{evidence or '待验证'}".strip())
         if relation_lines:
             synthesized.append("互联关系：\n" + "\n".join(relation_lines[:8]))
+        strategy_lines = []
+        for item in profile.get("relation_strategies") or []:
+            if isinstance(item, dict):
+                direction = str(item.get("direction") or "unknown").strip()
+                title = str(item.get("title") or "").strip()
+                method = str(item.get("method") or "").strip()
+                evidence = str(item.get("evidence") or "").strip()
+                if title or method:
+                    strategy_lines.append(f"- {direction}: {title}；采集方式：{method}；证据源：{evidence or '待采集'}")
+        if strategy_lines:
+            synthesized.append("互联采集策略：\n" + "\n".join(strategy_lines[:6]))
         focus_lines = []
         for item in profile.get("focus_areas") or []:
             if isinstance(item, dict):

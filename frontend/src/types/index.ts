@@ -44,6 +44,14 @@ export interface AssetProfileRelation {
   confidence?: number
 }
 
+export interface AssetProfileRelationStrategy {
+  direction: 'inbound' | 'outbound' | 'bidirectional' | 'unknown' | string
+  title: string
+  method?: string
+  evidence?: string
+  tool_hint?: string
+}
+
 export interface AssetProfile {
   version: number
   session_id: string
@@ -61,6 +69,7 @@ export interface AssetProfile {
   evidence: AssetProfileEvidence[]
   focus_areas: AssetProfileFocusArea[]
   relations?: AssetProfileRelation[]
+  relation_strategies?: AssetProfileRelationStrategy[]
   services: string[]
   tags: string[]
   source?: string

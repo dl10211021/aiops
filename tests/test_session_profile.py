@@ -26,7 +26,10 @@ def test_fallback_profile_marks_database_focus_area():
     assert profile["risk_level"] == "normal"
     assert profile["focus_areas"][0]["priority"] == "P0"
     assert profile["relations"][0]["direction"] == "inbound"
+    assert profile["relation_strategies"][0]["direction"] == "inbound"
+    assert "v$session" in profile["relation_strategies"][0]["evidence"].lower()
     assert "数据库" in profile_to_markdown(profile)
+    assert "互联采集策略" in profile_to_markdown(profile)
 
 
 def test_fallback_profile_raises_risk_for_multiple_failed_checks():
@@ -91,12 +94,23 @@ def test_profile_to_system_prompt_synthesizes_from_structured_profile_when_promp
                     "confidence": 80,
                 }
             ],
+            "relation_strategies": [
+                {
+                    "direction": "inbound",
+                    "title": "业务到 Oracle 的连接",
+                    "method": "查询 v$session/v$process 汇总客户端来源。",
+                    "evidence": "v$session、v$process",
+                    "tool_hint": "database_execute_sql",
+                }
+            ],
         }
     )
 
     assert "ISO27001 合规审计系统后端服务器" in prompt
     assert "互联关系" in prompt
+    assert "互联采集策略" in prompt
     assert "Oracle 数据库" in prompt
+    assert "v$session" in prompt
     assert "UFW active" in prompt
     assert "SSH 访问控制" in prompt
     assert "不需要每轮人工确认" in prompt

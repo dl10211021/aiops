@@ -80,7 +80,7 @@ export function ProfileSummaryButton({
 
       {profile && (
         <div className="mt-3">
-          <ProfileRelationsSection items={profile.relations || []} />
+          <ProfileRelationsSection items={profile.relations || []} strategies={profile.relation_strategies || []} />
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import type { AssetProfile, AssetProfileEvidence, AssetProfileFocusArea, AssetProfileRelation, Session } from '@/types'
+import type { AssetProfile, AssetProfileEvidence, AssetProfileFocusArea, AssetProfileRelation, AssetProfileRelationStrategy, Session } from '@/types'
 import { assetProfileFacts } from './assetProfileDisplay'
 
 export function ProfileIdentitySection({
@@ -54,7 +54,13 @@ export function ProfileEvidenceSection({ items }: { items: AssetProfileEvidence[
   )
 }
 
-export function ProfileRelationsSection({ items }: { items: AssetProfileRelation[] }) {
+export function ProfileRelationsSection({
+  items,
+  strategies = [],
+}: {
+  items: AssetProfileRelation[]
+  strategies?: AssetProfileRelationStrategy[]
+}) {
   const inbound = items.filter((item) => item.direction === 'inbound' || item.direction === 'bidirectional')
   const outbound = items.filter((item) => item.direction === 'outbound' || item.direction === 'bidirectional')
   const unknown = items.filter((item) => !['inbound', 'outbound', 'bidirectional'].includes(item.direction))
@@ -86,6 +92,7 @@ export function ProfileRelationsSection({ items }: { items: AssetProfileRelation
           <div className="rounded-xl border border-dashed border-ops-surface1/70 bg-ops-panel/30 px-3 py-3 text-xs leading-5 text-ops-subtext">
             暂无可确认互联关系。重新生成画像后，AI 会从监听端口、连接状态、访问日志、进程、数据库连接和会话证据里提取。
           </div>
+          <RelationStrategyGrid items={strategies} />
         </div>
       ) : (
         <div className="space-y-3">
@@ -128,6 +135,7 @@ export function ProfileRelationsSection({ items }: { items: AssetProfileRelation
             )}
           </div>
           <RelationEvidenceStrip items={items} />
+          <RelationStrategyGrid items={strategies} compact />
         </div>
       )}
     </div>
@@ -232,6 +240,41 @@ function RelationEvidenceStrip({ items }: { items: AssetProfileRelation[] }) {
           <div className="mt-1 line-clamp-2 text-xs leading-5 text-ops-subtext">{item.evidence}</div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function RelationStrategyGrid({
+  items,
+  compact = false,
+}: {
+  items: AssetProfileRelationStrategy[]
+  compact?: boolean
+}) {
+  if (!items.length) return null
+  return (
+    <div className="rounded-2xl border border-ops-surface0/80 bg-ops-panel/32 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-ops-accent">Collect Plan</span>
+        <span className="text-xs font-semibold text-ops-overlay">互联采集方式</span>
+      </div>
+      <div className={`mt-2 grid gap-2 ${compact ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-2'}`}>
+        {items.slice(0, compact ? 2 : 4).map((item, index) => (
+          <div key={`${item.direction}-${item.title}-${index}`} className="rounded-xl border border-ops-surface0 bg-ops-dark/32 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-xs font-black text-ops-text">{item.title || relationDirectionLabel(item.direction)}</span>
+              <span className="shrink-0 rounded-full border border-ops-accent/24 bg-ops-accent/8 px-2 py-0.5 text-[10px] text-ops-accent">
+                {relationDirectionLabel(item.direction)}
+              </span>
+            </div>
+            {item.method && <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-ops-subtext">{item.method}</div>}
+            <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-ops-overlay">
+              {item.evidence && <span className="rounded-full border border-ops-surface1/55 px-2 py-0.5">{item.evidence}</span>}
+              {item.tool_hint && <span className="rounded-full border border-ops-surface1/55 px-2 py-0.5">{item.tool_hint}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

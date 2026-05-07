@@ -184,6 +184,16 @@ def build_asset_profile_memory_summary(
                 relation_items.append(f"{direction}:{peer} {endpoint} {protocol_name}".strip())
     if relation_items:
         lines.append("【互联关系】" + "；".join(relation_items[:8]))
+    strategy_items = []
+    for item in profile.get("relation_strategies") or []:
+        if isinstance(item, dict):
+            direction = str(item.get("direction") or "unknown").strip()
+            title = str(item.get("title") or "").strip()
+            method = str(item.get("method") or "").strip()
+            if title or method:
+                strategy_items.append(f"{direction}:{title} {method}".strip())
+    if strategy_items:
+        lines.append("【互联采集策略】" + "；".join(strategy_items[:4]))
     if profile_prompt:
         lines.append(f"【画像提示词】{profile_prompt}")
     lines.append("【使用边界】画像是历史汇聚提示词，不需要每轮人工确认；如果后续工具结果与画像冲突，以当前工具结果为准。")
