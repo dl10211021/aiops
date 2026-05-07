@@ -1,4 +1,4 @@
-import type { AssetParamDefinition } from '@/types'
+import type { AssetParamDefinition, ToolDisplayDetail } from '@/types'
 
 export type AssetCategoryOption = {
   id: string
@@ -21,6 +21,7 @@ export type AssetSubType = {
     connector: string
     operation_model: string
     tools: string[]
+    tool_details?: ToolDisplayDetail[]
     credential_fields?: string[]
     maturity: string
     connector_group?: {

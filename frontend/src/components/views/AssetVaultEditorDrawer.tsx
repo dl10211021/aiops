@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import type { Asset, AssetTypeDefinition } from '@/types'
+import type { Asset, AssetTypeDefinition, ToolDisplayDetail } from '@/types'
+import { toolLabel } from '@/utils/assetDisplay'
 import {
   DEFAULT_SESSION_GROUP,
   normalizeSessionGroupName,
@@ -56,6 +57,10 @@ export function AssetVaultEditorDrawer({
     : protocol
       ? [{ protocol, label: display.protocolLabel || protocol }]
       : []
+  const selectedTools = selectedType?.capability?.tools || selectedType?.capability?.connector_group?.tools || []
+  const selectedToolDetails: ToolDisplayDetail[] = selectedType?.capability?.tool_details?.length
+    ? selectedType.capability.tool_details
+    : selectedTools.map((name) => ({ name }))
   const groupOptions = useMemo(
     () => uniqueSessionGroups([...sessionGroups, ...(asset.tags || []), DEFAULT_SESSION_GROUP]),
     [asset.tags, sessionGroups]
@@ -206,6 +211,24 @@ export function AssetVaultEditorDrawer({
               <p className="mt-2 text-[11px] text-ops-overlay">
                 默认建议：Linux 使用 SSH，Windows 使用 WinRM，数据库使用原生数据库协议，ESXi 可按实际接入选择 SSH/API。
               </p>
+              {selectedToolDetails.length > 0 && (
+                <details className="mt-3 rounded-lg border border-ops-surface1 bg-ops-panel/45 px-3 py-2">
+                  <summary className="cursor-pointer text-[11px] font-semibold text-ops-subtext">
+                    AI 工具目录 {selectedToolDetails.length} 个
+                  </summary>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {selectedToolDetails.map((tool) => (
+                      <span
+                        key={tool.name}
+                        title={[tool.name, tool.description].filter(Boolean).join(' · ')}
+                        className="rounded bg-ops-surface0 px-2 py-0.5 text-[10px] text-ops-subtext"
+                      >
+                        {tool.label || toolLabel(tool.name)}
+                      </span>
+                    ))}
+                  </div>
+                </details>
+              )}
             </EditorBlock>
 
             <EditorBlock title="分组与标签" hint="资产组会同步用于资产列表和批量会话；其它标签用于检索。">

@@ -62,6 +62,9 @@ export function buildConnectionModalModel({
   const selectedConnectorGroup = selectedSubInfo?.capability?.connector_group?.group || '连接方式'
   const selectedMaturity = selectedSubInfo?.capability?.maturity || 'generic'
   const selectedTools = selectedSubInfo?.capability?.tools || selectedSubInfo?.capability?.connector_group?.tools || []
+  const selectedToolDetails = selectedSubInfo?.capability?.tool_details?.length
+    ? selectedSubInfo.capability.tool_details
+    : selectedTools.map((name) => ({ name }))
   const selectedConnector = selectedSubInfo?.capability?.connector || ''
   const selectedConnectionHint = connectionHintFor(selectedSubInfo, currentProtocol)
   const isEndpointBackedAsset = ENDPOINT_BACKED_CONNECTORS.has(selectedConnector)
@@ -124,6 +127,7 @@ export function buildConnectionModalModel({
     selectedConnectorLabel,
     selectedMaturity,
     selectedSubInfo,
+    selectedToolDetails,
     selectedTools,
     shouldShowGenericHttpParams,
     subTypeGroups,

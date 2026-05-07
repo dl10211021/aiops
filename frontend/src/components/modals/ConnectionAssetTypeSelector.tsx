@@ -1,4 +1,5 @@
 import { toolLabel } from '@/utils/assetDisplay'
+import type { ToolDisplayDetail } from '@/types'
 import { MATURITY_LABELS } from './connectionModalHelpers'
 import type { AssetCategoryOption, AssetSubType } from './connectionModalHelpers'
 
@@ -21,6 +22,7 @@ interface ConnectionAssetTypeSelectorProps {
   selectedConnectorLabel: string
   selectedMaturity: string
   selectedSubInfo?: AssetSubType
+  selectedToolDetails: ToolDisplayDetail[]
   selectedTools: string[]
   subType: string
   subTypeGroups: Array<OptionGroup<AssetSubType>>
@@ -44,6 +46,7 @@ export default function ConnectionAssetTypeSelector({
   selectedConnectorLabel,
   selectedMaturity,
   selectedSubInfo,
+  selectedToolDetails,
   selectedTools,
   subType,
   subTypeGroups,
@@ -52,6 +55,10 @@ export default function ConnectionAssetTypeSelector({
   onSearchChange,
   onSubTypeChange,
 }: ConnectionAssetTypeSelectorProps) {
+  const displayTools: ToolDisplayDetail[] = selectedToolDetails.length > 0
+    ? selectedToolDetails
+    : selectedTools.map((name) => ({ name }))
+
   return (
     <section className="rounded-lg border border-ops-surface0 bg-ops-dark/20 p-3">
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -145,15 +152,19 @@ export default function ConnectionAssetTypeSelector({
                 {selectedConnectionHint}
               </p>
             )}
-            {selectedTools.length > 0 && (
+            {displayTools.length > 0 && (
               <details className="mt-2 rounded-lg border border-ops-surface1 bg-ops-panel/45 px-2.5 py-2">
                 <summary className="cursor-pointer text-[11px] font-semibold text-ops-subtext">
-                  AI 可用工具 {selectedTools.length} 个
+                  AI 可用工具 {displayTools.length} 个
                 </summary>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {selectedTools.map((tool) => (
-                    <span key={tool} title={tool} className="rounded bg-ops-surface0 px-1.5 py-0.5 text-[10px] text-ops-subtext">
-                      {toolLabel(tool)}
+                  {displayTools.map((tool) => (
+                    <span
+                      key={tool.name}
+                      title={[tool.name, tool.description].filter(Boolean).join(' · ')}
+                      className="rounded bg-ops-surface0 px-1.5 py-0.5 text-[10px] text-ops-subtext"
+                    >
+                      {tool.label || toolLabel(tool.name)}
                     </span>
                   ))}
                 </div>

@@ -279,6 +279,18 @@ export interface ToolDefinition {
   enabled?: boolean
 }
 
+export interface ToolDisplayDetail {
+  name: string
+  label?: string
+  description?: string
+  toolset?: string
+  scope?: string
+  safety_category?: string
+  protocols?: string[]
+  asset_types?: string[]
+  enabled?: boolean
+}
+
 export interface ToolsetInfo {
   id: string
   label?: string
@@ -384,7 +396,7 @@ export interface AssetTypeDefinition {
     connector: string
     operation_model: string
     tools: string[]
-    tool_details?: ToolDefinition[]
+    tool_details?: ToolDisplayDetail[]
     credential_fields: string[]
     connector_group?: AssetCategoryDefinition & { tools?: string[] }
     driver_key?: string
@@ -597,6 +609,7 @@ export interface AssetVerificationMatrix {
     extra_args: Record<string, unknown>
   }
   active_tools: string[]
+  active_tool_details?: ToolDisplayDetail[]
   supported_protocols?: AssetAccessProtocol[]
   steps: VerificationStep[]
   coverage: {

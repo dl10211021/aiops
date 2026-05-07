@@ -91,6 +91,8 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
         self.assertIn("readonly_inspection", step_ids)
         self.assertIn("scheduled_inspection", step_ids)
         self.assertIn("db_execute_query", matrix["active_tools"])
+        tool_details = {item["name"]: item for item in matrix["active_tool_details"]}
+        self.assertEqual(tool_details["db_execute_query"]["label"], "数据库 SQL 执行")
         dumped = json.dumps(response.data, ensure_ascii=False)
         self.assertNotIn("db-secret", dumped)
         self.assertNotIn("secret-key", dumped)
@@ -151,6 +153,9 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
             "scheduled_inspection",
         ])
         self.assertTrue(all(step["status"] == "success" for step in run["steps"]))
+        tool_step = next(step for step in run["steps"] if step["id"] == "tool_catalog")
+        tool_details = {item["name"]: item for item in tool_step["details"]["active_tool_details"]}
+        self.assertEqual(tool_details["db_execute_query"]["label"], "数据库 SQL 执行")
         self.assertEqual(history.data["runs"][0]["id"], run["id"])
         connect.assert_called_once()
         disconnect.assert_called_once_with("verify-session")
@@ -249,6 +254,8 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
         self.assertIn("网络设备 SSH CLI", descriptions)
         self.assertNotIn("Linux", descriptions)
         self.assertIn("network_cli_execute_command", matrix["active_tools"])
+        tool_details = {item["name"]: item for item in matrix["active_tool_details"]}
+        self.assertEqual(tool_details["network_cli_execute_command"]["label"], "网络设备 CLI")
         self.assertTrue(any(
             item["protocol"] == "ssh" and item["purpose"] == "operation" and item["is_current"]
             for item in matrix["supported_protocols"]

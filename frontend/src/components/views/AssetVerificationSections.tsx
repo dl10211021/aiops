@@ -1,8 +1,11 @@
-import type { AssetVerificationMatrix, AssetVerificationRun, InspectionRun } from '@/types'
+import type { AssetVerificationMatrix, AssetVerificationRun, InspectionRun, ToolDisplayDetail } from '@/types'
 import { statusLabel, toolLabel } from '@/utils/assetDisplay'
 
 export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificationMatrix }) {
   const supportedProtocols = matrix.supported_protocols || []
+  const activeToolDetails: ToolDisplayDetail[] = matrix.active_tool_details?.length
+    ? matrix.active_tool_details
+    : matrix.active_tools.map((name) => ({ name }))
   const operationProtocols = supportedProtocols.filter((item) => item.purpose === 'operation')
   const auxiliaryProtocols = supportedProtocols.filter((item) => item.purpose === 'monitoring' || item.purpose === 'probe')
   const currentProtocol = supportedProtocols.find((item) => item.is_current)
@@ -82,14 +85,20 @@ export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificatio
           </div>
         ))}
       </div>
-      {matrix.active_tools.length > 0 && (
+      {activeToolDetails.length > 0 && (
         <details className="mt-3 rounded-lg border border-ops-surface0 bg-ops-panel/45 px-3 py-2">
           <summary className="cursor-pointer text-[11px] font-semibold text-ops-subtext">
-            可用工具 {matrix.active_tools.length} 个
+            可用工具 {activeToolDetails.length} 个
           </summary>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {matrix.active_tools.map((tool) => (
-              <span key={tool} title={tool} className="rounded bg-ops-surface0 px-2 py-0.5 text-[10px] text-ops-subtext">{toolLabel(tool)}</span>
+            {activeToolDetails.map((tool) => (
+              <span
+                key={tool.name}
+                title={[tool.name, tool.description].filter(Boolean).join(' · ')}
+                className="rounded bg-ops-surface0 px-2 py-0.5 text-[10px] text-ops-subtext"
+              >
+                {tool.label || toolLabel(tool.name)}
+              </span>
             ))}
           </div>
         </details>

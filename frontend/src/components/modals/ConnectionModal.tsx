@@ -46,6 +46,7 @@ export default function ConnectionModal() {
     selectedMaturity,
     selectedSkills,
     selectedSubInfo,
+    selectedToolDetails,
     selectedTools,
     setAssetTypeSearch,
     setExtraArg,
@@ -95,6 +96,7 @@ export default function ConnectionModal() {
               selectedConnectorLabel={selectedConnectorLabel}
               selectedMaturity={selectedMaturity}
               selectedSubInfo={selectedSubInfo}
+              selectedToolDetails={selectedToolDetails}
               selectedTools={selectedTools}
               subType={form.sub_type}
               subTypeGroups={subTypeGroups}

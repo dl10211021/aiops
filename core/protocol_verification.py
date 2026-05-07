@@ -22,6 +22,7 @@ from core.asset_protocols import (
     resolve_asset_identity,
 )
 from core.asset_access_protocols import mark_current_protocol
+from core.tool_display import asset_tool_detail
 from core.tool_registry import tool_registry
 
 SECRET_KEYS = {
@@ -145,6 +146,10 @@ def _active_tools(asset: dict[str, Any]) -> list[str]:
     ]
 
 
+def _active_tool_details(active_tools: list[str]) -> list[dict[str, Any]]:
+    return [asset_tool_detail(tool_name) for tool_name in active_tools]
+
+
 def _access_method_label(asset_type: str, protocol: str) -> str:
     if protocol == "virtual":
         return "虚拟会话能力"
@@ -216,6 +221,7 @@ def _supported_protocols_for_asset(asset_type: str, protocol: str, extra_args: d
 def build_asset_matrix(asset: dict[str, Any]) -> dict[str, Any]:
     safe_asset = sanitize_asset(asset)
     active_tools = _active_tools(asset)
+    active_tool_details = _active_tool_details(active_tools)
     protocol = safe_asset["protocol"]
     asset_type = safe_asset["asset_type"]
     has_native_tool = bool(active_tools)
@@ -238,6 +244,7 @@ def build_asset_matrix(asset: dict[str, Any]) -> dict[str, Any]:
     support_summary = f"支持运维接入：{operation_summary}"
     if auxiliary_summary:
         support_summary += f"；辅助采集/探测：{auxiliary_summary}"
+    tool_summary = "、".join(item["label"] for item in active_tool_details) or "未匹配到协议工具"
     connection_description = (
         f"{support_summary}。检查虚拟会话记录、托管上下文和可用工具；不代表真实网络连通。"
         if protocol == "virtual"
@@ -265,7 +272,7 @@ def build_asset_matrix(asset: dict[str, Any]) -> dict[str, Any]:
             "id": "tool_catalog",
             "label": "工具目录",
             "status": "supported" if has_native_tool else "gap",
-            "description": "确认当前资产会暴露正确的协议工具给模型。",
+            "description": f"确认当前资产会暴露正确的协议工具给模型：{tool_summary}。",
         },
         {
             "id": "readonly_inspection",
@@ -284,6 +291,7 @@ def build_asset_matrix(asset: dict[str, Any]) -> dict[str, Any]:
     return {
         "asset": safe_asset,
         "active_tools": active_tools,
+        "active_tool_details": active_tool_details,
         "supported_protocols": supported_protocols,
         "steps": steps,
         "coverage": {
@@ -656,13 +664,15 @@ async def run_asset_verification(asset: dict[str, Any]) -> dict[str, Any]:
         steps.append(_step_result("protocol_probe", "协议原生探测", "skipped", "连接测试失败，跳过协议原生探测。"))
 
     if matrix["active_tools"]:
+        tool_details = matrix.get("active_tool_details") or _active_tool_details(matrix["active_tools"])
+        tool_summary = "、".join(item["label"] for item in tool_details)
         steps.append(
             _step_result(
                 "tool_catalog",
                 "工具目录",
                 "success",
-                f"可用工具 {len(matrix['active_tools'])} 个。",
-                {"active_tools": matrix["active_tools"]},
+                f"可用工具 {len(matrix['active_tools'])} 个：{tool_summary}。",
+                {"active_tools": matrix["active_tools"], "active_tool_details": tool_details},
             )
         )
     else:
