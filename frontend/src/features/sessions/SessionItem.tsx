@@ -100,17 +100,17 @@ export default function SessionItem({
             </span>
           )}
         </div>
-        <div className="absolute bottom-2 right-2 hidden items-center gap-1 group-hover:flex">
+        <div className="mt-2 flex items-center gap-1">
           <button
             onClick={(event) => onEdit(session.id, event)}
-            className="rounded-lg border border-ops-surface1/70 bg-ops-dark/45 px-2 py-1 text-[11px] font-semibold text-ops-subtext hover:border-ops-accent/40 hover:text-ops-text"
+            className="rounded-md border border-ops-surface1/65 bg-ops-dark/35 px-2 py-0.5 text-[11px] font-semibold text-ops-subtext hover:border-ops-accent/45 hover:text-ops-text"
             title="编辑"
           >
             编辑
           </button>
           <button
             onClick={(event) => onDisconnect(session.id, event)}
-            className="rounded-lg border border-ops-alert/35 bg-ops-alert/8 px-2 py-1 text-[11px] font-semibold text-ops-alert hover:bg-ops-alert/12"
+            className="rounded-md border border-ops-alert/35 bg-ops-alert/8 px-2 py-0.5 text-[11px] font-semibold text-ops-alert hover:bg-ops-alert/12"
             title="断开"
           >
             断开

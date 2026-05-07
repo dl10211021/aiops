@@ -7,6 +7,17 @@ import { renderMarkdown } from './markdown'
 type FeedbackRating = 'up' | 'down'
 type FeedbackDialogState = { rating: FeedbackRating; note: string } | null
 
+function compactReportPreview(content: string) {
+  const plain = content
+    .replace(/```[\s\S]*?```/g, ' [代码块] ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[#>*_`~|[\](){}-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!plain) return '点击展开查看本轮 AI 输出。'
+  return plain.length > 150 ? `${plain.slice(0, 150)}...` : plain
+}
+
 function formatMessageTime(timestamp: number) {
   return new Date(timestamp).toLocaleString('zh-CN', {
     year: 'numeric',
@@ -58,11 +69,13 @@ export function SystemMessageBubble({ content }: { content: string }) {
 
 export function AssistantReportBubble({
   message,
+  collapsedByDefault = true,
   onEdit,
   onDelete,
   onFeedback,
 }: {
   message: ChatMessage
+  collapsedByDefault?: boolean
   onEdit?: (message: ChatMessage) => void
   onDelete?: (message: ChatMessage) => void
   onFeedback?: (message: ChatMessage, rating: 'up' | 'down', note?: string) => void
@@ -75,6 +88,8 @@ export function AssistantReportBubble({
   const ownMessageId = String(message.memoryId || message._memory_id || message.id || '')
   const feedbackNote = message.feedback?.note?.trim()
   const [feedbackDialog, setFeedbackDialog] = useState<FeedbackDialogState>(null)
+  const [expanded, setExpanded] = useState(!collapsedByDefault)
+  const reportPreview = compactReportPreview(message.content)
   const openFeedbackDialog = (rating: FeedbackRating) => {
     setFeedbackDialog({ rating, note: feedbackNote || '' })
   }
@@ -149,12 +164,21 @@ export function AssistantReportBubble({
           : 'border-ops-surface1/55'
       }`}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-ops-surface0/80 bg-ops-surface0/35 px-4 py-2">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ops-surface0/80 bg-ops-surface0/35 px-4 py-2">
+        <button
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          aria-expanded={expanded}
+        >
+          <span className="font-mono text-[11px] text-ops-accent">{expanded ? '▼' : '▶'}</span>
           <span className="h-2 w-2 rounded-full bg-ops-success shadow-[0_0_14px_rgba(79,209,177,0.55)]" />
-          <span className="text-xs font-semibold text-ops-text">AI 输出报告</span>
-        </div>
-        <div className="flex items-center gap-2">
+          <span className="truncate text-xs font-semibold text-ops-text">AI 输出报告</span>
+          <span className="rounded-full border border-ops-surface1/60 px-2 py-0.5 text-[10px] font-semibold text-ops-overlay">
+            {expanded ? '已展开' : '默认折叠'}
+          </span>
+        </button>
+        <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={() => openFeedbackDialog('up')}
             title="回答很好，写入会话成功经验记忆"
@@ -177,12 +201,22 @@ export function AssistantReportBubble({
           >
             👎
           </button>
-          <button onClick={() => onEdit?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-subtext opacity-0 transition-opacity hover:bg-ops-dark/50 hover:text-ops-text group-hover:opacity-100">编辑</button>
-          <button onClick={() => onDelete?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-alert opacity-0 transition-opacity hover:bg-ops-alert/10 group-hover:opacity-100">删除</button>
+          <button onClick={() => onEdit?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-subtext transition-colors hover:bg-ops-dark/50 hover:text-ops-text">编辑</button>
+          <button onClick={() => onDelete?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-alert transition-colors hover:bg-ops-alert/10">删除</button>
           <span className="font-mono text-[11px] text-ops-overlay">{assistantTime}</span>
         </div>
       </div>
-      {feedbackRating && (
+      {!expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="block w-full border-b border-ops-surface0/65 bg-ops-dark/22 px-4 py-3 text-left hover:bg-ops-dark/32"
+        >
+          <div className="line-clamp-2 text-sm leading-6 text-ops-subtext">{reportPreview}</div>
+          <div className="mt-2 text-[11px] font-semibold text-ops-accent">展开查看完整输出</div>
+        </button>
+      )}
+      {expanded && feedbackRating && (
         <div className={`flex flex-wrap items-center justify-between gap-2 border-b border-ops-surface0/70 px-4 py-1.5 text-[11px] ${
           feedbackRating === 'up' ? 'text-ops-success' : 'text-ops-alert'
         }`}>
@@ -201,12 +235,16 @@ export function AssistantReportBubble({
           </button>
         </div>
       )}
-      <MemoryReferenceStrip message={message} />
-      <div
-        className="markdown-body ai-report-body w-full px-5 py-4"
-        onClick={handleCodeCopy}
-        dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
-      />
+      {expanded && (
+        <>
+          <MemoryReferenceStrip message={message} />
+          <div
+            className="markdown-body ai-report-body w-full px-5 py-4 text-[15px] leading-7 text-ops-text"
+            onClick={handleCodeCopy}
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
+          />
+        </>
+      )}
     </article>
     <FeedbackNoteDialog
       state={feedbackDialog}

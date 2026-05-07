@@ -97,6 +97,7 @@ export default function MessageBubble({
         {hasContent ? (
           <AssistantReportBubble
             message={message}
+            collapsedByDefault={!isPending}
             onEdit={onEdit}
             onDelete={onDelete}
             onFeedback={onFeedback}
