@@ -253,7 +253,7 @@ export default function AiThinkingChainPanel({
 
   return (
     <section className="min-h-0 flex min-w-0 flex-1 flex-col overflow-hidden border-t border-ops-surface0/80">
-      <header className="space-y-2 border-b border-ops-surface0/80 bg-ops-dark px-3 py-2">
+      <header className="space-y-2 border-b border-ops-surface0/80 bg-ops-dark/55 px-3 py-2.5">
         <div className="flex items-center justify-between gap-3 text-xs font-semibold tracking-wide text-ops-text">
           <div className="flex items-center gap-1 rounded-md border border-ops-surface0 bg-ops-panel/70 p-0.5">
             <button
@@ -282,13 +282,13 @@ export default function AiThinkingChainPanel({
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              className="h-8 w-full rounded-md border border-ops-surface1 bg-ops-panel/70 px-2.5 text-xs text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent/60"
+              className="h-9 w-full rounded-xl border border-ops-surface1/80 bg-ops-panel/65 px-3 text-xs text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent/60"
               placeholder="查找时间 / 会话内容 / 工具 / 结果"
             />
             <select
               value={selectedGroupId}
               onChange={(event) => selectGroup(event.target.value)}
-              className="h-8 w-full rounded-md border border-ops-surface1 bg-ops-panel/70 px-2.5 text-xs text-ops-text outline-none focus:border-ops-accent/60"
+              className="h-9 w-full rounded-xl border border-ops-surface1/80 bg-ops-panel/65 px-3 text-xs text-ops-text outline-none focus:border-ops-accent/60"
               title="按日期和轮次定位思维链"
             >
               <option value="all">全部日期 / 全部轮次</option>
@@ -305,7 +305,7 @@ export default function AiThinkingChainPanel({
           </>
         )}
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto bg-ops-panel/70 px-3 py-2">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-transparent px-3 py-3">
         {activeTab === 'memory' ? (
           <MemoryActivityPanel activity={memoryActivity} loading={memoryLoading} />
         ) : traceGroups.length === 0 ? (
@@ -321,12 +321,12 @@ export default function AiThinkingChainPanel({
             {filteredGroups.slice(-30).reverse().map((group) => (
               <div
                 key={`${group.id}-${group.traces.length}`}
-                className="w-full overflow-hidden rounded-md border border-ops-surface0 bg-ops-dark/30 text-left transition hover:border-ops-accent/45 hover:bg-ops-dark/45"
+                className="w-full overflow-hidden rounded-2xl border border-ops-surface0/90 bg-ops-dark/32 text-left transition hover:border-ops-accent/45 hover:bg-ops-dark/45"
               >
                 <button
                   type="button"
                   onClick={() => openGroup(group)}
-                  className="w-full border-b border-ops-surface0/70 px-3 py-2 text-left"
+                  className="w-full border-b border-ops-surface0/70 bg-ops-panel/24 px-3 py-2.5 text-left"
                   title="点击定位左侧对应 AI 输出报告"
                 >
                   <div className="flex items-center justify-between gap-2 text-xs">
@@ -349,11 +349,11 @@ export default function AiThinkingChainPanel({
                 {activeExpandedGroupId === group.id && (
                   <>
                     <div className="grid gap-2 px-3 py-2 text-[11px] leading-5">
-                    <div className="rounded-md border border-ops-surface0 bg-ops-panel/35 px-2.5 py-2">
+                    <div className="rounded-xl border border-ops-surface0 bg-ops-panel/35 px-2.5 py-2">
                       <span className="font-semibold text-ops-overlay">左侧用户：</span>
                       <span className="text-ops-subtext">{group.userPrompt}</span>
                     </div>
-                    <div className="rounded-md border border-ops-surface0 bg-ops-panel/35 px-2.5 py-2">
+                    <div className="rounded-xl border border-ops-surface0 bg-ops-panel/35 px-2.5 py-2">
                       <span className="font-semibold text-ops-overlay">AI 回复：</span>
                       <span className="text-ops-subtext">{group.assistantSummary}</span>
                     </div>
@@ -362,7 +362,7 @@ export default function AiThinkingChainPanel({
                       {group.traces.map((trace, index) => (
                         <div
                           key={`${trace.tool}-${index}-${trace.startedAt || trace.completedAt || ''}`}
-                          className="rounded-md border border-ops-surface0 bg-ops-panel/45 px-3 py-2"
+                          className="rounded-xl border border-ops-surface0 bg-ops-panel/45 px-3 py-2"
                         >
                           <div className="flex items-center gap-2 text-xs">
                             <span className={`h-2 w-2 rounded-full ${

@@ -308,7 +308,7 @@ export default function ChatWindow() {
         onReadWriteConfirmChange={setReadWriteConfirm}
         onReadWriteConfirmClose={() => setReadWriteConfirm(null)}
       />
-    <section className="flex min-h-0 min-w-0 overflow-hidden rounded-lg border border-ops-surface1/80 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
+    <section className="ops-command-panel flex min-h-0 min-w-0 overflow-hidden rounded-[18px] border border-ops-surface1/75 bg-ops-panel shadow-[0_28px_70px_rgba(0,0,0,0.36)]">
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         <div className="flex h-full min-h-0 min-w-0 flex-col">
           <SessionToolsetBar
@@ -372,7 +372,7 @@ export default function ChatWindow() {
         </div>
       </div>
       <div
-        className={`z-10 flex w-3 items-stretch justify-center border-l border-ops-surface1/80 ${
+        className={`z-10 flex w-3 items-stretch justify-center border-l border-ops-surface1/70 ${
           rightPanelCollapsed
             ? 'pointer-events-none opacity-0'
             : isResizing
@@ -391,19 +391,22 @@ export default function ChatWindow() {
         <span className="my-3 w-[2px] rounded-full bg-ops-surface0/90" />
       </div>
       <section
-        className="flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden border-l border-ops-surface1/80 bg-ops-panel/95 transition-[width] duration-200"
+        className="flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden border-l border-ops-surface1/70 bg-[linear-gradient(180deg,rgba(13,31,50,0.98),rgba(8,18,32,0.96))] transition-[width] duration-200"
         style={{ width: rightPanelCollapsed ? '48px' : `${rightPanelWidth}px` }}
       >
-        <div className="flex h-10 shrink-0 items-center justify-between border-b border-ops-surface0/80 bg-ops-dark px-2">
+        <div className="flex h-12 shrink-0 items-center justify-between border-b border-ops-surface0/80 bg-ops-dark/70 px-3">
           {!rightPanelCollapsed && (
-            <span className="truncate text-xs font-semibold text-ops-text">会话侧栏</span>
+            <div className="min-w-0">
+              <span className="block text-[11px] font-black uppercase tracking-[0.22em] text-ops-accent">Intel Panel</span>
+              <span className="block truncate text-sm font-black text-ops-text">情报侧栏</span>
+            </div>
           )}
           <div className="ml-auto flex items-center gap-1.5">
             {!rightPanelCollapsed && (
               <button
                 type="button"
                 onClick={toggleWideRightPanel}
-                className="h-7 rounded-md border border-ops-surface1 px-2 text-xs text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
+                className="h-8 rounded-lg border border-ops-surface1/80 bg-ops-panel/55 px-2 text-xs text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
                 title={rightPanelWidth < wideRightPanelWidth ? '放大右侧栏' : '恢复普通宽度'}
                 aria-label={rightPanelWidth < wideRightPanelWidth ? '放大右侧栏' : '恢复普通宽度'}
               >
@@ -413,7 +416,7 @@ export default function ChatWindow() {
             <button
               type="button"
               onClick={toggleRightPanel}
-              className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-ops-surface1 text-xs text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-ops-surface1/80 bg-ops-panel/55 text-xs text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
               title={rightPanelCollapsed ? '展开右侧栏' : '收起右侧栏'}
               aria-label={rightPanelCollapsed ? '展开右侧栏' : '收起右侧栏'}
             >
@@ -425,10 +428,10 @@ export default function ChatWindow() {
           <button
             type="button"
             onClick={toggleRightPanel}
-            className="flex min-h-0 flex-1 items-center justify-center px-2 text-xs font-semibold text-ops-subtext hover:text-ops-accent"
+            className="flex min-h-0 flex-1 items-center justify-center px-2 text-xs font-black tracking-[0.18em] text-ops-subtext hover:text-ops-accent"
             title="展开右侧栏"
           >
-            <span className="[writing-mode:vertical-rl]">画像 / 思维链</span>
+            <span className="[writing-mode:vertical-rl]">情报 / 画像 / 思维链</span>
           </button>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto">

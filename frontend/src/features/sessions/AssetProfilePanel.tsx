@@ -28,8 +28,8 @@ export default function AssetProfilePanel({
   const title = assetProfileTitle(profile, session)
   const subtitle = assetProfileSubtitle(profile)
   return (
-    <div className="border-b border-ops-surface0 bg-ops-panel/95 px-4 py-4">
-      <div className="overflow-hidden rounded-lg border border-ops-surface0 bg-ops-dark/35">
+    <div className="border-b border-ops-surface0/80 bg-transparent px-3 py-3">
+      <div className="overflow-hidden rounded-2xl border border-ops-accent/20 bg-[linear-gradient(135deg,rgba(40,208,168,0.11),rgba(12,31,52,0.86))] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
         <ProfileSummaryButton
           busy={busy}
           open={open}

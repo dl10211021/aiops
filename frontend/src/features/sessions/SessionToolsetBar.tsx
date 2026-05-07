@@ -35,7 +35,7 @@ export default function SessionToolsetBar({
   const toolsetModel = buildSessionToolsetModel(session, catalog)
 
   return (
-    <div className="border-b border-ops-surface0/80 bg-ops-dark/40 px-3 py-1.5">
+    <div className="border-b border-ops-surface0/75 bg-[linear-gradient(90deg,rgba(40,208,168,0.08),rgba(15,31,50,0.78),rgba(10,20,35,0.88))] px-3 py-2">
       <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
         <SessionIdentityStrip
           session={session}

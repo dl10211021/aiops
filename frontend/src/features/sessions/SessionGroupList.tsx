@@ -71,7 +71,7 @@ export default function SessionGroupList({
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-2">
+    <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
       {sessionList.length === 0 && (
         <div className="mt-8 rounded-lg border border-ops-surface1/70 bg-ops-surface0/50 px-3 py-5 text-center text-xs leading-5 text-ops-subtext">
           {searching ? '没有匹配的会话' : '暂无活跃会话'}
@@ -88,11 +88,11 @@ export default function SessionGroupList({
         return (
           <section
             key={group}
-            className={`mb-2 rounded-lg border bg-ops-panel transition-colors ${
-              selected ? 'border-ops-accent/55 shadow-[0_0_0_1px_rgba(40,208,168,0.14)]' : 'border-ops-surface1/70'
+            className={`mb-2.5 overflow-hidden rounded-2xl border bg-ops-dark/24 transition-colors ${
+              selected ? 'border-ops-accent/60 shadow-[0_0_0_1px_rgba(40,208,168,0.16),0_16px_36px_rgba(0,0,0,0.16)]' : 'border-ops-surface1/60'
             }`}
           >
-            <div className="flex items-center gap-1 px-1.5 py-1">
+            <div className="flex items-center gap-1 border-b border-ops-surface0/65 bg-ops-panel/34 px-1.5 py-1">
               <button
                 onClick={() => onToggleGroup(group)}
                 className="grid h-8 w-7 shrink-0 place-items-center rounded-md text-[10px] text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text"
@@ -132,7 +132,7 @@ export default function SessionGroupList({
                     className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-xs text-ops-subtext transition-colors hover:text-ops-text"
                     title={group}
                   >
-                    <span className="truncate font-semibold">{group}</span>
+                    <span className="truncate text-sm font-black text-ops-text">{group}</span>
                     <GroupMetrics sessions={items} />
                   </button>
                   {!isDefaultGroup && (
@@ -158,7 +158,7 @@ export default function SessionGroupList({
             </div>
 
             {!collapsedGroups.has(group) && (
-              <div className="grid gap-1 px-1.5 pb-1.5">
+              <div className="grid gap-1.5 px-1.5 pb-1.5 pt-1.5">
                 {items.length === 0 ? (
                   <div className="rounded-md border border-dashed border-ops-surface1/70 px-3 py-2 text-[11px] text-ops-overlay">
                     暂无会话

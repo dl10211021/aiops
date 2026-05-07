@@ -170,12 +170,12 @@ export default function App() {
       <LeftNav />
 
       {/* Main product workspace */}
-      <main className="min-h-0 min-w-0 overflow-hidden p-3">
+      <main className="min-h-0 min-w-0 overflow-hidden p-2 lg:p-3">
         {isChatView ? (
           <div
             className={`grid h-full min-h-0 gap-3 ${
               sidebarOpen
-                ? 'grid-cols-[minmax(268px,292px)_minmax(0,1fr)]'
+                ? 'grid-cols-[minmax(300px,320px)_minmax(0,1fr)]'
                 : 'grid-cols-[minmax(0,1fr)]'
             }`}
           >
