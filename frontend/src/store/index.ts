@@ -1,5 +1,6 @@
 // Zustand store — global state for OpsCore frontend
 import { create } from 'zustand'
+import type { ViewId } from '@/types'
 import {
   appendMessageState,
   clearMessagesState,
@@ -24,11 +25,38 @@ import {
 import type { AppState } from './types'
 
 let toastId = 0
+const VIEW_IDS = new Set<ViewId>([
+  'dashboard',
+  'bigscreen',
+  'chat',
+  'assets',
+  'canvas',
+  'cron',
+  'alerts',
+  'approvals',
+  'skills',
+  'knowledge',
+])
+
+export function viewFromLocationHash(): ViewId {
+  if (typeof window === 'undefined') return 'chat'
+  const raw = window.location.hash.replace(/^#\/?/, '').split(/[/?&]/)[0]
+  return VIEW_IDS.has(raw as ViewId) ? raw as ViewId : 'chat'
+}
+
+function syncViewHash(view: ViewId) {
+  if (typeof window === 'undefined') return
+  if (viewFromLocationHash() === view) return
+  window.history.pushState(null, '', `${window.location.pathname}${window.location.search}#/${view}`)
+}
 
 export const useStore = create<AppState>((set, get) => ({
   // View
-  currentView: 'chat',
-  setView: (v) => set({ currentView: v }),
+  currentView: viewFromLocationHash(),
+  setView: (v) => {
+    syncViewHash(v)
+    set({ currentView: v })
+  },
 
   // Sessions
   sessions: {},

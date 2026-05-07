@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from 'react'
-import { useStore } from '@/store'
+import { useStore, viewFromLocationHash } from '@/store'
 import LeftNav from '@/components/layout/LeftNav'
 import Sidebar from '@/components/layout/Sidebar'
 import TopBar from '@/components/layout/TopBar'
@@ -76,12 +76,19 @@ function ModalRouter() {
 export default function App() {
   const addSession = useStore((s) => s.addSession)
   const setCurrentSession = useStore((s) => s.setCurrentSession)
+  const setView = useStore((s) => s.setView)
   const appendMessage = useStore((s) => s.appendMessage)
   const sessions = useStore((s) => s.sessions)
   const currentView = useStore((s) => s.currentView)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const restoreStartedRef = useRef(false)
+
+  useEffect(() => {
+    const handleHashChange = () => setView(viewFromLocationHash())
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [setView])
 
   // Restore sessions from backend on mount
   useEffect(() => {
