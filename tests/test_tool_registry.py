@@ -1,5 +1,6 @@
 import unittest
 
+from api.asset_routes import get_asset_catalog
 from core.tool_registry import tool_registry
 
 
@@ -366,6 +367,32 @@ class TestToolRegistry(unittest.TestCase):
         self.assertIn("service_probe_request", names)
         self.assertNotIn("network_cli_execute_command", names)
         self.assertNotIn("linux_execute_command", names)
+
+    def test_all_registered_tools_have_chinese_display_labels(self):
+        missing = []
+        for tool in tool_registry.all_tools():
+            public = tool.public_dict()
+            label = str(public.get("label") or "")
+            if not label or label == tool.name or all(ord(ch) < 128 for ch in label):
+                missing.append(tool.name)
+
+        self.assertEqual(missing, [])
+
+    def test_asset_capability_tools_are_registered_and_named(self):
+        issues = []
+        for asset in get_asset_catalog():
+            capability = asset.get("capability") or {}
+            tools = capability.get("tools") or []
+            details = {item.get("name"): item for item in capability.get("tool_details") or []}
+            for tool_name in tools:
+                if not tool_registry.get(tool_name):
+                    issues.append((asset["id"], tool_name, "not_registered"))
+                    continue
+                detail = details.get(tool_name)
+                if not detail or not detail.get("label") or detail.get("label") == tool_name:
+                    issues.append((asset["id"], tool_name, "missing_label"))
+
+        self.assertEqual(issues, [])
 
 
 if __name__ == "__main__":

@@ -268,6 +268,7 @@ export interface UserInteractionRequest {
 
 export interface ToolDefinition {
   name: string
+  label?: string
   toolset: string
   scope: string
   description: string
@@ -280,6 +281,7 @@ export interface ToolDefinition {
 
 export interface ToolsetInfo {
   id: string
+  label?: string
   enabled: boolean
   tools: ToolDefinition[]
 }
@@ -382,6 +384,7 @@ export interface AssetTypeDefinition {
     connector: string
     operation_model: string
     tools: string[]
+    tool_details?: ToolDefinition[]
     credential_fields: string[]
     connector_group?: AssetCategoryDefinition & { tools?: string[] }
     driver_key?: string

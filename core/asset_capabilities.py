@@ -33,6 +33,7 @@ from core.asset_parameter_templates import (
     _text_parameter,
 )
 from core.asset_specific_parameters import apply_asset_parameter_template
+from core.tool_display import asset_tool_detail
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -91,6 +92,7 @@ def capability_for_asset(asset: dict[str, Any]) -> dict[str, Any]:
     capability.setdefault("maturity", "generic" if capability.get("tools") else "needs_adapter")
     capability["connector_group"] = connector_metadata(capability.get("connector"))
     apply_asset_parameter_template(capability, asset_id)
+    capability["tool_details"] = [asset_tool_detail(str(tool)) for tool in capability.get("tools", [])]
     capability["risk_model"] = _standard_risk_model(safety_category)
     capability["standard_version"] = "2026-04-28"
     return capability

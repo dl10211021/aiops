@@ -1,6 +1,6 @@
 export const TOOL_LABELS: Record<string, string> = {
   linux_execute_command: 'Linux/Unix 命令',
-  winrm_execute_command: 'Windows PowerShell',
+  winrm_execute_command: 'Windows PowerShell 命令',
   network_cli_execute_command: '网络设备 CLI',
   container_execute_command: '容器主机命令',
   middleware_execute_command: '中间件主机命令',
@@ -20,7 +20,7 @@ export const TOOL_LABELS: Record<string, string> = {
   cicd_api_request: 'CI/CD 平台接口',
   ai_platform_api_request: 'AI 平台接口',
   oob_api_request: '硬件带外接口',
-  k8s_api_request: 'Kubernetes API',
+  k8s_api_request: 'Kubernetes 集群 API',
   monitoring_api_query: '监控平台查询',
   virtualization_api_request: '虚拟化平台接口',
   storage_api_request: '存储/备份接口',
