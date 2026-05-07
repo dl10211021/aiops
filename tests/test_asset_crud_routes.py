@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from api import asset_routes, routes
 from api.schemas import (
     AssetPayload,
+    BatchAssetGroupPayload,
     BatchAssetImportItem,
     ConnectionRequest,
     InspectionTemplateStepPayload,
@@ -97,6 +98,7 @@ class TestAssetCrudRoutes(unittest.TestCase):
         self.assertIn("/assets", paths)
         self.assertIn("/assets/types", paths)
         self.assertIn("/assets/{asset_id}", paths)
+        self.assertIn("/assets/groups/bulk", paths)
         self.assertIn("/assets/normalize/preview", paths)
         self.assertIn("/assets/normalize/apply", paths)
         self.assertIn("/assets/batch_import", paths)
@@ -219,6 +221,21 @@ class TestAssetCrudRoutes(unittest.TestCase):
         self.assertEqual(asset["password"], "********")
         self.assertEqual(asset["extra_args"]["api_key"], "********")
         self.assertEqual(asset["extra_args"]["api_token"], "********")
+
+    def test_bulk_update_asset_group_preserves_secondary_tags_and_masks_response(self):
+        fake = FakeMemoryDB()
+        fake.assets[1]["tags"] = ["monitor", "生产"]
+        payload = BatchAssetGroupPayload(asset_ids=[1, 1], group_name="核心监控")
+
+        with patch("core.memory.memory_db", fake):
+            response = asyncio.run(asset_routes.bulk_update_asset_group(payload))
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data["updated"], 1)
+        self.assertEqual(fake.updated[1]["tags"], ["核心监控", "monitor", "生产"])
+        asset = response.data["assets"][0]
+        self.assertEqual(asset["tags"], ["核心监控", "monitor", "生产"])
+        self.assertEqual(asset["password"], "********")
 
     def test_catalog_password_params_are_masked_by_memory_policy(self):
         password_fields = {

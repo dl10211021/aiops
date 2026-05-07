@@ -2,13 +2,13 @@ import { useState } from 'react'
 import {
   applyAssetNormalization,
   batchImportAssets,
+  bulkUpdateAssetGroup,
   connectSession,
   deleteAsset,
   getAssetVerificationMatrix,
   getAssetVerificationRuns,
   listInspectionRuns,
   previewAssetNormalization,
-  updateAsset,
   verifyAsset,
 } from '@/api/client'
 import { useStore } from '@/store'
@@ -249,13 +249,8 @@ export function useAssetVaultActions({
     }
     createSessionGroup(normalized)
     try {
-      const updated = await Promise.all(selectedAssets.map(async (asset) => {
-        const res = await updateAsset(asset.id, withManagedSecret({
-          ...asset,
-          tags: withPrimaryGroup(asset.tags, normalized),
-        } as Parameters<typeof updateAsset>[1]))
-        return res.data.asset
-      }))
+      const res = await bulkUpdateAssetGroup(selectedAssets.map((asset) => asset.id), normalized)
+      const updated = res.data.assets
       const updatedById = new Map(updated.map((asset) => [asset.id, asset]))
       setAssets(assets.map((asset) => updatedById.get(asset.id) || asset))
       addToast(`已将 ${selectedAssets.length} 条资产加入 ${normalized}`, 'success')

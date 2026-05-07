@@ -29,3 +29,8 @@ class BatchAssetImportItem(BaseModel):
     extra_args: dict = Field(default_factory=dict)
     skills: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=lambda: ["未分组"])
+
+
+class BatchAssetGroupPayload(BaseModel):
+    asset_ids: list[int] = Field(default_factory=list)
+    group_name: str

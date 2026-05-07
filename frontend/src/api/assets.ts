@@ -103,6 +103,13 @@ export async function updateAsset(assetId: number, asset: Partial<Asset>) {
   })
 }
 
+export async function bulkUpdateAssetGroup(assetIds: number[], groupName: string) {
+  return request<{ assets: Asset[]; updated: number; group_name: string }>('/assets/groups/bulk', {
+    method: 'POST',
+    body: JSON.stringify({ asset_ids: assetIds, group_name: groupName }),
+  })
+}
+
 export async function batchImportAssets(items: Partial<Asset>[]) {
   return request('/assets/batch_import', {
     method: 'POST', body: JSON.stringify(items),

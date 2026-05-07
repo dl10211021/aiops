@@ -16,7 +16,7 @@ from api.response_mappers.assets import (
     batch_asset_import_response_kwargs,
     saved_assets_response_kwargs,
 )
-from api.schema_models.assets import AssetPayload, BatchAssetImportItem
+from api.schema_models.assets import AssetPayload, BatchAssetGroupPayload, BatchAssetImportItem
 from api.schema_models.common import ResponseModel
 from core.asset_catalog_response import build_asset_types_response
 from core.asset_cleanup_service import (
@@ -36,6 +36,25 @@ from core.asset_service import (
 
 
 router = APIRouter()
+
+DEFAULT_ASSET_GROUP = "未分组"
+
+
+def _normalize_asset_group_name(group_name: str) -> str:
+    return (group_name or "").strip() or DEFAULT_ASSET_GROUP
+
+
+def _with_primary_asset_group(tags: list[str] | None, group_name: str) -> list[str]:
+    normalized = _normalize_asset_group_name(group_name)
+    tail: list[str] = []
+    seen = {normalized}
+    for tag in tags or []:
+        clean = str(tag).strip()
+        if not clean or clean == DEFAULT_ASSET_GROUP or clean in seen:
+            continue
+        seen.add(clean)
+        tail.append(clean)
+    return [normalized, *tail]
 
 
 @router.get("/assets/saved", response_model=ResponseModel)
@@ -85,6 +104,35 @@ async def update_asset(asset_id: int, req: AssetPayload):
     except AssetServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**asset_updated_response_kwargs(asset))
+
+
+@router.post("/assets/groups/bulk", response_model=ResponseModel)
+async def bulk_update_asset_group(req: BatchAssetGroupPayload):
+    """批量更新资产主分组；主分组与会话组名称保持一致。"""
+    group_name = _normalize_asset_group_name(req.group_name)
+    asset_ids = [asset_id for asset_id in dict.fromkeys(req.asset_ids) if asset_id > 0]
+    if not asset_ids:
+        return ResponseModel(status="error", message="请选择要加入分组的资产")
+
+    updated_assets = []
+    try:
+        for asset_id in asset_ids:
+            asset = await asyncio.to_thread(get_saved_asset_record, asset_id)
+            asset["tags"] = _with_primary_asset_group(asset.get("tags"), group_name)
+            updated = await asyncio.to_thread(update_saved_asset_record, asset_id, asset)
+            updated_assets.append(updated)
+    except AssetServiceError as exc:
+        raise_http_error(exc)
+
+    return ResponseModel(
+        status="success",
+        data={
+            "assets": updated_assets,
+            "updated": len(updated_assets),
+            "group_name": group_name,
+        },
+        message=f"已将 {len(updated_assets)} 条资产加入 {group_name}",
+    )
 
 
 @router.get("/assets/normalize/preview", response_model=ResponseModel)
