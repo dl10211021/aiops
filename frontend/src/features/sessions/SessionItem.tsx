@@ -4,6 +4,17 @@ import { protocolLabel } from '@/utils/assetDisplay'
 import { sessionAttention } from './sessionAttention'
 import { isSessionRunning } from './sessionMetrics'
 
+function protocolBadgeClass(session: Session) {
+  const raw = `${session.protocol || ''} ${session.asset_type || ''}`.toLowerCase()
+  if (raw.includes('oracle')) return 'border-amber-400/25 bg-amber-400/8 text-amber-300'
+  if (raw.includes('postgres') || raw.includes('pgsql')) return 'border-violet-400/25 bg-violet-400/10 text-violet-200'
+  if (raw.includes('mysql') || raw.includes('tidb') || raw.includes('mariadb')) return 'border-sky-400/25 bg-sky-400/10 text-sky-200'
+  if (raw.includes('win') || raw.includes('rdp')) return 'border-slate-400/25 bg-slate-400/10 text-slate-200'
+  if (raw.includes('ssh') || raw.includes('linux') || raw.includes('unix') || raw.includes('esxi')) return 'border-blue-400/25 bg-blue-400/10 text-blue-200'
+  if (raw.includes('snmp') || raw.includes('switch') || raw.includes('network')) return 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200'
+  return 'border-ops-surface1/65 bg-ops-dark/82 text-ops-text'
+}
+
 interface SessionItemProps {
   session: Session
   active: boolean
@@ -16,8 +27,6 @@ export default function SessionItem({
   session,
   active,
   onSelect,
-  onDisconnect,
-  onEdit,
 }: SessionItemProps) {
   const attention = sessionAttention(session)
   const needsAttention = attention.type !== 'none'
@@ -32,12 +41,12 @@ export default function SessionItem({
           ? 'border-ops-accent/60 bg-[linear-gradient(135deg,rgba(40,208,168,0.16),rgba(15,36,56,0.76))] text-ops-accent shadow-[inset_0_0_0_1px_rgba(40,208,168,0.08)]'
           : needsAttention
             ? 'border-yellow-300/30 bg-[linear-gradient(135deg,rgba(253,224,71,0.12),rgba(18,32,49,0.72))] text-ops-text hover:border-yellow-300/45'
-            : 'border-ops-surface1/45 bg-[linear-gradient(135deg,rgba(23,35,53,0.64),rgba(9,20,35,0.82))] text-ops-subtext hover:border-ops-accent/30 hover:text-ops-text'}`}
+            : 'border-ops-surface1/45 bg-[linear-gradient(135deg,rgba(20,31,45,0.72),rgba(9,19,32,0.92))] text-ops-subtext hover:border-ops-accent/32 hover:bg-[linear-gradient(135deg,rgba(26,42,60,0.74),rgba(10,23,38,0.94))] hover:text-ops-text'}`}
     >
-      <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ops-accent/28 to-transparent" />
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ops-accent/18 to-transparent" />
       <span
         title={`${session.asset_type}/${session.protocol}`}
-        className="grid h-9 w-11 shrink-0 place-items-center rounded-md border border-ops-surface1/65 bg-ops-dark/82 px-1 text-center text-[10px] font-black leading-tight text-ops-text shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+        className={`grid h-9 w-11 shrink-0 place-items-center rounded-md border px-1 text-center text-[10px] font-black leading-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${protocolBadgeClass(session)}`}
       >
         {protocolText}
       </span>
@@ -49,28 +58,6 @@ export default function SessionItem({
         </div>
         <div className="mt-0.5 truncate font-mono text-[10px] font-semibold text-ops-overlay">
           {session.user}@{session.host}
-        </div>
-        <div className="pointer-events-none absolute right-7 top-2 flex gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
-          <button
-            onClick={(event) => {
-              event.stopPropagation()
-              onEdit(session.id, event)
-            }}
-            className="rounded border border-ops-surface1/70 bg-ops-dark/80 px-1.5 py-0.5 text-[10px] font-semibold text-ops-subtext hover:border-ops-accent/45 hover:text-ops-text"
-            title="编辑"
-          >
-            编辑
-          </button>
-          <button
-            onClick={(event) => {
-              event.stopPropagation()
-              onDisconnect(session.id, event)
-            }}
-            className="rounded border border-ops-alert/35 bg-ops-dark/80 px-1.5 py-0.5 text-[10px] font-semibold text-ops-alert hover:bg-ops-alert/12"
-            title="断开"
-          >
-            断开
-          </button>
         </div>
       </div>
       <span
