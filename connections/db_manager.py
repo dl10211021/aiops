@@ -18,6 +18,7 @@ from connections.oracle_client_discovery import (
     truthy as _truthy,
 )
 from connections.native_sql_executor import (
+    execute_dameng,
     execute_mssql,
     execute_mysql,
     execute_postgresql,
@@ -206,7 +207,7 @@ DATABASE_OPERATION_PROFILES: dict[str, dict] = {
         "readonly_examples": ["SELECT * FROM v$version", "SELECT username FROM dba_users"],
         "write_requires_approval": True,
         "hard_block_examples": ["DROP TABLE", "DROP USER"],
-        "operator_note": "达梦通过 JayDeBeApi + 达梦 JDBC 驱动接入；JDBC jar 路径由资产参数或环境变量注入。",
+        "operator_note": "达梦优先使用 dmPython 原生驱动接入；如离线环境暂无法安装 dmpython，可继续用 JayDeBeApi + 达梦 JDBC 驱动兜底。",
     },
     "db2": {
         "id": "db2",
@@ -267,6 +268,10 @@ def get_database_operation_profile(db_type: str | None) -> dict:
 
 def _module_installed(module_name: str) -> bool:
     return importlib.util.find_spec(module_name) is not None
+
+
+def _dm_python_installed() -> bool:
+    return _module_installed("dmPython") or _module_installed("dmpython")
 
 
 def _split_paths(value: Any) -> list[Path]:
@@ -373,6 +378,9 @@ def get_database_driver_capabilities() -> dict:
     """Return database connector readiness and installation hints for the UI."""
     oracle_client = discover_oracle_client_lib_dir()
     mssql_drivers = _mssql_odbc_drivers()
+    dameng_jdbc_driver = discover_jdbc_driver("dameng")
+    dameng_native_ready = _dm_python_installed()
+    dameng_jdbc_ready = _module_installed("jaydebeapi") and dameng_jdbc_driver["detected"]
     capabilities = {
         "oracle": {
             "id": "oracle",
@@ -475,8 +483,38 @@ def get_database_driver_capabilities() -> dict:
             "test_command": "find admin.system.version",
             "operation_profile": get_database_operation_profile("mongodb"),
         },
+        "dameng": {
+            "id": "dameng",
+            "label": "达梦数据库 DM",
+            "connector": "native_sql",
+            "python_package": "dmpython",
+            "python_import": "dmPython",
+            "python_package_installed": dameng_native_ready,
+            "external_client_required": False,
+            "external_client_detected": dameng_jdbc_driver["detected"],
+            "external_client_name": "达梦 JDBC Driver（可选兜底）",
+            "status": "ready" if dameng_native_ready or dameng_jdbc_ready else "missing_python_package",
+            "install_hint": (
+                "优先安装 dmpython 使用达梦原生连接；离线环境如果暂不能安装 dmpython，仍可配置 "
+                "JayDeBeApi + 达梦 JDBC jar 作为兜底。"
+            ),
+            "test_sql": "SELECT 1",
+            "operation_profile": get_database_operation_profile("dameng"),
+            "jdbc_fallback": {
+                "connector": "database_jdbc",
+                "python_package": "JayDeBeApi",
+                "python_package_installed": _module_installed("jaydebeapi"),
+                "detected_jars": dameng_jdbc_driver["jar_paths"],
+                "driver_class": dameng_jdbc_driver["driver_class"],
+                "recommended_path_windows": JDBC_DATABASE_DRIVERS["dameng"].get("recommended_path_windows", ""),
+                "recommended_path_linux": JDBC_DATABASE_DRIVERS["dameng"].get("recommended_path_linux", ""),
+                "env_vars": dameng_jdbc_driver["env_vars"],
+            },
+        },
     }
     for key, meta in JDBC_DATABASE_DRIVERS.items():
+        if key == "dameng":
+            continue
         jdbc_driver = discover_jdbc_driver(key)
         package_ready = _module_installed("jaydebeapi")
         capabilities[key] = {
@@ -637,6 +675,32 @@ class DatabaseExecutor:
         return execute_mssql(host, port, user, password, database, sql)
 
     @staticmethod
+    def _execute_dameng(host, port, user, password, database, sql, extra_args: dict | None = None) -> dict:
+        result = execute_dameng(host, port, user, password, database, sql)
+        if result.get("success") or not result.get("missing_driver"):
+            return result
+
+        jdbc_driver = discover_jdbc_driver("dameng", extra_args)
+        if _module_installed("jaydebeapi") and jdbc_driver["detected"]:
+            fallback = execute_jdbc(
+                "dameng",
+                host,
+                port,
+                user,
+                password,
+                database,
+                sql,
+                extra_args,
+                JDBC_DATABASE_DRIVERS,
+                normalize_database_driver_key,
+                discover_jdbc_driver,
+            )
+            if fallback.get("success"):
+                fallback["connector"] = "database_jdbc"
+            return fallback
+        return result
+
+    @staticmethod
     def _jdbc_url(db_type: str, host, port, database: str, extra_args: dict | None) -> str:
         return build_jdbc_url(
             JDBC_DATABASE_DRIVERS,
@@ -686,6 +750,8 @@ class DatabaseExecutor:
             res = self._execute_postgresql(host, port, user, password, database, sql)
         elif db_type in ["mssql", "sqlserver", "sql_server"]:
             res = self._execute_mssql(host, port, user, password, database, sql)
+        elif db_type == "dameng":
+            res = self._execute_dameng(host, port, user, password, database, sql, extra_args)
         elif db_type in JDBC_DATABASE_DRIVERS:
             res = self._execute_jdbc(db_type, host, port, user, password, database, sql, extra_args)
         else:

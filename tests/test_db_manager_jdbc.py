@@ -123,6 +123,39 @@ class TestDbManagerJdbc(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("JDBC 驱动 jar", result["error"])
 
+    def test_execute_dameng_uses_dmpython_native_driver(self):
+        fake_conn = FakeConnection()
+        calls = []
+
+        fake_dm_python = types.SimpleNamespace(
+            connect=lambda **kwargs: calls.append(kwargs) or fake_conn
+        )
+
+        with patch.dict(sys.modules, {"dmPython": fake_dm_python}):
+            result_text = DatabaseExecutor().execute_query(
+                "dameng",
+                "dm.local",
+                5236,
+                "SYSDBA",
+                "secret",
+                "DAMENG",
+                "SELECT 1",
+                {},
+            )
+
+        result = json.loads(result_text)
+        self.assertTrue(result["success"])
+        self.assertEqual(result["data"], [{"COL1": 1}])
+        self.assertEqual(
+            calls[0],
+            {
+                "user": "SYSDBA",
+                "password": "secret",
+                "server": "dm.local",
+                "port": 5236,
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

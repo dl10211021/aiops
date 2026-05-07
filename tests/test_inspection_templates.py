@@ -153,7 +153,8 @@ class TestInspectionTemplates(unittest.TestCase):
         store_path = self._store_path("builtin_windows_db")
         with patch.object(inspection_templates, "TEMPLATE_STORE_PATH", store_path):
             windows = inspection_templates.find_matching_template("windows", "winrm")
-            mysql = inspection_templates.find_matching_template("tidb", "mysql")
+            mysql = inspection_templates.find_matching_template("mysql", "mysql")
+            tidb = inspection_templates.find_matching_template("tidb", "mysql")
             postgresql = inspection_templates.find_matching_template("kingbase", "postgresql")
             oracle = inspection_templates.find_matching_template("oracle", "oracle")
             mssql = inspection_templates.find_matching_template("mssql", "mssql")
@@ -175,11 +176,12 @@ class TestInspectionTemplates(unittest.TestCase):
         self.assertIn("permission_denied", security_step["command"])
 
         self.assertEqual(mysql["id"], "builtin-mysql-core-readonly")
+        self.assertEqual(tidb["id"], "builtin-tidb-core-readonly")
         self.assertEqual(postgresql["id"], "builtin-postgresql-core-readonly")
         self.assertEqual(oracle["id"], "builtin-oracle-core-readonly")
         self.assertEqual(mssql["id"], "builtin-mssql-core-readonly")
         self.assertEqual(memcached["id"], "builtin-memcached-core-readonly")
-        self.assertEqual(dameng["id"], "builtin-jdbc-database-core-readonly")
+        self.assertEqual(dameng["id"], "builtin-dameng-core-readonly")
         self.assertEqual(db2["id"], "builtin-db2-core-readonly")
         self.assertEqual(db2["steps"][0]["sql"], "SELECT 1 FROM SYSIBM.SYSDUMMY1")
         self.assertEqual(clickhouse["id"], "builtin-clickhouse-core-readonly")
@@ -189,6 +191,39 @@ class TestInspectionTemplates(unittest.TestCase):
         for template in (mysql, postgresql, oracle, mssql):
             self.assertEqual({step["tool"] for step in template["steps"]}, {"db_execute_query"})
             self.assertTrue({"version", "connections"}.issubset({step["name"] for step in template["steps"]}))
+        self.assertTrue(
+            {
+                "max_connections",
+                "processlist",
+                "mysql_users",
+                "table_locks",
+            }.issubset({step["name"] for step in mysql["steps"]})
+        )
+        self.assertTrue(
+            {"cluster_info", "tikv_store_status", "processlist"}.issubset(
+                {step["name"] for step in tidb["steps"]}
+            )
+        )
+        self.assertTrue(
+            {"long_queries", "lock_info", "cache_hit", "settings_key"}.issubset(
+                {step["name"] for step in postgresql["steps"]}
+            )
+        )
+        self.assertTrue(
+            {"database_info", "locked_users", "archive_dest", "rman_jobs"}.issubset(
+                {step["name"] for step in oracle["steps"]}
+            )
+        )
+        self.assertTrue(
+            {"active_sessions", "blocking_sessions", "locks", "backups"}.issubset(
+                {step["name"] for step in mssql["steps"]}
+            )
+        )
+        self.assertTrue(
+            {"tablespace", "backup", "wait_events", "long_sql"}.issubset(
+                {step["name"] for step in dameng["steps"]}
+            )
+        )
         self.assertEqual({step["tool"] for step in memcached["steps"]}, {"memcached_execute_command"})
         self.assertEqual({step["command"] for step in memcached["steps"]}, {"version", "stats"})
 
@@ -455,7 +490,7 @@ class TestInspectionTemplates(unittest.TestCase):
         self.assertEqual(report["template_id"], "builtin-windows-core-readonly")
         self.assertTrue(any("Get-HotFix" in call["command"] for call in fake_winrm.calls))
 
-    def test_inspector_uses_builtin_mysql_template_for_mysql_protocol_subtypes(self):
+    def test_inspector_uses_builtin_tidb_template_for_tidb_asset_type(self):
         from core import inspection_templates, session_inspector
         from connections import db_manager
 
@@ -506,9 +541,9 @@ class TestInspectionTemplates(unittest.TestCase):
 
         self.assertEqual(report["status"], "success")
         self.assertEqual(report["profile"], "template")
-        self.assertEqual(report["template_id"], "builtin-mysql-core-readonly")
+        self.assertEqual(report["template_id"], "builtin-tidb-core-readonly")
         self.assertEqual({call["db_type"] for call in fake_db.calls}, {"mysql"})
-        self.assertTrue(any("Threads_connected" in call["sql"] for call in fake_db.calls))
+        self.assertTrue(any("TIDB_VERSION" in call["sql"] for call in fake_db.calls))
 
     def test_inspector_uses_builtin_network_template_for_network_cli_subtypes(self):
         from core import inspection_templates, session_inspector

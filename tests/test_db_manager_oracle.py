@@ -262,12 +262,17 @@ def test_database_driver_capabilities_group_core_database_connectors():
     capabilities = get_database_driver_capabilities()
     drivers = capabilities["drivers"]
 
-    assert {"oracle", "mysql", "postgresql", "mssql", "redis", "mongodb"}.issubset(drivers)
+    assert {"oracle", "mysql", "postgresql", "mssql", "redis", "mongodb", "dameng"}.issubset(drivers)
     assert drivers["oracle"]["connector"] == "native_sql"
     assert drivers["oracle"]["external_client_name"] == "Oracle Instant Client"
     assert "OPSCORE_ORACLE_CLIENT_LIB_DIR" in drivers["oracle"]["install_hint"]
+    assert drivers["dameng"]["connector"] == "native_sql"
+    assert drivers["dameng"]["python_package"] == "dmpython"
+    assert drivers["dameng"]["python_import"] == "dmPython"
+    assert drivers["dameng"]["jdbc_fallback"]["connector"] == "database_jdbc"
     assert drivers["mysql"]["external_client_required"] is False
     assert drivers["mysql"]["test_sql"] == "SELECT 1"
+    assert drivers["dameng"]["test_sql"] == "SELECT 1"
     assert drivers["oracle"]["operation_profile"]["identity_label"] == "SID / Service Name / TNS Alias"
     assert drivers["mysql"]["operation_profile"]["identity_label"] == "Database Name"
 

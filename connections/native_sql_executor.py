@@ -87,3 +87,45 @@ def execute_mssql(host, port, user, password, database, sql) -> dict:
     except Exception as e:
         logger.error(f"SQL Server 连接执行失败: {e}")
         return {"success": False, "error": str(e)}
+
+
+def execute_dameng(host, port, user, password, database, sql) -> dict:
+    try:
+        import dmPython
+    except ImportError:
+        return {
+            "success": False,
+            "missing_driver": True,
+            "error": "缺少 dmpython 依赖，请先安装 requirements.txt 中的 dmpython；达梦原生驱动导入名为 dmPython。",
+        }
+
+    conn = None
+    cursor = None
+    try:
+        conn = dmPython.connect(
+            user=user,
+            password=password or "",
+            server=host,
+            port=int(port),
+        )
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        if cursor.description is None:
+            return statement_success(conn, cursor, sql)
+        columns = [column[0] for column in cursor.description]
+        rows = cursor.fetchmany(1000)
+        return query_success(sql, rows, [dict(zip(columns, row)) for row in rows])
+    except Exception as e:
+        logger.error(f"达梦数据库连接执行失败: {e}")
+        return {"success": False, "error": str(e)}
+    finally:
+        try:
+            if cursor is not None:
+                cursor.close()
+        except Exception:
+            pass
+        try:
+            if conn is not None:
+                conn.close()
+        except Exception:
+            pass
