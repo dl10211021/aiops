@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from core.agent_chat_loop import (
     _assistant_orchestration_labels,
+    _build_trace_review_prompt,
     _resolve_model_orchestration,
     build_successful_execution_memory,
     run_chat_agent_loop,
@@ -137,7 +138,36 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("辅助模型根据上下文自确认", memory["content"])
         self.assertIn("无需用户每次点赞", memory["content"])
         self.assertIn("只可作为当前会话后续轮次", memory["content"])
+        self.assertIn("工具=Linux/Unix 命令 (`linux_execute_command`)", memory["content"])
+        self.assertNotIn("工具=linux_execute_command;", memory["content"])
         self.assertNotIn("同类资产排查", memory["content"])
+
+    def test_trace_review_prompt_localizes_tool_names_for_audit(self):
+        prompt = _build_trace_review_prompt(
+            {
+                "asset_type": "oracle",
+                "protocol": "oracle",
+                "host": "db.local",
+                "port": 1521,
+                "allow_modifications": False,
+            },
+            [
+                {
+                    "tool": "db_execute_query",
+                    "args": "select 1 from dual",
+                    "result": "1",
+                    "status": "done",
+                }
+            ],
+            "数据库只读检查完成。",
+            want_trace_review=True,
+            want_risk_advice=True,
+        )
+
+        self.assertIn("工具：数据库 SQL 执行 (`db_execute_query`)", prompt)
+        self.assertNotIn("工具：db_execute_query\n", prompt)
+        self.assertIn("【思维链审查】", prompt)
+        self.assertIn("【风险建议】", prompt)
 
     def test_successful_execution_memory_skips_interrupted_turn(self):
         memory = build_successful_execution_memory(

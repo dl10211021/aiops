@@ -18,6 +18,13 @@ from core.assistant_model_config import (
     get_assistant_model_config,
     resolve_assistant_model_id,
 )
+from core.tool_display import tool_label
+
+
+def _display_tool_name(tool_name: Any) -> str:
+    name = str(tool_name or "unknown")
+    label = tool_label(name)
+    return f"{label} (`{name}`)" if label != name else name
 
 
 class ChatLoopMemoryStore(Protocol):
@@ -377,10 +384,11 @@ def _build_trace_review_prompt(
 ) -> str:
     trace_lines = []
     for index, item in enumerate(exec_trace[-12:], start=1):
+        tool = _display_tool_name(item.get("tool"))
         trace_lines.append(
             "\n".join(
                 [
-                    f"{index}. 工具：{item.get('tool') or 'unknown'}",
+                    f"{index}. 工具：{tool}",
                     f"状态：{item.get('status') or '-'}",
                     f"执行：{str(item.get('args') or '-')[:900]}",
                     f"结果：{str(item.get('result') or '-')[:1400]}",
@@ -745,7 +753,7 @@ def build_successful_execution_memory(
         return None
     steps = []
     for index, item in enumerate(exec_trace, start=1):
-        tool = item.get("tool") or "unknown"
+        tool = _display_tool_name(item.get("tool"))
         args = str(item.get("args") or "").strip()
         result = str(item.get("result") or "").strip()
         steps.append(
