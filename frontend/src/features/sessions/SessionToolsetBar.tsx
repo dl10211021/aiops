@@ -33,6 +33,16 @@ export default function SessionToolsetBar({
 }: SessionToolsetBarProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const toolsetModel = buildSessionToolsetModel(session, catalog)
+  const requestEditSession = () => {
+    window.dispatchEvent(new CustomEvent('opscore:session-edit', {
+      detail: { sessionId: session.id },
+    }))
+  }
+  const requestDisconnectSession = () => {
+    window.dispatchEvent(new CustomEvent('opscore:session-disconnect', {
+      detail: { sessionId: session.id },
+    }))
+  }
 
   return (
     <div className="border-b border-ops-surface0/75 bg-[linear-gradient(90deg,rgba(40,208,168,0.07),rgba(15,31,50,0.76),rgba(10,20,35,0.88))] px-3 py-1.5">
@@ -54,6 +64,8 @@ export default function SessionToolsetBar({
           onOrchestrationModeChange={onOrchestrationModeChange}
           onThinkingModeChange={onThinkingModeChange}
           onToggleDetails={() => setDetailsOpen((open) => !open)}
+          onEditSession={requestEditSession}
+          onDisconnectSession={requestDisconnectSession}
         />
       </div>
 

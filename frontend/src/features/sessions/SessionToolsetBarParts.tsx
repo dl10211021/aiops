@@ -46,6 +46,8 @@ export function SessionRuntimeControls({
   onOrchestrationModeChange,
   onThinkingModeChange,
   onToggleDetails,
+  onEditSession,
+  onDisconnectSession,
 }: {
   availableModels: ModelGroup[]
   modelName: string
@@ -57,6 +59,8 @@ export function SessionRuntimeControls({
   onOrchestrationModeChange: (mode: 'single' | 'split') => void
   onThinkingModeChange: (value: string) => void
   onToggleDetails: () => void
+  onEditSession: () => void
+  onDisconnectSession: () => void
 }) {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
@@ -106,6 +110,22 @@ export function SessionRuntimeControls({
       >
         {detailsOpen ? '收起' : '详情'}
       </button>
+      <div className="inline-flex h-9 overflow-hidden rounded-lg border border-ops-surface1/70 bg-ops-panel/45 p-0.5" title="当前会话操作">
+        <button
+          type="button"
+          onClick={onEditSession}
+          className="rounded-md px-2.5 text-[11px] font-semibold text-ops-subtext transition-colors hover:bg-ops-surface0 hover:text-ops-text"
+        >
+          编辑
+        </button>
+        <button
+          type="button"
+          onClick={onDisconnectSession}
+          className="rounded-md px-2.5 text-[11px] font-semibold text-ops-alert transition-colors hover:bg-ops-alert/10"
+        >
+          断开
+        </button>
+      </div>
     </div>
   )
 }
