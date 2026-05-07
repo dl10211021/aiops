@@ -322,7 +322,7 @@ SPECIAL_CAPABILITY_OVERRIDES: dict[str, dict[str, Any]] = {
             "external_client_required": False,
             "note": "IPMI/BMC 标准远程管理通常使用 UDP 623。当前先提供只读连通性探测，电源控制等写操作后续应接专用 IPMI 适配器并走审批。",
         },
-        "maturity": "needs_adapter",
+        "maturity": "generic",
     },
     "ldap": {
         "family": "security",
@@ -336,7 +336,7 @@ SPECIAL_CAPABILITY_OVERRIDES: dict[str, dict[str, Any]] = {
             "external_client_required": False,
             "note": "LDAP/AD 标准端口为 389，LDAPS 常用 636。当前先提供 TCP/健康探测，目录查询后续应接 ldap3 专用适配器。",
         },
-        "maturity": "needs_adapter",
+        "maturity": "generic",
     },
     "dns_sd": {
         "family": "discovery",
@@ -368,7 +368,7 @@ SPECIAL_CAPABILITY_OVERRIDES: dict[str, dict[str, Any]] = {
             "external_client_required": False,
             "note": "JMX/RMI 端口通常由应用启动参数配置。当前先提供 TCP 健康探测，MBean 查询后续接 JMX 专用适配器。",
         },
-        "maturity": "needs_adapter",
+        "maturity": "generic",
     },
     "kafka_client": {
         "family": "middleware",
@@ -382,7 +382,7 @@ SPECIAL_CAPABILITY_OVERRIDES: dict[str, dict[str, Any]] = {
             "external_client_required": False,
             "note": "Kafka Broker 客户端入口通常是 9092。当前先提供 TCP 连通性探测，Topic/Consumer Group 管理后续接 Kafka Admin 适配器。",
         },
-        "maturity": "needs_adapter",
+        "maturity": "generic",
     },
 }
 
