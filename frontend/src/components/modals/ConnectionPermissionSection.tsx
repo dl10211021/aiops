@@ -20,7 +20,7 @@ export default function ConnectionPermissionSection({
               : 'border-ops-surface1 bg-ops-panel/40 text-ops-subtext hover:text-ops-text'
           }`}
         >
-          <div className="text-sm font-semibold">只读巡检</div>
+          <div className="text-sm font-semibold">只读模式</div>
           <div className="mt-1 text-[11px] leading-4 text-ops-overlay">
             默认模式，仅查询和分析，不主动修改目标系统。
           </div>

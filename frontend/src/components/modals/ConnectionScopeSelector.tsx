@@ -1,6 +1,6 @@
 const TARGET_SCOPE_OPTIONS = [
   { value: 'asset', label: '单台资产', desc: '保存到资产中心并打开会话' },
-  { value: 'group', label: '资产组别', desc: '作为批量任务或巡检入口' },
+  { value: 'group', label: '资产组别', desc: '作为批量任务或会话入口' },
   { value: 'global', label: '全局会话', desc: '不绑定具体资产' },
 ]
 

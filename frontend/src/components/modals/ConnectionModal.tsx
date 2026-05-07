@@ -67,7 +67,7 @@ export default function ConnectionModal() {
             <h2 className="text-lg font-bold text-ops-text">
               {typeof window !== 'undefined' && window.sessionStorage.getItem('asset_editing_id') ? '编辑资产' : '新建连接'}
             </h2>
-            <p className="mt-0.5 text-xs text-ops-subtext">选择数据中心常规资产类型后，平台会带出最适合 AI 登录、查询、巡检和操作的主接入方式。</p>
+            <p className="mt-0.5 text-xs text-ops-subtext">选择数据中心常规资产类型后，平台会带出最适合 AI 登录、查询和操作的主接入方式；巡检请在会话快捷指令中触发。</p>
           </div>
           <button onClick={closeModal} className="text-ops-subtext hover:text-ops-text text-sm">关闭</button>
         </div>

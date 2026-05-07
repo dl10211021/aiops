@@ -54,7 +54,7 @@ export default function ConnectionDatabaseDriverStatus({
             </div>
             <div>{driver.operation_profile.operator_note}</div>
             <div className="rounded border border-ops-accent/20 bg-ops-accent/5 px-2 py-1 text-ops-text">
-              巡检入口：连接并打开会话后，在快捷指令里选择 /db-inspect、/db-slow、/db-baseline 或 /db-index。
+              会话快捷指令：连接并打开会话后，可选择 /db-inspect、/db-slow、/db-baseline 或 /db-index。
             </div>
           </>
         )}
