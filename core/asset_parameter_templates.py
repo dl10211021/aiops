@@ -253,6 +253,22 @@ SHARED_PARAMETER_TEMPLATES: dict[str, list[dict[str, Any]]] = {
         _text_parameter("config_path", "配置路径", group="middleware_shell"),
         _text_parameter("log_path", "日志路径", group="middleware_shell"),
     ],
+    "storage_shell": [
+        _select_parameter(
+            "shell",
+            "命令环境",
+            group="storage_shell",
+            default="sh",
+            options=[
+                ("Sh", "sh"),
+                ("Bash", "bash"),
+                ("专用存储 CLI", "storage_cli"),
+            ],
+        ),
+        _text_parameter("management_cli", "管理 CLI", group="storage_shell", placeholder="synoservice / storage / isi"),
+        _text_parameter("volume_name", "默认卷/池名称", group="storage_shell"),
+        _text_parameter("health_command", "健康检查命令", group="storage_shell", placeholder="只读命令，例如 df -h 或厂商 CLI show status"),
+    ],
     "ai_compute_shell": [
         _text_parameter("gpu_vendor", "GPU 厂商", group="ai_compute", default="nvidia"),
         _text_parameter("driver_check_command", "驱动检查命令", group="ai_compute", default="nvidia-smi"),

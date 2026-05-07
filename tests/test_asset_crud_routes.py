@@ -340,18 +340,18 @@ class TestAssetCrudRoutes(unittest.TestCase):
         self.assertEqual(applied.message, "资产规范化清理完成")
         self.assertEqual(applied.data, report)
 
-    def test_snmp_protocol_validation_applies_to_nas_and_ipmi(self):
+    def test_snmp_protocol_validation_applies_to_generic_snmp_device(self):
         with self.assertRaises(ValidationError):
             ConnectionRequest(
-                host="nas.local",
+                host="snmp-device.local",
                 port=161,
                 username="",
                 password="",
-                asset_type="nas",
+                asset_type="snmp",
                 protocol="snmp",
                 extra_args={
-                    "category": "storage",
-                    "sub_type": "nas",
+                    "category": "oob",
+                    "sub_type": "snmp_device",
                     "snmp_version": "v3",
                     "v3_auth_protocol": "SHA",
                 },

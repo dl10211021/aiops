@@ -89,6 +89,26 @@ class AssetCatalogBuilderTests(unittest.TestCase):
                 snmp_access = [item for item in access_protocols if item["protocol"] == "snmp"]
                 self.assertTrue(ssh_access and ssh_access[0]["is_default"])
                 self.assertTrue(snmp_access and snmp_access[0]["purpose"] == "monitoring")
+        for asset_id in ("nas", "synology_nas"):
+            with self.subTest(asset_id=asset_id):
+                self.assertEqual(catalog[asset_id]["category"], "storage")
+                self.assertEqual(catalog[asset_id]["protocol"], "ssh")
+                self.assertEqual(catalog[asset_id]["default_port"], 22)
+                self.assertEqual(catalog[asset_id]["inspection_profile"], "linux")
+                access_protocols = catalog[asset_id]["access_protocols"]
+                self.assertTrue([item for item in access_protocols if item["protocol"] == "ssh" and item["is_default"]])
+                self.assertTrue([item for item in access_protocols if item["protocol"] == "snmp" and item["purpose"] == "monitoring"])
+        self.assertEqual(catalog["idrac"]["category"], "oob")
+        self.assertEqual(catalog["idrac"]["protocol"], "redfish")
+        self.assertEqual(catalog["idrac"]["default_port"], 443)
+        self.assertEqual(catalog["idrac"]["inspection_profile"], "http_api")
+        self.assertTrue(
+            [
+                item
+                for item in catalog["idrac"]["access_protocols"]
+                if item["protocol"] == "snmp" and item["purpose"] == "monitoring"
+            ]
+        )
 
     def test_protocol_alias_assets_are_normalized_but_preserved_in_catalog(self):
         catalog = {item["id"]: item for item in asset_protocols.get_asset_catalog()}

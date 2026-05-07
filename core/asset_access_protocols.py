@@ -280,7 +280,7 @@ def build_access_protocols(item: dict[str, Any]) -> list[dict[str, Any]]:
         ))
 
     hertzbeat_protocols = {str(protocol).strip().lower() for protocol in item.get("hertzbeat_protocols", [])}
-    if category == "network" and "snmp" in hertzbeat_protocols:
+    if "snmp" in hertzbeat_protocols and default_protocol != "snmp":
         _add(entries, _entry(
             "snmp",
             purpose=MONITORING_PURPOSE,

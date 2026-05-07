@@ -524,6 +524,15 @@ NETWORK_CLI_VENDOR_ASSET_IDS = {
     "tplink_switch",
 }
 
+STORAGE_CLI_ASSET_IDS = {
+    "nas",
+    "synology_nas",
+}
+
+REDFISH_OOB_ASSET_IDS = {
+    "idrac",
+}
+
 
 def _merge_asset_catalog(*catalogs: list[dict]) -> list[dict]:
     merged: list[dict] = []
@@ -693,6 +702,26 @@ def _apply_protocol_overrides(catalog: list[dict]) -> list[dict]:
             entry["protocol"] = "ssh"
             entry["default_port"] = 22
             entry["inspection_profile"] = "network_cli"
+        if entry.get("id") in STORAGE_CLI_ASSET_IDS:
+            hertzbeat_protocols = set(entry.get("hertzbeat_protocols") or [])
+            if entry.get("protocol") == "snmp":
+                hertzbeat_protocols.add("snmp")
+            if hertzbeat_protocols:
+                entry["hertzbeat_protocols"] = sorted(hertzbeat_protocols)
+            entry["category"] = "storage"
+            entry["protocol"] = "ssh"
+            entry["default_port"] = 22
+            entry["inspection_profile"] = "linux"
+        if entry.get("id") in REDFISH_OOB_ASSET_IDS:
+            hertzbeat_protocols = set(entry.get("hertzbeat_protocols") or [])
+            if entry.get("protocol") == "snmp":
+                hertzbeat_protocols.add("snmp")
+            if hertzbeat_protocols:
+                entry["hertzbeat_protocols"] = sorted(hertzbeat_protocols)
+            entry["category"] = "oob"
+            entry["protocol"] = "redfish"
+            entry["default_port"] = 443
+            entry["inspection_profile"] = "http_api"
         override = ASSET_PROTOCOL_OVERRIDES.get(entry.get("id"))
         if override:
             entry["protocol"] = override

@@ -182,7 +182,7 @@ class TestAssetProtocolLayer(unittest.TestCase):
             "switch": "ssh",
             "firewall": "ssh",
             "ceph": "ssh",
-            "nas": "snmp",
+            "nas": "ssh",
             "minio": "minio",
             "s3": "s3",
             "hdfs": "ssh",
@@ -246,9 +246,13 @@ class TestAssetProtocolLayer(unittest.TestCase):
         self.assertEqual(by_id["hertzbeat_token"]["category"], "monitor")
         self.assertEqual(by_id["influxdb_promql"]["category"], "monitor")
         self.assertEqual(by_id["synology_nas"]["category"], "storage")
-        self.assertEqual(by_id["synology_nas"]["protocol"], "snmp")
+        self.assertEqual(by_id["synology_nas"]["protocol"], "ssh")
         self.assertEqual(by_id["synology_nas"]["capability"]["family"], "storage")
-        self.assertEqual(by_id["synology_nas"]["capability"]["connector"], "snmp")
+        self.assertEqual(by_id["synology_nas"]["capability"]["connector"], "storage_shell")
+        self.assertIn(
+            "snmp",
+            {item["protocol"] for item in by_id["synology_nas"].get("access_protocols", [])},
+        )
         self.assertEqual(by_id["huawei_switch"]["capability"]["connector"], "ssh_network_cli")
         self.assertEqual(by_id["huawei_switch"]["category_meta"]["label"], "网络设备")
         self.assertEqual(by_id["huawei_switch"]["capability"]["tools"], ["network_cli_execute_command"])
@@ -426,10 +430,11 @@ class TestAssetProtocolLayer(unittest.TestCase):
         self.assertEqual(params("jenkins")["crumb_path"]["defaultValue"], "/crumbIssuer/api/json")
         self.assertEqual(by_id["s3"]["protocol"], "s3")
         self.assertEqual(by_id["minio"]["protocol"], "minio")
-        self.assertEqual(by_id["nas"]["protocol"], "snmp")
+        self.assertEqual(by_id["nas"]["protocol"], "ssh")
         self.assertEqual(by_id["nas"]["capability"]["family"], "storage")
-        self.assertEqual(by_id["nas"]["capability"]["connector"], "snmp")
-        self.assertEqual(by_id["nas"]["capability"]["tools"], ["snmp_get"])
+        self.assertEqual(by_id["nas"]["capability"]["connector"], "storage_shell")
+        self.assertEqual(by_id["nas"]["capability"]["tools"], ["storage_execute_command"])
+        self.assertIn("snmp", {item["protocol"] for item in by_id["nas"].get("access_protocols", [])})
         self.assertEqual(by_id["backup"]["capability"]["connector"], "storage_api")
         self.assertEqual(by_id["backup"]["capability"]["tools"], ["storage_api_request"])
         self.assertIn("api_token", by_id["backup"]["capability"]["credential_fields"])
