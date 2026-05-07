@@ -99,6 +99,21 @@ export default function ChatWindow() {
   const slashCommands = commandManager.slashCommands
   const quickCommands = buildQuickCommands(slashCommands)
   const visibleSlashCommands = visibleSlashCommandsForInput(input, slashCommands)
+  const traceStepCount = messages.reduce((total, message) => total + (message.execTrace?.length || 0), 0)
+  const assistantOutputCount = messages.filter((message) => message.role === 'assistant' && message.content.trim()).length
+  const latestMessageTime = messages.length > 0
+    ? new Date(messages[messages.length - 1].timestamp).toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    })
+    : '暂无消息'
+  const sessionModeText = session?.isReadWriteMode ? '读写模式' : '只读模式'
+  const sessionStatusText = isStreaming ? 'AI 执行中' : '会话待命'
 
   useEffect(() => {
     setSelectedSlashCommandIndex(0)
@@ -313,6 +328,56 @@ export default function ChatWindow() {
     <section className="ops-command-panel flex min-h-0 min-w-0 overflow-hidden rounded-[18px] border border-ops-surface1/75 bg-ops-panel shadow-[0_28px_70px_rgba(0,0,0,0.36)]">
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         <div className="flex h-full min-h-0 min-w-0 flex-col">
+          <div className="border-b border-ops-surface0/75 bg-[radial-gradient(circle_at_10%_0%,rgba(40,208,168,0.14),transparent_18rem),linear-gradient(90deg,rgba(7,17,31,0.96),rgba(17,35,55,0.88))] px-4 py-3">
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.9fr)] xl:items-center">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-ops-accent/35 bg-ops-accent/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-ops-accent">
+                    OpsCore Command Deck
+                  </span>
+                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${
+                    isStreaming
+                      ? 'border-ops-accent/45 bg-ops-accent/14 text-ops-accent'
+                      : 'border-ops-surface1/70 bg-ops-panel/60 text-ops-subtext'
+                  }`}>
+                    {sessionStatusText}
+                  </span>
+                  <span className="rounded-full border border-ops-surface1/70 bg-ops-panel/60 px-2.5 py-1 text-[11px] font-semibold text-ops-subtext">
+                    {sessionModeText}
+                  </span>
+                </div>
+                <div className="mt-2 flex min-w-0 flex-wrap items-end gap-x-3 gap-y-1">
+                  <h2 className="truncate text-xl font-black text-ops-text">
+                    {session.remark || session.host || '未命名会话'}
+                  </h2>
+                  <span className="pb-0.5 font-mono text-xs text-ops-overlay">
+                    {session.user ? `${session.user}@` : ''}{session.host}
+                  </span>
+                </div>
+                <p className="mt-1 truncate text-xs text-ops-subtext">
+                  {session.asset_type || '资产'} / {session.protocol || '协议'} · 最新记录 {latestMessageTime}
+                </p>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                <div className="rounded-2xl border border-ops-surface1/60 bg-ops-dark/35 px-3 py-2">
+                  <div className="text-[10px] text-ops-overlay">消息</div>
+                  <div className="mt-1 font-mono text-lg font-black text-ops-text">{messages.length}</div>
+                </div>
+                <div className="rounded-2xl border border-ops-surface1/60 bg-ops-dark/35 px-3 py-2">
+                  <div className="text-[10px] text-ops-overlay">AI 输出</div>
+                  <div className="mt-1 font-mono text-lg font-black text-sky-200">{assistantOutputCount}</div>
+                </div>
+                <div className="rounded-2xl border border-ops-accent/25 bg-ops-accent/8 px-3 py-2">
+                  <div className="text-[10px] text-ops-overlay">工具链路</div>
+                  <div className="mt-1 font-mono text-lg font-black text-ops-accent">{traceStepCount}</div>
+                </div>
+                <div className="rounded-2xl border border-ops-surface1/60 bg-ops-dark/35 px-3 py-2">
+                  <div className="text-[10px] text-ops-overlay">技能</div>
+                  <div className="mt-1 font-mono text-lg font-black text-ops-text">{session.skills?.length || 0}</div>
+                </div>
+              </div>
+            </div>
+          </div>
           <SessionToolsetBar
             catalog={toolCatalog}
             session={session}
