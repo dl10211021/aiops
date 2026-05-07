@@ -7,6 +7,10 @@ SQL_DRIVER_KEYS = {
     "mysql": "mysql",
     "postgresql": "postgresql",
     "mssql": "mssql",
+    "dameng": "dameng",
+    "dm": "dameng",
+    "db2": "db2",
+    "xugu": "xugu",
     "hive": "hive",
     "iotdb": "iotdb",
 }
@@ -26,6 +30,7 @@ DATABASE_ALIASES = {
     "pg": "postgresql",
     "sqlserver": "mssql",
     "sql_server": "mssql",
+    "dm": "dameng",
 }
 
 
@@ -148,7 +153,7 @@ SPECIAL_CAPABILITY_OVERRIDES: dict[str, dict[str, Any]] = {
         "credential_fields": ["host", "port", "username", "password", "sid_or_service_name"],
         "setup": {
             "python_package": "oracledb",
-            "external_client": "Oracle Instant Client",
+            "external_client": "Oracle Instant Client（可选兼容模式）",
             "external_client_required": False,
             "recommended_path_windows": r"D:\AIOPS\oracle_instantclient\instantclient_23_0",
             "recommended_path_linux": "/opt/opscore/oracle/instantclient",
@@ -157,7 +162,7 @@ SPECIAL_CAPABILITY_OVERRIDES: dict[str, dict[str, Any]] = {
                 "OPSCORE_ORACLE_CLIENT_LIB_DIR",
                 "OPSCORE_ORACLE_CLIENT_ROOT",
             ],
-            "note": "Thin Mode is enough for modern accounts; Thick Mode is required for legacy 10G password verifiers, OCI/TNS, or older Oracle compatibility.",
+            "note": "默认使用 python-oracledb Thin Mode；只有旧版 10G password verifier、OCI/TNS 或老版本兼容场景才启用 Thick Mode。",
         },
         "maturity": "native",
     },
@@ -195,9 +200,9 @@ SPECIAL_CAPABILITY_OVERRIDES: dict[str, dict[str, Any]] = {
         "credential_fields": ["host", "port", "username", "password", "database"],
         "setup": {
             "python_package": "pyodbc",
-            "external_client": "Microsoft ODBC Driver 18 for SQL Server",
+            "external_client": "Microsoft ODBC Driver 17 for SQL Server",
             "external_client_required": True,
-            "note": "Requires pyodbc and a Microsoft SQL Server ODBC driver on the OpsCore host.",
+            "note": "优先使用 pyodbc + Microsoft ODBC Driver 17；如运行环境只有 Driver 18，OpsCore 会兼容使用。",
         },
         "maturity": "native",
     },

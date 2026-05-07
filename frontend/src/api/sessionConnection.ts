@@ -24,21 +24,6 @@ export async function testConnection(params: {
   })
 }
 
-export async function inspectConnection(params: {
-  host: string; port: number; username: string; password?: string;
-  asset_type: string; protocol?: string; extra_args?: Record<string, unknown>;
-  active_skills?: string[]; agent_profile?: string; remark?: string;
-  tags?: string[]; target_scope?: string; scope_value?: string;
-  keep_session?: boolean;
-}) {
-  return request<{ inspection: {
-    status: string; supported: boolean; summary?: string; message?: string;
-    checks: Array<{ title: string; status: string; output: string }>;
-  } }>('/connect/inspect', {
-    method: 'POST', body: JSON.stringify(params),
-  })
-}
-
 export async function disconnectSession(sessionId: string) {
   return request(`/disconnect/${sessionId}`, { method: 'DELETE' })
 }

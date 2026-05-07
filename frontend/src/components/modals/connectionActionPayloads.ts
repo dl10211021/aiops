@@ -24,25 +24,6 @@ export function buildTestConnectionPayload({ form, target }: ConnectionActionPay
   }
 }
 
-export function buildInspectConnectionPayload({ form, selectedSkills, target }: ConnectionActionPayloadArgs) {
-  return {
-    host: target.host,
-    port: form.port,
-    username: target.username,
-    password: form.password,
-    asset_type: target.assetType,
-    protocol: target.protocol,
-    extra_args: form.extra_args,
-    active_skills: selectedSkills,
-    agent_profile: form.agent_profile,
-    remark: form.remark,
-    tags: [form.group_name],
-    target_scope: form.target_scope,
-    scope_value: target.scopeValue,
-    keep_session: false,
-  }
-}
-
 export function buildConnectSessionPayload({ form, selectedSkills, target }: ConnectionActionPayloadArgs) {
   return {
     ...form,

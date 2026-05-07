@@ -1,6 +1,62 @@
 import type { Session, SessionToolCatalog, SlashCommand } from '@/types'
 import { toolLabel } from '@/utils/assetDisplay'
 
+const DATABASE_ASSET_TYPES = new Set([
+  'oracle',
+  'mysql',
+  'mariadb',
+  'tidb',
+  'oceanbase',
+  'postgresql',
+  'postgres',
+  'opengauss',
+  'kingbase',
+  'vastbase',
+  'mssql',
+  'sqlserver',
+  'dameng',
+  'dm',
+])
+
+const DATABASE_PROTOCOLS = new Set(['oracle', 'mysql', 'postgresql', 'mssql', 'dameng', 'sql', 'jdbc'])
+
+function databaseShortcutCommands(session: Session, activeTools: string[], target: string): SlashCommand[] {
+  const isDatabaseSession = activeTools.includes('db_execute_query')
+    || DATABASE_ASSET_TYPES.has(String(session.asset_type || '').toLowerCase())
+    || DATABASE_PROTOCOLS.has(String(session.protocol || '').toLowerCase())
+  if (!isDatabaseSession) return []
+  return [
+    {
+      id: 'database-inspect',
+      label: '数据库巡检',
+      description: '按当前数据库类型执行完整只读巡检',
+      category: '数据库巡检',
+      prompt: `请对当前数据库 ${target} 做一次完整只读巡检。使用当前会话数据库工具，不要本地脚本，不要写入。先识别数据库类型和版本，再按该类型选择只读 SQL：连接/会话、容量、锁等待、慢 SQL/高耗 SQL、错误/告警、复制/集群、关键配置。输出：健康结论、证据 SQL 摘要、风险等级、P0/P1/P2 建议。`,
+    },
+    {
+      id: 'database-slow-sql',
+      label: '慢SQL分析',
+      description: '按数据库类型查找慢 SQL、高耗 SQL、等待和锁线索',
+      category: '数据库巡检',
+      prompt: `请对当前数据库 ${target} 做只读慢 SQL 和高耗 SQL 分析。先判断数据库类型，再使用对应系统视图或性能视图查询。不要执行写入、kill、flush 或参数变更。输出：Top SQL、耗时/等待/锁、影响范围、证据 SQL 摘要、优化建议。`,
+    },
+    {
+      id: 'database-baseline',
+      label: '配置基线',
+      description: '检查数据库关键参数、账号、安全和高风险配置',
+      category: '数据库巡检',
+      prompt: `请对当前数据库 ${target} 做只读配置基线检查。先识别数据库类型，再检查版本、关键参数、账号状态、权限风险、审计/日志、备份线索和高危默认配置。不要修改任何参数或账号。输出：异常项、风险等级、证据 SQL 摘要和整改建议。`,
+    },
+    {
+      id: 'database-index',
+      label: '索引健康',
+      description: '分析索引、表空间/膨胀、热点对象和容量风险',
+      category: '数据库巡检',
+      prompt: `请对当前数据库 ${target} 做只读索引和对象健康分析。先识别数据库类型，再检查大表、索引失效/未使用、表空间或数据文件水位、膨胀/碎片、热点对象和容量风险。不要 rebuild、analyze、vacuum 或执行任何写入。输出：对象清单、风险等级、证据 SQL 摘要和建议动作。`,
+    },
+  ]
+}
+
 export function buildSlashCommands(session: Session, catalog: SessionToolCatalog | null): SlashCommand[] {
   const activeTools = catalog?.active_tools || []
   const activeToolDetails = catalog?.active_tool_details || []
@@ -11,6 +67,7 @@ export function buildSlashCommands(session: Session, catalog: SessionToolCatalog
       : '当前会话原生协议工具'
   const target = `${session.asset_type}/${session.protocol} ${session.host}`
   return [
+    ...databaseShortcutCommands(session, activeTools, target),
     {
       id: 'inspect',
       label: '只读巡检',
