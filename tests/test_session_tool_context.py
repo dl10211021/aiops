@@ -48,6 +48,8 @@ class TestSessionToolContext(unittest.TestCase):
         self.assertEqual(payload["context"]["protocol"], "winrm")
         self.assertIn("winrm_execute_command", payload["active_tools"])
         self.assertNotIn("linux_execute_command", payload["active_tools"])
+        tool_details = {item["name"]: item for item in payload["active_tool_details"]}
+        self.assertEqual(tool_details["winrm_execute_command"]["label"], "Windows PowerShell 命令")
         dumped = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("managed-secret", dumped)
         self.assertNotIn("secret-key", dumped)
@@ -85,3 +87,5 @@ class TestSessionToolContext(unittest.TestCase):
 
         self.assertEqual(payload["context"]["protocol"], "winrm")
         self.assertIn("winrm_execute_command", payload["active_tools"])
+        tool_details = {item["name"]: item for item in payload["active_tool_details"]}
+        self.assertEqual(tool_details["winrm_execute_command"]["label"], "Windows PowerShell 命令")

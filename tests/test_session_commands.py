@@ -52,6 +52,9 @@ class TestSessionCommands(unittest.TestCase):
         command_ids = {item["id"] for item in payload["commands"]}
         self.assertIn("inspect", command_ids)
         self.assertIn("linux-services", command_ids)
+        tools_command = next(item for item in payload["commands"] if item["id"] == "tools")
+        self.assertIn("Linux/Unix 命令", tools_command["prompt"])
+        self.assertNotIn("linux_execute_command", tools_command["prompt"])
         self.assertEqual(payload["context"]["protocol"], "ssh")
         self.assertEqual(payload["custom_commands"], [])
 

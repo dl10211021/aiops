@@ -301,6 +301,7 @@ export interface ToolsetInfo {
 export interface SessionToolCatalog {
   toolsets: ToolsetInfo[]
   active_tools?: string[]
+  active_tool_details?: ToolDisplayDetail[]
   context?: {
     target_scope: string
     asset_type: string

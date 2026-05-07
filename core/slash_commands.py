@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from core.tool_display import tool_label
+
 
 @dataclass(frozen=True)
 class SlashCommand:
@@ -42,7 +44,7 @@ class SlashCommand:
         ).strip()
         variables = {
             "target": target,
-            "tool_list": ", ".join(active_tools or []) or "当前会话原生协议工具",
+            "tool_list": _tool_list_text(active_tools),
             "host": context.get("host") or "",
             "port": context.get("port") or "",
             "asset_type": context.get("asset_type") or "",
@@ -77,6 +79,11 @@ def safe_format(template: str, variables: dict[str, Any]) -> str:
     for key, value in variables.items():
         rendered = rendered.replace("{" + key + "}", str(value))
     return rendered
+
+
+def _tool_list_text(active_tools: list[str] | None) -> str:
+    labels = [tool_label(str(tool_name)) for tool_name in active_tools or []]
+    return "、".join(labels) or "当前会话原生协议工具"
 
 
 COMMANDS = [
@@ -494,7 +501,7 @@ def _render_builtin_with_override(
                 protocol=context.get("protocol") or "protocol",
                 host=context.get("host") or "",
             ).strip(),
-            "tool_list": ", ".join(active_tools or []) or "当前会话原生协议工具",
+            "tool_list": _tool_list_text(active_tools),
             "host": context.get("host") or "",
             "port": context.get("port") or "",
             "asset_type": context.get("asset_type") or "",
