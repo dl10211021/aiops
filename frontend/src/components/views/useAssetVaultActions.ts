@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   applyAssetNormalization,
   batchImportAssets,
+  bulkDeleteAssets,
   bulkUpdateAssetGroup,
   connectSession,
   deleteAsset,
@@ -71,6 +72,7 @@ export function useAssetVaultActions({
   const [normalizeDialog, setNormalizeDialog] = useState<{ rowsToUpdate: number; duplicatesToRemove: number } | null>(null)
   const [normalizingAssets, setNormalizingAssets] = useState(false)
   const [bulkVerifyingAssets, setBulkVerifyingAssets] = useState(false)
+  const [bulkDeletingAssets, setBulkDeletingAssets] = useState(false)
   const [connectingAssetGroup, setConnectingAssetGroup] = useState<string | null>(null)
   const [mutatingAssetGroup, setMutatingAssetGroup] = useState<string | null>(null)
 
@@ -232,6 +234,27 @@ export function useAssetVaultActions({
     }
   }
 
+  const handleBulkDeleteAssets = async (selectedAssets: Asset[]) => {
+    if (!selectedAssets.length) {
+      addToast('请先选择要删除的资产', 'error')
+      return
+    }
+    if (!window.confirm(`确认删除已选择的 ${selectedAssets.length} 条资产？此操作不会删除任何会话历史。`)) {
+      return
+    }
+    setBulkDeletingAssets(true)
+    try {
+      const res = await bulkDeleteAssets(selectedAssets.map((asset) => asset.id))
+      const deletedIds = new Set(res.data.deleted_ids)
+      setAssets(assets.filter((asset) => !deletedIds.has(asset.id)))
+      addToast(`已删除 ${res.data.deleted} 条资产`, 'success')
+    } catch (error: unknown) {
+      addToast(error instanceof Error ? error.message : '批量删除资产失败', 'error')
+    } finally {
+      setBulkDeletingAssets(false)
+    }
+  }
+
   const handleCreateAssetGroup = (groupName: string) => {
     const normalized = normalizeSessionGroupName(groupName)
     if (!normalized) {
@@ -379,12 +402,14 @@ export function useAssetVaultActions({
   return {
     batchImportDraft,
     batchImportOpen,
+    bulkDeletingAssets,
     bulkVerifyingAssets,
     connectingAssetGroup,
     mutatingAssetGroup,
     deleteTarget,
     deletingAsset,
     handleBatchImportConfirmed,
+    handleBulkDeleteAssets,
     handleBulkVerifyAssets,
     handleAssignAssetsToGroup,
     handleConnect,

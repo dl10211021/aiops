@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from api import asset_routes, routes
 from api.schemas import (
     AssetPayload,
+    BatchAssetDeletePayload,
     BatchAssetGroupDeletePayload,
     BatchAssetGroupPayload,
     BatchAssetGroupRenamePayload,
@@ -100,6 +101,7 @@ class TestAssetCrudRoutes(unittest.TestCase):
         self.assertIn("/assets", paths)
         self.assertIn("/assets/types", paths)
         self.assertIn("/assets/{asset_id}", paths)
+        self.assertIn("/assets/delete/bulk", paths)
         self.assertIn("/assets/groups/bulk", paths)
         self.assertIn("/assets/groups/delete", paths)
         self.assertIn("/assets/groups/rename", paths)
@@ -271,6 +273,18 @@ class TestAssetCrudRoutes(unittest.TestCase):
         by_id = {asset["id"]: asset for asset in response.data["assets"]}
         self.assertEqual(by_id[1]["tags"], ["未分组", "生产"])
         self.assertEqual(by_id[2]["tags"], ["其他组"])
+
+    def test_bulk_delete_assets_deletes_unique_selected_ids(self):
+        fake = FakeMemoryDB()
+        fake.assets[2] = {**fake.assets[1], "id": 2}
+        payload = BatchAssetDeletePayload(asset_ids=[1, 1, 2])
+
+        with patch("core.memory.memory_db", fake):
+            response = asyncio.run(asset_routes.bulk_delete_assets(payload))
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data["deleted_ids"], [1, 2])
+        self.assertEqual(fake.assets, {})
 
     def test_catalog_password_params_are_masked_by_memory_policy(self):
         password_fields = {

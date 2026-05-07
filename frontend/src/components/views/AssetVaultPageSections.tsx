@@ -159,6 +159,7 @@ export function AssetGroupSections({
 
 export function AssetTablePanel({
   assets,
+  bulkDeleting,
   bulkVerifying,
   connectingGroup,
   displayForAsset,
@@ -167,6 +168,7 @@ export function AssetTablePanel({
   mutatingGroup,
   sessionGroups,
   onAssignGroup,
+  onBulkDelete,
   onBulkVerify,
   onClearFilters,
   onConnect,
@@ -182,6 +184,7 @@ export function AssetTablePanel({
   search,
 }: {
   assets: Asset[]
+  bulkDeleting: boolean
   bulkVerifying: boolean
   connectingGroup: string | null
   displayForAsset: (asset: Asset) => AssetDisplayMeta
@@ -190,6 +193,7 @@ export function AssetTablePanel({
   mutatingGroup: string | null
   sessionGroups: string[]
   onAssignGroup: (assets: Asset[], groupName: string) => void
+  onBulkDelete: (assets: Asset[]) => void
   onBulkVerify: (assets: Asset[]) => void
   onClearFilters: () => void
   onConnect: (asset: Asset) => void
@@ -563,10 +567,17 @@ export function AssetTablePanel({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => onBulkVerify(selectedAssets)}
-              disabled={bulkVerifying}
+              disabled={bulkVerifying || bulkDeleting}
               className="rounded-lg bg-ops-accent px-3 py-1.5 font-semibold text-ops-dark transition-colors hover:bg-ops-accent/80 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {bulkVerifying ? '验证中...' : '批量验证'}
+            </button>
+            <button
+              onClick={() => onBulkDelete(selectedAssets)}
+              disabled={bulkDeleting || bulkVerifying}
+              className="rounded-lg border border-rose-400/35 bg-rose-400/10 px-3 py-1.5 font-semibold text-rose-200 transition-colors hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {bulkDeleting ? '删除中...' : '批量删除'}
             </button>
             <button
               onClick={() => setSelectedIds(new Set())}

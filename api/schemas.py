@@ -11,6 +11,7 @@ from api.schema_models.approvals import (
 )
 from api.schema_models.assets import (
     AssetPayload,
+    BatchAssetDeletePayload,
     BatchAssetGroupDeletePayload,
     BatchAssetGroupPayload,
     BatchAssetGroupRenamePayload,

@@ -16,6 +16,13 @@ export async function deleteAsset(assetId: number) {
   return request(`/assets/${assetId}`, { method: 'DELETE' })
 }
 
+export async function bulkDeleteAssets(assetIds: number[]) {
+  return request<{ deleted_ids: number[]; deleted: number }>('/assets/delete/bulk', {
+    method: 'POST',
+    body: JSON.stringify({ asset_ids: assetIds }),
+  })
+}
+
 export async function createAsset(asset: Partial<Asset>) {
   return request('/assets', {
     method: 'POST', body: JSON.stringify(asset),

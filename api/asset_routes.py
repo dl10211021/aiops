@@ -18,6 +18,7 @@ from api.response_mappers.assets import (
 )
 from api.schema_models.assets import (
     AssetPayload,
+    BatchAssetDeletePayload,
     BatchAssetGroupDeletePayload,
     BatchAssetGroupPayload,
     BatchAssetGroupRenamePayload,
@@ -267,6 +268,25 @@ async def delete_saved_asset(asset_id: int):
     """【新功能】删除持久化的资产"""
     await asyncio.to_thread(remove_saved_asset_record, asset_id)
     return ResponseModel(**asset_deleted_response_kwargs())
+
+
+@router.post("/assets/delete/bulk", response_model=ResponseModel)
+async def bulk_delete_assets(req: BatchAssetDeletePayload):
+    """批量删除资产；只处理显式选择的资产 ID。"""
+    asset_ids = [asset_id for asset_id in dict.fromkeys(req.asset_ids) if asset_id > 0]
+    if not asset_ids:
+        return ResponseModel(status="error", message="请选择要删除的资产")
+
+    deleted_ids = []
+    for asset_id in asset_ids:
+        await asyncio.to_thread(remove_saved_asset_record, asset_id)
+        deleted_ids.append(asset_id)
+
+    return ResponseModel(
+        status="success",
+        data={"deleted_ids": deleted_ids, "deleted": len(deleted_ids)},
+        message=f"已删除 {len(deleted_ids)} 条资产",
+    )
 
 
 @router.post("/assets/batch_import", response_model=ResponseModel)

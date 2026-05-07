@@ -77,6 +77,7 @@ export default function AssetVault() {
   const {
     batchImportDraft,
     batchImportOpen,
+    bulkDeletingAssets,
     bulkVerifyingAssets,
     connectingAssetGroup,
     mutatingAssetGroup,
@@ -84,6 +85,7 @@ export default function AssetVault() {
     deletingAsset,
     handleAssignAssetsToGroup,
     handleBatchImportConfirmed,
+    handleBulkDeleteAssets,
     handleBulkVerifyAssets,
     handleConnect,
     handleConnectAssetGroup,
@@ -161,12 +163,14 @@ export default function AssetVault() {
           displayForAsset={displayForAsset}
           hasActiveFilters={hasActiveFilters}
           matrixByAssetId={matrixByAssetId}
+          bulkDeleting={bulkDeletingAssets}
           bulkVerifying={bulkVerifyingAssets}
           connectingGroup={connectingAssetGroup}
           mutatingGroup={mutatingAssetGroup}
           sessionGroups={sessionGroups}
           onClearFilters={clearFilters}
           onAssignGroup={(selectedAssets, groupName) => void handleAssignAssetsToGroup(selectedAssets, groupName)}
+          onBulkDelete={(selectedAssets) => void handleBulkDeleteAssets(selectedAssets)}
           onBulkVerify={(selectedAssets) => void handleBulkVerifyAssets(selectedAssets)}
           onConnect={handleConnect}
           onConnectGroup={(groupAssets, groupName) => void handleConnectAssetGroup(groupAssets, groupName)}

@@ -44,3 +44,7 @@ class BatchAssetGroupRenamePayload(BaseModel):
 class BatchAssetGroupDeletePayload(BaseModel):
     group_name: str
     fallback_group: str = "未分组"
+
+
+class BatchAssetDeletePayload(BaseModel):
+    asset_ids: list[int] = Field(default_factory=list)
