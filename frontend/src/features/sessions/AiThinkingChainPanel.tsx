@@ -9,6 +9,7 @@ import { resultReason, traceTargetLabel } from './traceUtils'
 interface AiThinkingChainPanelProps {
   sessionId: string | null
   messages: ChatMessage[]
+  defaultTab?: 'trace' | 'memory'
 }
 
 const collapsedGroupId = '__collapsed__'
@@ -178,13 +179,14 @@ function scrollChatMessage(messageId: string) {
 }
 
 export default function AiThinkingChainPanel({
+  defaultTab = 'trace',
   sessionId,
   messages,
 }: AiThinkingChainPanelProps) {
   const [query, setQuery] = useState('')
   const [selectedGroupId, setSelectedGroupId] = useState('all')
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'trace' | 'memory'>('trace')
+  const [activeTab, setActiveTab] = useState<'trace' | 'memory'>(defaultTab)
   const [memoryActivity, setMemoryActivity] = useState<SessionMemoryActivity | null>(null)
   const [memoryLoading, setMemoryLoading] = useState(false)
   const traceGroups = useMemo(() => buildThinkingGroups(messages), [messages])

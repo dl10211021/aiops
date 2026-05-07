@@ -54,6 +54,7 @@ export default function ChatWindow() {
     if (typeof window === 'undefined') return false
     return localStorage.getItem(rightPanelCollapsedStorageKey) === '1'
   })
+  const [rightPanelTab, setRightPanelTab] = useState<'asset' | 'memory' | 'trace'>('asset')
   const [isResizing, setIsResizing] = useState(false)
   const [profileFocusPulse, setProfileFocusPulse] = useState(false)
   const [selectedSlashCommandIndex, setSelectedSlashCommandIndex] = useState(0)
@@ -107,6 +108,7 @@ export default function ChatWindow() {
     const handleProfileFocus = () => {
       setView('chat')
       setRightPanelCollapsed(false)
+      setRightPanelTab('asset')
       localStorage.setItem(rightPanelCollapsedStorageKey, '0')
       const nextWidth = Math.max(rightPanelWidthRef.current, defaultRightPanelWidth)
       rightPanelWidthRef.current = nextWidth
@@ -434,26 +436,60 @@ export default function ChatWindow() {
             <span className="[writing-mode:vertical-rl]">情报 / 画像 / 思维链</span>
           </button>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div
-              ref={profilePanelRef}
-              className={`transition-[box-shadow,filter] duration-300 ${
-                profileFocusPulse ? 'ring-2 ring-ops-accent/70 drop-shadow-[0_0_18px_rgba(45,212,191,0.35)]' : ''
-              }`}
-            >
-              <AssetProfilePanel
-                session={session}
-                profile={assetProfile.profile}
-                open={assetProfile.open}
-                busy={assetProfile.busy}
-                onToggle={assetProfile.toggle}
-                onGenerate={assetProfile.generate}
-              />
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="grid grid-cols-3 gap-1 border-b border-ops-surface0/80 bg-ops-dark/45 px-3 py-2">
+              {[
+                ['asset', '资产画像', '画像'],
+                ['memory', '会话记忆', '记忆'],
+                ['trace', 'AI 思维链', '链路'],
+              ].map(([tab, title, label]) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setRightPanelTab(tab as 'asset' | 'memory' | 'trace')}
+                  className={`rounded-xl border px-2 py-2 text-xs font-black transition ${
+                    rightPanelTab === tab
+                      ? 'border-ops-accent/55 bg-ops-accent/16 text-ops-accent shadow-[0_0_24px_rgba(40,208,168,0.12)]'
+                      : 'border-ops-surface1/65 bg-ops-panel/45 text-ops-subtext hover:border-ops-accent/35 hover:text-ops-text'
+                  }`}
+                  title={title}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            <AiThinkingChainPanel
-              sessionId={currentSessionId}
-              messages={messages}
-            />
+            {rightPanelTab === 'asset' ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <div
+                  ref={profilePanelRef}
+                  className={`transition-[box-shadow,filter] duration-300 ${
+                    profileFocusPulse ? 'ring-2 ring-ops-accent/70 drop-shadow-[0_0_18px_rgba(45,212,191,0.35)]' : ''
+                  }`}
+                >
+                  <AssetProfilePanel
+                    session={session}
+                    profile={assetProfile.profile}
+                    open={assetProfile.open}
+                    busy={assetProfile.busy}
+                    onToggle={assetProfile.toggle}
+                    onGenerate={assetProfile.generate}
+                  />
+                </div>
+                <div className="mx-3 mb-3 rounded-2xl border border-ops-surface0/85 bg-ops-dark/32 px-3 py-3 text-xs leading-5 text-ops-subtext">
+                  <div className="font-black uppercase tracking-[0.18em] text-ops-accent">Asset Intel</div>
+                  <p className="mt-2">
+                    这里聚焦当前会话绑定资产。需要追踪 AI 做了什么时，切到「链路」；需要看本会话沉淀和引用，切到「记忆」。
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <AiThinkingChainPanel
+                key={rightPanelTab}
+                defaultTab={rightPanelTab === 'memory' ? 'memory' : 'trace'}
+                sessionId={currentSessionId}
+                messages={messages}
+              />
+            )}
           </div>
         )}
       </section>
