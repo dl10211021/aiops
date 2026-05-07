@@ -1,8 +1,14 @@
 import type { Session, SessionToolCatalog, SlashCommand } from '@/types'
+import { toolLabel } from '@/utils/assetDisplay'
 
 export function buildSlashCommands(session: Session, catalog: SessionToolCatalog | null): SlashCommand[] {
   const activeTools = catalog?.active_tools || []
-  const toolList = activeTools.length > 0 ? activeTools.join(', ') : '当前会话原生协议工具'
+  const activeToolDetails = catalog?.active_tool_details || []
+  const toolList = activeToolDetails.length > 0
+    ? activeToolDetails.map((tool) => tool.label || toolLabel(tool.name)).join('、')
+    : activeTools.length > 0
+      ? activeTools.map(toolLabel).join('、')
+      : '当前会话原生协议工具'
   const target = `${session.asset_type}/${session.protocol} ${session.host}`
   return [
     {

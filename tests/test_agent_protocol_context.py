@@ -26,6 +26,7 @@ class TestAgentProtocolContext(unittest.TestCase):
     def test_protocol_tool_guidance_uses_network_tool_for_switch(self):
         guidance = protocol_tool_guidance("ssh", "switch", "10.0.0.1")
 
+        self.assertIn("网络设备 CLI", guidance)
         self.assertIn("network_cli_execute_command", guidance)
         self.assertIn("不要使用 Linux 命令", guidance)
 
@@ -34,7 +35,13 @@ class TestAgentProtocolContext(unittest.TestCase):
         allowed = protocol_tool_list("virtual", has_skill_scripts=True)
 
         self.assertNotIn("- local_execute_script:", filtered)
-        self.assertIn("- local_execute_script:", allowed)
+        self.assertIn("- 本地技能脚本 (`local_execute_script`):", allowed)
+
+    def test_protocol_tool_list_uses_chinese_names_with_tool_ids(self):
+        tools = protocol_tool_list("ssh", asset_type="linux")
+
+        self.assertIn("- Linux/Unix 命令 (`linux_execute_command`):", tools)
+        self.assertNotIn("- linux_execute_command:", tools)
 
     def test_allow_local_skill_scripts_only_for_virtual_protocol(self):
         self.assertTrue(allow_local_skill_scripts("virtual"))
