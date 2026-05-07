@@ -182,7 +182,11 @@ class ToolRegistry:
         for tool in self.available(context):
             if tool.name in {"send_notification", "search_knowledge_base", "web_search"}:
                 continue
-            lines.append(f"- {tool.name}: {tool.description}")
+            label = TOOL_LABELS.get(tool.name, tool.name)
+            display_name = (
+                f"{label} (`{tool.name}`)" if label != tool.name else f"`{tool.name}`"
+            )
+            lines.append(f"- {display_name}: {tool.description}")
         return "\n".join(lines)
 
 

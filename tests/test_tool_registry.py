@@ -1,6 +1,7 @@
 import unittest
 
 from api.asset_routes import get_asset_catalog
+from core.tool_display import toolset_label
 from core.tool_registry import tool_registry
 
 
@@ -377,6 +378,78 @@ class TestToolRegistry(unittest.TestCase):
                 missing.append(tool.name)
 
         self.assertEqual(missing, [])
+
+    def test_all_registered_toolsets_have_chinese_display_labels(self):
+        missing = []
+        for toolset in {tool.toolset for tool in tool_registry.all_tools()}:
+            label = toolset_label(toolset)
+            if not label or label == toolset or all(ord(ch) < 128 for ch in label):
+                missing.append(toolset)
+
+        self.assertEqual(sorted(missing), [])
+
+    def test_prompt_lines_show_chinese_labels_with_original_tool_ids(self):
+        expectations = [
+            (
+                {"target_scope": "asset", "asset_type": "linux", "protocol": "ssh"},
+                "- Linux/Unix 命令 (`linux_execute_command`):",
+                "- linux_execute_command:",
+            ),
+            (
+                {"target_scope": "asset", "asset_type": "windows", "protocol": "winrm"},
+                "- Windows PowerShell 命令 (`winrm_execute_command`):",
+                "- winrm_execute_command:",
+            ),
+            (
+                {"target_scope": "asset", "asset_type": "oracle", "protocol": "oracle"},
+                "- 数据库 SQL 执行 (`db_execute_query`):",
+                "- db_execute_query:",
+            ),
+            (
+                {"target_scope": "asset", "asset_type": "redis", "protocol": "redis"},
+                "- Redis 命令 (`redis_execute_command`):",
+                "- redis_execute_command:",
+            ),
+            (
+                {
+                    "target_scope": "asset",
+                    "asset_type": "switch",
+                    "protocol": "snmp",
+                    "extra_args": {"category": "network", "sub_type": "h3c_switch"},
+                },
+                "- SNMP 读取 (`snmp_get`):",
+                "- snmp_get:",
+            ),
+            (
+                {
+                    "target_scope": "asset",
+                    "asset_type": "zabbix",
+                    "protocol": "http_api",
+                    "extra_args": {"category": "monitor", "sub_type": "zabbix"},
+                },
+                "- 监控平台查询 (`monitoring_api_query`):",
+                "- monitoring_api_query:",
+            ),
+            (
+                {
+                    "target_scope": "asset",
+                    "asset_type": "vmware",
+                    "protocol": "api",
+                    "extra_args": {
+                        "category": "virtualization",
+                        "sub_type": "vmware",
+                    },
+                },
+                "- 虚拟化平台接口 (`virtualization_api_request`):",
+                "- virtualization_api_request:",
+            ),
+        ]
+
+        for context, expected_label, raw_prefix in expectations:
+            with self.subTest(expected_label=expected_label):
+                prompt = tool_registry.prompt_lines(context)
+                self.assertIn(expected_label, prompt)
+                self.assertNotIn(raw_prefix, prompt)
 
     def test_asset_capability_tools_are_registered_and_named(self):
         issues = []
