@@ -127,8 +127,8 @@ DATABASE_OPERATION_PROFILES: dict[str, dict] = {
         "write_requires_approval": True,
         "hard_block_examples": ["DROP DATABASE", "DROP USER", "DROP TABLESPACE"],
         "operator_note": (
-            "Oracle 资产使用托管原生驱动连接，AI 只需要提供 SQL。SID/Service Name/TNS Alias、账号、密码和 "
-            "Thin/Thick Mode 由资产中心注入。"
+            "Oracle 资产默认使用 python-oracledb Thin Mode，AI 只需要提供 SQL。SID/Service Name/"
+            "TNS Alias、账号和密码由资产中心注入；仅旧版密码校验或 OCI/TNS 特殊场景才启用 Thick Mode。"
         ),
     },
     "mysql": {
@@ -387,22 +387,24 @@ def get_database_driver_capabilities() -> dict:
             "label": "Oracle",
             "connector": "native_sql",
             "python_package": "oracledb",
+            "python_import": "oracledb",
+            "default_mode": "thin",
             "python_package_installed": _module_installed("oracledb"),
             "external_client_required": False,
             "external_client_detected": oracle_client["detected"],
-            "external_client_name": "Oracle Instant Client",
+            "external_client_name": "Oracle Instant Client（可选兼容模式）",
             "status": "ready" if _module_installed("oracledb") else "missing_python_package",
             "recommended_path_windows": r"D:\AIOPS\oracle_instantclient\instantclient_23_0",
             "recommended_path_linux": "/opt/opscore/oracle/instantclient",
             "env_vars": {
-                "OPSCORE_ORACLE_THICK_MODE": "true",
+                "OPSCORE_ORACLE_THICK_MODE": "false",
                 "OPSCORE_ORACLE_CLIENT_LIB_DIR": "${ORACLE_INSTANT_CLIENT_DIR}",
                 "OPSCORE_ORACLE_CLIENT_ROOT": "${ORACLE_INSTANT_CLIENT_ROOT}",
             },
             "install_hint": (
-                "常规 11G/12C+ 账号可直接使用 python-oracledb Thin Mode；遇到 DPY-3015、旧版 "
-                "10G password verifier、OCI/TNS 场景时，下载 Oracle Instant Client Basic 或 "
-                "Basic Light，放到推荐目录，并设置 OPSCORE_ORACLE_CLIENT_LIB_DIR。"
+                "默认使用 python-oracledb Thin Mode，不需要下载 Oracle Instant Client。只有遇到 "
+                "DPY-3015、旧版 10G password verifier、OCI/TNS 等兼容场景时，才设置 "
+                "use_thick_mode=true 或 OPSCORE_ORACLE_THICK_MODE=true，并配置 Instant Client 路径。"
             ),
             "test_sql": "SELECT 1 FROM DUAL",
             "operation_profile": get_database_operation_profile("oracle"),
@@ -587,7 +589,7 @@ class DatabaseExecutor:
         )
         use_thick = _truthy(config.get("use_thick_mode")) or _truthy(
             os.getenv("OPSCORE_ORACLE_THICK_MODE")
-        ) or bool(str(explicit_lib_dir or "").strip())
+        )
         if not use_thick:
             return
 

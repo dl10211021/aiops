@@ -219,7 +219,7 @@ def test_oracle_thick_mode_expands_env_var_from_extra_args(monkeypatch):
     assert db_manager._ORACLE_CLIENT_INIT_ATTEMPTED is True
 
 
-def test_oracle_client_dir_implies_thick_mode(monkeypatch):
+def test_oracle_client_dir_does_not_imply_thick_mode(monkeypatch):
     class FakeOracleDbWithInit:
         calls = []
 
@@ -235,8 +235,8 @@ def test_oracle_client_dir_implies_thick_mode(monkeypatch):
         {"oracle_client_lib_dir": r"C:\oracle\instantclient"},
     )
 
-    assert FakeOracleDbWithInit.calls == [{"lib_dir": r"C:\oracle\instantclient"}]
-    assert db_manager._ORACLE_CLIENT_INIT_ATTEMPTED is True
+    assert FakeOracleDbWithInit.calls == []
+    assert db_manager._ORACLE_CLIENT_INIT_ATTEMPTED is False
 
 
 def test_oracle_client_discovery_uses_configured_root(monkeypatch):
@@ -264,8 +264,10 @@ def test_database_driver_capabilities_group_core_database_connectors():
 
     assert {"oracle", "mysql", "postgresql", "mssql", "redis", "mongodb", "dameng"}.issubset(drivers)
     assert drivers["oracle"]["connector"] == "native_sql"
-    assert drivers["oracle"]["external_client_name"] == "Oracle Instant Client"
-    assert "OPSCORE_ORACLE_CLIENT_LIB_DIR" in drivers["oracle"]["install_hint"]
+    assert drivers["oracle"]["python_import"] == "oracledb"
+    assert drivers["oracle"]["default_mode"] == "thin"
+    assert drivers["oracle"]["external_client_name"] == "Oracle Instant Client（可选兼容模式）"
+    assert "不需要下载 Oracle Instant Client" in drivers["oracle"]["install_hint"]
     assert drivers["dameng"]["connector"] == "native_sql"
     assert drivers["dameng"]["python_package"] == "dmpython"
     assert drivers["dameng"]["python_import"] == "dmPython"
