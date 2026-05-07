@@ -19,6 +19,12 @@ const ASSET_TABLE_GROUP_OPTIONS: Array<{ id: AssetTableGroupBy; label: string }>
   { id: 'protocol', label: '按主接入' },
   { id: 'none', label: '不分组' },
 ]
+type AssetGroupSummary = {
+  name: string
+  count: number
+  ready: number
+  assets: Asset[]
+}
 
 export function AssetOverviewGrid({
   overview,
@@ -204,12 +210,29 @@ export function AssetTablePanel({
   const [assignGroup, setAssignGroup] = useState(DEFAULT_SESSION_GROUP)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set())
-  const pageCount = Math.max(1, Math.ceil(assets.length / ASSET_TABLE_PAGE_SIZE))
+  const [activeAssetGroup, setActiveAssetGroup] = useState<string | null>(null)
+  const assetGroupSummaries = useMemo(() => {
+    const groups = new Map<string, AssetGroupSummary>()
+    assets.forEach((asset) => {
+      const name = normalizeSessionGroupName(asset.tags?.[0]) || DEFAULT_SESSION_GROUP
+      const current = groups.get(name) || { name, count: 0, ready: 0, assets: [] }
+      current.count += 1
+      current.assets.push(asset)
+      if (matrixByAssetId.get(asset.id)?.status === 'ready') current.ready += 1
+      groups.set(name, current)
+    })
+    return Array.from(groups.values()).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  }, [assets, matrixByAssetId])
+  const panelAssets = useMemo(() => {
+    if (!activeAssetGroup) return assets
+    return assets.filter((asset) => (normalizeSessionGroupName(asset.tags?.[0]) || DEFAULT_SESSION_GROUP) === activeAssetGroup)
+  }, [activeAssetGroup, assets])
+  const pageCount = Math.max(1, Math.ceil(panelAssets.length / ASSET_TABLE_PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
   const pageStart = (currentPage - 1) * ASSET_TABLE_PAGE_SIZE
   const visibleAssets = useMemo(
-    () => assets.slice(pageStart, pageStart + ASSET_TABLE_PAGE_SIZE),
-    [assets, pageStart]
+    () => panelAssets.slice(pageStart, pageStart + ASSET_TABLE_PAGE_SIZE),
+    [panelAssets, pageStart]
   )
   const assetGroupOptions = useMemo(() => uniqueSessionGroups([
     ...sessionGroups,
@@ -218,21 +241,21 @@ export function AssetTablePanel({
   const groupCounts = useMemo(() => {
     const counts = new Map<string, number>()
     if (groupBy === 'none') return counts
-    assets.forEach((asset) => {
+    panelAssets.forEach((asset) => {
       const label = assetTableGroupLabel(asset, displayForAsset(asset), groupBy)
       counts.set(label, (counts.get(label) || 0) + 1)
     })
     return counts
-  }, [assets, displayForAsset, groupBy])
+  }, [displayForAsset, groupBy, panelAssets])
   const groupAssetsByLabel = useMemo(() => {
     const grouped = new Map<string, Asset[]>()
     if (groupBy === 'none') return grouped
-    assets.forEach((asset) => {
+    panelAssets.forEach((asset) => {
       const label = assetTableGroupLabel(asset, displayForAsset(asset), groupBy)
       grouped.set(label, [...(grouped.get(label) || []), asset])
     })
     return grouped
-  }, [assets, displayForAsset, groupBy])
+  }, [displayForAsset, groupBy, panelAssets])
   const groupedVisibleAssets = useMemo(() => {
     if (groupBy === 'none') {
       return [{ id: 'all', label: '全部资产', count: visibleAssets.length, allItems: visibleAssets, items: visibleAssets }]
@@ -262,7 +285,13 @@ export function AssetTablePanel({
 
   useEffect(() => {
     setPage(1)
-  }, [search, hasActiveFilters, assets.length])
+  }, [activeAssetGroup, search, hasActiveFilters, assets.length])
+
+  useEffect(() => {
+    if (!activeAssetGroup) return
+    if (assetGroupSummaries.some((group) => group.name === activeAssetGroup)) return
+    setActiveAssetGroup(null)
+  }, [activeAssetGroup, assetGroupSummaries])
 
   useEffect(() => {
     if (groupBy === 'none') {
@@ -369,8 +398,13 @@ export function AssetTablePanel({
         <div className="flex min-w-0 items-center gap-2">
           <h2 className="text-sm font-bold text-ops-text">资产列表</h2>
           <span className="rounded-lg border border-ops-surface1 bg-ops-panel px-2 py-0.5 text-[11px] text-ops-subtext">
-            {assets.length} 条
+            {panelAssets.length} 条{activeAssetGroup ? ` / ${assets.length}` : ''}
           </span>
+          {activeAssetGroup && (
+            <span className="rounded-lg border border-ops-accent/35 bg-ops-accent/10 px-2 py-0.5 text-[11px] font-semibold text-ops-accent">
+              {activeAssetGroup}
+            </span>
+          )}
           {assets.length > ASSET_TABLE_PAGE_SIZE && (
             <span className="rounded-lg border border-ops-surface1 bg-ops-panel px-2 py-0.5 text-[11px] text-ops-overlay">
               每页 {ASSET_TABLE_PAGE_SIZE} 条
@@ -457,6 +491,67 @@ export function AssetTablePanel({
           </button>
         </div>
       </div>
+      {assetGroupSummaries.length > 0 && (
+        <div className="border-b border-ops-surface1/75 bg-[radial-gradient(circle_at_top_left,rgba(38,207,175,0.11),transparent_34%),rgba(10,18,32,0.42)] px-4 py-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-ops-text">资产组概览</div>
+              <div className="mt-0.5 text-[11px] text-ops-overlay">点击组名快速过滤；需要批量进入时直接拉起组会话。</div>
+            </div>
+            <button
+              onClick={() => setActiveAssetGroup(null)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                !activeAssetGroup
+                  ? 'border-ops-accent/45 bg-ops-accent/15 text-ops-accent'
+                  : 'border-ops-surface1 bg-ops-panel text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text'
+              }`}
+            >
+              全部资产
+            </button>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+            {assetGroupSummaries.map((group) => (
+              <div
+                key={group.name}
+                className={`rounded-xl border p-3 transition-colors ${
+                  activeAssetGroup === group.name
+                    ? 'border-ops-accent/55 bg-ops-accent/15'
+                    : 'border-ops-surface1 bg-ops-panel/80 hover:border-ops-accent/35'
+                }`}
+              >
+                <button
+                  onClick={() => {
+                    setActiveAssetGroup((current) => current === group.name ? null : group.name)
+                    setGroupBy('assetGroup')
+                  }}
+                  className="flex w-full items-start justify-between gap-3 text-left"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-bold text-ops-text" title={group.name}>{group.name}</div>
+                    <div className="mt-1 text-[11px] text-ops-overlay">已验证 {group.ready}/{group.count}</div>
+                  </div>
+                  <div className="shrink-0 font-mono text-xl font-bold leading-none text-ops-accent">{group.count}</div>
+                </button>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-ops-surface0">
+                    <span
+                      className="block h-full rounded-full bg-ops-accent"
+                      style={{ width: `${Math.round((group.ready / Math.max(1, group.count)) * 100)}%` }}
+                    />
+                  </span>
+                  <button
+                    onClick={() => onConnectGroup(group.assets, group.name)}
+                    disabled={connectingGroup === group.name}
+                    className="shrink-0 rounded-lg border border-ops-accent/35 bg-ops-accent/10 px-2 py-1 text-[11px] font-semibold text-ops-accent hover:bg-ops-accent/18 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {connectingGroup === group.name ? '拉起中' : '会话'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {selectedIds.size > 0 && (
         <div className="flex flex-col gap-2 border-b border-ops-surface1/75 bg-ops-accent/10 px-4 py-3 text-xs text-ops-subtext lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2">
@@ -639,7 +734,7 @@ export function AssetTablePanel({
                 })}
               </Fragment>
             ))}
-            {assets.length === 0 && (
+            {panelAssets.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-4 py-12 text-center text-sm text-ops-subtext">
                   当前没有匹配的资产
@@ -649,10 +744,10 @@ export function AssetTablePanel({
           </tbody>
         </table>
       </div>
-      {assets.length > ASSET_TABLE_PAGE_SIZE && (
+      {panelAssets.length > ASSET_TABLE_PAGE_SIZE && (
         <div className="flex flex-col gap-2 border-t border-ops-surface1/75 bg-ops-surface0/35 px-4 py-3 text-xs text-ops-subtext sm:flex-row sm:items-center sm:justify-between">
           <span>
-            显示 {pageStart + 1}-{Math.min(pageStart + ASSET_TABLE_PAGE_SIZE, assets.length)} / {assets.length} 条
+            显示 {pageStart + 1}-{Math.min(pageStart + ASSET_TABLE_PAGE_SIZE, panelAssets.length)} / {panelAssets.length} 条
           </span>
           <div className="flex items-center gap-2">
             <button
