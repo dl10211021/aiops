@@ -9,7 +9,13 @@ from api.schema_models.approvals import (
     ToolApprovalRequest,
     UserInteractionResponseRequest,
 )
-from api.schema_models.assets import AssetPayload, BatchAssetGroupPayload, BatchAssetImportItem
+from api.schema_models.assets import (
+    AssetPayload,
+    BatchAssetGroupDeletePayload,
+    BatchAssetGroupPayload,
+    BatchAssetGroupRenamePayload,
+    BatchAssetImportItem,
+)
 from api.schema_models.chat import ChatRequest
 from api.schema_models.common import ResponseModel
 from api.schema_models.config import (

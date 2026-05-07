@@ -15,7 +15,9 @@ from pydantic import ValidationError
 from api import asset_routes, routes
 from api.schemas import (
     AssetPayload,
+    BatchAssetGroupDeletePayload,
     BatchAssetGroupPayload,
+    BatchAssetGroupRenamePayload,
     BatchAssetImportItem,
     ConnectionRequest,
     InspectionTemplateStepPayload,
@@ -99,6 +101,8 @@ class TestAssetCrudRoutes(unittest.TestCase):
         self.assertIn("/assets/types", paths)
         self.assertIn("/assets/{asset_id}", paths)
         self.assertIn("/assets/groups/bulk", paths)
+        self.assertIn("/assets/groups/delete", paths)
+        self.assertIn("/assets/groups/rename", paths)
         self.assertIn("/assets/normalize/preview", paths)
         self.assertIn("/assets/normalize/apply", paths)
         self.assertIn("/assets/batch_import", paths)
@@ -236,6 +240,37 @@ class TestAssetCrudRoutes(unittest.TestCase):
         asset = response.data["assets"][0]
         self.assertEqual(asset["tags"], ["核心监控", "monitor", "生产"])
         self.assertEqual(asset["password"], "********")
+
+    def test_rename_asset_group_only_changes_primary_group(self):
+        fake = FakeMemoryDB()
+        fake.assets[1]["tags"] = ["核心监控", "生产"]
+        fake.assets[2] = {**fake.assets[1], "id": 2, "tags": ["其他组", "核心监控"]}
+        payload = BatchAssetGroupRenamePayload(
+            group_name="核心监控",
+            new_group_name="平台监控",
+        )
+
+        with patch("core.memory.memory_db", fake):
+            response = asyncio.run(asset_routes.rename_asset_group(payload))
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data["updated"], 1)
+        self.assertEqual(response.data["assets"][0]["tags"], ["平台监控", "生产"])
+
+    def test_delete_asset_group_moves_primary_assets_and_removes_secondary_tags(self):
+        fake = FakeMemoryDB()
+        fake.assets[1]["tags"] = ["核心监控", "生产"]
+        fake.assets[2] = {**fake.assets[1], "id": 2, "tags": ["其他组", "核心监控"]}
+        payload = BatchAssetGroupDeletePayload(group_name="核心监控")
+
+        with patch("core.memory.memory_db", fake):
+            response = asyncio.run(asset_routes.delete_asset_group(payload))
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data["updated"], 2)
+        by_id = {asset["id"]: asset for asset in response.data["assets"]}
+        self.assertEqual(by_id[1]["tags"], ["未分组", "生产"])
+        self.assertEqual(by_id[2]["tags"], ["其他组"])
 
     def test_catalog_password_params_are_masked_by_memory_policy(self):
         password_fields = {

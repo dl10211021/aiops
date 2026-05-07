@@ -16,7 +16,13 @@ from api.response_mappers.assets import (
     batch_asset_import_response_kwargs,
     saved_assets_response_kwargs,
 )
-from api.schema_models.assets import AssetPayload, BatchAssetGroupPayload, BatchAssetImportItem
+from api.schema_models.assets import (
+    AssetPayload,
+    BatchAssetGroupDeletePayload,
+    BatchAssetGroupPayload,
+    BatchAssetGroupRenamePayload,
+    BatchAssetImportItem,
+)
 from api.schema_models.common import ResponseModel
 from core.asset_catalog_response import build_asset_types_response
 from core.asset_cleanup_service import (
@@ -55,6 +61,42 @@ def _with_primary_asset_group(tags: list[str] | None, group_name: str) -> list[s
         seen.add(clean)
         tail.append(clean)
     return [normalized, *tail]
+
+
+def _primary_asset_group(tags: list[str] | None) -> str:
+    return _normalize_asset_group_name((tags or [DEFAULT_ASSET_GROUP])[0])
+
+
+def _rename_primary_asset_group(
+    tags: list[str] | None,
+    old_group_name: str,
+    new_group_name: str,
+) -> list[str]:
+    if _primary_asset_group(tags) != old_group_name:
+        return tags or [DEFAULT_ASSET_GROUP]
+    return _with_primary_asset_group(
+        [tag for tag in (tags or [])[1:] if _normalize_asset_group_name(tag) != old_group_name],
+        new_group_name,
+    )
+
+
+def _delete_asset_group_tags(
+    tags: list[str] | None,
+    group_name: str,
+    fallback_group: str,
+) -> list[str]:
+    current = tags or [DEFAULT_ASSET_GROUP]
+    fallback = _normalize_asset_group_name(fallback_group)
+    if _primary_asset_group(current) == group_name:
+        return _with_primary_asset_group(
+            [tag for tag in current[1:] if _normalize_asset_group_name(tag) != group_name],
+            fallback,
+        )
+    remaining = [
+        tag for tag in current
+        if _normalize_asset_group_name(tag) != group_name
+    ]
+    return remaining or [DEFAULT_ASSET_GROUP]
 
 
 @router.get("/assets/saved", response_model=ResponseModel)
@@ -132,6 +174,77 @@ async def bulk_update_asset_group(req: BatchAssetGroupPayload):
             "group_name": group_name,
         },
         message=f"已将 {len(updated_assets)} 条资产加入 {group_name}",
+    )
+
+
+@router.post("/assets/groups/rename", response_model=ResponseModel)
+async def rename_asset_group(req: BatchAssetGroupRenamePayload):
+    """批量改名资产主分组，并返回受影响资产。"""
+    group_name = _normalize_asset_group_name(req.group_name)
+    new_group_name = _normalize_asset_group_name(req.new_group_name)
+    if group_name == new_group_name:
+        return ResponseModel(status="error", message="新旧资产组名称相同")
+
+    updated_assets = []
+    assets = await asyncio.to_thread(list_saved_asset_records)
+    try:
+        for asset in assets:
+            if _primary_asset_group(asset.get("tags")) != group_name:
+                continue
+            asset["tags"] = _rename_primary_asset_group(
+                asset.get("tags"),
+                group_name,
+                new_group_name,
+            )
+            updated = await asyncio.to_thread(update_saved_asset_record, asset["id"], asset)
+            updated_assets.append(updated)
+    except AssetServiceError as exc:
+        raise_http_error(exc)
+
+    return ResponseModel(
+        status="success",
+        data={
+            "assets": updated_assets,
+            "updated": len(updated_assets),
+            "group_name": new_group_name,
+        },
+        message=f"资产组已改名：{group_name} -> {new_group_name}",
+    )
+
+
+@router.post("/assets/groups/delete", response_model=ResponseModel)
+async def delete_asset_group(req: BatchAssetGroupDeletePayload):
+    """删除资产组；主分组命中的资产移动到 fallback_group。"""
+    group_name = _normalize_asset_group_name(req.group_name)
+    fallback_group = _normalize_asset_group_name(req.fallback_group)
+    if group_name == DEFAULT_ASSET_GROUP:
+        return ResponseModel(status="error", message="默认资产组不能删除")
+    if group_name == fallback_group:
+        fallback_group = DEFAULT_ASSET_GROUP
+
+    updated_assets = []
+    assets = await asyncio.to_thread(list_saved_asset_records)
+    try:
+        for asset in assets:
+            old_tags = asset.get("tags") or [DEFAULT_ASSET_GROUP]
+            new_tags = _delete_asset_group_tags(old_tags, group_name, fallback_group)
+            if new_tags == old_tags:
+                continue
+            asset["tags"] = new_tags
+            updated = await asyncio.to_thread(update_saved_asset_record, asset["id"], asset)
+            updated_assets.append(updated)
+    except AssetServiceError as exc:
+        raise_http_error(exc)
+
+    return ResponseModel(
+        status="success",
+        data={
+            "assets": updated_assets,
+            "updated": len(updated_assets),
+            "group_name": group_name,
+            "fallback_group": fallback_group,
+        },
+        message=f"资产组已删除：{group_name}",
     )
 
 

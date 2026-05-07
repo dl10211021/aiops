@@ -79,6 +79,7 @@ export default function AssetVault() {
     batchImportOpen,
     bulkVerifyingAssets,
     connectingAssetGroup,
+    mutatingAssetGroup,
     deleteTarget,
     deletingAsset,
     handleAssignAssetsToGroup,
@@ -87,10 +88,12 @@ export default function AssetVault() {
     handleConnect,
     handleConnectAssetGroup,
     handleCreateAssetGroup,
+    handleDeleteAssetGroup,
     handleEditAsset,
     handleDeleteConfirmed,
     handleNormalizeAssets,
     handleNormalizeConfirmed,
+    handleRenameAssetGroup,
     importingAssets,
     normalizeDialog,
     normalizingAssets,
@@ -160,6 +163,7 @@ export default function AssetVault() {
           matrixByAssetId={matrixByAssetId}
           bulkVerifying={bulkVerifyingAssets}
           connectingGroup={connectingAssetGroup}
+          mutatingGroup={mutatingAssetGroup}
           sessionGroups={sessionGroups}
           onClearFilters={clearFilters}
           onAssignGroup={(selectedAssets, groupName) => void handleAssignAssetsToGroup(selectedAssets, groupName)}
@@ -167,9 +171,11 @@ export default function AssetVault() {
           onConnect={handleConnect}
           onConnectGroup={(groupAssets, groupName) => void handleConnectAssetGroup(groupAssets, groupName)}
           onCreateGroup={handleCreateAssetGroup}
+          onDeleteGroup={(groupName) => void handleDeleteAssetGroup(groupName)}
           onEdit={handleEditAsset}
           onDelete={setDeleteTarget}
           onOpenVerification={(item) => void openVerification(item)}
+          onRenameGroup={(groupName, nextGroupName) => void handleRenameAssetGroup(groupName, nextGroupName)}
           onRefresh={() => void loadAssets()}
           onSearchChange={setSearch}
           search={search}

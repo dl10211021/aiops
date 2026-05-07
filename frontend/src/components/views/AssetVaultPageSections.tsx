@@ -158,6 +158,7 @@ export function AssetTablePanel({
   displayForAsset,
   hasActiveFilters,
   matrixByAssetId,
+  mutatingGroup,
   sessionGroups,
   onAssignGroup,
   onBulkVerify,
@@ -165,9 +166,11 @@ export function AssetTablePanel({
   onConnect,
   onConnectGroup,
   onCreateGroup,
+  onDeleteGroup,
   onEdit,
   onDelete,
   onOpenVerification,
+  onRenameGroup,
   onRefresh,
   onSearchChange,
   search,
@@ -178,6 +181,7 @@ export function AssetTablePanel({
   displayForAsset: (asset: Asset) => AssetDisplayMeta
   hasActiveFilters: boolean
   matrixByAssetId: Map<number, AssetVerificationMatrix>
+  mutatingGroup: string | null
   sessionGroups: string[]
   onAssignGroup: (assets: Asset[], groupName: string) => void
   onBulkVerify: (assets: Asset[]) => void
@@ -185,9 +189,11 @@ export function AssetTablePanel({
   onConnect: (asset: Asset) => void
   onConnectGroup: (assets: Asset[], groupName: string) => void
   onCreateGroup: (groupName: string) => void
+  onDeleteGroup: (groupName: string) => void
   onEdit: (asset: Asset) => void
   onDelete: (asset: Asset) => void
   onOpenVerification: (asset: Asset) => void
+  onRenameGroup: (groupName: string, nextGroupName: string) => void
   onRefresh: () => void
   onSearchChange: (value: string) => void
   search: string
@@ -342,6 +348,18 @@ export function AssetTablePanel({
   }
   const assignSelectedToGroup = () => {
     onAssignGroup(selectedAssets, assignGroup)
+    setGroupBy('assetGroup')
+  }
+  const renameCurrentGroup = (groupName: string) => {
+    const next = window.prompt('请输入新的资产组名称', groupName)?.trim()
+    if (!next) return
+    onRenameGroup(groupName, next)
+    setGroupBy('assetGroup')
+  }
+  const deleteCurrentGroup = (groupName: string) => {
+    if (groupName === DEFAULT_SESSION_GROUP) return
+    if (!window.confirm(`删除资产组「${groupName}」？组内资产会移动到「${DEFAULT_SESSION_GROUP}」。`)) return
+    onDeleteGroup(groupName)
     setGroupBy('assetGroup')
   }
 
@@ -515,13 +533,31 @@ export function AssetTablePanel({
                             {ASSET_TABLE_GROUP_OPTIONS.find((option) => option.id === groupBy)?.label}
                           </span>
                           {groupBy === 'assetGroup' && (
-                            <button
-                              onClick={() => onConnectGroup(group.allItems, group.label)}
-                              disabled={connectingGroup === group.label}
-                              className="rounded-lg border border-ops-accent/35 bg-ops-accent/10 px-2.5 py-1 text-[11px] font-semibold text-ops-accent hover:bg-ops-accent/18 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {connectingGroup === group.label ? '拉起中...' : '拉起组会话'}
-                            </button>
+                            <>
+                              <button
+                                onClick={() => renameCurrentGroup(group.label)}
+                                disabled={mutatingGroup === group.label}
+                                className="rounded-lg border border-ops-surface1 bg-ops-panel px-2.5 py-1 text-[11px] font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                改名
+                              </button>
+                              {group.label !== DEFAULT_SESSION_GROUP && (
+                                <button
+                                  onClick={() => deleteCurrentGroup(group.label)}
+                                  disabled={mutatingGroup === group.label}
+                                  className="rounded-lg border border-rose-400/35 bg-rose-400/10 px-2.5 py-1 text-[11px] font-semibold text-rose-200 hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {mutatingGroup === group.label ? '处理中...' : '删除组'}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => onConnectGroup(group.allItems, group.label)}
+                                disabled={connectingGroup === group.label}
+                                className="rounded-lg border border-ops-accent/35 bg-ops-accent/10 px-2.5 py-1 text-[11px] font-semibold text-ops-accent hover:bg-ops-accent/18 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {connectingGroup === group.label ? '拉起中...' : '拉起组会话'}
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>

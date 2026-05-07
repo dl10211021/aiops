@@ -110,6 +110,20 @@ export async function bulkUpdateAssetGroup(assetIds: number[], groupName: string
   })
 }
 
+export async function renameAssetGroup(groupName: string, newGroupName: string) {
+  return request<{ assets: Asset[]; updated: number; group_name: string }>('/assets/groups/rename', {
+    method: 'POST',
+    body: JSON.stringify({ group_name: groupName, new_group_name: newGroupName }),
+  })
+}
+
+export async function deleteAssetGroup(groupName: string, fallbackGroup = '未分组') {
+  return request<{ assets: Asset[]; updated: number; group_name: string; fallback_group: string }>('/assets/groups/delete', {
+    method: 'POST',
+    body: JSON.stringify({ group_name: groupName, fallback_group: fallbackGroup }),
+  })
+}
+
 export async function batchImportAssets(items: Partial<Asset>[]) {
   return request('/assets/batch_import', {
     method: 'POST', body: JSON.stringify(items),

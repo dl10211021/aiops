@@ -5,10 +5,12 @@ import {
   bulkUpdateAssetGroup,
   connectSession,
   deleteAsset,
+  deleteAssetGroup,
   getAssetVerificationMatrix,
   getAssetVerificationRuns,
   listInspectionRuns,
   previewAssetNormalization,
+  renameAssetGroup,
   verifyAsset,
 } from '@/api/client'
 import { useStore } from '@/store'
@@ -56,6 +58,8 @@ export function useAssetVaultActions({
   const addSession = useStore((s) => s.addSession)
   const addToast = useStore((s) => s.addToast)
   const createSessionGroup = useStore((s) => s.createSessionGroup)
+  const deleteSessionGroup = useStore((s) => s.deleteSessionGroup)
+  const renameSessionGroup = useStore((s) => s.renameSessionGroup)
   const setView = useStore((s) => s.setView)
   const [verificationPanel, setVerificationPanel] = useState<VerificationPanelState | null>(null)
   const [reportRunId, setReportRunId] = useState<string | null>(null)
@@ -68,6 +72,7 @@ export function useAssetVaultActions({
   const [normalizingAssets, setNormalizingAssets] = useState(false)
   const [bulkVerifyingAssets, setBulkVerifyingAssets] = useState(false)
   const [connectingAssetGroup, setConnectingAssetGroup] = useState<string | null>(null)
+  const [mutatingAssetGroup, setMutatingAssetGroup] = useState<string | null>(null)
 
   const openCreateAsset = () => {
     sessionStorage.removeItem('asset_editing_id')
@@ -259,6 +264,51 @@ export function useAssetVaultActions({
     }
   }
 
+  const handleRenameAssetGroup = async (groupName: string, nextGroupName: string) => {
+    const normalized = normalizeSessionGroupName(groupName)
+    const next = normalizeSessionGroupName(nextGroupName)
+    if (!normalized || !next) {
+      addToast('请输入有效的资产组名称', 'error')
+      return
+    }
+    if (normalized === next) {
+      addToast('新旧资产组名称相同', 'error')
+      return
+    }
+    setMutatingAssetGroup(normalized)
+    try {
+      const res = await renameAssetGroup(normalized, next)
+      const updatedById = new Map(res.data.assets.map((asset) => [asset.id, asset]))
+      setAssets(assets.map((asset) => updatedById.get(asset.id) || asset))
+      renameSessionGroup(normalized, next)
+      addToast(`资产组已改名：${next}`, 'success')
+    } catch (error: unknown) {
+      addToast(error instanceof Error ? error.message : '资产组改名失败', 'error')
+    } finally {
+      setMutatingAssetGroup(null)
+    }
+  }
+
+  const handleDeleteAssetGroup = async (groupName: string) => {
+    const normalized = normalizeSessionGroupName(groupName)
+    if (!normalized || normalized === '未分组') {
+      addToast('默认资产组不能删除', 'error')
+      return
+    }
+    setMutatingAssetGroup(normalized)
+    try {
+      const res = await deleteAssetGroup(normalized)
+      const updatedById = new Map(res.data.assets.map((asset) => [asset.id, asset]))
+      setAssets(assets.map((asset) => updatedById.get(asset.id) || asset))
+      deleteSessionGroup(normalized, res.data.fallback_group)
+      addToast(`资产组已删除：${normalized}`, 'success')
+    } catch (error: unknown) {
+      addToast(error instanceof Error ? error.message : '资产组删除失败', 'error')
+    } finally {
+      setMutatingAssetGroup(null)
+    }
+  }
+
   const handleConnectAssetGroup = async (groupAssets: Asset[], groupName: string) => {
     const normalized = normalizeSessionGroupName(groupName)
     if (!normalized) {
@@ -331,6 +381,7 @@ export function useAssetVaultActions({
     batchImportOpen,
     bulkVerifyingAssets,
     connectingAssetGroup,
+    mutatingAssetGroup,
     deleteTarget,
     deletingAsset,
     handleBatchImportConfirmed,
@@ -339,10 +390,12 @@ export function useAssetVaultActions({
     handleConnect,
     handleConnectAssetGroup,
     handleCreateAssetGroup,
+    handleDeleteAssetGroup,
     handleEditAsset,
     handleDeleteConfirmed,
     handleNormalizeAssets,
     handleNormalizeConfirmed,
+    handleRenameAssetGroup,
     importingAssets,
     normalizeDialog,
     normalizingAssets,

@@ -34,3 +34,13 @@ class BatchAssetImportItem(BaseModel):
 class BatchAssetGroupPayload(BaseModel):
     asset_ids: list[int] = Field(default_factory=list)
     group_name: str
+
+
+class BatchAssetGroupRenamePayload(BaseModel):
+    group_name: str
+    new_group_name: str
+
+
+class BatchAssetGroupDeletePayload(BaseModel):
+    group_name: str
+    fallback_group: str = "未分组"
