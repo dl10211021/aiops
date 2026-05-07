@@ -2,6 +2,7 @@ import InspectionReportModal from '@/components/inspection/InspectionReportModal
 import PageHeader from '@/components/layout/PageHeader'
 import { BatchImportAssetsDialog, DeleteAssetDialog, NormalizeAssetsDialog } from './AssetVaultDialogs'
 import { AssetVaultFilterPanel, AssetVaultHeaderActions } from './AssetVaultFilterPanel'
+import { AssetVaultEditorDrawer } from './AssetVaultEditorDrawer'
 import { VerificationPanel } from './AssetVerificationPanel'
 import { AssetEnterpriseCommandPanel, AssetTablePanel } from './AssetVaultPageSections'
 import { buildAssetVaultViewModel } from './assetVaultViewModel'
@@ -81,6 +82,7 @@ export default function AssetVault() {
     bulkVerifyingAssets,
     connectingAssetGroup,
     connectingSelectedAssets,
+    editTarget,
     mutatingAssetGroup,
     deleteTarget,
     deletingAsset,
@@ -94,6 +96,7 @@ export default function AssetVault() {
     handleCreateAssetGroup,
     handleDeleteAssetGroup,
     handleEditAsset,
+    handleSaveAsset,
     handleDeleteConfirmed,
     handleNormalizeAssets,
     handleNormalizeConfirmed,
@@ -107,10 +110,12 @@ export default function AssetVault() {
     runVerification,
     setBatchImportDraft,
     setBatchImportOpen,
+    setEditTarget,
     setDeleteTarget,
     setNormalizeDialog,
     setReportRunId,
     setVerificationPanel,
+    savingAsset,
     verificationPanel,
   } = useAssetVaultActions({
     assets,
@@ -198,6 +203,25 @@ export default function AssetVault() {
         />
       )}
       {reportRunId && <InspectionReportModal runId={reportRunId} onClose={() => setReportRunId(null)} />}
+      {editTarget && (
+        <AssetVaultEditorDrawer
+          asset={editTarget}
+          catalogTypes={catalogTypes}
+          display={displayForAsset(editTarget)}
+          saving={savingAsset}
+          sessionGroups={sessionGroups}
+          onClose={() => setEditTarget(null)}
+          onConnect={(asset) => {
+            setEditTarget(null)
+            handleConnect(asset)
+          }}
+          onOpenVerification={(asset) => {
+            setEditTarget(null)
+            void openVerification(asset)
+          }}
+          onSave={(asset, patch) => void handleSaveAsset(asset, patch)}
+        />
+      )}
       {batchImportOpen && (
         <BatchImportAssetsDialog
           draft={batchImportDraft}

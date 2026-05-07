@@ -12,6 +12,7 @@ import {
   listInspectionRuns,
   previewAssetNormalization,
   renameAssetGroup,
+  updateAsset,
   verifyAsset,
 } from '@/api/client'
 import { useStore } from '@/store'
@@ -76,6 +77,8 @@ export function useAssetVaultActions({
   const [connectingAssetGroup, setConnectingAssetGroup] = useState<string | null>(null)
   const [connectingSelectedAssets, setConnectingSelectedAssets] = useState(false)
   const [mutatingAssetGroup, setMutatingAssetGroup] = useState<string | null>(null)
+  const [editTarget, setEditTarget] = useState<Asset | null>(null)
+  const [savingAsset, setSavingAsset] = useState(false)
 
   const openCreateAsset = () => {
     sessionStorage.removeItem('asset_editing_id')
@@ -104,9 +107,27 @@ export function useAssetVaultActions({
   }
 
   const handleEditAsset = (asset: Asset) => {
-    sessionStorage.setItem('asset_editing_id', String(asset.id))
-    sessionStorage.setItem('prefill_asset', JSON.stringify(asset))
-    openModal('connect')
+    sessionStorage.removeItem('asset_editing_id')
+    sessionStorage.removeItem('prefill_asset')
+    setEditTarget(asset)
+  }
+
+  const handleSaveAsset = async (asset: Asset, patch: Partial<Asset>) => {
+    setSavingAsset(true)
+    try {
+      const res = await updateAsset(asset.id, patch)
+      const updatedAsset = res.data.asset
+      setAssets(assets.map((item) => item.id === asset.id ? updatedAsset : item))
+      setEditTarget(updatedAsset)
+      const primaryGroup = normalizeSessionGroupName(updatedAsset.tags?.[0])
+      if (primaryGroup) createSessionGroup(primaryGroup)
+      addToast('资产信息已保存', 'success')
+      void refreshVerificationOverview()
+    } catch (error: unknown) {
+      addToast(error instanceof Error ? error.message : '资产保存失败', 'error')
+    } finally {
+      setSavingAsset(false)
+    }
   }
 
   const handleNormalizeAssets = async () => {
@@ -470,6 +491,7 @@ export function useAssetVaultActions({
     bulkVerifyingAssets,
     connectingAssetGroup,
     connectingSelectedAssets,
+    editTarget,
     mutatingAssetGroup,
     deleteTarget,
     deletingAsset,
@@ -483,6 +505,7 @@ export function useAssetVaultActions({
     handleCreateAssetGroup,
     handleDeleteAssetGroup,
     handleEditAsset,
+    handleSaveAsset,
     handleDeleteConfirmed,
     handleNormalizeAssets,
     handleNormalizeConfirmed,
@@ -493,6 +516,7 @@ export function useAssetVaultActions({
     openCreateAsset,
     setBatchImportDraft,
     setBatchImportOpen,
+    setEditTarget,
     openVerification,
     reportRunId,
     runVerification,
@@ -500,6 +524,7 @@ export function useAssetVaultActions({
     setNormalizeDialog,
     setReportRunId,
     setVerificationPanel,
+    savingAsset,
     verificationPanel,
   }
 }
