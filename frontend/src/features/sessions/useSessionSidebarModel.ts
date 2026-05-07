@@ -99,25 +99,6 @@ export function useSessionSidebarModel() {
     if (editingSessionId && !sessions[editingSessionId]) setEditingSessionId(null)
   }, [editingSessionId, sessions])
 
-  useEffect(() => {
-    const handleExternalEdit = (event: Event) => {
-      const sessionId = (event as CustomEvent<{ sessionId?: string }>).detail?.sessionId
-      if (!sessionId || !sessions[sessionId]) return
-      setEditingSessionId(sessionId)
-    }
-    const handleExternalDisconnect = (event: Event) => {
-      const sessionId = (event as CustomEvent<{ sessionId?: string }>).detail?.sessionId
-      if (!sessionId || !sessions[sessionId]) return
-      void disconnectSidebarSession(sessionId, removeSession)
-    }
-    window.addEventListener('opscore:session-edit', handleExternalEdit)
-    window.addEventListener('opscore:session-disconnect', handleExternalDisconnect)
-    return () => {
-      window.removeEventListener('opscore:session-edit', handleExternalEdit)
-      window.removeEventListener('opscore:session-disconnect', handleExternalDisconnect)
-    }
-  }, [removeSession, sessions])
-
   const sessionMetrics = useMemo(() => summarizeSessions(sessionList), [sessionList])
   const handleDisconnect = async (sid: string, event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()

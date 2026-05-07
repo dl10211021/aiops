@@ -38,6 +38,35 @@ export default function SessionSidebar() {
           onCreateGroup={model.handleCreateGroup}
         />
 
+        {model.currentSession && (
+          <div className="mt-2 rounded-xl border border-ops-surface1/65 bg-ops-dark/30 px-2.5 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="truncate text-[11px] font-semibold text-ops-overlay">当前会话</div>
+                <div className="truncate text-xs font-black text-ops-text">
+                  {model.currentSession.remark || model.currentSession.host}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={(event) => model.handleEditSession(model.currentSession!.id, event)}
+                  className="rounded-md border border-ops-surface1/75 bg-ops-panel/55 px-2 py-1 text-[11px] font-semibold text-ops-subtext transition-colors hover:border-ops-accent/45 hover:text-ops-text"
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => model.handleDisconnect(model.currentSession!.id, event)}
+                  className="rounded-md border border-ops-alert/35 bg-ops-alert/8 px-2 py-1 text-[11px] font-semibold text-ops-alert transition-colors hover:bg-ops-alert/14"
+                >
+                  断开
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="mt-2">
           <input
             value={model.sessionSearch}
@@ -56,8 +85,6 @@ export default function SessionSidebar() {
         groupNames={model.groupNames}
         selectedGroup={model.selectedGroup}
         sessionList={model.sessionList}
-        onDisconnect={model.handleDisconnect}
-        onEdit={model.handleEditSession}
         onDeleteGroup={model.handleDeleteGroup}
         onRenameGroup={model.handleRenameGroup}
         onSelectGroup={model.setSelectedGroup}

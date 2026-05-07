@@ -1,4 +1,3 @@
-import type { MouseEvent } from 'react'
 import type { Session } from '@/types'
 import { protocolLabel } from '@/utils/assetDisplay'
 import { sessionAttention } from './sessionAttention'
@@ -19,8 +18,6 @@ interface SessionItemProps {
   session: Session
   active: boolean
   onSelect: () => void
-  onDisconnect: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
-  onEdit: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
 }
 
 export default function SessionItem({
