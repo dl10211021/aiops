@@ -23,13 +23,11 @@ export default function SessionItem({
   const needsAttention = attention.type !== 'none'
   const running = isSessionRunning(session)
   const protocolText = protocolLabel(session.protocol || session.asset_type)
-  const messageCount = session.messages?.length || 0
-  const skillCount = session.skills?.length || 0
-  const assetText = session.asset_type || session.protocol || 'asset'
+  const statusTitle = running ? '会话执行中' : needsAttention ? attention.label : '会话已连接'
   return (
     <div
       onClick={onSelect}
-      className={`group relative grid min-h-[72px] cursor-pointer grid-cols-[44px_minmax(0,1fr)] gap-2.5 overflow-hidden rounded-xl border px-2.5 py-2.5 text-sm transition-colors duration-150
+      className={`group relative grid min-h-[58px] cursor-pointer grid-cols-[46px_minmax(0,1fr)_14px] items-center gap-3 overflow-hidden rounded-lg border px-2.5 py-2 text-sm transition-colors duration-150
         ${active
           ? 'border-ops-accent/60 bg-[linear-gradient(135deg,rgba(40,208,168,0.16),rgba(15,36,56,0.76))] text-ops-accent shadow-[inset_0_0_0_1px_rgba(40,208,168,0.08)]'
           : needsAttention
@@ -39,84 +37,53 @@ export default function SessionItem({
       <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ops-accent/28 to-transparent" />
       <span
         title={`${session.asset_type}/${session.protocol}`}
-        className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-ops-surface1/65 bg-ops-dark/78 px-1 text-center text-[10px] font-black leading-tight text-ops-text shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+        className="grid h-9 w-11 shrink-0 place-items-center rounded-md border border-ops-surface1/65 bg-ops-dark/82 px-1 text-center text-[10px] font-black leading-tight text-ops-text shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
       >
-        <span
-          className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-ops-panel ${
-            running
-              ? 'bg-ops-accent shadow-[0_0_10px_rgba(40,208,168,0.85)] animate-pulse'
-              : 'bg-ops-success shadow-[0_0_8px_rgba(90,214,125,0.6)]'
-          }`}
-          title={running ? '会话执行中' : '会话已连接'}
-          aria-label={running ? '会话执行中' : '会话已连接'}
-        />
         {protocolText}
       </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-start gap-2">
-          <span className="min-w-0 flex-1 truncate text-sm font-black text-ops-text">
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-[15px] font-black leading-5 text-ops-text">
             {session.remark || session.host}
           </span>
-          {needsAttention && (
-            <span
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-yellow-300/35 bg-yellow-300/10 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-100"
-              title={attention.label}
-              aria-label={attention.label}
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-yellow-300 animate-pulse" />
-              {attention.label}
-            </span>
-          )}
-          {running && !needsAttention && (
-            <span
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-ops-accent/35 bg-ops-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-ops-accent"
-              title="AI 正在执行"
-              aria-label="AI 正在执行"
-            >
-              <span className="h-2 w-2 rounded-full border border-ops-accent/35 border-t-ops-accent animate-spin" />
-              执行中
-            </span>
-          )}
         </div>
-        <div className="mt-1 truncate font-mono text-[10px] text-ops-overlay">
+        <div className="mt-0.5 truncate font-mono text-[10px] font-semibold text-ops-overlay">
           {session.user}@{session.host}
         </div>
-        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
-          <span className="rounded-full border border-ops-surface1/60 bg-ops-dark/35 px-2 py-0.5 text-[10px] font-semibold text-ops-overlay">
-            {assetText}
-          </span>
-          <span className="rounded-full border border-ops-surface1/60 bg-ops-dark/35 px-2 py-0.5 text-[10px] font-semibold text-ops-overlay">
-            消息 {messageCount}
-          </span>
-          {skillCount > 0 && (
-            <span className="rounded-full border border-ops-accent/30 bg-ops-accent/10 px-2 py-0.5 text-[10px] font-semibold text-ops-accent">
-              技能 {skillCount}
-            </span>
-          )}
-          {session.heartbeatEnabled && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-ops-success/30 bg-ops-success/10 px-2 py-0.5 text-[10px] font-semibold text-ops-success" title="巡检已开启">
-              <span className="h-1.5 w-1.5 rounded-full bg-ops-success animate-pulse" />
-              巡检
-            </span>
-          )}
-        </div>
-        <div className="mt-2 flex items-center gap-1">
+        <div className="pointer-events-none absolute right-7 top-2 flex gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
           <button
-            onClick={(event) => onEdit(session.id, event)}
-            className="rounded-md border border-ops-surface1/65 bg-ops-dark/35 px-2 py-0.5 text-[11px] font-semibold text-ops-subtext hover:border-ops-accent/45 hover:text-ops-text"
+            onClick={(event) => {
+              event.stopPropagation()
+              onEdit(session.id, event)
+            }}
+            className="rounded border border-ops-surface1/70 bg-ops-dark/80 px-1.5 py-0.5 text-[10px] font-semibold text-ops-subtext hover:border-ops-accent/45 hover:text-ops-text"
             title="编辑"
           >
             编辑
           </button>
           <button
-            onClick={(event) => onDisconnect(session.id, event)}
-            className="rounded-md border border-ops-alert/35 bg-ops-alert/8 px-2 py-0.5 text-[11px] font-semibold text-ops-alert hover:bg-ops-alert/12"
+            onClick={(event) => {
+              event.stopPropagation()
+              onDisconnect(session.id, event)
+            }}
+            className="rounded border border-ops-alert/35 bg-ops-dark/80 px-1.5 py-0.5 text-[10px] font-semibold text-ops-alert hover:bg-ops-alert/12"
             title="断开"
           >
             断开
           </button>
         </div>
       </div>
+      <span
+        className={`h-2.5 w-2.5 rounded-full border border-ops-panel ${
+          running
+            ? 'bg-ops-accent shadow-[0_0_10px_rgba(40,208,168,0.85)] animate-pulse'
+            : needsAttention
+              ? 'bg-yellow-300 shadow-[0_0_10px_rgba(253,224,71,0.58)]'
+              : 'bg-ops-success shadow-[0_0_9px_rgba(90,214,125,0.7)]'
+        }`}
+        title={statusTitle}
+        aria-label={statusTitle}
+      />
     </div>
   )
 }
