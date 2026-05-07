@@ -22,19 +22,24 @@ export default function SessionItem({
   const attention = sessionAttention(session)
   const needsAttention = attention.type !== 'none'
   const running = isSessionRunning(session)
+  const protocolText = protocolLabel(session.protocol || session.asset_type)
+  const messageCount = session.messages?.length || 0
+  const skillCount = session.skills?.length || 0
+  const assetText = session.asset_type || session.protocol || 'asset'
   return (
     <div
       onClick={onSelect}
-      className={`group grid min-h-[58px] cursor-pointer grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border px-2.5 py-2 text-sm transition-all
+      className={`group relative grid min-h-[76px] cursor-pointer grid-cols-[44px_minmax(0,1fr)] gap-2.5 overflow-hidden rounded-2xl border px-2.5 py-2.5 text-sm transition-all
         ${active
-          ? 'border-ops-accent/55 bg-ops-accent/12 text-ops-accent'
+          ? 'border-ops-accent/60 bg-[linear-gradient(135deg,rgba(40,208,168,0.18),rgba(15,36,56,0.78))] text-ops-accent shadow-[0_16px_34px_rgba(40,208,168,0.12)]'
           : needsAttention
-            ? 'border-yellow-300/25 bg-yellow-300/8 text-ops-text hover:bg-yellow-300/12'
-            : 'border-ops-surface1/45 bg-ops-surface0/35 text-ops-subtext hover:bg-ops-surface0/70 hover:text-ops-text'}`}
+            ? 'border-yellow-300/30 bg-[linear-gradient(135deg,rgba(253,224,71,0.12),rgba(18,32,49,0.72))] text-ops-text hover:border-yellow-300/45'
+            : 'border-ops-surface1/45 bg-[linear-gradient(135deg,rgba(23,35,53,0.64),rgba(9,20,35,0.82))] text-ops-subtext hover:border-ops-accent/30 hover:text-ops-text'}`}
     >
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ops-accent/28 to-transparent" />
       <span
         title={`${session.asset_type}/${session.protocol}`}
-        className="relative grid h-[38px] w-[38px] shrink-0 place-items-center rounded-lg bg-ops-dark/70 px-1 text-center text-[10px] font-bold leading-tight text-ops-text"
+        className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-ops-surface1/65 bg-ops-dark/78 px-1 text-center text-[10px] font-black leading-tight text-ops-text shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
       >
         <span
           className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-ops-panel ${
@@ -45,11 +50,11 @@ export default function SessionItem({
           title={running ? '会话执行中' : '会话已连接'}
           aria-label={running ? '会话执行中' : '会话已连接'}
         />
-        {protocolLabel(session.protocol || session.asset_type)}
+        {protocolText}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-semibold">
+        <div className="flex min-w-0 items-start gap-2">
+          <span className="min-w-0 flex-1 truncate text-sm font-black text-ops-text">
             {session.remark || session.host}
           </span>
           {needsAttention && (
@@ -73,28 +78,44 @@ export default function SessionItem({
             </span>
           )}
         </div>
-        <div className="mt-0.5 truncate font-mono text-[10px] text-ops-overlay">
+        <div className="mt-1 truncate font-mono text-[10px] text-ops-overlay">
           {session.user}@{session.host}
         </div>
-      </div>
-      <div className="flex items-center gap-1">
-        {session.heartbeatEnabled && (
-          <span className="h-2 w-2 shrink-0 rounded-full bg-ops-success animate-pulse" title="巡检已开启" />
-        )}
-        <button
-          onClick={(event) => onEdit(session.id, event)}
-          className="hidden rounded-md px-1.5 py-1 text-xs text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text group-hover:block"
-          title="编辑"
-        >
-          编辑
-        </button>
-        <button
-          onClick={(event) => onDisconnect(session.id, event)}
-          className="hidden rounded-md px-1.5 py-1 text-xs text-ops-alert hover:bg-ops-alert/10 group-hover:block"
-          title="断开"
-        >
-          断开
-        </button>
+        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
+          <span className="rounded-full border border-ops-surface1/60 bg-ops-dark/35 px-2 py-0.5 text-[10px] font-semibold text-ops-overlay">
+            {assetText}
+          </span>
+          <span className="rounded-full border border-ops-surface1/60 bg-ops-dark/35 px-2 py-0.5 text-[10px] font-semibold text-ops-overlay">
+            消息 {messageCount}
+          </span>
+          {skillCount > 0 && (
+            <span className="rounded-full border border-ops-accent/30 bg-ops-accent/10 px-2 py-0.5 text-[10px] font-semibold text-ops-accent">
+              技能 {skillCount}
+            </span>
+          )}
+          {session.heartbeatEnabled && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-ops-success/30 bg-ops-success/10 px-2 py-0.5 text-[10px] font-semibold text-ops-success" title="巡检已开启">
+              <span className="h-1.5 w-1.5 rounded-full bg-ops-success animate-pulse" />
+              巡检
+            </span>
+          )}
+        </div>
+        <div className="mt-2 hidden items-center gap-1 group-hover:flex">
+          <button
+            onClick={(event) => onEdit(session.id, event)}
+            className="rounded-lg border border-ops-surface1/70 bg-ops-dark/45 px-2 py-1 text-[11px] font-semibold text-ops-subtext hover:border-ops-accent/40 hover:text-ops-text"
+            title="编辑"
+          >
+            编辑
+          </button>
+          <button
+            onClick={(event) => onDisconnect(session.id, event)}
+            className="rounded-lg border border-ops-alert/35 bg-ops-alert/8 px-2 py-1 text-[11px] font-semibold text-ops-alert hover:bg-ops-alert/12"
+            title="断开"
+          >
+            断开
+          </button>
+        </div>
       </div>
     </div>
   )
