@@ -1,10 +1,8 @@
 interface ConnectionActionBarProps {
   canSubmitAsset: boolean
   connecting: boolean
-  inspecting: boolean
   testing: boolean
   onConnect: () => void
-  onInspect: () => void
   onSaveOnly: () => void
   onTest: () => void
 }
@@ -12,10 +10,8 @@ interface ConnectionActionBarProps {
 export default function ConnectionActionBar({
   canSubmitAsset,
   connecting,
-  inspecting,
   testing,
   onConnect,
-  onInspect,
   onSaveOnly,
   onTest,
 }: ConnectionActionBarProps) {
@@ -37,13 +33,6 @@ export default function ConnectionActionBar({
           className="rounded-lg bg-ops-surface0 px-4 py-2 text-sm text-ops-subtext transition-colors hover:text-ops-text disabled:opacity-40"
         >
           {testing ? '测试中...' : '测试连接'}
-        </button>
-        <button
-          onClick={onInspect}
-          disabled={inspecting || !canSubmitAsset}
-          className="rounded-lg bg-ops-surface0 px-4 py-2 text-sm text-ops-subtext transition-colors hover:text-ops-text disabled:opacity-40"
-        >
-          {inspecting ? '巡检中...' : '只读巡检'}
         </button>
         <button
           onClick={onConnect}

@@ -29,13 +29,10 @@ export default function ConnectionModal() {
     form,
     handleCategoryChange,
     handleConnect,
-    handleInspect,
     handleSaveOnly,
     handleSubTypeChange,
     handleTest,
     inferredHostFromEndpoint,
-    inspecting,
-    inspectionResult,
     isEndpointBackedAsset,
     isKubernetesAsset,
     normalizedAssetTypeSearch,
@@ -174,16 +171,14 @@ export default function ConnectionModal() {
             onChange={(allowModifications) => setForm({ ...form, allow_modifications: allowModifications })}
           />
 
-          <ConnectionFeedbackPanels testResult={testResult} inspectionResult={inspectionResult} />
+          <ConnectionFeedbackPanels testResult={testResult} />
         </div>
 
         <ConnectionActionBar
           canSubmitAsset={canSubmitAsset}
           connecting={connecting}
-          inspecting={inspecting}
           testing={testing}
           onConnect={handleConnect}
-          onInspect={handleInspect}
           onSaveOnly={handleSaveOnly}
           onTest={handleTest}
         />

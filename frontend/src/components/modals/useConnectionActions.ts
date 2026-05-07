@@ -1,15 +1,13 @@
 import { useState } from 'react'
-import { batchImportAssets, updateAsset, connectSession, getSavedAssets, inspectConnection, testConnection } from '@/api/client'
+import { batchImportAssets, updateAsset, connectSession, getSavedAssets, testConnection } from '@/api/client'
 import { useStore } from '@/store'
 import {
   buildConnectSessionPayload,
-  buildInspectConnectionPayload,
   buildSavedAssetPayload,
   buildTestConnectionPayload,
 } from './connectionActionPayloads'
 import { connectionFeedbackFromError, type ConnectionFeedback } from './connectionModalHelpers'
 import { resolveConnectionTarget, type ConnectionFormState } from './connectionModalState'
-import type { ConnectionInspectionResult } from './ConnectionFeedbackPanels'
 
 interface UseConnectionActionsArgs {
   currentProtocol: string
@@ -32,10 +30,8 @@ export function useConnectionActions({
   const setAssets = useStore((state) => state.setAssets)
   const setView = useStore((state) => state.setView)
   const [testing, setTesting] = useState(false)
-  const [inspecting, setInspecting] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [testResult, setTestResult] = useState<ConnectionFeedback | null>(null)
-  const [inspectionResult, setInspectionResult] = useState<ConnectionInspectionResult | null>(null)
 
   const resolveRequestTarget = () => {
     const isGlobal = form.target_scope === 'global'
@@ -69,7 +65,6 @@ export function useConnectionActions({
     }
     setTesting(true)
     setTestResult(null)
-    setInspectionResult(null)
     try {
       const res = await testConnection(buildTestConnectionPayload(payloadArgsFor(target)))
       setTestResult({
@@ -81,36 +76,6 @@ export function useConnectionActions({
       setTestResult(connectionFeedbackFromError(error, '测试失败'))
     } finally {
       setTesting(false)
-    }
-  }
-
-  const handleInspect = async () => {
-    const { host, target } = resolveRequestTarget()
-
-    if (!host) {
-      addToast(missingHostMessage, 'error')
-      return
-    }
-    setInspecting(true)
-    setTestResult(null)
-    setInspectionResult(null)
-    try {
-      const res = await inspectConnection(buildInspectConnectionPayload(payloadArgsFor(target)))
-      const inspection = res.data.inspection
-      setInspectionResult({
-        ok: res.status === 'success' && inspection.status !== 'error',
-        summary: inspection.summary || inspection.message || res.message,
-        checks: inspection.checks || [],
-      })
-    } catch (error: unknown) {
-      const feedback = connectionFeedbackFromError(error, '巡检失败')
-      setInspectionResult({
-        ok: false,
-        summary: `${feedback.title}：${feedback.msg}`,
-        checks: [],
-      })
-    } finally {
-      setInspecting(false)
     }
   }
 
@@ -194,11 +159,8 @@ export function useConnectionActions({
   return {
     connecting,
     handleConnect,
-    handleInspect,
     handleSaveOnly,
     handleTest,
-    inspecting,
-    inspectionResult,
     testing,
     testResult,
   }

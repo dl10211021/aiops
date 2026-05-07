@@ -52,8 +52,10 @@ export default function ConnectionDatabaseDriverStatus({
               {' · '}
               验证语句：{driver.operation_profile.test_statement}
             </div>
-            <div>只读示例：{driver.operation_profile.readonly_examples.slice(0, 2).join('；')}</div>
             <div>{driver.operation_profile.operator_note}</div>
+            <div className="rounded border border-ops-accent/20 bg-ops-accent/5 px-2 py-1 text-ops-text">
+              巡检入口：连接并打开会话后，在快捷指令里选择 /db-inspect、/db-slow、/db-baseline 或 /db-index。
+            </div>
           </>
         )}
         {isOracle && (
