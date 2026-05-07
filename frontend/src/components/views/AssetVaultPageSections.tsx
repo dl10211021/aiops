@@ -162,6 +162,7 @@ export function AssetTablePanel({
   bulkDeleting,
   bulkVerifying,
   connectingGroup,
+  connectingSelected,
   displayForAsset,
   hasActiveFilters,
   matrixByAssetId,
@@ -173,6 +174,7 @@ export function AssetTablePanel({
   onClearFilters,
   onConnect,
   onConnectGroup,
+  onConnectSelected,
   onCreateGroup,
   onDeleteGroup,
   onEdit,
@@ -187,6 +189,7 @@ export function AssetTablePanel({
   bulkDeleting: boolean
   bulkVerifying: boolean
   connectingGroup: string | null
+  connectingSelected: boolean
   displayForAsset: (asset: Asset) => AssetDisplayMeta
   hasActiveFilters: boolean
   matrixByAssetId: Map<number, AssetVerificationMatrix>
@@ -198,6 +201,7 @@ export function AssetTablePanel({
   onClearFilters: () => void
   onConnect: (asset: Asset) => void
   onConnectGroup: (assets: Asset[], groupName: string) => void
+  onConnectSelected: (assets: Asset[]) => void
   onCreateGroup: (groupName: string) => void
   onDeleteGroup: (groupName: string) => void
   onEdit: (asset: Asset) => void
@@ -567,14 +571,21 @@ export function AssetTablePanel({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => onBulkVerify(selectedAssets)}
-              disabled={bulkVerifying || bulkDeleting}
+              disabled={bulkVerifying || bulkDeleting || connectingSelected}
               className="rounded-lg bg-ops-accent px-3 py-1.5 font-semibold text-ops-dark transition-colors hover:bg-ops-accent/80 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {bulkVerifying ? '验证中...' : '批量验证'}
             </button>
             <button
+              onClick={() => onConnectSelected(selectedAssets)}
+              disabled={connectingSelected || bulkVerifying || bulkDeleting}
+              className="rounded-lg border border-ops-accent/35 bg-ops-accent/10 px-3 py-1.5 font-semibold text-ops-accent transition-colors hover:bg-ops-accent/18 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {connectingSelected ? '拉起中...' : '批量会话'}
+            </button>
+            <button
               onClick={() => onBulkDelete(selectedAssets)}
-              disabled={bulkDeleting || bulkVerifying}
+              disabled={bulkDeleting || bulkVerifying || connectingSelected}
               className="rounded-lg border border-rose-400/35 bg-rose-400/10 px-3 py-1.5 font-semibold text-rose-200 transition-colors hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {bulkDeleting ? '删除中...' : '批量删除'}

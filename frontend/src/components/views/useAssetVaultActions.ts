@@ -74,6 +74,7 @@ export function useAssetVaultActions({
   const [bulkVerifyingAssets, setBulkVerifyingAssets] = useState(false)
   const [bulkDeletingAssets, setBulkDeletingAssets] = useState(false)
   const [connectingAssetGroup, setConnectingAssetGroup] = useState<string | null>(null)
+  const [connectingSelectedAssets, setConnectingSelectedAssets] = useState(false)
   const [mutatingAssetGroup, setMutatingAssetGroup] = useState<string | null>(null)
 
   const openCreateAsset = () => {
@@ -255,6 +256,69 @@ export function useAssetVaultActions({
     }
   }
 
+  const handleConnectSelectedAssets = async (selectedAssets: Asset[]) => {
+    if (!selectedAssets.length) {
+      addToast('请先选择要拉起会话的资产', 'error')
+      return
+    }
+    setConnectingSelectedAssets(true)
+    let successCount = 0
+    let failedCount = 0
+    try {
+      for (const asset of selectedAssets) {
+        const tags = asset.tags?.length ? asset.tags : ['未分组']
+        const primaryGroup = normalizeSessionGroupName(tags[0])
+        if (primaryGroup) createSessionGroup(primaryGroup)
+        try {
+          const res = await connectSession(withManagedSecret({
+            host: asset.host,
+            port: asset.port,
+            username: asset.username,
+            allow_modifications: false,
+            active_skills: asset.skills || [],
+            agent_profile: asset.agent_profile || 'default',
+            remark: asset.remark || asset.host,
+            asset_type: asset.asset_type,
+            protocol: asset.protocol,
+            extra_args: asset.extra_args || {},
+            tags,
+            target_scope: 'asset',
+            scope_value: asset.host,
+          } as Parameters<typeof connectSession>[0]))
+          addSession({
+            id: res.data.session_id,
+            host: asset.host,
+            remark: asset.remark || asset.host,
+            isReadWriteMode: false,
+            skills: asset.skills || [],
+            agentProfile: asset.agent_profile || 'default',
+            user: asset.username || '',
+            asset_type: asset.asset_type,
+            protocol: asset.protocol || asset.asset_type,
+            extra_args: asset.extra_args || {},
+            heartbeatEnabled: false,
+            tags,
+            target_scope: 'asset',
+            scope_value: asset.host,
+            messages: [],
+            isStreaming: false,
+            historyLoaded: false,
+          }, successCount === 0)
+          successCount += 1
+        } catch {
+          failedCount += 1
+        }
+      }
+      if (successCount > 0) setView('chat')
+      addToast(
+        `批量会话完成：成功 ${successCount} 条，失败 ${failedCount} 条`,
+        failedCount > 0 ? 'error' : 'success'
+      )
+    } finally {
+      setConnectingSelectedAssets(false)
+    }
+  }
+
   const handleCreateAssetGroup = (groupName: string) => {
     const normalized = normalizeSessionGroupName(groupName)
     if (!normalized) {
@@ -405,12 +469,14 @@ export function useAssetVaultActions({
     bulkDeletingAssets,
     bulkVerifyingAssets,
     connectingAssetGroup,
+    connectingSelectedAssets,
     mutatingAssetGroup,
     deleteTarget,
     deletingAsset,
     handleBatchImportConfirmed,
     handleBulkDeleteAssets,
     handleBulkVerifyAssets,
+    handleConnectSelectedAssets,
     handleAssignAssetsToGroup,
     handleConnect,
     handleConnectAssetGroup,

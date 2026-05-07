@@ -80,6 +80,7 @@ export default function AssetVault() {
     bulkDeletingAssets,
     bulkVerifyingAssets,
     connectingAssetGroup,
+    connectingSelectedAssets,
     mutatingAssetGroup,
     deleteTarget,
     deletingAsset,
@@ -89,6 +90,7 @@ export default function AssetVault() {
     handleBulkVerifyAssets,
     handleConnect,
     handleConnectAssetGroup,
+    handleConnectSelectedAssets,
     handleCreateAssetGroup,
     handleDeleteAssetGroup,
     handleEditAsset,
@@ -166,6 +168,7 @@ export default function AssetVault() {
           bulkDeleting={bulkDeletingAssets}
           bulkVerifying={bulkVerifyingAssets}
           connectingGroup={connectingAssetGroup}
+          connectingSelected={connectingSelectedAssets}
           mutatingGroup={mutatingAssetGroup}
           sessionGroups={sessionGroups}
           onClearFilters={clearFilters}
@@ -174,6 +177,7 @@ export default function AssetVault() {
           onBulkVerify={(selectedAssets) => void handleBulkVerifyAssets(selectedAssets)}
           onConnect={handleConnect}
           onConnectGroup={(groupAssets, groupName) => void handleConnectAssetGroup(groupAssets, groupName)}
+          onConnectSelected={(selectedAssets) => void handleConnectSelectedAssets(selectedAssets)}
           onCreateGroup={handleCreateAssetGroup}
           onDeleteGroup={(groupName) => void handleDeleteAssetGroup(groupName)}
           onEdit={handleEditAsset}
