@@ -51,24 +51,39 @@ export function AssetVaultFilterPanel({
   onConnectorChange: (value: string) => void
 }) {
   return (
-    <details open className="mb-3 rounded-xl border border-ops-surface1/70 bg-ops-panel">
+    <details className="mb-3 rounded-xl border border-ops-surface1/70 bg-ops-panel">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
         <div>
-          <div className="text-xs font-semibold text-ops-text">筛选</div>
-          <div className="text-[11px] text-ops-overlay">按分类、类型、主接入快速定位资产。</div>
+          <div className="text-xs font-semibold text-ops-text">高级筛选</div>
+          <div className="text-[11px] text-ops-overlay">
+            {hasActiveFilters
+              ? '已启用筛选条件，展开可调整分类、类型和主接入。'
+              : '按分类、类型、主接入定位资产；默认收起，优先展示资产列表。'}
+          </div>
         </div>
-        {hasActiveFilters && (
-          <button
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              onClearFilters()
-            }}
-            className="rounded-lg bg-ops-surface0 px-2.5 py-1 text-xs text-ops-subtext hover:text-ops-text"
+        <div className="flex shrink-0 items-center gap-2">
+          <span
+            className={`rounded-full border px-2.5 py-1 text-[11px] ${
+              hasActiveFilters
+                ? 'border-ops-accent/40 bg-ops-accent/10 text-ops-accent'
+                : 'border-ops-surface1 bg-ops-dark/40 text-ops-overlay'
+            }`}
           >
-            清空过滤
-          </button>
-        )}
+            {hasActiveFilters ? '筛选中' : '展开筛选'}
+          </span>
+          {hasActiveFilters && (
+            <button
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                onClearFilters()
+              }}
+              className="rounded-lg bg-ops-surface0 px-2.5 py-1 text-xs text-ops-subtext hover:text-ops-text"
+            >
+              清空
+            </button>
+          )}
+        </div>
       </summary>
       <div className="border-t border-ops-surface1/70 px-4 py-3">
         <CategoryFilterRow
