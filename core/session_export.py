@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from core.tool_display import tool_label
+
 
 def chat_history_messages(messages: list[dict]) -> list[dict]:
     return [msg for msg in messages if msg.get("role") in ("user", "assistant")]
@@ -30,10 +32,12 @@ def format_exec_trace_lines(exec_trace: list[dict]) -> list[str]:
         if not isinstance(item, dict):
             continue
         tool = item.get("tool") or "unknown"
+        label = tool_label(str(tool))
+        tool_text = f"{label} (`{tool}`)" if label != tool else f"`{tool}`"
         status = item.get("status") or "done"
         args = str(item.get("args") or "").strip()
         result = str(item.get("result") or "").strip()
-        lines.append(f"- Step {index}: `{tool}` [{status}]")
+        lines.append(f"- Step {index}: {tool_text} [{status}]")
         if args:
             lines.append(f"  - Execute: {args}")
         if result:

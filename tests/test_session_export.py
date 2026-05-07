@@ -44,3 +44,29 @@ class TestSessionExport(unittest.TestCase):
         )
 
         self.assertEqual([item["role"] for item in messages], ["user", "assistant"])
+
+    def test_format_session_history_markdown_localizes_exec_trace_tool_names(self):
+        markdown = format_session_history_markdown(
+            [
+                {
+                    "role": "assistant",
+                    "content": "巡检完成",
+                    "exec_trace": [
+                        {
+                            "tool": "local_execute_script",
+                            "status": "success",
+                            "args": "uptime",
+                            "result": "load average: 0.01",
+                        }
+                    ],
+                }
+            ],
+            "linux-01",
+        )
+
+        self.assertIn(
+            "- Step 1: 本地技能脚本 (`local_execute_script`) [success]",
+            markdown,
+        )
+        self.assertIn("  - Execute: uptime", markdown)
+        self.assertIn("  - Result: load average: 0.01", markdown)
