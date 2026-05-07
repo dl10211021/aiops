@@ -66,8 +66,26 @@ export function ProfileRelationsSection({ items }: { items: AssetProfileRelation
         <span className="text-xs font-semibold text-ops-overlay">互联信息</span>
       </div>
       {items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-ops-surface1/70 bg-ops-panel/30 px-3 py-3 text-xs leading-5 text-ops-subtext">
-          暂无可确认互联关系。重新生成画像后，AI 会从监听端口、连接状态、访问日志、进程、数据库连接和会话证据里提取。
+        <div className="space-y-3">
+          <div className="relative overflow-hidden rounded-2xl border border-ops-accent/25 bg-[radial-gradient(circle_at_50%_10%,rgba(45,212,191,0.16),rgba(15,23,42,0.2)_40%,rgba(2,6,23,0.75)_100%)] p-3 shadow-[0_0_32px_rgba(45,212,191,0.08)]">
+            <div className="pointer-events-none absolute inset-0 opacity-35">
+              <div className="absolute left-0 right-0 top-1/2 h-px bg-gradient-to-r from-transparent via-ops-accent/60 to-transparent" />
+              <div className="absolute bottom-0 left-1/2 top-0 w-px bg-gradient-to-b from-transparent via-ops-accent/25 to-transparent" />
+            </div>
+            <div className="relative flex items-center justify-between gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-ops-overlay">
+              <span>Inbound</span>
+              <span>等待画像提取</span>
+              <span>Outbound</span>
+            </div>
+            <div className="relative mt-3 grid min-h-[220px] grid-cols-[1fr_96px_1fr] items-center gap-2">
+              <RelationNodeColumn title="哪些业务连接它" empty="等待入站证据" items={[]} side="left" />
+              <AssetHub inboundCount={0} outboundCount={0} />
+              <RelationNodeColumn title="它去连接别人" empty="等待出站证据" items={[]} side="right" />
+            </div>
+          </div>
+          <div className="rounded-xl border border-dashed border-ops-surface1/70 bg-ops-panel/30 px-3 py-3 text-xs leading-5 text-ops-subtext">
+            暂无可确认互联关系。重新生成画像后，AI 会从监听端口、连接状态、访问日志、进程、数据库连接和会话证据里提取。
+          </div>
         </div>
       ) : (
         <div className="space-y-3">

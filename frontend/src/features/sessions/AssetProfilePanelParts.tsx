@@ -78,6 +78,12 @@ export function ProfileSummaryButton({
         </span>
       </button>
 
+      {profile && (
+        <div className="mt-3">
+          <ProfileRelationsSection items={profile.relations || []} />
+        </div>
+      )}
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {profile && (
           <button
@@ -103,7 +109,6 @@ export function ProfileDetails({
   return (
     <div className="grid gap-3 border-t border-ops-surface0/80 bg-ops-dark/18 px-4 py-4">
       <ProfileIdentitySection profile={profile} session={session} />
-      <ProfileRelationsSection items={profile.relations || []} />
       <ProfileEvidenceSection items={profile.evidence.slice(0, 4)} />
       <ProfileFocusSection items={profile.focus_areas.slice(0, 4)} />
     </div>
