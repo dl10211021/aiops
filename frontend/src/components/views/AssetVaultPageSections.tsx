@@ -290,6 +290,8 @@ export function AssetTablePanel({
   const allGroupsCollapsed = groupBy !== 'none'
     && groupedVisibleAssets.length > 0
     && groupedVisibleAssets.every((group) => collapsedGroups.has(group.id))
+  const panelSelectedCount = panelAssets.reduce((count, asset) => count + (selectedIds.has(asset.id) ? 1 : 0), 0)
+  const allPanelSelected = panelAssets.length > 0 && panelSelectedCount === panelAssets.length
 
   useEffect(() => {
     setPage(1)
@@ -341,6 +343,20 @@ export function AssetTablePanel({
       } else {
         visibleIds.forEach((id) => next.add(id))
       }
+      return next
+    })
+  }
+  const selectPanelAssets = () => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      panelAssets.forEach((asset) => next.add(asset.id))
+      return next
+    })
+  }
+  const clearPanelSelection = () => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      panelAssets.forEach((asset) => next.delete(asset.id))
       return next
     })
   }
@@ -510,6 +526,20 @@ export function AssetTablePanel({
           >
             导出结果
           </button>
+          <button
+            onClick={selectPanelAssets}
+            disabled={panelAssets.length === 0 || allPanelSelected}
+            className="h-8 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            选择结果
+          </button>
+          <button
+            onClick={clearPanelSelection}
+            disabled={panelSelectedCount === 0}
+            className="h-8 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            取消结果
+          </button>
         </div>
       </div>
       {assetGroupSummaries.length > 0 && (
@@ -578,6 +608,9 @@ export function AssetTablePanel({
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-lg bg-ops-accent/15 px-2.5 py-1 font-semibold text-ops-accent">
               已选择 {selectedIds.size} 条资产
+            </span>
+            <span className="rounded-lg border border-ops-surface1 bg-ops-panel px-2.5 py-1 text-ops-overlay">
+              当前结果 {panelSelectedCount}/{panelAssets.length}
             </span>
             <span className="text-ops-overlay">批量动作只针对已选择资产执行，避免误操作整库。</span>
           </div>
