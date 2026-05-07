@@ -106,6 +106,7 @@ export function ProfileRelationsSection({
               <span>{total} 条关系</span>
               <span>Outbound</span>
             </div>
+            <RelationStats inbound={inbound.length} outbound={outbound.length} unknown={unknown.length} />
             <div className="relative mt-3 grid min-h-[240px] grid-cols-[1fr_96px_1fr] items-center gap-2">
               <RelationNodeColumn
                 title="哪些业务连接它"
@@ -134,6 +135,7 @@ export function ProfileRelationsSection({
               </div>
             )}
           </div>
+          <RelationGroupedList inbound={inbound} outbound={outbound} unknown={unknown} />
           <RelationEvidenceStrip items={items} />
           <RelationStrategyGrid items={strategies} compact />
         </div>
@@ -153,7 +155,7 @@ function RelationNodeColumn({
   items: AssetProfileRelation[]
   side: 'left' | 'right'
 }) {
-  const visibleItems = items.slice(0, 4)
+  const visibleItems = items.slice(0, 2)
   const alignClass = side === 'left' ? 'items-end text-right' : 'items-start text-left'
   const flowClass = side === 'left' ? 'right-[-18px] bg-gradient-to-r' : 'left-[-18px] bg-gradient-to-l'
   return (
@@ -172,6 +174,33 @@ function RelationNodeColumn({
         </div>
       )}
     </section>
+  )
+}
+
+function RelationStats({
+  inbound,
+  outbound,
+  unknown,
+}: {
+  inbound: number
+  outbound: number
+  unknown: number
+}) {
+  return (
+    <div className="relative mt-3 grid grid-cols-3 gap-2">
+      <RelationStat label="入站" value={inbound} tone="text-ops-accent" />
+      <RelationStat label="出站" value={outbound} tone="text-sky-200" />
+      <RelationStat label="待确认" value={unknown} tone="text-amber-200" />
+    </div>
+  )
+}
+
+function RelationStat({ label, value, tone }: { label: string; value: number; tone: string }) {
+  return (
+    <div className="rounded-xl border border-ops-surface0/70 bg-ops-dark/36 px-2.5 py-2">
+      <div className="text-[10px] text-ops-overlay">{label}</div>
+      <div className={`mt-0.5 text-lg font-black ${tone}`}>{value}</div>
+    </div>
   )
 }
 
@@ -217,6 +246,54 @@ function AssetHub({ inboundCount, outboundCount }: { inboundCount: number; outbo
         <span className="text-[10px] text-ops-overlay">连接</span>
       </div>
     </div>
+  )
+}
+
+function RelationGroupedList({
+  inbound,
+  outbound,
+  unknown,
+}: {
+  inbound: AssetProfileRelation[]
+  outbound: AssetProfileRelation[]
+  unknown: AssetProfileRelation[]
+}) {
+  return (
+    <div className="grid gap-2">
+      <RelationCompactGroup title="哪些业务连接它" items={inbound} />
+      <RelationCompactGroup title="它去连接别人" items={outbound} />
+      {unknown.length > 0 && <RelationCompactGroup title="方向待确认" items={unknown} />}
+    </div>
+  )
+}
+
+function RelationCompactGroup({ title, items }: { title: string; items: AssetProfileRelation[] }) {
+  if (!items.length) return null
+  return (
+    <section className="rounded-2xl border border-ops-surface0/85 bg-ops-panel/32 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-black text-ops-text">{title}</span>
+        <span className="rounded-full border border-ops-surface1/60 bg-ops-dark/36 px-2 py-0.5 text-[10px] text-ops-overlay">{items.length} 条</span>
+      </div>
+      <div className="mt-2 max-h-[220px] space-y-1.5 overflow-y-auto pr-1">
+        {items.map((item, index) => (
+          <div key={`${title}-${item.peer}-${index}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-xl border border-ops-surface0 bg-ops-dark/32 px-3 py-2">
+            <div className="min-w-0">
+              <div className="truncate text-xs font-black text-ops-text">{item.peer}</div>
+              <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-ops-overlay">
+                {item.peer_role && <span className="rounded-full border border-ops-surface1/55 px-2 py-0.5">{item.peer_role}</span>}
+                {item.endpoint && <span className="rounded-full border border-ops-surface1/55 px-2 py-0.5 font-mono">{item.endpoint}</span>}
+                {item.protocol && <span className="rounded-full border border-ops-accent/25 bg-ops-accent/8 px-2 py-0.5 text-ops-accent">{item.protocol}</span>}
+              </div>
+              {item.evidence && <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-ops-subtext">{item.evidence}</div>}
+            </div>
+            {typeof item.confidence === 'number' && (
+              <span className="h-fit rounded-full border border-ops-accent/25 bg-ops-accent/8 px-2 py-0.5 text-[10px] font-semibold text-ops-accent">{item.confidence}%</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 

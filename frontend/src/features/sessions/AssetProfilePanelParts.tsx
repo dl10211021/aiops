@@ -46,12 +46,7 @@ export function ProfileSummaryButton({
         </button>
       </div>
 
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={!profile}
-        className="mt-4 block w-full min-w-0 overflow-hidden rounded-[18px] border border-ops-accent/22 bg-[radial-gradient(circle_at_18%_0%,rgba(40,208,168,0.16),transparent_13rem),linear-gradient(135deg,rgba(16,37,58,0.9),rgba(7,17,31,0.78))] px-4 py-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] disabled:cursor-default"
-      >
+      <div className="mt-4 block w-full min-w-0 overflow-hidden rounded-[18px] border border-ops-accent/22 bg-[radial-gradient(circle_at_18%_0%,rgba(40,208,168,0.16),transparent_13rem),linear-gradient(135deg,rgba(16,37,58,0.9),rgba(7,17,31,0.78))] px-4 py-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
         <span className="block text-[11px] font-black uppercase tracking-[0.18em] text-ops-overlay">
           {session ? `${session.protocol || session.asset_type || 'session'} · ${session.host || 'unknown'}` : 'No session'}
         </span>
@@ -67,7 +62,7 @@ export function ProfileSummaryButton({
                 置信度 {profile.confidence}%
               </span>
               <span className="ml-auto rounded-full border border-ops-surface1/70 bg-ops-panel/45 px-2.5 py-1 text-xs font-semibold text-ops-overlay">
-                {open ? '点击收起' : '点击展开'}
+                画像已生成
               </span>
             </>
           ) : (
@@ -76,7 +71,7 @@ export function ProfileSummaryButton({
             </span>
           )}
         </span>
-      </button>
+      </div>
 
       {profile && (
         <div className="mt-3">
@@ -91,7 +86,7 @@ export function ProfileSummaryButton({
             onClick={onToggle}
             className="ml-auto rounded-xl border border-ops-surface1/75 bg-ops-dark/35 px-3 py-2 text-sm font-semibold text-ops-subtext hover:border-ops-accent/40 hover:text-ops-text"
           >
-            {open ? '收起详情' : '展开详情'}
+            {open ? '收起详情' : '查看详情'}
           </button>
         )}
       </div>
