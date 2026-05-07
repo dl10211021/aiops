@@ -516,6 +516,14 @@ EXCLUDED_HERTZBEAT_ASSET_IDS = {
     "a_example",
 }
 
+NETWORK_CLI_VENDOR_ASSET_IDS = {
+    "cisco_switch",
+    "h3c_switch",
+    "hpe_switch",
+    "huawei_switch",
+    "tplink_switch",
+}
+
 
 def _merge_asset_catalog(*catalogs: list[dict]) -> list[dict]:
     merged: list[dict] = []
@@ -680,6 +688,11 @@ def _apply_protocol_overrides(catalog: list[dict]) -> list[dict]:
         category_override = ASSET_CATEGORY_OVERRIDES.get(entry.get("id"))
         if category_override:
             entry["category"] = category_override
+        if entry.get("id") in NETWORK_CLI_VENDOR_ASSET_IDS:
+            entry["category"] = "network"
+            entry["protocol"] = "ssh"
+            entry["default_port"] = 22
+            entry["inspection_profile"] = "network_cli"
         override = ASSET_PROTOCOL_OVERRIDES.get(entry.get("id"))
         if override:
             entry["protocol"] = override

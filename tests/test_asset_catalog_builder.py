@@ -76,8 +76,19 @@ class AssetCatalogBuilderTests(unittest.TestCase):
         self.assertEqual(catalog["switch"]["protocol"], "ssh")
         self.assertEqual(catalog["switch"]["capability"]["connector"], "ssh_network_cli")
         self.assertIn("enable_pass", fields("switch"))
-        self.assertEqual(catalog["tplink_switch"]["protocol"], "snmp")
-        self.assertEqual(catalog["tplink_switch"]["default_port"], 161)
+        for asset_id in ("h3c_switch", "huawei_switch", "cisco_switch", "tplink_switch"):
+            with self.subTest(asset_id=asset_id):
+                self.assertEqual(catalog[asset_id]["category"], "network")
+                self.assertEqual(catalog[asset_id]["protocol"], "ssh")
+                self.assertEqual(catalog[asset_id]["default_port"], 22)
+                self.assertEqual(catalog[asset_id]["inspection_profile"], "network_cli")
+                self.assertEqual(catalog[asset_id]["capability"]["connector"], "ssh_network_cli")
+                self.assertIn("enable_pass", fields(asset_id))
+                access_protocols = catalog[asset_id]["access_protocols"]
+                ssh_access = [item for item in access_protocols if item["protocol"] == "ssh"]
+                snmp_access = [item for item in access_protocols if item["protocol"] == "snmp"]
+                self.assertTrue(ssh_access and ssh_access[0]["is_default"])
+                self.assertTrue(snmp_access and snmp_access[0]["purpose"] == "monitoring")
 
     def test_protocol_alias_assets_are_normalized_but_preserved_in_catalog(self):
         catalog = {item["id"]: item for item in asset_protocols.get_asset_catalog()}

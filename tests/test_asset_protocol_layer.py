@@ -207,7 +207,8 @@ class TestAssetProtocolLayer(unittest.TestCase):
 
         self.assertGreaterEqual(len([item for item in catalog if item.get("source") == "hertzbeat"]), 100)
         self.assertEqual(by_id["huawei_switch"]["category"], "network")
-        self.assertEqual(by_id["huawei_switch"]["protocol"], "snmp")
+        self.assertEqual(by_id["huawei_switch"]["protocol"], "ssh")
+        self.assertEqual(by_id["huawei_switch"]["default_port"], 22)
         huawei_params = {param["field"]: param for param in by_id["huawei_switch"].get("params", [])}
         self.assertNotIn("snmpVersion", huawei_params)
         self.assertNotIn("community", huawei_params)
@@ -248,17 +249,21 @@ class TestAssetProtocolLayer(unittest.TestCase):
         self.assertEqual(by_id["synology_nas"]["protocol"], "snmp")
         self.assertEqual(by_id["synology_nas"]["capability"]["family"], "storage")
         self.assertEqual(by_id["synology_nas"]["capability"]["connector"], "snmp")
-        self.assertEqual(by_id["huawei_switch"]["capability"]["connector"], "snmp")
-        self.assertEqual(by_id["huawei_switch"]["capability"]["connector_group"]["label"], "SNMP")
+        self.assertEqual(by_id["huawei_switch"]["capability"]["connector"], "ssh_network_cli")
         self.assertEqual(by_id["huawei_switch"]["category_meta"]["label"], "网络设备")
-        self.assertEqual(by_id["huawei_switch"]["capability"]["tools"], ["snmp_get"])
-        self.assertEqual(by_id["huawei_switch"]["params"][0]["field"], "snmp_version")
-        self.assertEqual(by_id["huawei_switch"]["params"][0]["defaultValue"], "v2c")
+        self.assertEqual(by_id["huawei_switch"]["capability"]["tools"], ["network_cli_execute_command"])
+        self.assertEqual(by_id["huawei_switch"]["params"][0]["field"], "enable_pass")
         huawei_param_map = {param["field"]: param for param in by_id["huawei_switch"].get("params", [])}
-        self.assertEqual(huawei_param_map["community_string"]["type"], "password")
-        self.assertEqual(huawei_param_map["v3_auth_pass"]["type"], "password")
-        self.assertEqual(huawei_param_map["v3_priv_pass"]["type"], "password")
-        self.assertIn("oid_profile", {param["field"] for param in by_id["huawei_switch"].get("params", [])})
+        self.assertEqual(huawei_param_map["enable_pass"]["type"], "password")
+        huawei_access_protocols = by_id["huawei_switch"].get("access_protocols", [])
+        self.assertIn("snmp", {item["protocol"] for item in huawei_access_protocols})
+        self.assertTrue(
+            [
+                item
+                for item in huawei_access_protocols
+                if item["protocol"] == "snmp" and item["purpose"] == "monitoring"
+            ]
+        )
 
         # Existing OpsCore definitions keep their native protocol mappings.
         self.assertEqual(by_id["oracle"]["protocol"], "oracle")

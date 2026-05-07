@@ -279,6 +279,19 @@ def build_access_protocols(item: dict[str, Any]) -> list[dict[str, Any]]:
             description="网络设备主推荐方式，适合执行 show/display 等只读或经审批操作。",
         ))
 
+    hertzbeat_protocols = {str(protocol).strip().lower() for protocol in item.get("hertzbeat_protocols", [])}
+    if category == "network" and "snmp" in hertzbeat_protocols:
+        _add(entries, _entry(
+            "snmp",
+            purpose=MONITORING_PURPOSE,
+            role="alternate",
+            source="HertzBeat 监控目录",
+            default_protocol=default_protocol,
+            default_port=161,
+            security="read_only",
+            description="保留 SNMP 作为只读指标/OID 采集，不作为 AI 运维主接入协议。",
+        ))
+
     if asset_id in NETWORK_API_ASSET_TYPES or (category == "network" and default_protocol == "http_api"):
         _add(entries, _entry(
             "http_api",
