@@ -32,7 +32,7 @@ export default function ChatComposerInput({
   onStop,
 }: ChatComposerInputProps) {
   return (
-    <div className="flex items-end gap-2 rounded-[18px] border border-ops-surface1/70 bg-ops-dark/35 p-2">
+    <div className="flex items-end gap-2 rounded-xl border border-ops-surface1/70 bg-ops-dark/35 p-1.5">
       <button
         type="button"
         onClick={() => {
@@ -40,7 +40,7 @@ export default function ChatComposerInput({
           fileInputRef.current?.click()
         }}
         disabled={uploadingAttachment || isStreaming}
-        className="h-[50px] shrink-0 rounded-xl border border-ops-surface1/80 bg-ops-panel/80 px-3 text-sm font-semibold text-ops-subtext transition-colors hover:border-ops-accent/70 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-12 shrink-0 rounded-lg border border-ops-surface1/80 bg-ops-panel/80 px-3 text-sm font-semibold text-ops-subtext transition-colors hover:border-ops-accent/70 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-50"
         title="上传附件"
       >
         {uploadingAttachment ? '解析中' : '附件'}
@@ -57,14 +57,14 @@ export default function ChatComposerInput({
         onPaste={onPaste}
         placeholder="输入消息，Enter 发送，Shift+Enter 换行"
         rows={1}
-        className="min-h-[90px] flex-1 resize-y rounded-[14px] border border-ops-surface1/80 bg-ops-panel/82 px-4 py-3 text-sm leading-6 text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent focus:shadow-[0_0_0_3px_rgba(40,208,168,0.08)]"
-        style={{ height: '90px', maxHeight: '240px', overflowY: 'auto' }}
+        className="min-h-12 flex-1 resize-y rounded-lg border border-ops-surface1/80 bg-ops-panel/82 px-3 py-3 text-sm leading-6 text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent focus:shadow-[0_0_0_3px_rgba(40,208,168,0.08)]"
+        style={{ height: '48px', maxHeight: '160px', overflowY: 'auto' }}
       />
 
       {isStreaming ? (
         <button
           onClick={onStop}
-          className="h-[50px] shrink-0 rounded-xl bg-ops-alert px-5 text-sm font-black text-white transition-colors hover:bg-ops-alert/80"
+          className="h-12 shrink-0 rounded-lg bg-ops-alert px-5 text-sm font-black text-white transition-colors hover:bg-ops-alert/80"
         >
           停止
         </button>
@@ -72,7 +72,7 @@ export default function ChatComposerInput({
         <button
           onClick={onSend}
           disabled={!hasSendableContent}
-          className="h-[50px] shrink-0 rounded-xl bg-ops-accent px-5 text-sm font-black text-ops-dark shadow-[0_12px_34px_rgba(40,208,168,0.18)] transition-colors hover:bg-ops-accent/80 disabled:cursor-not-allowed disabled:opacity-40"
+          className="h-12 shrink-0 rounded-lg bg-ops-accent px-5 text-sm font-black text-ops-dark shadow-[0_12px_34px_rgba(40,208,168,0.18)] transition-colors hover:bg-ops-accent/80 disabled:cursor-not-allowed disabled:opacity-40"
         >
           发送
         </button>

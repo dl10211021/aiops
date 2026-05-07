@@ -29,7 +29,7 @@ export default function SessionItem({
   return (
     <div
       onClick={onSelect}
-      className={`group relative grid min-h-[102px] cursor-pointer grid-cols-[44px_minmax(0,1fr)] gap-2.5 overflow-hidden rounded-2xl border px-2.5 py-2.5 text-sm transition-colors duration-150
+      className={`group relative grid min-h-[72px] cursor-pointer grid-cols-[44px_minmax(0,1fr)] gap-2.5 overflow-hidden rounded-xl border px-2.5 py-2.5 text-sm transition-colors duration-150
         ${active
           ? 'border-ops-accent/60 bg-[linear-gradient(135deg,rgba(40,208,168,0.16),rgba(15,36,56,0.76))] text-ops-accent shadow-[inset_0_0_0_1px_rgba(40,208,168,0.08)]'
           : needsAttention
@@ -100,7 +100,7 @@ export default function SessionItem({
             </span>
           )}
         </div>
-        <div className="mt-2 flex min-h-[26px] items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+        <div className="absolute bottom-2 right-2 hidden items-center gap-1 group-hover:flex">
           <button
             onClick={(event) => onEdit(session.id, event)}
             className="rounded-lg border border-ops-surface1/70 bg-ops-dark/45 px-2 py-1 text-[11px] font-semibold text-ops-subtext hover:border-ops-accent/40 hover:text-ops-text"

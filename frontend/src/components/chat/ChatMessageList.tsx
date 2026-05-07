@@ -76,7 +76,7 @@ export default function ChatMessageList({
   return (
     <div
       ref={containerRef}
-      className="min-h-0 flex-1 space-y-5 overflow-y-auto bg-[radial-gradient(circle_at_18%_8%,rgba(40,208,168,0.09),transparent_24rem),linear-gradient(180deg,rgba(9,19,34,0.76),rgba(8,17,30,0.94))] px-5 py-5 lg:px-7 lg:py-6"
+      className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-[radial-gradient(circle_at_18%_8%,rgba(40,208,168,0.08),transparent_24rem),linear-gradient(180deg,rgba(9,19,34,0.74),rgba(8,17,30,0.94))] px-4 py-4 lg:px-6 lg:py-5"
     >
       {messages.map((msg, index) => (
         <div key={msg.id} className="relative pl-7">

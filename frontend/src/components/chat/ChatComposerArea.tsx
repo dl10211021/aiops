@@ -95,7 +95,7 @@ export default function ChatComposerArea({
 
   return (
     <div
-      className="relative border-t border-ops-surface1/70 bg-[linear-gradient(180deg,rgba(14,30,49,0.94),rgba(9,20,35,0.98))] px-4 py-3 lg:px-5"
+      className="relative border-t border-ops-surface1/70 bg-[linear-gradient(180deg,rgba(14,30,49,0.92),rgba(9,20,35,0.98))] px-3 py-2 lg:px-4"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -120,10 +120,6 @@ export default function ChatComposerArea({
           policyRuleBusy={policyRuleBusy}
         />
       )}
-      <div className="mb-2 flex items-center justify-between gap-3 text-[11px] text-ops-overlay">
-        <span className="font-black uppercase tracking-[0.18em] text-ops-accent">Command Composer</span>
-        <span>Enter 发送 / Shift+Enter 换行 / 输入 / 触发快捷命令</span>
-      </div>
       {(quickCommands.length > 0 || onOpenRealtimeCanvas) && (
         <QuickCommandDock
           commands={quickCommands}

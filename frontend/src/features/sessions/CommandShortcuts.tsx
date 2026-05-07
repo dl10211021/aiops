@@ -10,13 +10,13 @@ interface QuickCommandDockProps {
 
 export function QuickCommandDock({ commands, onSelect, onManage, onOpenRealtimeCanvas }: QuickCommandDockProps) {
   return (
-    <div className="mb-2 flex items-center gap-2 overflow-x-auto rounded-2xl border border-ops-surface1/60 bg-ops-dark/30 px-2.5 py-2">
-      <span className="shrink-0 rounded-full border border-ops-accent/35 bg-ops-accent/10 px-2.5 py-1 text-[11px] font-black text-ops-accent">快捷命令</span>
+    <div className="mb-1.5 flex items-center gap-1.5 overflow-x-auto rounded-lg border border-ops-surface1/55 bg-ops-dark/24 px-2 py-1.5">
+      <span className="shrink-0 rounded-full border border-ops-accent/30 bg-ops-accent/8 px-2 py-0.5 text-[10px] font-black text-ops-accent">快捷</span>
       {onOpenRealtimeCanvas && (
         <button
           type="button"
           onClick={onOpenRealtimeCanvas}
-          className="shrink-0 rounded-full border border-ops-accent/50 bg-ops-accent/14 px-3 py-1.5 text-[11px] font-black text-ops-accent transition-colors hover:bg-ops-accent/20"
+          className="shrink-0 rounded-full border border-ops-accent/45 bg-ops-accent/12 px-2.5 py-1 text-[11px] font-black text-ops-accent transition-colors hover:bg-ops-accent/20"
           title="打开交互式实时画板，选择监控点、刷新间隔和运行时长"
         >
           实时画板
@@ -27,7 +27,7 @@ export function QuickCommandDock({ commands, onSelect, onManage, onOpenRealtimeC
           key={cmd.id}
           type="button"
           onClick={() => onSelect(cmd.prompt)}
-          className="shrink-0 rounded-full border border-ops-surface1/80 bg-ops-panel/70 px-3 py-1.5 text-[11px] font-semibold text-ops-subtext transition-colors hover:border-ops-accent/50 hover:bg-ops-accent/10 hover:text-ops-text"
+          className="shrink-0 rounded-full border border-ops-surface1/75 bg-ops-panel/65 px-2.5 py-1 text-[11px] font-semibold text-ops-subtext transition-colors hover:border-ops-accent/50 hover:bg-ops-accent/10 hover:text-ops-text"
           title={cmd.description}
         >
           {displayCommandLabel(cmd.label)}
@@ -36,7 +36,7 @@ export function QuickCommandDock({ commands, onSelect, onManage, onOpenRealtimeC
       <button
         type="button"
         onClick={onManage}
-        className="shrink-0 rounded-full border border-ops-accent/40 bg-ops-accent/10 px-3 py-1.5 text-[11px] font-black text-ops-accent transition-colors hover:bg-ops-accent/15"
+        className="shrink-0 rounded-full border border-ops-accent/35 bg-ops-accent/8 px-2.5 py-1 text-[11px] font-black text-ops-accent transition-colors hover:bg-ops-accent/15"
       >
         管理
       </button>
