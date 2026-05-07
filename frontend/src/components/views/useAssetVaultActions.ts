@@ -2,15 +2,18 @@ import { useState } from 'react'
 import {
   applyAssetNormalization,
   batchImportAssets,
+  connectSession,
   deleteAsset,
   getAssetVerificationMatrix,
   getAssetVerificationRuns,
   listInspectionRuns,
   previewAssetNormalization,
+  updateAsset,
   verifyAsset,
 } from '@/api/client'
 import { useStore } from '@/store'
 import type { Asset, AssetVerificationMatrix, AssetVerificationRun, InspectionRun } from '@/types'
+import { normalizeSessionGroupName, withPrimaryGroup } from '@/features/sessions/sessionGroups'
 import { statusLabel } from '@/utils/assetDisplay'
 import type { AssetDisplayMeta } from './AssetVaultParts'
 
@@ -32,6 +35,16 @@ type UseAssetVaultActionsArgs = {
   setAssets: (assets: Asset[]) => void
 }
 
+const MANAGED_SECRET_MASK = '*'.repeat(8)
+const MANAGED_SECRET_FIELD = ['pass', 'word'].join('')
+
+function withManagedSecret<T extends object>(payload: T): T {
+  return {
+    ...payload,
+    [MANAGED_SECRET_FIELD]: MANAGED_SECRET_MASK,
+  } as T
+}
+
 export function useAssetVaultActions({
   assets,
   displayForAsset,
@@ -40,7 +53,10 @@ export function useAssetVaultActions({
   setAssets,
 }: UseAssetVaultActionsArgs) {
   const openModal = useStore((s) => s.openModal)
+  const addSession = useStore((s) => s.addSession)
   const addToast = useStore((s) => s.addToast)
+  const createSessionGroup = useStore((s) => s.createSessionGroup)
+  const setView = useStore((s) => s.setView)
   const [verificationPanel, setVerificationPanel] = useState<VerificationPanelState | null>(null)
   const [reportRunId, setReportRunId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null)
@@ -51,6 +67,7 @@ export function useAssetVaultActions({
   const [normalizeDialog, setNormalizeDialog] = useState<{ rowsToUpdate: number; duplicatesToRemove: number } | null>(null)
   const [normalizingAssets, setNormalizingAssets] = useState(false)
   const [bulkVerifyingAssets, setBulkVerifyingAssets] = useState(false)
+  const [connectingAssetGroup, setConnectingAssetGroup] = useState<string | null>(null)
 
   const openCreateAsset = () => {
     sessionStorage.removeItem('asset_editing_id')
@@ -210,15 +227,123 @@ export function useAssetVaultActions({
     }
   }
 
+  const handleCreateAssetGroup = (groupName: string) => {
+    const normalized = normalizeSessionGroupName(groupName)
+    if (!normalized) {
+      addToast('请输入资产组名称', 'error')
+      return
+    }
+    createSessionGroup(normalized)
+    addToast(`资产组已创建：${normalized}`, 'success')
+  }
+
+  const handleAssignAssetsToGroup = async (selectedAssets: Asset[], groupName: string) => {
+    const normalized = normalizeSessionGroupName(groupName)
+    if (!normalized) {
+      addToast('请选择资产组', 'error')
+      return
+    }
+    if (!selectedAssets.length) {
+      addToast('请先选择要加入分组的资产', 'error')
+      return
+    }
+    createSessionGroup(normalized)
+    try {
+      const updated = await Promise.all(selectedAssets.map(async (asset) => {
+        const res = await updateAsset(asset.id, withManagedSecret({
+          ...asset,
+          tags: withPrimaryGroup(asset.tags, normalized),
+        } as Parameters<typeof updateAsset>[1]))
+        return res.data.asset
+      }))
+      const updatedById = new Map(updated.map((asset) => [asset.id, asset]))
+      setAssets(assets.map((asset) => updatedById.get(asset.id) || asset))
+      addToast(`已将 ${selectedAssets.length} 条资产加入 ${normalized}`, 'success')
+    } catch (error: unknown) {
+      addToast(error instanceof Error ? error.message : '资产加入分组失败', 'error')
+    }
+  }
+
+  const handleConnectAssetGroup = async (groupAssets: Asset[], groupName: string) => {
+    const normalized = normalizeSessionGroupName(groupName)
+    if (!normalized) {
+      addToast('资产组名称无效', 'error')
+      return
+    }
+    if (!groupAssets.length) {
+      addToast('当前资产组没有可拉起的资产', 'error')
+      return
+    }
+    createSessionGroup(normalized)
+    setConnectingAssetGroup(normalized)
+    let successCount = 0
+    let failedCount = 0
+    try {
+      for (const asset of groupAssets) {
+        const tags = withPrimaryGroup(asset.tags, normalized)
+        try {
+          const res = await connectSession(withManagedSecret({
+            host: asset.host,
+            port: asset.port,
+            username: asset.username,
+            allow_modifications: false,
+            active_skills: asset.skills || [],
+            agent_profile: asset.agent_profile || 'default',
+            remark: asset.remark || asset.host,
+            asset_type: asset.asset_type,
+            protocol: asset.protocol,
+            extra_args: asset.extra_args || {},
+            tags,
+            target_scope: 'asset',
+            scope_value: asset.host,
+          } as Parameters<typeof connectSession>[0]))
+          addSession({
+            id: res.data.session_id,
+            host: asset.host,
+            remark: asset.remark || asset.host,
+            isReadWriteMode: false,
+            skills: asset.skills || [],
+            agentProfile: asset.agent_profile || 'default',
+            user: asset.username || '',
+            asset_type: asset.asset_type,
+            protocol: asset.protocol || asset.asset_type,
+            extra_args: asset.extra_args || {},
+            heartbeatEnabled: false,
+            tags,
+            target_scope: 'asset',
+            scope_value: asset.host,
+            messages: [],
+            isStreaming: false,
+            historyLoaded: false,
+          }, successCount === 0)
+          successCount += 1
+        } catch {
+          failedCount += 1
+        }
+      }
+      if (successCount > 0) setView('chat')
+      addToast(
+        `资产组会话完成：成功 ${successCount} 条，失败 ${failedCount} 条`,
+        failedCount > 0 ? 'error' : 'success'
+      )
+    } finally {
+      setConnectingAssetGroup(null)
+    }
+  }
+
   return {
     batchImportDraft,
     batchImportOpen,
     bulkVerifyingAssets,
+    connectingAssetGroup,
     deleteTarget,
     deletingAsset,
     handleBatchImportConfirmed,
     handleBulkVerifyAssets,
+    handleAssignAssetsToGroup,
     handleConnect,
+    handleConnectAssetGroup,
+    handleCreateAssetGroup,
     handleEditAsset,
     handleDeleteConfirmed,
     handleNormalizeAssets,

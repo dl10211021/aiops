@@ -1,13 +1,19 @@
 import type { Asset, AssetVerificationMatrix, ProtocolVerificationOverview } from '@/types'
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import {
+  DEFAULT_SESSION_GROUP,
+  normalizeSessionGroupName,
+  uniqueSessionGroups,
+} from '@/features/sessions/sessionGroups'
 import { AssetCard } from './AssetVaultCards'
 import { OverviewCard, type AssetDisplayMeta } from './AssetVaultParts'
 import { assetTypeKey } from './assetVaultModel'
 import type { AssetVaultGroup } from './assetVaultViewModel'
 
 const ASSET_TABLE_PAGE_SIZE = 50
-type AssetTableGroupBy = 'category' | 'type' | 'protocol' | 'none'
+type AssetTableGroupBy = 'assetGroup' | 'category' | 'type' | 'protocol' | 'none'
 const ASSET_TABLE_GROUP_OPTIONS: Array<{ id: AssetTableGroupBy; label: string }> = [
+  { id: 'assetGroup', label: '按资产组' },
   { id: 'category', label: '按分类' },
   { id: 'type', label: '按类型' },
   { id: 'protocol', label: '按主接入' },
@@ -148,12 +154,17 @@ export function AssetGroupSections({
 export function AssetTablePanel({
   assets,
   bulkVerifying,
+  connectingGroup,
   displayForAsset,
   hasActiveFilters,
   matrixByAssetId,
+  sessionGroups,
+  onAssignGroup,
   onBulkVerify,
   onClearFilters,
   onConnect,
+  onConnectGroup,
+  onCreateGroup,
   onEdit,
   onDelete,
   onOpenVerification,
@@ -163,12 +174,17 @@ export function AssetTablePanel({
 }: {
   assets: Asset[]
   bulkVerifying: boolean
+  connectingGroup: string | null
   displayForAsset: (asset: Asset) => AssetDisplayMeta
   hasActiveFilters: boolean
   matrixByAssetId: Map<number, AssetVerificationMatrix>
+  sessionGroups: string[]
+  onAssignGroup: (assets: Asset[], groupName: string) => void
   onBulkVerify: (assets: Asset[]) => void
   onClearFilters: () => void
   onConnect: (asset: Asset) => void
+  onConnectGroup: (assets: Asset[], groupName: string) => void
+  onCreateGroup: (groupName: string) => void
   onEdit: (asset: Asset) => void
   onDelete: (asset: Asset) => void
   onOpenVerification: (asset: Asset) => void
@@ -177,7 +193,9 @@ export function AssetTablePanel({
   search: string
 }) {
   const [page, setPage] = useState(1)
-  const [groupBy, setGroupBy] = useState<AssetTableGroupBy>('category')
+  const [groupBy, setGroupBy] = useState<AssetTableGroupBy>('assetGroup')
+  const [assetGroupDraft, setAssetGroupDraft] = useState('')
+  const [assignGroup, setAssignGroup] = useState(DEFAULT_SESSION_GROUP)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set())
   const pageCount = Math.max(1, Math.ceil(assets.length / ASSET_TABLE_PAGE_SIZE))
@@ -187,6 +205,10 @@ export function AssetTablePanel({
     () => assets.slice(pageStart, pageStart + ASSET_TABLE_PAGE_SIZE),
     [assets, pageStart]
   )
+  const assetGroupOptions = useMemo(() => uniqueSessionGroups([
+    ...sessionGroups,
+    ...assets.flatMap((asset) => asset.tags || []),
+  ]), [assets, sessionGroups])
   const groupCounts = useMemo(() => {
     const counts = new Map<string, number>()
     if (groupBy === 'none') return counts
@@ -196,11 +218,20 @@ export function AssetTablePanel({
     })
     return counts
   }, [assets, displayForAsset, groupBy])
+  const groupAssetsByLabel = useMemo(() => {
+    const grouped = new Map<string, Asset[]>()
+    if (groupBy === 'none') return grouped
+    assets.forEach((asset) => {
+      const label = assetTableGroupLabel(asset, displayForAsset(asset), groupBy)
+      grouped.set(label, [...(grouped.get(label) || []), asset])
+    })
+    return grouped
+  }, [assets, displayForAsset, groupBy])
   const groupedVisibleAssets = useMemo(() => {
     if (groupBy === 'none') {
-      return [{ id: 'all', label: '全部资产', count: visibleAssets.length, items: visibleAssets }]
+      return [{ id: 'all', label: '全部资产', count: visibleAssets.length, allItems: visibleAssets, items: visibleAssets }]
     }
-    const groups = new Map<string, { id: string; label: string; count: number; items: Asset[] }>()
+    const groups = new Map<string, { id: string; label: string; count: number; allItems: Asset[]; items: Asset[] }>()
     visibleAssets.forEach((asset) => {
       const label = assetTableGroupLabel(asset, displayForAsset(asset), groupBy)
       const id = `${groupBy}:${label}`
@@ -212,12 +243,13 @@ export function AssetTablePanel({
           id,
           label,
           count: groupCounts.get(label) || 0,
+          allItems: groupAssetsByLabel.get(label) || [],
           items: [asset],
         })
       }
     })
     return Array.from(groups.values())
-  }, [displayForAsset, groupBy, groupCounts, visibleAssets])
+  }, [displayForAsset, groupAssetsByLabel, groupBy, groupCounts, visibleAssets])
   const allGroupsCollapsed = groupBy !== 'none'
     && groupedVisibleAssets.length > 0
     && groupedVisibleAssets.every((group) => collapsedGroups.has(group.id))
@@ -231,6 +263,12 @@ export function AssetTablePanel({
       setCollapsedGroups(new Set())
     }
   }, [groupBy])
+
+  useEffect(() => {
+    if (!assetGroupOptions.includes(assignGroup)) {
+      setAssignGroup(assetGroupOptions[0] || DEFAULT_SESSION_GROUP)
+    }
+  }, [assetGroupOptions, assignGroup])
 
   useEffect(() => {
     setCollapsedGroups((current) => {
@@ -291,6 +329,21 @@ export function AssetTablePanel({
       return new Set(groupedVisibleAssets.map((group) => group.id))
     })
   }
+  const createAssetGroup = () => {
+    const normalized = normalizeSessionGroupName(assetGroupDraft)
+    if (!normalized) {
+      onCreateGroup(assetGroupDraft)
+      return
+    }
+    onCreateGroup(normalized)
+    setAssignGroup(normalized)
+    setAssetGroupDraft('')
+    setGroupBy('assetGroup')
+  }
+  const assignSelectedToGroup = () => {
+    onAssignGroup(selectedAssets, assignGroup)
+    setGroupBy('assetGroup')
+  }
 
   return (
     <section className="overflow-hidden rounded-xl border border-ops-surface1/80 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
@@ -315,6 +368,42 @@ export function AssetTablePanel({
           )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="flex h-8 items-center gap-1 rounded-lg border border-ops-surface1 bg-ops-panel px-2">
+            <input
+              value={assetGroupDraft}
+              onChange={(event) => setAssetGroupDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') createAssetGroup()
+              }}
+              placeholder="新建资产组"
+              className="h-6 w-24 bg-transparent text-xs text-ops-text outline-none placeholder:text-ops-overlay"
+            />
+            <button
+              onClick={createAssetGroup}
+              className="rounded-md bg-ops-accent/15 px-2 py-0.5 text-[11px] font-semibold text-ops-accent hover:bg-ops-accent/25"
+            >
+              创建
+            </button>
+          </div>
+          <label className="flex h-8 items-center gap-2 rounded-lg border border-ops-surface1 bg-ops-panel px-2 text-xs text-ops-overlay">
+            加入
+            <select
+              value={assignGroup}
+              onChange={(event) => setAssignGroup(event.target.value)}
+              className="h-6 max-w-32 rounded-md border border-ops-surface1 bg-ops-dark px-2 text-xs text-ops-text outline-none focus:border-ops-accent"
+            >
+              {assetGroupOptions.map((group) => (
+                <option key={group} value={group}>{group}</option>
+              ))}
+            </select>
+            <button
+              onClick={assignSelectedToGroup}
+              disabled={selectedAssets.length === 0}
+              className="rounded-md bg-ops-surface0 px-2 py-0.5 text-[11px] font-semibold text-ops-subtext hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              选中资产
+            </button>
+          </label>
           <label className="flex h-8 items-center gap-2 rounded-lg border border-ops-surface1 bg-ops-panel px-2 text-xs text-ops-overlay">
             分组
             <select
@@ -421,9 +510,20 @@ export function AssetTablePanel({
                             本页 {group.items.length} 条 / 共 {group.count} 条
                           </span>
                         </button>
-                        <span className="text-[11px] text-ops-overlay">
-                          {ASSET_TABLE_GROUP_OPTIONS.find((option) => option.id === groupBy)?.label}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-ops-overlay">
+                            {ASSET_TABLE_GROUP_OPTIONS.find((option) => option.id === groupBy)?.label}
+                          </span>
+                          {groupBy === 'assetGroup' && (
+                            <button
+                              onClick={() => onConnectGroup(group.allItems, group.label)}
+                              disabled={connectingGroup === group.label}
+                              className="rounded-lg border border-ops-accent/35 bg-ops-accent/10 px-2.5 py-1 text-[11px] font-semibold text-ops-accent hover:bg-ops-accent/18 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {connectingGroup === group.label ? '拉起中...' : '拉起组会话'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -554,6 +654,7 @@ function verificationBadge(matrix?: AssetVerificationMatrix) {
 }
 
 function assetTableGroupLabel(asset: Asset, display: AssetDisplayMeta, groupBy: AssetTableGroupBy) {
+  if (groupBy === 'assetGroup') return normalizeSessionGroupName(asset.tags?.[0]) || DEFAULT_SESSION_GROUP
   if (groupBy === 'type') return display.typeLabel || asset.asset_type || '未标记类型'
   if (groupBy === 'protocol') return display.protocolLabel || asset.protocol || '未标记主接入'
   if (groupBy === 'category') return display.categoryLabel || '未分类'

@@ -8,8 +8,10 @@ import { buildAssetVaultViewModel } from './assetVaultViewModel'
 import { useAssetVaultActions } from './useAssetVaultActions'
 import { useAssetVaultData } from './useAssetVaultData'
 import { useAssetVaultFilterValidation, useAssetVaultFilters } from './useAssetVaultFilters'
+import { useStore } from '@/store'
 
 export default function AssetVault() {
+  const sessionGroups = useStore((s) => s.sessionGroups)
   const {
     assets,
     catalogCategories,
@@ -76,11 +78,15 @@ export default function AssetVault() {
     batchImportDraft,
     batchImportOpen,
     bulkVerifyingAssets,
+    connectingAssetGroup,
     deleteTarget,
     deletingAsset,
+    handleAssignAssetsToGroup,
     handleBatchImportConfirmed,
     handleBulkVerifyAssets,
     handleConnect,
+    handleConnectAssetGroup,
+    handleCreateAssetGroup,
     handleEditAsset,
     handleDeleteConfirmed,
     handleNormalizeAssets,
@@ -153,9 +159,14 @@ export default function AssetVault() {
           hasActiveFilters={hasActiveFilters}
           matrixByAssetId={matrixByAssetId}
           bulkVerifying={bulkVerifyingAssets}
+          connectingGroup={connectingAssetGroup}
+          sessionGroups={sessionGroups}
           onClearFilters={clearFilters}
+          onAssignGroup={(selectedAssets, groupName) => void handleAssignAssetsToGroup(selectedAssets, groupName)}
           onBulkVerify={(selectedAssets) => void handleBulkVerifyAssets(selectedAssets)}
           onConnect={handleConnect}
+          onConnectGroup={(groupAssets, groupName) => void handleConnectAssetGroup(groupAssets, groupName)}
+          onCreateGroup={handleCreateAssetGroup}
           onEdit={handleEditAsset}
           onDelete={setDeleteTarget}
           onOpenVerification={(item) => void openVerification(item)}
