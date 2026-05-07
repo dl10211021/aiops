@@ -387,6 +387,12 @@ export function AssetTablePanel({
     onAssignGroup(selectedAssets, assignGroup)
     setGroupBy('assetGroup')
   }
+  const exportCurrentAssets = () => {
+    exportAssetsCsv(panelAssets, displayForAsset, `opscore-assets-${formatExportDate()}.csv`)
+  }
+  const exportSelectedAssets = () => {
+    exportAssetsCsv(selectedAssets, displayForAsset, `opscore-selected-assets-${formatExportDate()}.csv`)
+  }
   const renameCurrentGroup = (groupName: string) => {
     const next = window.prompt('请输入新的资产组名称', groupName)?.trim()
     if (!next) return
@@ -497,6 +503,13 @@ export function AssetTablePanel({
           >
             刷新
           </button>
+          <button
+            onClick={exportCurrentAssets}
+            disabled={panelAssets.length === 0}
+            className="h-8 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            导出结果
+          </button>
         </div>
       </div>
       {assetGroupSummaries.length > 0 && (
@@ -582,6 +595,13 @@ export function AssetTablePanel({
               className="rounded-lg border border-ops-accent/35 bg-ops-accent/10 px-3 py-1.5 font-semibold text-ops-accent transition-colors hover:bg-ops-accent/18 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {connectingSelected ? '拉起中...' : '批量会话'}
+            </button>
+            <button
+              onClick={exportSelectedAssets}
+              disabled={connectingSelected || bulkVerifying || bulkDeleting}
+              className="rounded-lg border border-ops-surface1 bg-ops-panel px-3 py-1.5 font-semibold text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              导出选中
             </button>
             <button
               onClick={() => onBulkDelete(selectedAssets)}
@@ -812,4 +832,52 @@ function assetTableGroupLabel(asset: Asset, display: AssetDisplayMeta, groupBy: 
   if (groupBy === 'protocol') return display.protocolLabel || asset.protocol || '未标记主接入'
   if (groupBy === 'category') return display.categoryLabel || '未分类'
   return '全部资产'
+}
+
+function exportAssetsCsv(
+  assets: Asset[],
+  displayForAsset: (asset: Asset) => AssetDisplayMeta,
+  filename: string
+) {
+  if (!assets.length) {
+    window.alert('没有可导出的资产')
+    return
+  }
+  const headers = ['名称', '主机', '端口', '账号', '类型', '主接入', '资产组', '标签']
+  const rows = assets.map((asset) => {
+    const display = displayForAsset(asset)
+    const tags = asset.tags || []
+    return [
+      asset.remark || asset.host,
+      asset.host,
+      String(asset.port ?? ''),
+      asset.username || '',
+      display.typeLabel || asset.asset_type || '',
+      display.protocolLabel || asset.protocol || '',
+      normalizeSessionGroupName(tags[0]) || DEFAULT_SESSION_GROUP,
+      tags.join('|'),
+    ]
+  })
+  const csv = [headers, ...rows]
+    .map((row) => row.map(csvCell).join(','))
+    .join('\r\n')
+  const blob = new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+function csvCell(value: string) {
+  return `"${value.replace(/"/g, '""')}"`
+}
+
+function formatExportDate() {
+  const now = new Date()
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`
 }
