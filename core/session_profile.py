@@ -131,6 +131,97 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
+def _fallback_relations(context: dict[str, Any], inspection: dict[str, Any] | None) -> list[dict[str, Any]]:
+    relations: list[dict[str, Any]] = []
+    host = str(context.get("host") or "")
+    protocol = str(context.get("protocol") or "")
+    port = context.get("port")
+    checks = inspection.get("checks", []) if isinstance(inspection, dict) else []
+    listen_evidence = ""
+    outbound_evidence = ""
+    for check in checks:
+        if not isinstance(check, dict):
+            continue
+        title = str(check.get("title") or check.get("name") or "")
+        command = str(check.get("command") or "")
+        output = str(check.get("output") or "")
+        haystack = f"{title}\n{command}\n{output}".lower()
+        if not listen_evidence and ("listen" in haystack or "监听" in title or "端口" in title):
+            listen_evidence = output.strip().replace("\r", "")[:260]
+        if not outbound_evidence and ("estab" in haystack or "established" in haystack or "连接" in title):
+            outbound_evidence = output.strip().replace("\r", "")[:260]
+    if host:
+        relations.append(
+            {
+                "direction": "inbound",
+                "peer": "OpsCore 当前会话 / 运维入口",
+                "peer_role": "运维访问方",
+                "endpoint": f"{host}:{port}" if port else host,
+                "protocol": protocol,
+                "evidence": "来自当前资产连接信息；业务上游需结合监听端口、访问日志和会话证据继续确认。",
+                "confidence": 70,
+            }
+        )
+    if listen_evidence:
+        relations.append(
+            {
+                "direction": "inbound",
+                "peer": "业务调用方 / 用户入口",
+                "peer_role": "上游访问方",
+                "endpoint": "监听端口",
+                "protocol": "tcp/udp",
+                "evidence": listen_evidence,
+                "confidence": 55,
+            }
+        )
+    if outbound_evidence:
+        relations.append(
+            {
+                "direction": "outbound",
+                "peer": "外部依赖 / 下游服务",
+                "peer_role": "下游依赖",
+                "endpoint": "已建立连接",
+                "protocol": "tcp",
+                "evidence": outbound_evidence,
+                "confidence": 45,
+            }
+        )
+    return relations[:6]
+
+
+def _normalize_relations(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    normalized = []
+    allowed = {"inbound", "outbound", "bidirectional", "unknown"}
+    for item in value[:12]:
+        if not isinstance(item, dict):
+            continue
+        direction = str(item.get("direction") or "unknown").strip().lower()
+        if direction not in allowed:
+            direction = "unknown"
+        peer = str(item.get("peer") or item.get("target") or item.get("name") or "").strip()
+        if not peer:
+            continue
+        confidence_raw = item.get("confidence", 50)
+        try:
+            confidence = int(confidence_raw)
+        except Exception:
+            confidence = 50
+        normalized.append(
+            {
+                "direction": direction,
+                "peer": peer[:120],
+                "peer_role": str(item.get("peer_role") or item.get("role") or "")[:120],
+                "endpoint": str(item.get("endpoint") or item.get("address") or "")[:160],
+                "protocol": str(item.get("protocol") or "")[:80],
+                "evidence": str(item.get("evidence") or item.get("reason") or "")[:320],
+                "confidence": max(0, min(100, confidence)),
+            }
+        )
+    return normalized
+
+
 def _fallback_profile(
     session_id: str,
     context: dict[str, Any],
@@ -187,6 +278,7 @@ def _fallback_profile(
             "risk_level": risk_level,
             "evidence": evidence[:8],
             "focus_areas": focus_areas[:6],
+            "relations": _fallback_relations(context, inspection),
             "services": [],
             "tags": context.get("tags") or [],
             "source": source,
@@ -215,6 +307,7 @@ def _normalize_profile(profile: dict[str, Any], context: dict[str, Any]) -> dict
         "risk_level": str(profile.get("risk_level") or "watch"),
         "evidence": profile.get("evidence") if isinstance(profile.get("evidence"), list) else [],
         "focus_areas": profile.get("focus_areas") if isinstance(profile.get("focus_areas"), list) else [],
+        "relations": _normalize_relations(profile.get("relations")),
         "services": profile.get("services") if isinstance(profile.get("services"), list) else [],
         "tags": profile.get("tags") if isinstance(profile.get("tags"), list) else context.get("tags") or [],
         "source": str(profile.get("source") or "ai"),
@@ -261,7 +354,7 @@ async def _generate_ai_profile(
 你是企业 AIOps 平台的资产画像分析器。请根据资产连接信息、只读巡检结果和最近会话内容，判断这是什么资产、可能承担什么业务角色、后续排查应该重点关注什么。
 
 只输出 JSON 对象，不要 Markdown，不要解释。字段：
-role_label, role_category, purpose, confidence, risk_level, evidence, focus_areas, services, tags, source_summary, profile_prompt。
+role_label, role_category, purpose, confidence, risk_level, evidence, focus_areas, relations, services, tags, source_summary, profile_prompt。
 
 要求：
 - role_label 用中文短语，例如“Oracle 数据库服务”“Linux 应用服务器”“Windows 主机”“网络交换设备”。
@@ -270,6 +363,9 @@ role_label, role_category, purpose, confidence, risk_level, evidence, focus_area
 - risk_level 只能是 normal/watch/high。
 - evidence 最多 6 条，每条含 label,value,source。
 - focus_areas 最多 6 条，每条含 title,reason,priority，priority 用 P0/P1/P2。
+- relations 最多 10 条，用于描述资产互联关系；每条含 direction,peer,peer_role,endpoint,protocol,evidence,confidence。
+- relations.direction 只能是 inbound/outbound/bidirectional/unknown；inbound 表示“哪些业务/系统/用户连接它”，outbound 表示“它主动连接哪些下游/数据库/API/中间件”，bidirectional 表示双向依赖，unknown 表示方向证据不足。
+- relations 必须基于监听端口、已建立连接、访问日志、进程、容器、数据库连接、会话上下文或巡检证据推断；不确定时写 unknown，不要编造业务名。
 - profile_prompt 是写给主会话模型的专业提示词，必须基于本资产画像汇聚生成，说明资产角色、业务用途、排查优先级、风险边界、工具使用注意事项；不要超过 900 字。
 - 不要输出密码、Token、密钥、完整敏感连接串。
 
@@ -354,6 +450,19 @@ def profile_to_markdown(profile: dict[str, Any]) -> str:
     ]
     for item in profile.get("evidence") or []:
         lines.append(f"- {item.get('label')}: {item.get('value')} ({item.get('source') or '未知来源'})")
+    relations = profile.get("relations") or []
+    if relations:
+        lines.append("")
+        lines.append("### 互联关系")
+        for item in relations:
+            lines.append(
+                "- "
+                f"{item.get('direction') or 'unknown'} | "
+                f"{item.get('peer') or '-'} | "
+                f"{item.get('endpoint') or '-'} | "
+                f"{item.get('protocol') or '-'} | "
+                f"证据：{item.get('evidence') or '-'}"
+            )
     lines.append("")
     lines.append("### 后续排查重点")
     for item in profile.get("focus_areas") or []:
@@ -388,6 +497,18 @@ def profile_to_system_prompt(profile: dict[str, Any] | None) -> str:
                     evidence_lines.append(f"- {label}: {value}{suffix}")
         if evidence_lines:
             synthesized.append("画像证据：\n" + "\n".join(evidence_lines[:6]))
+        relation_lines = []
+        for item in profile.get("relations") or []:
+            if isinstance(item, dict):
+                direction = str(item.get("direction") or "unknown").strip()
+                peer = str(item.get("peer") or "").strip()
+                endpoint = str(item.get("endpoint") or "").strip()
+                protocol = str(item.get("protocol") or "").strip()
+                evidence = str(item.get("evidence") or "").strip()
+                if peer:
+                    relation_lines.append(f"- {direction}: {peer} {endpoint} {protocol}，证据：{evidence or '待验证'}".strip())
+        if relation_lines:
+            synthesized.append("互联关系：\n" + "\n".join(relation_lines[:8]))
         focus_lines = []
         for item in profile.get("focus_areas") or []:
             if isinstance(item, dict):

@@ -7,6 +7,7 @@ import {
   ProfileEvidenceSection,
   ProfileFocusSection,
   ProfileIdentitySection,
+  ProfileRelationsSection,
 } from './AssetProfileDetailSections'
 
 export function ProfileSummaryButton({
@@ -102,6 +103,7 @@ export function ProfileDetails({
   return (
     <div className="grid gap-3 border-t border-ops-surface0/80 bg-ops-dark/18 px-4 py-4">
       <ProfileIdentitySection profile={profile} session={session} />
+      <ProfileRelationsSection items={profile.relations || []} />
       <ProfileEvidenceSection items={profile.evidence.slice(0, 4)} />
       <ProfileFocusSection items={profile.focus_areas.slice(0, 4)} />
     </div>

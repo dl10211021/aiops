@@ -25,6 +25,7 @@ def test_fallback_profile_marks_database_focus_area():
     assert "数据库" in profile["role_label"]
     assert profile["risk_level"] == "normal"
     assert profile["focus_areas"][0]["priority"] == "P0"
+    assert profile["relations"][0]["direction"] == "inbound"
     assert "数据库" in profile_to_markdown(profile)
 
 
@@ -80,10 +81,22 @@ def test_profile_to_system_prompt_synthesizes_from_structured_profile_when_promp
                     "reason": "确认登录审计和密钥轮换策略。",
                 }
             ],
+            "relations": [
+                {
+                    "direction": "outbound",
+                    "peer": "Oracle 数据库",
+                    "endpoint": "172.17.8.150:1521",
+                    "protocol": "oracle",
+                    "evidence": "应用配置存在数据库连接。",
+                    "confidence": 80,
+                }
+            ],
         }
     )
 
     assert "ISO27001 合规审计系统后端服务器" in prompt
+    assert "互联关系" in prompt
+    assert "Oracle 数据库" in prompt
     assert "UFW active" in prompt
     assert "SSH 访问控制" in prompt
     assert "不需要每轮人工确认" in prompt

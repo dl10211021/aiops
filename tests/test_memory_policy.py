@@ -140,6 +140,7 @@ class MemoryPolicyTests(unittest.TestCase):
                 "confidence": 85,
                 "focus_areas": [{"priority": "P1", "title": "SSH 登录", "reason": "确认来源"}],
                 "evidence": [{"label": "OS", "value": "Ubuntu"}],
+                "relations": [{"direction": "outbound", "peer": "MySQL", "endpoint": "10.0.0.2:3306"}],
                 "profile_prompt": "优先检查业务进程和 SSH 登录来源。",
             },
             host="172.17.8.131",
@@ -150,6 +151,8 @@ class MemoryPolicyTests(unittest.TestCase):
 
         self.assertIn("【记忆类型】资产画像", summary)
         self.assertIn("画像提示词", summary)
+        self.assertIn("【互联关系】", summary)
+        self.assertIn("MySQL", summary)
         self.assertIn("不需要每轮人工确认", summary)
         self.assertIn("【保留方式】会话状态", summary)
 

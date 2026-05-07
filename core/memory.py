@@ -173,6 +173,17 @@ def build_asset_profile_memory_summary(
         lines.append("【排查重点】" + "；".join(focus_items[:6]))
     if evidence_items:
         lines.append("【证据摘要】" + "；".join(evidence_items[:6]))
+    relation_items = []
+    for item in profile.get("relations") or []:
+        if isinstance(item, dict):
+            direction = str(item.get("direction") or "unknown").strip()
+            peer = str(item.get("peer") or "").strip()
+            endpoint = str(item.get("endpoint") or "").strip()
+            protocol_name = str(item.get("protocol") or "").strip()
+            if peer:
+                relation_items.append(f"{direction}:{peer} {endpoint} {protocol_name}".strip())
+    if relation_items:
+        lines.append("【互联关系】" + "；".join(relation_items[:8]))
     if profile_prompt:
         lines.append(f"【画像提示词】{profile_prompt}")
     lines.append("【使用边界】画像是历史汇聚提示词，不需要每轮人工确认；如果后续工具结果与画像冲突，以当前工具结果为准。")

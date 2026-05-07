@@ -34,6 +34,16 @@ export interface AssetProfileFocusArea {
   priority: string
 }
 
+export interface AssetProfileRelation {
+  direction: 'inbound' | 'outbound' | 'bidirectional' | 'unknown' | string
+  peer: string
+  peer_role?: string
+  endpoint?: string
+  protocol?: string
+  evidence?: string
+  confidence?: number
+}
+
 export interface AssetProfile {
   version: number
   session_id: string
@@ -50,6 +60,7 @@ export interface AssetProfile {
   risk_level: 'normal' | 'watch' | 'high' | string
   evidence: AssetProfileEvidence[]
   focus_areas: AssetProfileFocusArea[]
+  relations?: AssetProfileRelation[]
   services: string[]
   tags: string[]
   source?: string
