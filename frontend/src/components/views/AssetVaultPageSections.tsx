@@ -1,11 +1,18 @@
 import type { Asset, AssetVerificationMatrix, ProtocolVerificationOverview } from '@/types'
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { AssetCard } from './AssetVaultCards'
 import { OverviewCard, type AssetDisplayMeta } from './AssetVaultParts'
 import { assetTypeKey } from './assetVaultModel'
 import type { AssetVaultGroup } from './assetVaultViewModel'
 
 const ASSET_TABLE_PAGE_SIZE = 50
+type AssetTableGroupBy = 'category' | 'type' | 'protocol' | 'none'
+const ASSET_TABLE_GROUP_OPTIONS: Array<{ id: AssetTableGroupBy; label: string }> = [
+  { id: 'category', label: '按分类' },
+  { id: 'type', label: '按类型' },
+  { id: 'protocol', label: '按主接入' },
+  { id: 'none', label: '不分组' },
+]
 
 export function AssetOverviewGrid({
   overview,
@@ -170,6 +177,7 @@ export function AssetTablePanel({
   search: string
 }) {
   const [page, setPage] = useState(1)
+  const [groupBy, setGroupBy] = useState<AssetTableGroupBy>('category')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set())
   const pageCount = Math.max(1, Math.ceil(assets.length / ASSET_TABLE_PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
@@ -178,6 +186,37 @@ export function AssetTablePanel({
     () => assets.slice(pageStart, pageStart + ASSET_TABLE_PAGE_SIZE),
     [assets, pageStart]
   )
+  const groupCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    if (groupBy === 'none') return counts
+    assets.forEach((asset) => {
+      const label = assetTableGroupLabel(asset, displayForAsset(asset), groupBy)
+      counts.set(label, (counts.get(label) || 0) + 1)
+    })
+    return counts
+  }, [assets, displayForAsset, groupBy])
+  const groupedVisibleAssets = useMemo(() => {
+    if (groupBy === 'none') {
+      return [{ id: 'all', label: '全部资产', count: visibleAssets.length, items: visibleAssets }]
+    }
+    const groups = new Map<string, { id: string; label: string; count: number; items: Asset[] }>()
+    visibleAssets.forEach((asset) => {
+      const label = assetTableGroupLabel(asset, displayForAsset(asset), groupBy)
+      const id = `${groupBy}:${label}`
+      const current = groups.get(id)
+      if (current) {
+        current.items.push(asset)
+      } else {
+        groups.set(id, {
+          id,
+          label,
+          count: groupCounts.get(label) || 0,
+          items: [asset],
+        })
+      }
+    })
+    return Array.from(groups.values())
+  }, [displayForAsset, groupBy, groupCounts, visibleAssets])
 
   useEffect(() => {
     setPage(1)
@@ -241,6 +280,18 @@ export function AssetTablePanel({
           )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <label className="flex h-8 items-center gap-2 rounded-lg border border-ops-surface1 bg-ops-panel px-2 text-xs text-ops-overlay">
+            分组
+            <select
+              value={groupBy}
+              onChange={(event) => setGroupBy(event.target.value as AssetTableGroupBy)}
+              className="h-6 rounded-md border border-ops-surface1 bg-ops-dark px-2 text-xs text-ops-text outline-none focus:border-ops-accent"
+            >
+              {ASSET_TABLE_GROUP_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>{option.label}</option>
+              ))}
+            </select>
+          </label>
           <input
             type="text"
             placeholder="搜索资产、地址、账号、类型、主接入"
@@ -307,79 +358,102 @@ export function AssetTablePanel({
             </tr>
           </thead>
           <tbody>
-            {visibleAssets.map((asset) => {
-              const display = displayForAsset(asset)
-              const matrix = matrixByAssetId.get(asset.id)
-              const verification = verificationBadge(matrix)
-              const tags = asset.tags?.length ? asset.tags : [display.categoryLabel]
-              return (
-                <tr key={asset.id} className="border-b border-ops-surface1/55 hover:bg-ops-surface0/35">
-                  <td className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(asset.id)}
-                      onChange={() => toggleAssetSelection(asset.id)}
-                      aria-label={`选择资产 ${asset.remark || asset.host}`}
-                      className="h-4 w-4 rounded border-ops-surface1 bg-ops-dark text-ops-accent"
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="max-w-[18rem] truncate font-semibold text-ops-text" title={asset.remark || asset.host}>
-                      {asset.remark || asset.host}
-                    </div>
-                    <div className="mt-1 truncate font-mono text-[11px] text-ops-overlay">{asset.username || '-'}</div>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-ops-subtext">{asset.host}:{asset.port}</td>
-                  <td className="px-4 py-3 text-ops-subtext">{display.typeLabel}</td>
-                  <td className="px-4 py-3">
-                    <span className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-2 py-1 text-[11px] font-semibold text-ops-subtext">
-                      {display.protocolLabel}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex max-w-[16rem] flex-wrap gap-1.5">
-                      {tags.slice(0, 3).map((tag) => (
-                        <span key={tag} className="rounded-lg bg-ops-surface0 px-2 py-0.5 text-[11px] text-ops-subtext">{tag}</span>
-                      ))}
-                      {tags.length > 3 && <span className="text-[11px] text-ops-overlay">+{tags.length - 3}</span>}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-lg border px-2 py-1 text-[11px] font-semibold ${verification.className}`}>
-                      {verification.label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-1.5 whitespace-nowrap">
-                      <button
-                        onClick={() => onConnect(asset)}
-                        className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-2.5 py-1 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
-                      >
-                        连接
-                      </button>
-                      <button
-                        onClick={() => onOpenVerification(asset)}
-                        className="rounded-lg border border-ops-success/35 bg-ops-success/10 px-2.5 py-1 text-xs font-semibold text-ops-success hover:bg-ops-success/18"
-                      >
-                        验证
-                      </button>
-                      <button
-                        onClick={() => onEdit(asset)}
-                        className="rounded-lg border border-ops-surface1 bg-ops-panel px-2.5 py-1 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
-                      >
-                        编辑
-                      </button>
-                      <button
-                        onClick={() => onDelete(asset)}
-                        className="rounded-lg border border-ops-alert/35 bg-ops-alert/10 px-2.5 py-1 text-xs font-semibold text-ops-alert hover:bg-ops-alert/15"
-                      >
-                        删除
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
+            {groupedVisibleAssets.map((group) => (
+              <Fragment key={group.id}>
+                {groupBy !== 'none' && (
+                  <tr className="border-b border-ops-surface1/70 bg-ops-dark/45">
+                    <td colSpan={8} className="px-4 py-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="rounded-lg border border-ops-accent/25 bg-ops-accent/10 px-2 py-0.5 font-semibold text-ops-accent">
+                            {group.label}
+                          </span>
+                          <span className="text-ops-overlay">
+                            本页 {group.items.length} 条 / 共 {group.count} 条
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-ops-overlay">
+                          {ASSET_TABLE_GROUP_OPTIONS.find((option) => option.id === groupBy)?.label}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {group.items.map((asset) => {
+                  const display = displayForAsset(asset)
+                  const matrix = matrixByAssetId.get(asset.id)
+                  const verification = verificationBadge(matrix)
+                  const tags = asset.tags?.length ? asset.tags : [display.categoryLabel]
+                  return (
+                    <tr key={asset.id} className="border-b border-ops-surface1/55 hover:bg-ops-surface0/35">
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(asset.id)}
+                          onChange={() => toggleAssetSelection(asset.id)}
+                          aria-label={`选择资产 ${asset.remark || asset.host}`}
+                          className="h-4 w-4 rounded border-ops-surface1 bg-ops-dark text-ops-accent"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="max-w-[18rem] truncate font-semibold text-ops-text" title={asset.remark || asset.host}>
+                          {asset.remark || asset.host}
+                        </div>
+                        <div className="mt-1 truncate font-mono text-[11px] text-ops-overlay">{asset.username || '-'}</div>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-ops-subtext">{asset.host}:{asset.port}</td>
+                      <td className="px-4 py-3 text-ops-subtext">{display.typeLabel}</td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-2 py-1 text-[11px] font-semibold text-ops-subtext">
+                          {display.protocolLabel}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex max-w-[16rem] flex-wrap gap-1.5">
+                          {tags.slice(0, 3).map((tag) => (
+                            <span key={tag} className="rounded-lg bg-ops-surface0 px-2 py-0.5 text-[11px] text-ops-subtext">{tag}</span>
+                          ))}
+                          {tags.length > 3 && <span className="text-[11px] text-ops-overlay">+{tags.length - 3}</span>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-lg border px-2 py-1 text-[11px] font-semibold ${verification.className}`}>
+                          {verification.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1.5 whitespace-nowrap">
+                          <button
+                            onClick={() => onConnect(asset)}
+                            className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-2.5 py-1 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
+                          >
+                            连接
+                          </button>
+                          <button
+                            onClick={() => onOpenVerification(asset)}
+                            className="rounded-lg border border-ops-success/35 bg-ops-success/10 px-2.5 py-1 text-xs font-semibold text-ops-success hover:bg-ops-success/18"
+                          >
+                            验证
+                          </button>
+                          <button
+                            onClick={() => onEdit(asset)}
+                            className="rounded-lg border border-ops-surface1 bg-ops-panel px-2.5 py-1 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
+                          >
+                            编辑
+                          </button>
+                          <button
+                            onClick={() => onDelete(asset)}
+                            className="rounded-lg border border-ops-alert/35 bg-ops-alert/10 px-2.5 py-1 text-xs font-semibold text-ops-alert hover:bg-ops-alert/15"
+                          >
+                            删除
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </Fragment>
+            ))}
             {assets.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-4 py-12 text-center text-sm text-ops-subtext">
@@ -428,4 +502,11 @@ function verificationBadge(matrix?: AssetVerificationMatrix) {
     return { label: '已验证', className: 'border-ops-success/35 bg-ops-success/10 text-ops-success' }
   }
   return { label: '需复验', className: 'border-amber-400/40 bg-amber-400/10 text-amber-200' }
+}
+
+function assetTableGroupLabel(asset: Asset, display: AssetDisplayMeta, groupBy: AssetTableGroupBy) {
+  if (groupBy === 'type') return display.typeLabel || asset.asset_type || '未标记类型'
+  if (groupBy === 'protocol') return display.protocolLabel || asset.protocol || '未标记主接入'
+  if (groupBy === 'category') return display.categoryLabel || '未分类'
+  return '全部资产'
 }
