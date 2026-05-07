@@ -178,6 +178,7 @@ export function AssetTablePanel({
 }) {
   const [page, setPage] = useState(1)
   const [groupBy, setGroupBy] = useState<AssetTableGroupBy>('category')
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set())
   const pageCount = Math.max(1, Math.ceil(assets.length / ASSET_TABLE_PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
@@ -217,10 +218,27 @@ export function AssetTablePanel({
     })
     return Array.from(groups.values())
   }, [displayForAsset, groupBy, groupCounts, visibleAssets])
+  const allGroupsCollapsed = groupBy !== 'none'
+    && groupedVisibleAssets.length > 0
+    && groupedVisibleAssets.every((group) => collapsedGroups.has(group.id))
 
   useEffect(() => {
     setPage(1)
   }, [search, hasActiveFilters, assets.length])
+
+  useEffect(() => {
+    if (groupBy === 'none') {
+      setCollapsedGroups(new Set())
+    }
+  }, [groupBy])
+
+  useEffect(() => {
+    setCollapsedGroups((current) => {
+      const visibleGroupIds = new Set(groupedVisibleAssets.map((group) => group.id))
+      const next = new Set(Array.from(current).filter((id) => visibleGroupIds.has(id)))
+      return next.size === current.size ? current : next
+    })
+  }, [groupedVisibleAssets])
 
   useEffect(() => {
     setSelectedIds((current) => {
@@ -254,6 +272,23 @@ export function AssetTablePanel({
         next.add(assetId)
       }
       return next
+    })
+  }
+  const toggleGroupCollapse = (groupId: string) => {
+    setCollapsedGroups((current) => {
+      const next = new Set(current)
+      if (next.has(groupId)) {
+        next.delete(groupId)
+      } else {
+        next.add(groupId)
+      }
+      return next
+    })
+  }
+  const toggleAllGroups = () => {
+    setCollapsedGroups(() => {
+      if (allGroupsCollapsed) return new Set()
+      return new Set(groupedVisibleAssets.map((group) => group.id))
     })
   }
 
@@ -292,6 +327,14 @@ export function AssetTablePanel({
               ))}
             </select>
           </label>
+          {groupBy !== 'none' && groupedVisibleAssets.length > 0 && (
+            <button
+              onClick={toggleAllGroups}
+              className="h-8 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
+            >
+              {allGroupsCollapsed ? '全部展开' : '全部收起'}
+            </button>
+          )}
           <input
             type="text"
             placeholder="搜索资产、地址、账号、类型、主接入"
@@ -364,14 +407,20 @@ export function AssetTablePanel({
                   <tr className="border-b border-ops-surface1/70 bg-ops-dark/45">
                     <td colSpan={8} className="px-4 py-2">
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <div className="flex min-w-0 items-center gap-2">
+                        <button
+                          onClick={() => toggleGroupCollapse(group.id)}
+                          className="flex min-w-0 items-center gap-2 text-left"
+                        >
+                          <span className="font-mono text-[11px] text-ops-overlay">
+                            {collapsedGroups.has(group.id) ? '+' : '-'}
+                          </span>
                           <span className="rounded-lg border border-ops-accent/25 bg-ops-accent/10 px-2 py-0.5 font-semibold text-ops-accent">
                             {group.label}
                           </span>
                           <span className="text-ops-overlay">
                             本页 {group.items.length} 条 / 共 {group.count} 条
                           </span>
-                        </div>
+                        </button>
                         <span className="text-[11px] text-ops-overlay">
                           {ASSET_TABLE_GROUP_OPTIONS.find((option) => option.id === groupBy)?.label}
                         </span>
@@ -379,7 +428,7 @@ export function AssetTablePanel({
                     </td>
                   </tr>
                 )}
-                {group.items.map((asset) => {
+                {!collapsedGroups.has(group.id) && group.items.map((asset) => {
                   const display = displayForAsset(asset)
                   const matrix = matrixByAssetId.get(asset.id)
                   const verification = verificationBadge(matrix)
