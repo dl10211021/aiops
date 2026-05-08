@@ -49,6 +49,41 @@ class DispatcherUtilityToolsTest(unittest.TestCase):
         self.assertEqual(json.loads(result)["success"], True)
         send_notification.assert_called_once_with("wechat", "巡检", "完成")
 
+    def test_search_knowledge_base_uses_vault_context_before_vector_store(self):
+        with (
+            patch(
+                "core.knowledge_base_service.build_vault_rag_context_for_prompt",
+                return_value={
+                    "context": "[OpsCore RAG 证据上下文]\n192.168.11.132 是 kmstest 资产。",
+                    "references": [{"title": "账号台账"}],
+                },
+            ),
+            patch("core.llm_factory.get_embedding_client_and_model") as embedding_factory,
+        ):
+            result = asyncio.run(
+                execute_utility_tool(
+                    "search_knowledge_base",
+                    {"query": "192.168.11.132是干嘛的"},
+                )
+            )
+
+        payload = json.loads(result)
+        self.assertEqual(payload["status"], "SUCCESS")
+        self.assertEqual(payload["source"], "vault")
+        self.assertIn("kmstest", payload["results"])
+        embedding_factory.assert_not_called()
+
+    def test_web_search_reports_success_from_search_provider(self):
+        with patch(
+            "core.dispatcher_utility_tools._run_duckduckgo_search",
+            return_value=[{"title": "Python", "href": "https://www.python.org"}],
+        ):
+            result = asyncio.run(execute_utility_tool("web_search", {"query": "Python"}))
+
+        payload = json.loads(result)
+        self.assertEqual(payload["status"], "SUCCESS")
+        self.assertEqual(payload["results"][0]["title"], "Python")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -69,37 +69,68 @@ async def _send_notification(args: dict[str, Any], logger: logging.Logger) -> st
 
 
 async def _search_knowledge_base(args: dict[str, Any]) -> str:
-    from core.llm_factory import get_embedding_client_and_model
-    from core.rag import kb_manager
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return json.dumps({"error": "知识库检索关键词不能为空。"}, ensure_ascii=False)
 
-    client, embedding_model = get_embedding_client_and_model()
-    query = args.get("query")
     try:
+        from core.knowledge_base_service import build_vault_rag_context_for_prompt
+
+        vault_result = await asyncio.to_thread(build_vault_rag_context_for_prompt, query, limit=5)
+        context = str(vault_result.get("context") or "").strip()
+        if context:
+            return json.dumps(
+                {
+                    "status": "SUCCESS",
+                    "source": "vault",
+                    "results": context,
+                    "references": vault_result.get("references") or [],
+                },
+                ensure_ascii=False,
+            )
+    except Exception as exc:
+        logging.getLogger(__name__).warning("vault knowledge lookup failed: %s", exc)
+
+    try:
+        from core.llm_factory import get_embedding_client_and_model
+        from core.rag import kb_manager
+
+        client, embedding_model = get_embedding_client_and_model()
         result = await asyncio.wait_for(
             kb_manager.search(query, client, embedding_model), timeout=60.0
         )
-        return json.dumps({"status": "SUCCESS", "results": result})
+        return json.dumps({"status": "SUCCESS", "source": "vector", "results": result}, ensure_ascii=False)
     except asyncio.TimeoutError:
-        return json.dumps({"error": "知识库检索超时被强制截断。"})
+        return json.dumps({"error": "知识库检索超时被强制截断。"}, ensure_ascii=False)
     except Exception as e:
-        return json.dumps({"error": f"知识库检索异常: {str(e)}"})
+        return json.dumps({"error": f"知识库检索异常: {str(e)}"}, ensure_ascii=False)
+
+
+def _run_duckduckgo_search(query: str, logger: logging.Logger) -> list[dict[str, Any]]:
+    try:
+        from ddgs import DDGS
+    except ImportError:
+        from duckduckgo_search import DDGS
+
+    logger.info(f"AI 发起了外网检索: {query}")
+    with DDGS() as ddgs:
+        return [r for r in ddgs.text(query, max_results=5)]
 
 
 async def _web_search(args: dict[str, Any], logger: logging.Logger) -> str:
-    query = args.get("query")
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return json.dumps({"error": "联网搜索关键词不能为空。"}, ensure_ascii=False)
     try:
-
-        def do_search():
-            from duckduckgo_search import DDGS
-
-            logger.info(f"AI 发起了外网检索: {query}")
-            with DDGS() as ddgs:
-                return [r for r in ddgs.text(query, max_results=5)]
-
-        results = await asyncio.to_thread(do_search)
+        results = await asyncio.wait_for(
+            asyncio.to_thread(_run_duckduckgo_search, query, logger),
+            timeout=20.0,
+        )
         return json.dumps({"status": "SUCCESS", "results": results}, ensure_ascii=False)
+    except asyncio.TimeoutError:
+        return json.dumps({"error": "联网搜索超时，请稍后重试或换一个更具体的关键词。"}, ensure_ascii=False)
     except Exception as e:
-        return json.dumps({"error": f"外网检索异常: {str(e)}"})
+        return json.dumps({"error": f"外网检索异常: {str(e)}"}, ensure_ascii=False)
 
 
 async def _search_assets_by_tag(args: dict[str, Any], logger: logging.Logger) -> str:
