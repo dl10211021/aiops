@@ -44,7 +44,13 @@ export default function SystemConfigCenter() {
 
       <section className="grid gap-4 xl:grid-cols-3">
         {CONFIG_CARDS.map((card) => (
-          <article key={card.id} className="ops-card overflow-hidden">
+          <button
+            key={card.id}
+            type="button"
+            onClick={() => openModal(card.modal)}
+            className="ops-card group overflow-hidden text-left transition-all hover:border-ops-accent/45 hover:shadow-[0_18px_50px_rgba(40,208,168,0.08)] focus:outline-none focus:ring-2 focus:ring-ops-accent/45"
+            aria-label={card.action}
+          >
             <div className="ops-card-header block">
               <div className="text-[11px] font-black uppercase tracking-[0.24em] text-ops-accent">{card.eyebrow}</div>
               <h2 className="mt-2 text-xl font-black text-ops-text">{card.title}</h2>
@@ -58,15 +64,11 @@ export default function SystemConfigCenter() {
               ))}
             </div>
             <div className="ops-card-footer">
-              <button
-                type="button"
-                onClick={() => openModal(card.modal)}
-                className="ops-primary-action w-full px-4 py-2 text-sm"
-              >
+              <span className="ops-primary-action block w-full px-4 py-2 text-center text-sm transition-transform group-hover:translate-x-0.5">
                 {card.action}
-              </button>
+              </span>
             </div>
-          </article>
+          </button>
         ))}
       </section>
 
