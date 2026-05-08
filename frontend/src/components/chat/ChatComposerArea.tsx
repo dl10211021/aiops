@@ -95,7 +95,7 @@ export default function ChatComposerArea({
 
   return (
     <div
-      className="relative border-t border-ops-surface1/70 bg-[linear-gradient(180deg,rgba(14,30,49,0.92),rgba(9,20,35,0.98))] px-3 py-2 lg:px-4"
+      className="ops-chat-composer relative border-t border-ops-surface1/70 px-3 py-2 lg:px-4"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}

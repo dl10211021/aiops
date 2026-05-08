@@ -393,10 +393,10 @@ export default function ChatWindow() {
         <span className="my-3 w-[2px] rounded-full bg-ops-surface0/90" />
       </div>
       <section
-        className="flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden border-l border-ops-surface1/70 bg-[linear-gradient(180deg,rgba(13,31,50,0.98),rgba(8,18,32,0.96))] transition-[width] duration-200"
+        className="ops-chat-intel-panel flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden border-l border-ops-surface1/70 transition-[width] duration-200"
         style={{ width: rightPanelCollapsed ? '48px' : `${rightPanelWidth}px` }}
       >
-        <div className="flex h-12 shrink-0 items-center justify-between border-b border-ops-surface0/80 bg-ops-dark/70 px-3">
+        <div className="ops-chat-intel-header flex h-12 shrink-0 items-center justify-between border-b border-ops-surface0/80 px-3">
           {!rightPanelCollapsed && (
             <div className="min-w-0">
               <span className="block text-[11px] font-black uppercase tracking-[0.22em] text-ops-accent">Intel Panel</span>
@@ -437,7 +437,7 @@ export default function ChatWindow() {
           </button>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="grid grid-cols-3 gap-1 border-b border-ops-surface0/80 bg-ops-dark/45 px-3 py-2">
+            <div className="ops-chat-intel-tabs grid grid-cols-3 gap-1 border-b border-ops-surface0/80 px-3 py-2">
               {[
                 ['asset', '资产画像', '画像'],
                 ['memory', '会话记忆', '记忆'],
@@ -475,7 +475,7 @@ export default function ChatWindow() {
                     onGenerate={assetProfile.generate}
                   />
                 </div>
-                <div className="mx-3 mb-3 rounded-2xl border border-ops-surface0/85 bg-ops-dark/32 px-3 py-3 text-xs leading-5 text-ops-subtext">
+                <div className="ops-chat-asset-note mx-3 mb-3 rounded-2xl border border-ops-surface0/85 px-3 py-3 text-xs leading-5 text-ops-subtext">
                   <div className="font-black uppercase tracking-[0.18em] text-ops-accent">Asset Intel</div>
                   <p className="mt-2">
                     这里聚焦当前会话绑定资产。需要追踪 AI 做了什么时，切到「链路」；需要看本会话沉淀和引用，切到「记忆」。

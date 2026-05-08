@@ -51,7 +51,7 @@ export default function ChatMessageList({
   return (
     <div
       ref={containerRef}
-      className="min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(circle_at_18%_8%,rgba(40,208,168,0.055),transparent_22rem),linear-gradient(180deg,rgba(9,19,34,0.58),rgba(8,17,30,0.88))] px-4 py-4 lg:px-6 lg:py-5"
+      className="ops-chat-message-list min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6 lg:py-5"
     >
       <div className="mx-auto w-full max-w-[1060px] space-y-3">
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ops-surface0/70 bg-ops-panel/38 px-3 py-2 text-[11px] text-ops-overlay">
