@@ -34,8 +34,8 @@ export function UserMessageBubble({
       <div className="max-w-[86%] rounded-lg rounded-br-sm bg-ops-accent/15 px-4 py-2.5 text-sm text-ops-text">
         <div className="mb-1 flex items-center justify-end gap-2">
           <span className="font-mono text-[11px] text-ops-overlay">{userTime}</span>
-          <button onClick={() => onEdit?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-subtext opacity-0 transition-opacity hover:bg-ops-dark/50 hover:text-ops-text group-hover:opacity-100">编辑</button>
-          <button onClick={() => onDelete?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-alert opacity-0 transition-opacity hover:bg-ops-alert/10 group-hover:opacity-100">删除</button>
+          <button onClick={() => onEdit?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-subtext opacity-0 transition-opacity hover:bg-ops-dark/50 hover:text-ops-text group-hover:opacity-100">编辑消息</button>
+          <button onClick={() => onDelete?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-alert opacity-0 transition-opacity hover:bg-ops-alert/10 group-hover:opacity-100">删除消息</button>
         </div>
         <div className="whitespace-pre-wrap">{message.content}</div>
         {message.attachments && message.attachments.length > 0 && (
@@ -177,8 +177,8 @@ export function AssistantReportBubble({
           >
             👎
           </button>
-          <button onClick={() => onEdit?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-subtext transition-colors hover:bg-ops-dark/50 hover:text-ops-text">编辑</button>
-          <button onClick={() => onDelete?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-alert transition-colors hover:bg-ops-alert/10">删除</button>
+          <button onClick={() => onEdit?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-subtext transition-colors hover:bg-ops-dark/50 hover:text-ops-text">编辑消息</button>
+          <button onClick={() => onDelete?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-alert transition-colors hover:bg-ops-alert/10">删除消息</button>
           <span className="font-mono text-[11px] text-ops-overlay">{assistantTime}</span>
         </div>
       </div>
