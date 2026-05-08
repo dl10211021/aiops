@@ -13,11 +13,11 @@ export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificatio
   const protocolChipClass = (item: (typeof supportedProtocols)[number]) => {
     if (item.is_current) return 'border-ops-accent/50 bg-ops-accent/12 text-ops-accent'
     if (item.security === 'not_recommended') return 'border-ops-alert/35 bg-ops-alert/10 text-ops-alert'
-    return 'border-ops-surface1 bg-ops-surface0 text-ops-subtext'
+    return 'border-ops-surface1 bg-ops-surface2/70 text-ops-subtext'
   }
 
   return (
-    <section className="mb-5 rounded-lg border border-ops-surface0 bg-ops-dark/30 p-4">
+    <section className="ops-data-panel mb-5 p-4">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-bold text-ops-text">主接入检查</h3>
         <span className="font-mono text-xs text-ops-overlay">
@@ -25,11 +25,11 @@ export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificatio
         </span>
       </div>
       {supportedProtocols.length > 0 && (
-        <div className="mb-3 rounded-lg border border-ops-surface0 bg-ops-panel/55 px-3 py-2">
+        <div className="ops-data-panel mb-3 px-3 py-2">
           <div className="mb-2 flex items-center justify-between gap-3">
             <div className="text-[11px] font-semibold text-ops-subtext">主接入协议</div>
             {currentProtocol && (
-              <span className="rounded-full bg-ops-accent/10 px-2 py-0.5 text-[10px] text-ops-accent">
+              <span className="ops-control px-2 py-0.5 text-[10px] text-ops-accent">
                 当前：{currentProtocol.label}
               </span>
             )}
@@ -51,7 +51,7 @@ export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificatio
             ))}
           </div>
           {auxiliaryProtocols.length > 0 && (
-            <details className="mt-3 rounded-lg border border-ops-surface0 bg-ops-dark/30 px-3 py-2">
+            <details className="ops-data-panel mt-3 px-3 py-2">
               <summary className="cursor-pointer text-[11px] font-semibold text-ops-subtext">
                 辅助采集/探测 {auxiliaryProtocols.length} 项
               </summary>
@@ -74,7 +74,7 @@ export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificatio
       )}
       <div className="space-y-2">
         {matrix.steps.map((step) => (
-          <div key={step.id} title={step.description} className="rounded-lg bg-ops-surface0/60 px-3 py-2">
+          <div key={step.id} title={step.description} className="ops-data-panel px-3 py-2">
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-ops-text">{step.label}</span>
               <span className={`rounded px-2 py-0.5 text-[11px] ${step.status === 'supported' ? 'bg-ops-success/15 text-ops-success' : 'bg-ops-alert/15 text-ops-alert'}`}>
@@ -86,7 +86,7 @@ export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificatio
         ))}
       </div>
       {activeToolDetails.length > 0 && (
-        <details className="mt-3 rounded-lg border border-ops-surface0 bg-ops-panel/45 px-3 py-2">
+        <details className="ops-data-panel mt-3 px-3 py-2">
           <summary className="cursor-pointer text-[11px] font-semibold text-ops-subtext">
             可用工具 {activeToolDetails.length} 个
           </summary>
@@ -95,7 +95,7 @@ export function VerificationMatrixSection({ matrix }: { matrix: AssetVerificatio
               <span
                 key={tool.name}
                 title={[tool.name, tool.description].filter(Boolean).join(' · ')}
-                className="rounded bg-ops-surface0 px-2 py-0.5 text-[10px] text-ops-subtext"
+                className="ops-control px-2 py-0.5 text-[10px] text-ops-subtext"
               >
                 {tool.label || toolLabel(tool.name)}
               </span>
@@ -112,7 +112,7 @@ function VerificationRunCard({ run, isLatest = false }: { run: AssetVerification
   const shouldOpen = run.status !== 'success' || abnormalSteps.length > 0
 
   return (
-    <div className="rounded-lg border border-ops-surface0 bg-ops-panel/70 p-3">
+    <div className="ops-data-panel p-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className={`rounded px-2 py-0.5 text-[11px] ${run.status === 'success' ? 'bg-ops-success/15 text-ops-success' : 'bg-ops-alert/15 text-ops-alert'}`}>
           {statusLabel(run.status)}
@@ -122,12 +122,12 @@ function VerificationRunCard({ run, isLatest = false }: { run: AssetVerification
         <span className="ml-auto text-[11px] text-ops-overlay">{run.completed_at}</span>
       </div>
       <details className="mt-2" open={shouldOpen}>
-        <summary className="cursor-pointer rounded-lg bg-ops-dark/45 px-3 py-2 text-[11px] text-ops-subtext">
+        <summary className="ops-data-panel cursor-pointer px-3 py-2 text-[11px] text-ops-subtext">
           {abnormalSteps.length > 0 ? `查看 ${abnormalSteps.length} 个异常项` : `查看 ${run.steps.length} 项验证详情`}
         </summary>
         <div className="mt-2 grid gap-2">
           {run.steps.map((step) => (
-            <div key={`${run.id}-${step.id}`} className="rounded-lg bg-ops-dark/45 px-3 py-2">
+            <div key={`${run.id}-${step.id}`} className="ops-data-panel px-3 py-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-ops-text">{step.label}</span>
                 <span className={`text-[11px] ${step.status === 'success' ? 'text-ops-success' : step.status === 'skipped' ? 'text-ops-overlay' : 'text-ops-alert'}`}>
@@ -148,17 +148,17 @@ export function VerificationHistorySection({ runs }: { runs: AssetVerificationRu
   const olderRuns = runs.slice(1)
 
   return (
-    <section className="rounded-lg border border-ops-surface0 bg-ops-dark/30 p-4">
+    <section className="ops-data-panel p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-bold text-ops-text">验证历史</h3>
-        <span className="rounded-full bg-ops-surface0 px-2.5 py-1 font-mono text-[11px] text-ops-overlay">
+        <span className="ops-control px-2.5 py-1 font-mono text-[11px] text-ops-overlay">
           {runs.length} 次
         </span>
       </div>
       <div className="space-y-3">
         {latestRun && <VerificationRunCard run={latestRun} isLatest />}
         {olderRuns.length > 0 && (
-          <details className="rounded-lg border border-ops-surface0 bg-ops-panel/45 px-3 py-2">
+          <details className="ops-data-panel px-3 py-2">
             <summary className="cursor-pointer text-[11px] font-semibold text-ops-subtext">
               更早历史 {olderRuns.length} 次
             </summary>
@@ -185,19 +185,19 @@ export function InspectionRunsSection({
   onOpenInspectionReport: (runId: string) => void
 }) {
   return (
-    <section className="mt-5 rounded-lg border border-ops-surface0 bg-ops-dark/30 p-4">
+    <section className="ops-data-panel mt-5 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-bold text-ops-text">巡检运行</h3>
           <p className="mt-1 text-xs text-ops-overlay">按资产过滤的定时巡检结果，可直接打开报告详情。</p>
         </div>
-        <span className="rounded-full bg-ops-surface0 px-2.5 py-1 font-mono text-[11px] text-ops-accent">
+        <span className="ops-control px-2.5 py-1 font-mono text-[11px] text-ops-accent">
           {runs.length} 条记录
         </span>
       </div>
       <div className="space-y-3">
         {runs.map((run) => (
-          <div key={run.id} className="rounded-lg border border-ops-surface0 bg-ops-panel/70 p-3">
+          <div key={run.id} className="ops-data-panel p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
                 <span className={`rounded px-2 py-0.5 text-[11px] ${
@@ -214,7 +214,7 @@ export function InspectionRunsSection({
               </div>
               <button
                 onClick={() => onOpenInspectionReport(run.id)}
-                className="rounded-lg bg-ops-accent/15 px-2.5 py-1 text-[11px] text-ops-accent hover:bg-ops-accent/25"
+                className="ops-muted-action px-2.5 py-1 text-[11px] text-ops-accent"
               >
                 查看报告
               </button>
@@ -225,7 +225,7 @@ export function InspectionRunsSection({
               <span>目标：{run.target_count}</span>
               <span>完成：{run.completed_at || '-'}</span>
             </div>
-            <div className="mt-2 truncate rounded-lg bg-ops-dark/45 px-3 py-2 text-xs text-ops-overlay">
+            <div className="ops-data-panel mt-2 truncate px-3 py-2 text-xs text-ops-overlay">
               {run.message}
             </div>
           </div>
