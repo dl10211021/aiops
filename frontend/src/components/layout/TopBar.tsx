@@ -21,7 +21,13 @@ export default function TopBar() {
     togglePermission,
     toggleSidebar,
   } = useTopBarState()
-  const showGlobalActions = currentView !== 'assets'
+  const showGlobalActions = currentView !== 'assets' && currentView !== 'config'
+  const viewDescription =
+    currentView === 'chat'
+      ? '请选择或新建一个会话'
+      : currentView === 'config'
+        ? '管理模型、安全和通知等系统级配置'
+        : '统一资产、会话、知识和审计工作流'
 
   return (
     <header className="ops-topbar col-span-2 grid min-h-[56px] grid-cols-[236px_minmax(0,1fr)_auto] items-center gap-3 border-b border-ops-surface0/80 px-3.5 backdrop-blur-xl">
@@ -57,9 +63,7 @@ export default function TopBar() {
         <>
           <div className="flex min-w-0 items-center gap-3 text-sm">
             <span className="font-semibold text-ops-text">{VIEW_LABELS[currentView] || 'OpsCore'}</span>
-            <span className="hidden truncate text-xs text-ops-subtext md:block">
-              {currentView === 'chat' ? '请选择或新建一个会话' : '统一资产、会话、知识和审计工作流'}
-            </span>
+            <span className="hidden truncate text-xs text-ops-subtext md:block">{viewDescription}</span>
           </div>
           <div className="flex min-w-0 items-center justify-end gap-2">
             <ThemeSelector value={theme} onChange={setTheme} />
