@@ -29,7 +29,7 @@ export default function ConnectionAdvancedParamsSection({
   const maturityLabel = maturity ? MATURITY_LABELS[maturity] || maturity : ''
 
   return (
-    <div className="rounded-lg border border-ops-surface1 bg-ops-dark/30 p-3">
+    <div className="ops-data-panel p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="text-xs font-semibold text-ops-text">连接参数</div>
         {connectorLabel && (
@@ -41,7 +41,7 @@ export default function ConnectionAdvancedParamsSection({
       </div>
       <div className="space-y-3">
         {paramGroups.map((group) => (
-          <div key={group.group} className="rounded-lg border border-ops-surface0 bg-ops-panel/35 p-3">
+          <div key={group.group} className="ops-data-panel p-3">
             <div className="mb-2 text-[11px] font-semibold text-ops-subtext">{group.group}</div>
             <div className="grid grid-cols-2 gap-3">
               {group.items.map((param) => (

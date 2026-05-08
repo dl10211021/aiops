@@ -14,7 +14,7 @@ export default function ConnectionScopeSelector({
   onChange,
 }: ConnectionScopeSelectorProps) {
   return (
-    <section className="rounded-lg border border-ops-surface0 bg-ops-dark/25 p-3">
+    <section className="ops-data-panel p-3">
       <div className="mb-2 text-xs font-semibold text-ops-text">连接范围</div>
       <div className="grid gap-2 sm:grid-cols-3">
         {TARGET_SCOPE_OPTIONS.map((option) => (
@@ -25,7 +25,7 @@ export default function ConnectionScopeSelector({
             className={`rounded-lg border px-3 py-2 text-left transition-colors ${
               value === option.value
                 ? 'border-ops-accent bg-ops-accent/15 text-ops-text'
-                : 'border-ops-surface1 bg-ops-panel/40 text-ops-subtext hover:text-ops-text'
+                : 'border-ops-surface1 bg-ops-panel/40 text-ops-subtext hover:bg-ops-surface0/60 hover:text-ops-text'
             }`}
           >
             <div className="text-sm font-semibold">{option.label}</div>

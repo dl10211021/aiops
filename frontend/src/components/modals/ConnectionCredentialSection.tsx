@@ -30,7 +30,7 @@ export default function ConnectionCredentialSection({
   onUsernameChange,
 }: ConnectionCredentialSectionProps) {
   return (
-    <section className="rounded-lg border border-ops-surface0 bg-ops-dark/20 p-3">
+    <section className="ops-data-panel p-3">
       <div className="mb-3 text-xs font-semibold text-ops-text">连接地址与凭据</div>
       <div className="grid grid-cols-3 gap-3">
         <div className="col-span-2">
@@ -40,7 +40,7 @@ export default function ConnectionCredentialSection({
           <input
             value={host}
             onChange={(event) => onHostChange(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control mt-1 w-full px-3 py-2 text-sm"
             placeholder={isEndpointBackedAsset ? (inferredHostFromEndpoint || '可从 Endpoint/Base URL 自动识别') : '192.168.1.100'}
           />
           {isEndpointBackedAsset && (
@@ -57,7 +57,7 @@ export default function ConnectionCredentialSection({
             type="number"
             value={port}
             onChange={(event) => onPortChange(parseInt(event.target.value) || 22)}
-            className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control mt-1 w-full px-3 py-2 text-sm"
           />
         </div>
       </div>
@@ -70,7 +70,7 @@ export default function ConnectionCredentialSection({
               <input
                 value={username}
                 onChange={(event) => onUsernameChange(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+                className="ops-control mt-1 w-full px-3 py-2 text-sm"
               />
             </div>
           )}
@@ -81,7 +81,7 @@ export default function ConnectionCredentialSection({
                 type="password"
                 value={password}
                 onChange={(event) => onPasswordChange(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+                className="ops-control mt-1 w-full px-3 py-2 text-sm"
               />
             </div>
           )}

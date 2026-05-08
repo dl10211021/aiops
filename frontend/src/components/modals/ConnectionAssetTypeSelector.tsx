@@ -60,7 +60,7 @@ export default function ConnectionAssetTypeSelector({
     : selectedTools.map((name) => ({ name }))
 
   return (
-    <section className="rounded-lg border border-ops-surface0 bg-ops-dark/20 p-3">
+    <section className="ops-data-panel p-3">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-semibold text-ops-text">资产类型与主接入方式</div>
@@ -68,7 +68,7 @@ export default function ConnectionAssetTypeSelector({
             当前分类 {subTypeOptions.length} 类资产，只展示 AI 运维最常用的登录、查询或 API 接入。
           </div>
         </div>
-        <span className="rounded bg-ops-surface0 px-2 py-0.5 text-[10px] text-ops-subtext">
+        <span className="ops-control px-2 py-0.5 text-[10px] text-ops-subtext">
           {currentProtocol.toUpperCase()}
         </span>
       </div>
@@ -78,7 +78,7 @@ export default function ConnectionAssetTypeSelector({
           <select
             value={category}
             onChange={(event) => onCategoryChange(event.target.value)}
-            className="w-full appearance-none rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control w-full appearance-none px-3 py-2 text-sm"
           >
             {categoryGroups.map((group) => (
               <optgroup key={group.group} label={group.group}>
@@ -101,12 +101,12 @@ export default function ConnectionAssetTypeSelector({
             value={assetTypeSearch}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="搜索资产类型或主接入方式"
-            className="mb-2 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control mb-2 w-full px-3 py-2 text-sm"
           />
           <select
             value={subType}
             onChange={(event) => onSubTypeChange(event.target.value)}
-            className="w-full appearance-none rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control w-full appearance-none px-3 py-2 text-sm"
           >
             {subTypeGroups.map((group) => (
               <optgroup key={group.group} label={group.group}>
@@ -117,7 +117,7 @@ export default function ConnectionAssetTypeSelector({
           </select>
         </div>
         {selectedSubInfo && (
-          <div className="col-span-2 rounded-lg border border-ops-surface1 bg-ops-dark/30 px-3 py-2">
+          <div className="ops-data-panel col-span-2 px-3 py-2">
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-ops-text">{selectedSubInfo.label}</span>
@@ -127,10 +127,10 @@ export default function ConnectionAssetTypeSelector({
                 <span className="text-ops-subtext">{selectedConnectorGroup}</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded bg-ops-surface0 px-1.5 py-0.5 text-[10px] text-ops-subtext">
+                <span className="ops-control px-1.5 py-0.5 text-[10px] text-ops-subtext">
                   默认端口 {selectedSubInfo.defaultPort}
                 </span>
-                <span className="rounded bg-ops-surface0 px-1.5 py-0.5 text-[10px] text-ops-subtext">
+                <span className="ops-control px-1.5 py-0.5 text-[10px] text-ops-subtext">
                   {selectedSubInfo.capability?.credential_fields?.length || 2} 个凭据字段
                 </span>
               </div>
@@ -153,7 +153,7 @@ export default function ConnectionAssetTypeSelector({
               </p>
             )}
             {displayTools.length > 0 && (
-              <details className="mt-2 rounded-lg border border-ops-surface1 bg-ops-panel/45 px-2.5 py-2">
+              <details className="ops-data-panel mt-2 px-2.5 py-2">
                 <summary className="cursor-pointer text-[11px] font-semibold text-ops-subtext">
                   AI 可用工具 {displayTools.length} 个
                 </summary>
@@ -162,7 +162,7 @@ export default function ConnectionAssetTypeSelector({
                     <span
                       key={tool.name}
                       title={[tool.name, tool.description].filter(Boolean).join(' · ')}
-                      className="rounded bg-ops-surface0 px-1.5 py-0.5 text-[10px] text-ops-subtext"
+                      className="ops-control px-1.5 py-0.5 text-[10px] text-ops-subtext"
                     >
                       {tool.label || toolLabel(tool.name)}
                     </span>

@@ -31,7 +31,7 @@ export default function ConnectionSkillsSelector({
   })
 
   return (
-    <section className="rounded-lg border border-ops-surface0 bg-ops-dark/20 p-3">
+    <section className="ops-data-panel p-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div>
           <div className="text-xs font-semibold text-ops-text">会话技能</div>
@@ -42,7 +42,7 @@ export default function ConnectionSkillsSelector({
           placeholder="搜索技能..."
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
-          className="w-48 rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-1.5 text-xs text-ops-text outline-none focus:border-ops-accent"
+          className="ops-control w-48 px-3 py-1.5 text-xs"
         />
       </div>
       <div className="grid max-h-32 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -53,7 +53,7 @@ export default function ConnectionSkillsSelector({
             className={`min-w-0 rounded-lg border px-2.5 py-1.5 text-left text-[11px] transition-colors ${
               selectedSkills.has(skill.id)
                 ? 'border-ops-accent/45 bg-ops-accent/15 text-ops-accent'
-                : 'border-transparent bg-ops-surface0 text-ops-subtext hover:text-ops-text'
+                : 'border-transparent bg-ops-surface0 text-ops-subtext hover:bg-ops-surface1/70 hover:text-ops-text'
             }`}
             title={skill.description || skill.name || skill.id}
           >
@@ -61,7 +61,7 @@ export default function ConnectionSkillsSelector({
           </button>
         ))}
         {orderedFilteredSkills.length === 0 && (
-          <div className="col-span-full rounded-lg border border-ops-surface0 bg-ops-panel/40 px-3 py-3 text-center text-xs text-ops-overlay">
+          <div className="ops-data-panel col-span-full px-3 py-3 text-center text-xs text-ops-overlay">
             没有匹配的技能
           </div>
         )}

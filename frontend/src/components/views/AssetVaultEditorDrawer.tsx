@@ -117,7 +117,7 @@ export function AssetVaultEditorDrawer({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/55">
-      <aside className="flex h-full w-full max-w-[760px] flex-col border-l border-ops-surface1 bg-ops-panel shadow-2xl">
+      <aside className="ops-modal-surface flex h-full w-full max-w-[760px] flex-col rounded-none border-l border-ops-surface1">
         <header className="border-b border-ops-surface1 bg-[linear-gradient(135deg,rgba(38,207,175,0.12),rgba(10,18,32,0.96)_55%,rgba(44,88,148,0.14))] px-5 py-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
@@ -138,7 +138,7 @@ export function AssetVaultEditorDrawer({
             </div>
             <button
               onClick={onClose}
-              className="rounded-lg border border-ops-surface1 bg-ops-panel px-3 py-1.5 text-sm font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
+              className="ops-muted-action px-3 py-1.5 text-sm"
             >
               关闭
             </button>
@@ -146,7 +146,7 @@ export function AssetVaultEditorDrawer({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          <section className="mb-4 grid gap-3 rounded-xl border border-ops-surface1 bg-ops-dark/25 p-4 md:grid-cols-3">
+          <section className="ops-data-panel mb-4 grid gap-3 p-4 md:grid-cols-3">
             <InfoItem label="资产 ID" value={String(asset.id)} />
             <InfoItem label="当前地址" value={`${asset.host}:${asset.port}`} />
             <InfoItem label="资产组" value={normalizeSessionGroupName(asset.tags?.[0]) || DEFAULT_SESSION_GROUP} />
@@ -202,7 +202,7 @@ export function AssetVaultEditorDrawer({
                   <button
                     onClick={applyTypeDefault}
                     disabled={!selectedType}
-                    className="h-10 rounded-lg border border-ops-accent/35 bg-ops-accent/10 px-3 text-xs font-semibold text-ops-accent hover:bg-ops-accent/18 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="ops-muted-action h-10 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     应用默认
                   </button>
@@ -212,7 +212,7 @@ export function AssetVaultEditorDrawer({
                 默认建议：Linux 使用 SSH，Windows 使用 WinRM，数据库使用原生数据库协议，ESXi 可按实际接入选择 SSH/API。
               </p>
               {selectedToolDetails.length > 0 && (
-                <details className="mt-3 rounded-lg border border-ops-surface1 bg-ops-panel/45 px-3 py-2">
+                <details className="ops-data-panel mt-3 px-3 py-2">
                   <summary className="cursor-pointer text-[11px] font-semibold text-ops-subtext">
                     AI 工具目录 {selectedToolDetails.length} 个
                   </summary>
@@ -221,7 +221,7 @@ export function AssetVaultEditorDrawer({
                       <span
                         key={tool.name}
                         title={[tool.name, tool.description].filter(Boolean).join(' · ')}
-                        className="rounded bg-ops-surface0 px-2 py-0.5 text-[10px] text-ops-subtext"
+                        className="ops-control px-2 py-0.5 text-[10px] text-ops-subtext"
                       >
                         {tool.label || toolLabel(tool.name)}
                       </span>
@@ -269,14 +269,14 @@ export function AssetVaultEditorDrawer({
               <textarea
                 value={extraArgsText}
                 onChange={(event) => setExtraArgsText(event.target.value)}
-                className="min-h-40 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 font-mono text-xs text-ops-text outline-none focus:border-ops-accent"
+                className="ops-control min-h-40 w-full px-3 py-2 font-mono text-xs"
                 spellCheck={false}
               />
             </EditorBlock>
           </section>
         </div>
 
-        <footer className="border-t border-ops-surface1 bg-ops-surface0/70 px-5 py-4">
+        <footer className="ops-modal-footer">
           {error && (
             <div className="mb-3 rounded-lg border border-rose-400/35 bg-rose-400/10 px-3 py-2 text-xs text-rose-100">
               {error}
@@ -289,20 +289,20 @@ export function AssetVaultEditorDrawer({
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => onOpenVerification(asset)}
-                className="rounded-lg border border-ops-success/35 bg-ops-success/10 px-3 py-2 text-sm font-semibold text-ops-success hover:bg-ops-success/18"
+                className="ops-muted-action px-3 py-2 text-sm text-ops-success"
               >
                 验证
               </button>
               <button
                 onClick={() => onConnect(asset)}
-                className="rounded-lg border border-ops-accent/35 bg-ops-accent/10 px-3 py-2 text-sm font-semibold text-ops-accent hover:bg-ops-accent/18"
+                className="ops-muted-action px-3 py-2 text-sm text-ops-accent"
               >
                 进入会话
               </button>
               <button
                 onClick={submit}
                 disabled={saving}
-                className="rounded-lg bg-ops-accent px-4 py-2 text-sm font-bold text-ops-dark hover:bg-ops-accent/80 disabled:cursor-not-allowed disabled:opacity-60"
+                className="ops-primary-action px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving ? '保存中...' : '保存资产'}
               </button>
@@ -316,7 +316,7 @@ export function AssetVaultEditorDrawer({
 
 function EditorBlock({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
   return (
-    <section className="rounded-xl border border-ops-surface1 bg-ops-panel/70 p-4">
+    <section className="ops-data-panel p-4">
       <div className="mb-3">
         <h3 className="text-sm font-bold text-ops-text">{title}</h3>
         <p className="mt-1 text-[11px] text-ops-overlay">{hint}</p>
@@ -360,4 +360,4 @@ function setOptionalField(target: Record<string, unknown>, field: string, value:
   }
 }
 
-const inputClass = 'h-10 rounded-lg border border-ops-surface1 bg-ops-dark px-3 text-sm text-ops-text outline-none focus:border-ops-accent'
+const inputClass = 'ops-control h-10 px-3 text-sm'
