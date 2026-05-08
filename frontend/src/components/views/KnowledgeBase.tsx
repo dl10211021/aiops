@@ -186,8 +186,8 @@ export default function KnowledgeBase() {
       next: '知识库/RAG 可以全局共享；AI 会话记忆严格按 session 隔离，审计归档不会自动进入提示词。',
     }
   return (
-    <div className="flex-1 overflow-y-auto p-4 lg:p-5">
-      <div className="w-full max-w-none">
+    <div className="ops-page">
+      <div className="ops-page-inner">
         <PageHeader
           title="知识库"
           description="资料库/RAG 用于全局共享知识；AI 会话记忆只属于当前 session，互不串用。"
@@ -203,21 +203,21 @@ export default function KnowledgeBase() {
                 <button
                   type="button"
                   onClick={() => setMemoryStep('write')}
-                  className="bg-ops-accent text-ops-dark text-sm px-3 py-1.5 rounded-lg font-semibold hover:bg-ops-accent/90 transition-colors"
+                  className="ops-primary-action px-3 py-1.5 text-sm"
                 >
                   新建记忆
                 </button>
                 <button
                   type="button"
                   onClick={() => setMemoryStep('write')}
-                  className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors"
+                  className="ops-control rounded-lg px-3 py-1.5 text-sm font-semibold"
                 >
                   搜索记忆
                 </button>
                 <button
                   type="button"
                   onClick={() => setMemoryStep('feedback')}
-                  className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors"
+                  className="ops-control rounded-lg px-3 py-1.5 text-sm font-semibold"
                 >
                   反馈追踪
                 </button>
@@ -225,7 +225,7 @@ export default function KnowledgeBase() {
             )}
             <button
               onClick={handleRefresh}
-              className="bg-ops-surface0 text-ops-subtext text-sm px-3 py-1.5 rounded-lg hover:text-ops-text transition-colors"
+              className="ops-control rounded-lg px-3 py-1.5 text-sm font-semibold"
             >
               刷新
             </button>
@@ -247,25 +247,29 @@ export default function KnowledgeBase() {
           }}
         />
 
-        <section className="mb-4 grid gap-3 lg:grid-cols-2">
-          <div className="rounded-lg border border-ops-success/25 bg-ops-success/5 px-4 py-3">
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-ops-success/80">共享范围</div>
-            <div className="mt-1 text-sm font-semibold text-ops-text">知识库 / RAG 全局共享</div>
-            <p className="mt-1 text-xs leading-5 text-ops-subtext">
-              上传资料、原文预览、向量索引和 RAG 召回面向整个系统，所有会话都可以按权限检索这些资料。
-            </p>
+        <details className="mb-4 rounded-xl border border-ops-surface0 bg-ops-panel/55 p-3 text-sm text-ops-subtext">
+          <summary className="cursor-pointer select-none text-sm font-semibold text-ops-text">
+            使用说明：资料库全局共享，AI 记忆按会话隔离
+          </summary>
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            <div className="rounded-lg border border-ops-success/25 bg-ops-success/5 px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-ops-success/80">共享范围</div>
+              <div className="mt-1 text-sm font-semibold text-ops-text">知识库 / RAG 全局共享</div>
+              <p className="mt-1 text-xs leading-5 text-ops-subtext">
+                上传资料、原文预览、向量索引和 RAG 召回面向整个系统，所有会话都可以按权限检索这些资料。
+              </p>
+            </div>
+            <div className="rounded-lg border border-ops-accent/25 bg-ops-accent/5 px-4 py-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-ops-accent/80">隔离范围</div>
+              <div className="mt-1 text-sm font-semibold text-ops-text">AI 会话记忆按 session 隔离</div>
+              <p className="mt-1 text-xs leading-5 text-ops-subtext">
+                点赞、点踩、画像和成功经验只进入当前会话；完整轨迹保留用于审计，压缩后的成功经验/错误反馈才会被当前会话召回。
+              </p>
+            </div>
           </div>
-          <div className="rounded-lg border border-ops-accent/25 bg-ops-accent/5 px-4 py-3">
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-ops-accent/80">隔离范围</div>
-          <div className="mt-1 text-sm font-semibold text-ops-text">AI 会话记忆按 session 隔离</div>
-          <p className="mt-1 text-xs leading-5 text-ops-subtext">
-              点赞、点踩、画像和成功经验只进入当前会话；完整轨迹保留用于审计，压缩后的成功经验/错误反馈才会被当前会话召回。
-          </p>
-          </div>
-        </section>
+        </details>
 
-
-        <section className="mb-4 rounded-lg border border-ops-accent/20 bg-gradient-to-r from-ops-accent/10 via-ops-panel/70 to-ops-dark/30 p-4">
+        <section className="mb-4 rounded-xl border border-ops-accent/20 bg-gradient-to-r from-ops-accent/10 via-ops-panel/70 to-ops-dark/30 p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.22em] text-ops-accent/80">

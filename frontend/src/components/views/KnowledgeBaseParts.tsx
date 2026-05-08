@@ -125,12 +125,12 @@ export function KnowledgeTabs({
     ['memory', 'AI 记忆', `${memoryCount} 条记忆`],
   ]
   return (
-    <div className="mb-4 flex flex-wrap gap-2 rounded-lg border border-ops-surface0 bg-ops-panel/55 p-1">
+    <div className="mb-4 flex flex-wrap gap-2 rounded-xl border border-ops-surface0 bg-ops-panel/55 p-1">
       {tabs.map(([id, label, desc]) => (
         <button
           key={id}
           onClick={() => onChange(id)}
-          className={`rounded-md px-4 py-2 text-left transition-colors ${
+          className={`rounded-lg px-4 py-2 text-left transition-colors ${
             activeTab === id
               ? 'bg-ops-accent text-ops-dark'
               : 'text-ops-subtext hover:bg-ops-surface0/70 hover:text-ops-text'
@@ -170,7 +170,7 @@ export function KnowledgeUploadButton({
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void
 }) {
   return (
-    <label className="bg-ops-accent text-ops-dark text-sm px-3 py-1.5 rounded-lg font-medium hover:bg-ops-accent/80 transition-colors cursor-pointer">
+    <label className="ops-primary-action cursor-pointer px-3 py-1.5 text-sm">
       {uploading ? '上传中...' : '上传资料'}
       <UploadInput disabled={uploading} onUpload={onUpload} />
     </label>
