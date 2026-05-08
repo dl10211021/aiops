@@ -4,27 +4,27 @@ import { useStore } from '@/store'
 const CONFIG_CARDS = [
   {
     id: 'model',
-    eyebrow: 'Model Router',
+    eyebrow: '模型中心',
     title: '模型配置',
-    description: '维护模型供应商、主模型、辅助模型、运行参数和模型拉取结果。',
+    description: '统一维护模型供应商、主模型、辅助模型、运行参数和模型拉取结果。',
     action: '打开模型配置',
     modal: 'llm-config',
     stats: ['主模型 / 辅助模型', '供应商连接', '自动获取模型'],
   },
   {
     id: 'safety',
-    eyebrow: 'Safety Guard',
+    eyebrow: '安全边界',
     title: '安全策略',
-    description: '统一管理只读/高危操作拦截、审批策略和工具执行边界。',
+    description: '集中管理只读边界、高危操作拦截、审批策略和工具执行规则。',
     action: '打开安全策略',
     modal: 'safety-policy',
     stats: ['工具审批', '硬拦截', '执行边界'],
   },
   {
     id: 'notify',
-    eyebrow: 'Notify Hub',
+    eyebrow: '通知通道',
     title: '通知配置',
-    description: '配置告警、巡检、审批和系统事件的通知通道。',
+    description: '集中配置告警、巡检、审批和系统事件的消息通知通道。',
     action: '打开通知配置',
     modal: 'notifications',
     stats: ['告警通知', '巡检结果', '审批提醒'],
@@ -37,9 +37,9 @@ export default function SystemConfigCenter() {
   return (
     <div className="flex-1 overflow-y-auto p-4 lg:p-5">
       <PageHeader
-        eyebrow="System Control"
+        eyebrow="系统中枢"
         title="系统配置"
-        description="把模型、安全和通知集中到一个入口。常用配置仍复用原有弹窗，避免重复页面和重复逻辑。"
+        description="把模型、安全和通知集中到一个入口。左侧只保留“配置”，这里负责进入具体配置项。"
       />
 
       <section className="grid gap-4 xl:grid-cols-3">
@@ -73,7 +73,7 @@ export default function SystemConfigCenter() {
       <section className="ops-data-panel mt-4 p-4">
         <div className="text-sm font-bold text-ops-text">使用说明</div>
         <p className="mt-2 text-sm leading-6 text-ops-subtext">
-          这里是系统级配置入口，不承载业务资产数据。资产接入去“资产中心”，会话与工具执行去“会话”，知识资料去“知识库”。
+          这里只承载系统级配置，不承载业务资产数据。资产接入去“资产中心”，会话与工具执行去“会话”，知识资料去“知识库”。
         </p>
       </section>
     </div>
