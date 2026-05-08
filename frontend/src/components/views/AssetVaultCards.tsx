@@ -27,7 +27,7 @@ export function AssetCard({
   onOpenVerification: (asset: Asset) => void
 }) {
   return (
-    <div className="ops-glass rounded-lg border p-4 transition-all hover:-translate-y-0.5 hover:border-ops-accent/45">
+    <div className="ops-data-panel p-4 transition-all hover:-translate-y-0.5 hover:border-ops-accent/45">
       {matrix && <VerificationStatusStrip matrix={matrix} />}
       <div className="mb-2 flex items-start justify-between">
         <div className="min-w-0">
@@ -60,10 +60,10 @@ export function AssetCard({
         </div>
       )}
       <div className="mt-3 grid grid-cols-4 gap-2">
-        <button onClick={() => onConnect(asset)} className="col-span-2 rounded-lg bg-ops-accent/15 py-1.5 text-xs text-ops-accent transition-colors hover:bg-ops-accent/25">连接</button>
-        <button onClick={() => onOpenVerification(asset)} className="rounded-lg bg-ops-success/10 px-2.5 py-1.5 text-xs text-ops-success transition-colors hover:bg-ops-success/20">验证</button>
-        <button onClick={() => onEdit(asset)} className="rounded-lg border border-ops-surface1 px-2.5 py-1.5 text-xs text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text">编辑</button>
-        <button onClick={() => onDelete(asset)} className="col-span-4 rounded-lg border border-ops-alert/35 bg-ops-alert/10 px-2.5 py-1.5 text-xs text-ops-alert transition-colors hover:bg-ops-alert/15">删除</button>
+        <button onClick={() => onConnect(asset)} className="ops-primary-action col-span-2 py-1.5 text-xs">连接</button>
+        <button onClick={() => onOpenVerification(asset)} className="rounded-lg border border-ops-success/35 bg-ops-success/10 px-2.5 py-1.5 text-xs font-semibold text-ops-success transition-colors hover:bg-ops-success/18">验证</button>
+        <button onClick={() => onEdit(asset)} className="ops-muted-action px-2.5 py-1.5 text-xs">编辑</button>
+        <button onClick={() => onDelete(asset)} className="ops-danger-action col-span-4 px-2.5 py-1.5 text-xs">删除</button>
       </div>
     </div>
   )
@@ -81,7 +81,7 @@ export function AssetEmptyState({
   onCreateAsset: () => void
 }) {
   return (
-    <div className="rounded-lg border border-ops-surface0 bg-ops-panel/55 p-5">
+    <div className="ops-data-panel p-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-sm font-semibold text-ops-text">
@@ -97,14 +97,14 @@ export function AssetEmptyState({
           {hasActiveFilters && (
             <button
               onClick={onClearFilters}
-              className="rounded-lg bg-ops-surface0 px-3 py-1.5 text-xs text-ops-subtext hover:text-ops-text"
+              className="ops-muted-action px-3 py-1.5 text-xs"
             >
               清空筛选
             </button>
           )}
           <button
             onClick={onCreateAsset}
-            className="rounded-lg bg-ops-accent px-3 py-1.5 text-xs font-semibold text-ops-dark hover:bg-ops-accent/80"
+            className="ops-primary-action px-3 py-1.5 text-xs"
           >
             新建连接
           </button>

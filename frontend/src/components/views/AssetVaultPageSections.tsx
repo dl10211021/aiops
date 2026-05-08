@@ -64,7 +64,7 @@ export function AssetEnterpriseCommandPanel({
   ]
 
   return (
-    <section className="mb-3 overflow-hidden rounded-xl border border-ops-surface1/80 bg-[linear-gradient(135deg,rgba(38,207,175,0.10),rgba(10,18,32,0.96)_48%,rgba(44,88,148,0.12))] shadow-[var(--ops-panel-shadow)]">
+    <section className="mb-3 ops-data-panel">
       <div className="flex flex-col gap-3 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -423,8 +423,8 @@ export function AssetTablePanel({
   }
 
   return (
-    <section className="overflow-hidden rounded-xl border border-ops-surface1/80 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
-      <div className="flex min-h-[58px] flex-col gap-3 border-b border-ops-surface1/75 bg-ops-surface0/65 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+    <section className="ops-data-panel">
+      <div className="ops-data-toolbar flex min-h-[58px] flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <h2 className="text-sm font-bold text-ops-text">资产列表</h2>
           <span className="rounded-lg border border-ops-surface1 bg-ops-panel px-2 py-0.5 text-[11px] text-ops-subtext">
@@ -443,14 +443,14 @@ export function AssetTablePanel({
           {hasActiveFilters && (
             <button
               onClick={onClearFilters}
-              className="rounded-lg border border-ops-surface1 bg-ops-panel px-2 py-0.5 text-[11px] text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
+              className="ops-muted-action px-2 py-0.5 text-[11px]"
             >
               清空筛选
             </button>
           )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <div className="flex h-8 items-center gap-1 rounded-lg border border-ops-surface1 bg-ops-panel px-2">
+          <div className="ops-control flex h-8 items-center gap-1 rounded-lg px-2">
             <input
               value={assetGroupDraft}
               onChange={(event) => setAssetGroupDraft(event.target.value)}
@@ -462,12 +462,12 @@ export function AssetTablePanel({
             />
             <button
               onClick={createAssetGroup}
-              className="rounded-md bg-ops-accent/15 px-2 py-0.5 text-[11px] font-semibold text-ops-accent hover:bg-ops-accent/25"
+              className="rounded-md border border-ops-accent/35 bg-ops-accent/10 px-2 py-0.5 text-[11px] font-semibold text-ops-accent hover:bg-ops-accent/18"
             >
               创建
             </button>
           </div>
-          <label className="flex h-8 items-center gap-2 rounded-lg border border-ops-surface1 bg-ops-panel px-2 text-xs text-ops-overlay">
+          <label className="ops-control flex h-8 items-center gap-2 rounded-lg px-2 text-xs">
             加入
             <select
               value={assignGroup}
@@ -486,7 +486,7 @@ export function AssetTablePanel({
               选中资产
             </button>
           </label>
-          <label className="flex h-8 items-center gap-2 rounded-lg border border-ops-surface1 bg-ops-panel px-2 text-xs text-ops-overlay">
+          <label className="ops-control flex h-8 items-center gap-2 rounded-lg px-2 text-xs">
             分组
             <select
               value={groupBy}
@@ -501,7 +501,7 @@ export function AssetTablePanel({
           {groupBy !== 'none' && groupedVisibleAssets.length > 0 && (
             <button
               onClick={toggleAllGroups}
-              className="h-8 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
+              className="ops-muted-action h-8 px-3 text-xs"
             >
               {allGroupsCollapsed ? '全部展开' : '全部收起'}
             </button>
@@ -515,35 +515,35 @@ export function AssetTablePanel({
           />
           <button
             onClick={onRefresh}
-            className="h-8 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
+            className="ops-muted-action h-8 px-3 text-xs"
           >
             刷新
           </button>
           <button
             onClick={exportCurrentAssets}
             disabled={panelAssets.length === 0}
-            className="h-8 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-45"
+            className="ops-muted-action h-8 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-45"
           >
             导出结果
           </button>
           <button
             onClick={selectPanelAssets}
             disabled={panelAssets.length === 0 || allPanelSelected}
-            className="h-8 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-45"
+            className="ops-muted-action h-8 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-45"
           >
             选择结果
           </button>
           <button
             onClick={clearPanelSelection}
             disabled={panelSelectedCount === 0}
-            className="h-8 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-45"
+            className="ops-muted-action h-8 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-45"
           >
             取消结果
           </button>
         </div>
       </div>
       {assetGroupSummaries.length > 0 && (
-        <div className="border-b border-ops-surface1/75 bg-[radial-gradient(circle_at_top_left,rgba(38,207,175,0.11),transparent_34%),rgba(10,18,32,0.42)] px-4 py-3">
+        <div className=" bg-[radial-gradient(circle_at_top_left,rgba(38,207,175,0.11),transparent_34%),rgba(10,18,32,0.42)] px-4 py-3">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="text-xs font-bold text-ops-text">资产组概览</div>
@@ -604,7 +604,7 @@ export function AssetTablePanel({
         </div>
       )}
       {selectedIds.size > 0 && (
-        <div className="flex flex-col gap-2 border-b border-ops-surface1/75 bg-ops-accent/10 px-4 py-3 text-xs text-ops-subtext lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-2  bg-ops-accent/10 px-4 py-3 text-xs text-ops-subtext lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-lg bg-ops-accent/15 px-2.5 py-1 font-semibold text-ops-accent">
               已选择 {selectedIds.size} 条资产
@@ -618,28 +618,28 @@ export function AssetTablePanel({
             <button
               onClick={() => onBulkVerify(selectedAssets)}
               disabled={bulkVerifying || bulkDeleting || connectingSelected}
-              className="rounded-lg bg-ops-accent px-3 py-1.5 font-semibold text-ops-dark transition-colors hover:bg-ops-accent/80 disabled:cursor-not-allowed disabled:opacity-60"
+              className="ops-primary-action px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60"
             >
               {bulkVerifying ? '验证中...' : '批量验证'}
             </button>
             <button
               onClick={() => onConnectSelected(selectedAssets)}
               disabled={connectingSelected || bulkVerifying || bulkDeleting}
-              className="rounded-lg border border-ops-accent/35 bg-ops-accent/10 px-3 py-1.5 font-semibold text-ops-accent transition-colors hover:bg-ops-accent/18 disabled:cursor-not-allowed disabled:opacity-60"
+              className="ops-muted-action px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60"
             >
               {connectingSelected ? '拉起中...' : '批量会话'}
             </button>
             <button
               onClick={exportSelectedAssets}
               disabled={connectingSelected || bulkVerifying || bulkDeleting}
-              className="rounded-lg border border-ops-surface1 bg-ops-panel px-3 py-1.5 font-semibold text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-60"
+              className="ops-muted-action px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60"
             >
               导出选中
             </button>
             <button
               onClick={() => onBulkDelete(selectedAssets)}
               disabled={bulkDeleting || bulkVerifying || connectingSelected}
-              className="rounded-lg border border-rose-400/35 bg-rose-400/10 px-3 py-1.5 font-semibold text-rose-200 transition-colors hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-60"
+              className="ops-danger-action px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60"
             >
               {bulkDeleting ? '删除中...' : '批量删除'}
             </button>
@@ -653,9 +653,9 @@ export function AssetTablePanel({
         </div>
       )}
       <div className="overflow-auto">
-        <table className="min-w-full border-collapse text-left text-sm">
-          <thead className="bg-ops-surface0/55 text-[11px] uppercase tracking-normal text-ops-overlay">
-            <tr className="border-b border-ops-surface1/75">
+        <table className="ops-data-table">
+          <thead className="">
+            <tr className="">
               <th className="w-10 px-4 py-3 font-semibold">
                 <input
                   type="checkbox"
@@ -707,7 +707,7 @@ export function AssetTablePanel({
                               <button
                                 onClick={() => renameCurrentGroup(group.label)}
                                 disabled={mutatingGroup === group.label}
-                                className="rounded-lg border border-ops-surface1 bg-ops-panel px-2.5 py-1 text-[11px] font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-60"
+                                className="ops-muted-action px-2.5 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 改名
                               </button>
@@ -715,7 +715,7 @@ export function AssetTablePanel({
                                 <button
                                   onClick={() => deleteCurrentGroup(group.label)}
                                   disabled={mutatingGroup === group.label}
-                                  className="rounded-lg border border-rose-400/35 bg-rose-400/10 px-2.5 py-1 text-[11px] font-semibold text-rose-200 hover:bg-rose-400/18 disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="ops-danger-action px-2.5 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   {mutatingGroup === group.label ? '处理中...' : '删除组'}
                                 </button>
@@ -723,7 +723,7 @@ export function AssetTablePanel({
                               <button
                                 onClick={() => onConnectGroup(group.allItems, group.label)}
                                 disabled={connectingGroup === group.label}
-                                className="rounded-lg border border-ops-accent/35 bg-ops-accent/10 px-2.5 py-1 text-[11px] font-semibold text-ops-accent hover:bg-ops-accent/18 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="ops-muted-action px-2.5 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 {connectingGroup === group.label ? '拉起中...' : '拉起组会话'}
                               </button>
@@ -740,7 +740,7 @@ export function AssetTablePanel({
                   const verification = verificationBadge(matrix)
                   const tags = asset.tags?.length ? asset.tags : [display.categoryLabel]
                   return (
-                    <tr key={asset.id} className="border-b border-ops-surface1/55 hover:bg-ops-surface0/35">
+                    <tr key={asset.id} className="">
                       <td className="px-4 py-3">
                         <input
                           type="checkbox"
@@ -780,7 +780,7 @@ export function AssetTablePanel({
                         <div className="flex justify-end gap-1.5 whitespace-nowrap">
                           <button
                             onClick={() => onConnect(asset)}
-                            className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-2.5 py-1 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
+                            className="ops-muted-action px-2.5 py-1 text-xs"
                           >
                             连接
                           </button>
@@ -792,13 +792,13 @@ export function AssetTablePanel({
                           </button>
                           <button
                             onClick={() => onEdit(asset)}
-                            className="rounded-lg border border-ops-surface1 bg-ops-panel px-2.5 py-1 text-xs font-semibold text-ops-subtext hover:border-ops-accent/50 hover:text-ops-text"
+                            className="ops-muted-action px-2.5 py-1 text-xs"
                           >
                             编辑
                           </button>
                           <button
                             onClick={() => onDelete(asset)}
-                            className="rounded-lg border border-ops-alert/35 bg-ops-alert/10 px-2.5 py-1 text-xs font-semibold text-ops-alert hover:bg-ops-alert/15"
+                            className="ops-danger-action px-2.5 py-1 text-xs"
                           >
                             删除
                           </button>
@@ -828,7 +828,7 @@ export function AssetTablePanel({
             <button
               onClick={() => setPage((value) => Math.max(1, value - 1))}
               disabled={currentPage <= 1}
-              className="rounded-lg border border-ops-surface1 px-3 py-1 disabled:cursor-not-allowed disabled:opacity-45 hover:border-ops-accent/50 hover:text-ops-text"
+              className="ops-muted-action px-3 py-1 disabled:cursor-not-allowed disabled:opacity-45"
             >
               上一页
             </button>
@@ -838,7 +838,7 @@ export function AssetTablePanel({
             <button
               onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
               disabled={currentPage >= pageCount}
-              className="rounded-lg border border-ops-surface1 px-3 py-1 disabled:cursor-not-allowed disabled:opacity-45 hover:border-ops-accent/50 hover:text-ops-text"
+              className="ops-muted-action px-3 py-1 disabled:cursor-not-allowed disabled:opacity-45"
             >
               下一页
             </button>

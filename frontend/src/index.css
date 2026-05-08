@@ -320,6 +320,75 @@ button, input, textarea, select {
   color: var(--color-ops-text);
 }
 
+.ops-data-panel {
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--color-ops-surface1) 58%, transparent);
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in oklab, var(--color-ops-accent) 8%, transparent), transparent 24rem),
+    color-mix(in oklab, var(--color-ops-panel) 92%, transparent);
+  box-shadow: var(--ops-panel-shadow);
+}
+
+.ops-data-toolbar {
+  border-bottom: 1px solid color-mix(in oklab, var(--color-ops-surface1) 62%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--color-ops-surface0) 62%, transparent), color-mix(in oklab, var(--color-ops-panel) 72%, transparent));
+}
+
+.ops-data-table {
+  min-width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.ops-data-table thead {
+  background: color-mix(in oklab, var(--color-ops-surface0) 62%, transparent);
+  color: var(--color-ops-overlay);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ops-data-table tbody tr {
+  border-bottom: 1px solid color-mix(in oklab, var(--color-ops-surface1) 48%, transparent);
+  transition: background 130ms ease;
+}
+
+.ops-data-table tbody tr:hover {
+  background: color-mix(in oklab, var(--color-ops-accent) 6%, var(--color-ops-surface0));
+}
+
+.ops-muted-action {
+  border: 1px solid var(--ops-control-border);
+  border-radius: 0.65rem;
+  background: var(--ops-control-bg);
+  color: var(--color-ops-subtext);
+  font-weight: 700;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.ops-muted-action:hover {
+  border-color: color-mix(in oklab, var(--color-ops-accent) 44%, var(--ops-control-border));
+  background: var(--ops-control-hover);
+  color: var(--color-ops-text);
+}
+
+.ops-danger-action {
+  border: 1px solid color-mix(in oklab, var(--color-ops-alert) 42%, transparent);
+  border-radius: 0.65rem;
+  background: color-mix(in oklab, var(--color-ops-alert) 12%, transparent);
+  color: var(--color-ops-alert);
+  font-weight: 700;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.ops-danger-action:hover {
+  background: color-mix(in oklab, var(--color-ops-alert) 18%, transparent);
+  border-color: color-mix(in oklab, var(--color-ops-alert) 56%, transparent);
+}
+
 .ops-nav-rail {
   background:
     linear-gradient(180deg, color-mix(in oklab, var(--color-ops-sidebar) 98%, transparent), color-mix(in oklab, var(--color-ops-dark) 82%, var(--color-ops-sidebar)));

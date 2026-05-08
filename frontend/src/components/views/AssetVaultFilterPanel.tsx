@@ -12,11 +12,11 @@ export function AssetVaultHeaderActions({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <button onClick={onBatchImport}
-        className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text">批量导入</button>
+        className="ops-control rounded-lg px-3 py-1.5 text-sm font-semibold">批量导入</button>
       <button onClick={onNormalize}
-        className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text">规范化检查</button>
+        className="ops-control rounded-lg px-3 py-1.5 text-sm font-semibold">规范化检查</button>
       <button onClick={onCreateAsset}
-        className="rounded-lg bg-ops-accent px-3 py-1.5 text-sm font-bold text-ops-dark transition-colors hover:bg-ops-accent/80">新建资产</button>
+        className="ops-primary-action px-3 py-1.5 text-sm">新建资产</button>
     </div>
   )
 }
@@ -51,7 +51,7 @@ export function AssetVaultFilterPanel({
   onConnectorChange: (value: string) => void
 }) {
   return (
-    <details className="mb-3 rounded-xl border border-ops-surface1/70 bg-ops-panel">
+    <details className="ops-data-panel mb-3">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
         <div>
           <div className="text-xs font-semibold text-ops-text">高级筛选</div>
@@ -78,7 +78,7 @@ export function AssetVaultFilterPanel({
                 event.stopPropagation()
                 onClearFilters()
               }}
-              className="rounded-lg bg-ops-surface0 px-2.5 py-1 text-xs text-ops-subtext hover:text-ops-text"
+              className="ops-muted-action px-2.5 py-1 text-xs"
             >
               清空
             </button>
