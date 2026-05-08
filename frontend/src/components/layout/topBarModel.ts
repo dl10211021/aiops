@@ -11,6 +11,7 @@ export const VIEW_LABELS: Record<ViewId, string> = {
   approvals: '审批',
   skills: 'Skills',
   knowledge: '知识库',
+  config: '系统配置',
 }
 
 export const THEME_OPTIONS = [

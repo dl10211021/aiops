@@ -17,7 +17,11 @@ const KNOWLEDGE_ITEMS: Array<{ id: ViewId; icon: string; label: string }> = [
   { id: 'knowledge', icon: '文', label: '知识库' },
 ]
 
-const SETTINGS_ITEMS: Array<{ id: string; icon: string; label: string; modal: string }> = [
+const SETTINGS_ITEMS: Array<{ id: ViewId; icon: string; label: string }> = [
+  { id: 'config', icon: '⚙', label: '配置' },
+]
+
+const QUICK_SETTINGS: Array<{ id: string; icon: string; label: string; modal: string }> = [
   { id: 'safety', icon: '盾', label: '安全', modal: 'safety-policy' },
   { id: 'model', icon: '模', label: '模型', modal: 'llm-config' },
   { id: 'notify', icon: '铃', label: '通知', modal: 'notifications' },
@@ -58,6 +62,15 @@ export default function LeftNav() {
 
       <NavGroup label="系统">
         {SETTINGS_ITEMS.map((item) => (
+          <NavButton
+            key={item.id}
+            active={currentView === item.id}
+            icon={item.icon}
+            label={item.label}
+            onClick={() => setView(item.id)}
+          />
+        ))}
+        {QUICK_SETTINGS.map((item) => (
           <NavButton
             key={item.id}
             active={false}

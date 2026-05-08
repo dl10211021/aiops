@@ -36,6 +36,7 @@ const VIEW_IDS = new Set<ViewId>([
   'approvals',
   'skills',
   'knowledge',
+  'config',
 ])
 
 export function viewFromLocationHash(): ViewId {
