@@ -31,6 +31,21 @@ const CONFIG_CARDS = [
   },
 ]
 
+const BOUNDARY_CARDS = [
+  {
+    title: '系统配置',
+    description: '模型、安全、通知等平台级开关。',
+  },
+  {
+    title: '资产中心',
+    description: '资产接入、协议、凭据和分组管理。',
+  },
+  {
+    title: '会话 / 知识库',
+    description: '工具执行、会话追踪和资料检索。',
+  },
+]
+
 export default function SystemConfigCenter() {
   const openModal = useStore((state) => state.openModal)
 
@@ -75,18 +90,12 @@ export default function SystemConfigCenter() {
       <section className="ops-data-panel mt-4 p-4">
         <div className="text-sm font-bold text-ops-text">入口边界</div>
         <div className="mt-3 grid gap-2 text-xs text-ops-subtext lg:grid-cols-3">
-          <div className="rounded-xl border border-ops-surface1/70 bg-ops-dark/28 px-3 py-2">
-            <div className="font-bold text-ops-text">系统配置</div>
-            <div className="mt-1 leading-5">模型、安全、通知等平台级开关。</div>
-          </div>
-          <div className="rounded-xl border border-ops-surface1/70 bg-ops-dark/28 px-3 py-2">
-            <div className="font-bold text-ops-text">资产中心</div>
-            <div className="mt-1 leading-5">资产接入、协议、凭据和分组管理。</div>
-          </div>
-          <div className="rounded-xl border border-ops-surface1/70 bg-ops-dark/28 px-3 py-2">
-            <div className="font-bold text-ops-text">会话 / 知识库</div>
-            <div className="mt-1 leading-5">工具执行、会话追踪和资料检索。</div>
-          </div>
+          {BOUNDARY_CARDS.map((item) => (
+            <div key={item.title} className="rounded-xl border border-ops-surface1/70 bg-ops-dark/28 px-3 py-2">
+              <div className="font-bold text-ops-text">{item.title}</div>
+              <div className="mt-1 leading-5">{item.description}</div>
+            </div>
+          ))}
         </div>
       </section>
     </div>
