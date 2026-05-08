@@ -21,16 +21,9 @@ const SETTINGS_ITEMS: Array<{ id: ViewId; icon: string; label: string }> = [
   { id: 'config', icon: '⚙', label: '配置' },
 ]
 
-const QUICK_SETTINGS: Array<{ id: string; icon: string; label: string; modal: string }> = [
-  { id: 'safety', icon: '盾', label: '安全', modal: 'safety-policy' },
-  { id: 'model', icon: '模', label: '模型', modal: 'llm-config' },
-  { id: 'notify', icon: '铃', label: '通知', modal: 'notifications' },
-]
-
 export default function LeftNav() {
   const currentView = useStore((s) => s.currentView)
   const setView = useStore((s) => s.setView)
-  const openModal = useStore((s) => s.openModal)
 
   return (
     <nav className="ops-nav-rail min-h-0 w-[104px] overflow-y-auto border-r border-ops-surface0/80 px-2 py-3 backdrop-blur-xl">
@@ -68,15 +61,6 @@ export default function LeftNav() {
             icon={item.icon}
             label={item.label}
             onClick={() => setView(item.id)}
-          />
-        ))}
-        {QUICK_SETTINGS.map((item) => (
-          <NavButton
-            key={item.id}
-            active={false}
-            icon={item.icon}
-            label={item.label}
-            onClick={() => openModal(item.modal)}
           />
         ))}
       </NavGroup>
