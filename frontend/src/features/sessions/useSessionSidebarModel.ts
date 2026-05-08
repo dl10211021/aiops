@@ -185,7 +185,9 @@ export function useSessionSidebarModel() {
     setEditingBusy(true)
     const currentGroup = sessionPrimaryGroup(editingSession)
     const currentRemark = String(editingSession.remark || '').trim()
-    const currentTags = (editingSession.tags || []).slice(1)
+    const currentTags = (editingSession.tags || [])
+      .map((tag) => normalizeSessionGroupName(tag))
+      .filter((tag, index) => tag && (index > 0 || tag !== currentGroup))
     const remarkChanged = values.remark !== currentRemark
     const secondaryTagsChanged = !sameStringList(values.tags, currentTags)
     const groupChanged = groupName !== currentGroup

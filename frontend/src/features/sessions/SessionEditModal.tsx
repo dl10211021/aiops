@@ -31,14 +31,14 @@ export default function SessionEditModal({
   const [remark, setRemark] = useState(session.remark || '')
   const [groupName, setGroupName] = useState(currentGroup)
   const [customGroupName, setCustomGroupName] = useState('')
-  const [tagsText, setTagsText] = useState((session.tags || []).slice(1).join(', '))
+  const [tagsText, setTagsText] = useState(sessionUserTags(session).join(', '))
   const [formError, setFormError] = useState('')
 
   useEffect(() => {
     setRemark(session.remark || '')
     setGroupName(sessionPrimaryGroup(session))
     setCustomGroupName('')
-    setTagsText((session.tags || []).slice(1).join(', '))
+    setTagsText(sessionUserTags(session).join(', '))
     setFormError('')
   }, [session])
 
@@ -60,7 +60,7 @@ export default function SessionEditModal({
     onSave({
       groupName: nextGroup,
       remark: remark.trim(),
-      tags: parseTags(tagsText),
+      tags: parseTags(tagsText).filter((tag) => tag !== nextGroup),
     })
   }
 
@@ -73,8 +73,10 @@ export default function SessionEditModal({
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-sm font-bold text-ops-text">编辑会话</h2>
-            <div className="mt-1 truncate font-mono text-[11px] text-ops-overlay">{session.id}</div>
+            <h2 className="text-sm font-bold text-ops-text">编辑单个会话</h2>
+            <div className="mt-1 truncate text-[11px] text-ops-overlay">
+              修改会话名称、所属分组和标签，不会修改资产连接凭据。
+            </div>
           </div>
           <button
             type="button"
@@ -95,18 +97,18 @@ export default function SessionEditModal({
 
         <div className="mt-3 space-y-3">
           <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-ops-subtext">名称/备注</span>
+            <span className="mb-1 block text-xs font-semibold text-ops-subtext">会话名称</span>
             <input
               value={remark}
               onChange={(event) => setRemark(event.target.value)}
               maxLength={200}
-              placeholder={session.host}
+              placeholder={`默认使用主机名：${session.host}`}
               className="w-full rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
             />
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-ops-subtext">会话组</span>
+            <span className="mb-1 block text-xs font-semibold text-ops-subtext">所属分组</span>
             <select
               value={groupName}
               onChange={(event) => {
@@ -140,14 +142,17 @@ export default function SessionEditModal({
           )}
 
           <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-ops-subtext">标签（不含会话组）</span>
+            <span className="mb-1 block text-xs font-semibold text-ops-subtext">普通标签</span>
             <input
               value={tagsText}
               onChange={(event) => setTagsText(event.target.value)}
-              placeholder="P0, 数据库, 生产"
+              placeholder="例如：P0, 数据库, 生产；这里不需要再填写分组名"
               className="w-full rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
             />
           </label>
+          <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 px-3 py-2 text-[11px] leading-5 text-ops-overlay">
+            保存后会把「所属分组」写到会话分组字段，普通标签只作为辅助筛选；两者互不混用。
+          </div>
           {formError && (
             <div className="rounded-md border border-ops-alert/35 bg-ops-alert/10 px-3 py-2 text-xs text-ops-alert">
               {formError}
@@ -193,4 +198,11 @@ function parseTags(value: string): string[] {
     if (tag && !tags.includes(tag)) tags.push(tag)
   }
   return tags
+}
+
+function sessionUserTags(session: Session): string[] {
+  const primaryGroup = sessionPrimaryGroup(session)
+  return (session.tags || [])
+    .map((tag) => normalizeSessionGroupName(tag))
+    .filter((tag, index) => tag && (index > 0 || tag !== primaryGroup))
 }
