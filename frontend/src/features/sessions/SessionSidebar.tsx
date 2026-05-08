@@ -39,10 +39,10 @@ export default function SessionSidebar() {
         />
 
         {model.currentSession && (
-          <div className="mt-2 rounded-xl border border-ops-surface1/65 bg-ops-dark/30 px-2.5 py-2">
+          <div className="mt-2 rounded-xl border border-ops-surface1/55 bg-[linear-gradient(135deg,rgba(17,30,47,0.68),rgba(8,18,31,0.78))] px-2.5 py-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <div className="truncate text-[11px] font-semibold text-ops-overlay">当前会话</div>
+                <div className="truncate text-[10px] font-black uppercase tracking-[0.18em] text-ops-overlay">当前会话</div>
                 <div className="truncate text-xs font-black text-ops-text">
                   {model.currentSession.remark || model.currentSession.host}
                 </div>
@@ -51,7 +51,7 @@ export default function SessionSidebar() {
                 <button
                   type="button"
                   onClick={(event) => model.handleEditSession(model.currentSession!.id, event)}
-                  className="rounded-md border border-ops-surface1/75 bg-ops-panel/55 px-2 py-1 text-[11px] font-semibold text-ops-subtext transition-colors hover:border-ops-accent/45 hover:text-ops-text"
+                  className="rounded-md border border-ops-surface1/75 bg-ops-panel/45 px-2 py-1 text-[11px] font-semibold text-ops-subtext transition-colors hover:border-ops-accent/45 hover:text-ops-text"
                 >
                   编辑
                 </button>
