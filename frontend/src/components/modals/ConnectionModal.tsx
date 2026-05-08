@@ -60,19 +60,19 @@ export default function ConnectionModal() {
   } = useConnectionModalController()
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center">
-      <div className="flex max-h-[94vh] w-[860px] max-w-[94vw] flex-col rounded-lg border border-ops-surface0 bg-ops-panel shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-ops-surface0 px-6 py-4">
+    <div className="ops-modal-backdrop">
+      <div className="ops-modal-surface flex max-h-[94vh] w-[860px] max-w-[94vw] flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="ops-modal-header">
           <div>
-            <h2 className="text-lg font-bold text-ops-text">
+            <h2 className="ops-modal-title">
               {typeof window !== 'undefined' && window.sessionStorage.getItem('asset_editing_id') ? '编辑资产' : '新建连接'}
             </h2>
-            <p className="mt-0.5 text-xs text-ops-subtext">选择数据中心常规资产类型后，平台会带出最适合 AI 登录、查询和操作的主接入方式；巡检请在会话快捷指令中触发。</p>
+            <p className="ops-modal-description">选择数据中心常规资产类型后，平台会带出最适合 AI 登录、查询和操作的主接入方式；巡检请在会话快捷指令中触发。</p>
           </div>
-          <button onClick={closeModal} className="text-ops-subtext hover:text-ops-text text-sm">关闭</button>
+          <button onClick={closeModal} className="ops-icon-button" title="关闭">×</button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4 pb-6">
+        <div className="ops-modal-body space-y-4 px-6 py-4 pb-6">
           <ConnectionScopeSelector
             value={form.target_scope}
             onChange={(targetScope) => setForm({ ...form, target_scope: targetScope })}

@@ -27,9 +27,16 @@ export default function SessionActionsModal() {
   } = useSessionActions()
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center" onClick={closeModal}>
-      <div className="bg-ops-panel rounded-lg p-5 w-[440px]" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-sm font-bold text-ops-text mb-3">会话操作</h2>
+    <div className="ops-modal-backdrop" onClick={closeModal}>
+      <div className="ops-modal-surface flex max-h-[92vh] w-[460px] max-w-[94vw] flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="ops-modal-header">
+          <div>
+            <h2 className="ops-modal-title">会话操作</h2>
+            <p className="ops-modal-description">生成画像、导出记录、Webhook 发送和危险清理都集中在这里。</p>
+          </div>
+          <button onClick={closeModal} className="ops-icon-button" title="关闭">×</button>
+        </div>
+        <div className="ops-modal-body p-5">
         {confirmClear ? (
           <div className="rounded-lg border border-ops-alert/35 bg-ops-alert/8 p-3">
             <div className="text-sm font-semibold text-ops-alert">确认清空聊天记录</div>
@@ -168,11 +175,12 @@ export default function SessionActionsModal() {
                 {busy ? '发送中...' : '确认发送当前会话'}
               </button>
             </div>
-            <button onClick={closeModal} className="w-full mt-3 text-xs text-ops-overlay hover:text-ops-subtext text-center py-1">
+            <button onClick={closeModal} className="mt-3 w-full py-1 text-center text-xs text-ops-overlay hover:text-ops-subtext">
               关闭
             </button>
           </>
         )}
+        </div>
       </div>
     </div>
   )

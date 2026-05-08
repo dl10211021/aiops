@@ -38,14 +38,14 @@ export default function LLMConfigModal() {
   } = useLLMConfigData()
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4" onClick={closeModal}>
-      <div className="flex h-[min(740px,94vh)] w-full max-w-6xl overflow-hidden rounded-lg border border-ops-surface1 bg-ops-panel shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="ops-modal-backdrop" onClick={closeModal}>
+      <div className="ops-modal-surface flex h-[min(740px,94vh)] w-full max-w-6xl" onClick={(e) => e.stopPropagation()}>
         
         {/* 左侧：供应商列表 */}
-        <div className="w-64 bg-ops-dark border-r border-ops-surface0 flex flex-col">
-          <div className="p-4 border-b border-ops-surface0 flex justify-between items-center">
-            <h2 className="text-ops-text font-bold">模型配置</h2>
-            <button onClick={handleAddProvider} className="text-ops-accent hover:bg-ops-accent/20 px-2 py-1 rounded text-xs transition-colors">+ 添加</button>
+        <div className="flex w-64 flex-col border-r border-ops-surface0 bg-ops-dark/72">
+          <div className="flex items-center justify-between border-b border-ops-surface0 p-4">
+            <h2 className="text-sm font-bold text-ops-text">模型配置</h2>
+            <button onClick={handleAddProvider} className="ops-control rounded-lg px-2 py-1 text-xs font-semibold">+ 添加</button>
           </div>
           
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -54,7 +54,7 @@ export default function LLMConfigModal() {
               <div 
                 key={p.id}
                 onClick={() => setSelectedId(p.id)}
-                className={`px-3 py-2 text-sm rounded cursor-pointer transition-colors ${selectedId === p.id ? 'bg-ops-surface1 text-ops-text font-medium' : 'text-ops-subtext hover:bg-ops-surface0'}`}
+                className={`cursor-pointer rounded-lg px-3 py-2 text-sm transition-colors ${selectedId === p.id ? 'bg-ops-accent/14 text-ops-accent font-semibold ring-1 ring-ops-accent/30' : 'text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text'}`}
               >
                 {p.name}
               </div>
@@ -65,12 +65,15 @@ export default function LLMConfigModal() {
 
         {/* 右侧：详情配置面板 */}
         <div className="flex-1 flex flex-col bg-ops-panel">
-          <div className="p-4 border-b border-ops-surface0 flex justify-between items-center h-14">
-            <h2 className="text-ops-text font-medium">模型配置 · 主模型 / 辅助模型</h2>
-            <button onClick={closeModal} className="text-ops-subtext hover:text-ops-text text-xl">&times;</button>
+          <div className="ops-modal-header h-16">
+            <div>
+              <h2 className="ops-modal-title">模型配置 · 主模型 / 辅助模型</h2>
+              <p className="ops-modal-description">维护模型供应商、主模型、辅助模型和运行参数。</p>
+            </div>
+            <button onClick={closeModal} className="ops-icon-button" title="关闭">&times;</button>
           </div>
 
-          <div className="flex-1 p-6 overflow-y-auto">
+          <div className="ops-modal-body p-6">
             {error && (
               <div className="mb-4 rounded-lg border border-ops-alert/35 bg-ops-alert/10 px-4 py-3 text-sm text-ops-alert">
                 {error}
@@ -177,16 +180,16 @@ export default function LLMConfigModal() {
           </div>
 
           {/* 右下侧：保存与获取按钮 */}
-          <div className="p-4 border-t border-ops-surface0 flex justify-between items-center bg-ops-dark">
+          <div className="ops-modal-footer justify-between">
             <div className="flex items-center gap-3">
-              <button onClick={handleTestModels} disabled={testing || saving || loading} className="text-xs bg-ops-surface1 hover:bg-ops-surface2 text-ops-text px-3 py-1.5 rounded transition-colors disabled:opacity-50">
+              <button onClick={handleTestModels} disabled={testing || saving || loading} className="ops-control rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
                 {testing ? '正在与当前模型供应商通信...' : '测试当前供应商并获取模型'}
               </button>
               {modelsCount !== null && <span className="text-xs text-green-400">已成功获取 {modelsCount} 个模型</span>}
             </div>
             <div className="flex gap-2">
-              <button onClick={closeModal} className="px-4 py-2 text-sm text-ops-subtext hover:text-ops-text transition-colors">取消</button>
-              <button onClick={handleSave} disabled={saving || loading} className="px-4 py-2 text-sm bg-ops-accent text-ops-dark rounded-lg font-medium hover:bg-ops-accent/80 transition-colors disabled:opacity-50">
+              <button onClick={closeModal} className="ops-control rounded-lg px-4 py-2 text-sm font-semibold">取消</button>
+              <button onClick={handleSave} disabled={saving || loading} className="ops-primary-action px-4 py-2 text-sm disabled:opacity-50">
                 {saving ? '保存中...' : '保存所有更改'}
               </button>
             </div>

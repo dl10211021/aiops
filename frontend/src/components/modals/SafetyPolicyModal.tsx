@@ -52,9 +52,9 @@ export default function SafetyPolicyModal() {
   } = useSafetyPolicyData()
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55" onClick={closeModal}>
+    <div className="ops-modal-backdrop" onClick={closeModal}>
       <div
-        className="flex h-[760px] w-[1180px] max-w-[96vw] overflow-hidden rounded-xl border border-ops-surface0 bg-ops-panel shadow-2xl"
+        className="ops-modal-surface flex h-[760px] w-[1180px] max-w-[96vw]"
         onClick={(e) => e.stopPropagation()}
       >
         <SafetyPolicySidebar
@@ -131,12 +131,12 @@ export default function SafetyPolicyModal() {
             </div>
           )}
 
-          <footer className="flex justify-end gap-2 border-t border-ops-surface0 px-5 py-3">
-            <button onClick={closeModal} className="px-4 py-2 text-sm text-ops-subtext hover:text-ops-text">取消</button>
+          <footer className="ops-modal-footer">
+            <button onClick={closeModal} className="ops-control rounded-lg px-4 py-2 text-sm font-semibold">取消</button>
             <button
               onClick={save}
               disabled={!policy || saving}
-              className="rounded-lg bg-ops-accent px-4 py-2 text-sm font-medium text-ops-dark transition-colors hover:bg-ops-accent/80 disabled:opacity-40"
+              className="ops-primary-action px-4 py-2 text-sm disabled:opacity-40"
             >
               {saving ? '保存中...' : '保存策略'}
             </button>

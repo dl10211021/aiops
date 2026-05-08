@@ -234,6 +234,92 @@ button, input, textarea, select {
   box-shadow: var(--ops-focus-ring);
 }
 
+.ops-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 50% 8%, color-mix(in oklab, var(--color-ops-accent) 10%, transparent), transparent 28rem),
+    rgba(0, 0, 0, 0.58);
+  padding: 1rem;
+  backdrop-filter: blur(10px);
+}
+
+.ops-modal-surface {
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--color-ops-surface1) 58%, transparent);
+  border-radius: 1rem;
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--color-ops-panel) 96%, transparent), color-mix(in oklab, var(--color-ops-panel) 88%, var(--color-ops-dark)));
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.ops-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-ops-surface0) 82%, transparent);
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in oklab, var(--color-ops-accent) 11%, transparent), transparent 18rem),
+    color-mix(in oklab, var(--color-ops-panel) 88%, transparent);
+  padding: 1rem 1.25rem;
+}
+
+.ops-modal-title {
+  margin: 0;
+  color: var(--color-ops-text);
+  font-size: 1rem;
+  font-weight: 850;
+  letter-spacing: -0.015em;
+}
+
+.ops-modal-description {
+  margin-top: 0.35rem;
+  color: var(--color-ops-subtext);
+  font-size: 0.78rem;
+  line-height: 1.65;
+}
+
+.ops-modal-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.ops-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  border-top: 1px solid color-mix(in oklab, var(--color-ops-surface0) 82%, transparent);
+  background: color-mix(in oklab, var(--color-ops-dark) 48%, var(--color-ops-panel));
+  padding: 0.85rem 1.25rem;
+}
+
+.ops-icon-button {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid var(--ops-control-border);
+  border-radius: 0.65rem;
+  background: var(--ops-control-bg);
+  color: var(--color-ops-subtext);
+  font-size: 0.85rem;
+  font-weight: 800;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.ops-icon-button:hover {
+  border-color: color-mix(in oklab, var(--color-ops-accent) 48%, var(--ops-control-border));
+  background: var(--ops-control-hover);
+  color: var(--color-ops-text);
+}
+
 .ops-nav-rail {
   background:
     linear-gradient(180deg, color-mix(in oklab, var(--color-ops-sidebar) 98%, transparent), color-mix(in oklab, var(--color-ops-dark) 82%, var(--color-ops-sidebar)));

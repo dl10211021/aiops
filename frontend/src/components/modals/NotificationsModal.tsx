@@ -15,19 +15,19 @@ export default function NotificationsModal() {
   } = useNotificationConfig()
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4" onClick={closeModal}>
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-ops-surface1 bg-ops-panel shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-4 border-b border-ops-surface0 px-6 py-5">
+    <div className="ops-modal-backdrop" onClick={closeModal}>
+      <div className="ops-modal-surface flex max-h-[90vh] w-full max-w-3xl flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="ops-modal-header">
           <div>
-            <h2 className="text-lg font-bold text-ops-text">告警通道配置</h2>
-            <p className="mt-1 text-sm leading-6 text-ops-subtext">
+            <h2 className="ops-modal-title">告警通道配置</h2>
+            <p className="ops-modal-description">
               用于自动巡检、告警闭环和审批事件通知。建议至少启用一个即时通道和一个邮件归档通道。
             </p>
           </div>
-          <button onClick={closeModal} className="rounded-lg bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext hover:text-ops-text">关闭</button>
+          <button onClick={closeModal} className="ops-icon-button" title="关闭">×</button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="ops-modal-body px-6 py-5">
           {error && (
             <div className="mb-4 rounded-lg border border-ops-alert/35 bg-ops-alert/10 px-4 py-3 text-sm text-ops-alert">
               {error}
@@ -84,10 +84,10 @@ export default function NotificationsModal() {
           )}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-ops-surface0 bg-ops-dark/45 px-6 py-4">
-          <button onClick={closeModal} className="px-4 py-2 text-sm text-ops-subtext hover:text-ops-text">取消</button>
+        <div className="ops-modal-footer">
+          <button onClick={closeModal} className="ops-control rounded-lg px-4 py-2 text-sm font-semibold">取消</button>
           <button onClick={handleSave} disabled={saving || loading}
-            className="px-4 py-2 text-sm bg-ops-accent text-ops-dark rounded-lg font-medium hover:bg-ops-accent/80 disabled:opacity-40 transition-colors">
+            className="ops-primary-action px-4 py-2 text-sm disabled:opacity-40">
             {saving ? '保存中...' : '保存'}
           </button>
         </div>
