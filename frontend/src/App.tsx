@@ -162,7 +162,7 @@ export default function App() {
   const isChatView = currentView === 'chat'
 
   return (
-    <div className="ops-shell grid h-screen grid-cols-[118px_minmax(0,1fr)] grid-rows-[52px_minmax(0,1fr)] overflow-hidden bg-ops-dark">
+    <div className="ops-shell grid h-screen grid-cols-[104px_minmax(0,1fr)] grid-rows-[56px_minmax(0,1fr)] overflow-hidden bg-ops-dark">
       {/* Global command bar */}
       <TopBar />
 

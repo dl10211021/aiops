@@ -22,6 +22,10 @@
   --ops-grid-line: rgba(242, 247, 251, 0.035);
   --ops-grid-line-strong: rgba(242, 247, 251, 0.024);
   --ops-panel-shadow: 0 22px 55px rgba(0, 0, 0, 0.34);
+  --ops-focus-ring: 0 0 0 3px rgba(40, 208, 168, 0.18);
+  --ops-control-bg: color-mix(in oklab, var(--color-ops-surface0) 70%, transparent);
+  --ops-control-border: color-mix(in oklab, var(--color-ops-surface1) 68%, transparent);
+  --ops-control-hover: color-mix(in oklab, var(--color-ops-accent) 12%, var(--color-ops-surface0));
 }
 
 :root[data-ops-theme="deep-command"] {
@@ -41,46 +45,58 @@
   --ops-grid-line: rgba(242, 247, 251, 0.038);
   --ops-grid-line-strong: rgba(242, 247, 251, 0.025);
   --ops-panel-shadow: 0 22px 55px rgba(0, 0, 0, 0.34);
+  --ops-focus-ring: 0 0 0 3px rgba(40, 208, 168, 0.18);
+  --ops-control-bg: color-mix(in oklab, var(--color-ops-surface0) 72%, transparent);
+  --ops-control-border: color-mix(in oklab, var(--color-ops-surface1) 70%, transparent);
+  --ops-control-hover: color-mix(in oklab, var(--color-ops-accent) 12%, var(--color-ops-surface0));
 }
 
 :root[data-ops-theme="titanium"] {
-  --color-ops-dark: #e9edf2;
-  --color-ops-sidebar: #f6f8fb;
+  --color-ops-dark: #eef2f6;
+  --color-ops-sidebar: #f8fafc;
   --color-ops-panel: #ffffff;
-  --color-ops-accent: #0f766e;
-  --color-ops-alert: #c2410c;
-  --color-ops-success: #14804a;
-  --color-ops-text: #182230;
-  --color-ops-subtext: #59677a;
-  --color-ops-surface0: #f1f4f8;
-  --color-ops-surface1: #cfd7e3;
-  --color-ops-overlay: #8491a3;
-  --ops-body-bg: #e9edf2;
-  --ops-shell-wash: linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 18rem);
-  --ops-grid-opacity: 0.18;
-  --ops-grid-line: rgba(24, 34, 48, 0.055);
-  --ops-grid-line-strong: rgba(24, 34, 48, 0.035);
-  --ops-panel-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+  --color-ops-accent: #0b6bcb;
+  --color-ops-alert: #b42318;
+  --color-ops-success: #087443;
+  --color-ops-text: #101828;
+  --color-ops-subtext: #475467;
+  --color-ops-surface0: #e8edf3;
+  --color-ops-surface1: #c9d3df;
+  --color-ops-overlay: #667085;
+  --ops-body-bg: #eef2f6;
+  --ops-shell-wash: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(238, 242, 246, 0) 18rem);
+  --ops-grid-opacity: 0.1;
+  --ops-grid-line: rgba(16, 24, 40, 0.045);
+  --ops-grid-line-strong: rgba(16, 24, 40, 0.03);
+  --ops-panel-shadow: 0 18px 42px rgba(16, 24, 40, 0.1);
+  --ops-focus-ring: 0 0 0 3px rgba(11, 107, 203, 0.16);
+  --ops-control-bg: rgba(255, 255, 255, 0.72);
+  --ops-control-border: rgba(102, 112, 133, 0.24);
+  --ops-control-hover: #edf5ff;
 }
 
 :root[data-ops-theme="arctic"] {
-  --color-ops-dark: #f5f9fb;
-  --color-ops-sidebar: #eef7fa;
-  --color-ops-panel: #ffffff;
-  --color-ops-accent: #0891b2;
-  --color-ops-alert: #c2410c;
-  --color-ops-success: #0f8a5f;
-  --color-ops-text: #10202c;
-  --color-ops-subtext: #4e6474;
-  --color-ops-surface0: #f3f8fb;
-  --color-ops-surface1: #cce1e9;
-  --color-ops-overlay: #7a8e9b;
-  --ops-body-bg: #f5f9fb;
-  --ops-shell-wash: linear-gradient(180deg, rgba(255, 255, 255, 0.52), transparent 18rem);
-  --ops-grid-opacity: 0.18;
-  --ops-grid-line: rgba(16, 32, 44, 0.052);
-  --ops-grid-line-strong: rgba(16, 32, 44, 0.034);
-  --ops-panel-shadow: 0 18px 42px rgba(14, 116, 144, 0.12);
+  --color-ops-dark: #050a12;
+  --color-ops-sidebar: #08111d;
+  --color-ops-panel: #0d1724;
+  --color-ops-accent: #7dd3fc;
+  --color-ops-alert: #fb7185;
+  --color-ops-success: #34d399;
+  --color-ops-text: #eef6ff;
+  --color-ops-subtext: #b5c7d9;
+  --color-ops-surface0: #152235;
+  --color-ops-surface1: #2a3b52;
+  --color-ops-overlay: #8aa4bc;
+  --ops-body-bg: #050a12;
+  --ops-shell-wash: linear-gradient(180deg, rgba(125, 211, 252, 0.06), transparent 18rem);
+  --ops-grid-opacity: 0.14;
+  --ops-grid-line: rgba(238, 246, 255, 0.025);
+  --ops-grid-line-strong: rgba(125, 211, 252, 0.018);
+  --ops-panel-shadow: 0 24px 60px rgba(0, 0, 0, 0.48);
+  --ops-focus-ring: 0 0 0 3px rgba(125, 211, 252, 0.18);
+  --ops-control-bg: color-mix(in oklab, var(--color-ops-surface0) 74%, transparent);
+  --ops-control-border: color-mix(in oklab, var(--color-ops-surface1) 70%, transparent);
+  --ops-control-hover: color-mix(in oklab, var(--color-ops-accent) 12%, var(--color-ops-surface0));
 }
 
 body {
@@ -113,6 +129,54 @@ button, input, textarea, select {
   background:
     var(--ops-shell-wash),
     transparent;
+}
+
+.ops-control {
+  border: 1px solid var(--ops-control-border);
+  background: var(--ops-control-bg);
+  color: var(--color-ops-subtext);
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.ops-control:hover {
+  border-color: color-mix(in oklab, var(--color-ops-accent) 48%, var(--ops-control-border));
+  background: var(--ops-control-hover);
+  color: var(--color-ops-text);
+}
+
+.ops-control:focus-visible {
+  outline: none;
+  box-shadow: var(--ops-focus-ring);
+}
+
+.ops-topbar {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--color-ops-sidebar) 96%, transparent), color-mix(in oklab, var(--color-ops-sidebar) 90%, transparent));
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--color-ops-surface1) 42%, transparent);
+}
+
+.ops-nav-rail {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--color-ops-sidebar) 98%, transparent), color-mix(in oklab, var(--color-ops-dark) 82%, var(--color-ops-sidebar)));
+}
+
+.ops-nav-button {
+  position: relative;
+}
+
+.ops-nav-button::before {
+  content: "";
+  position: absolute;
+  left: -0.35rem;
+  top: 0.55rem;
+  bottom: 0.55rem;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.ops-nav-button.is-active::before {
+  background: var(--color-ops-accent);
 }
 
 .ops-glass {

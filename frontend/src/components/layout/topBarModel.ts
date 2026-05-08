@@ -15,8 +15,8 @@ export const VIEW_LABELS: Record<ViewId, string> = {
 
 export const THEME_OPTIONS = [
   { id: 'deep-command', label: '深空指挥' },
-  { id: 'titanium', label: '工业钛灰' },
-  { id: 'arctic', label: '极地控制台' },
+  { id: 'titanium', label: '企业浅色' },
+  { id: 'arctic', label: '夜间高对比' },
 ] as const
 
 export type OpsTheme = typeof THEME_OPTIONS[number]['id']
