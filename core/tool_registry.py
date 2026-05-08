@@ -861,6 +861,49 @@ def _register_builtin_tools() -> None:
             parameters=_obj({"tags": {"type": "array", "items": {"type": "string"}}}, ["tags"]),
         )
     )
+    tool_registry.register(
+        ToolDefinition(
+            name="observability_read_business_profile",
+            toolset="observability",
+            scope="global",
+            safety_category="readonly",
+            description="读取业务系统可观测性画像、分层拓扑、资产/会话/观测源绑定，用于只读排查规划。",
+            parameters=_obj({"system_id": {"type": "string"}}, ["system_id"]),
+        )
+    )
+    tool_registry.register(
+        ToolDefinition(
+            name="observability_append_evidence",
+            toolset="observability",
+            scope="global",
+            safety_category="readonly",
+            description="向可观测性排查事件追加证据。证据必须来自用户输入、指标、日志、命令、告警、API 或人工确认。",
+            parameters=_obj(
+                {
+                    "investigation_id": {"type": "string"},
+                    "evidence_type": {"type": "string"},
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "component_id": {"type": "string"},
+                    "source_id": {"type": "string"},
+                    "raw_ref": {"type": "string"},
+                    "raw_excerpt": {"type": "string"},
+                    "confidence": {"type": "string", "enum": ["confirmed", "discovered", "inferred", "unknown"]},
+                },
+                ["investigation_id", "evidence_type", "title", "summary"],
+            ),
+        )
+    )
+    tool_registry.register(
+        ToolDefinition(
+            name="observability_dispatch_investigation",
+            toolset="observability",
+            scope="global",
+            safety_category="batch",
+            description="为可观测性排查事件生成只读多 Agent 任务计划，并向可用会话调度；V1 默认禁止变更动作。",
+            parameters=_obj({"investigation_id": {"type": "string"}}, ["investigation_id"]),
+        )
+    )
 
 
 _register_builtin_tools()

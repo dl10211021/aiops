@@ -20,6 +20,7 @@ from api.inspection_job_routes import router as inspection_job_router
 from api.inspection_run_routes import router as inspection_run_router
 from api.chat_routes import router as chat_router
 from api.realtime_canvas_routes import router as realtime_canvas_router
+from api.observability_routes import router as observability_router
 
 router = APIRouter()
 router.include_router(chat_router)
@@ -43,4 +44,5 @@ router.include_router(inspection_template_router)
 router.include_router(inspection_job_router)
 router.include_router(inspection_run_router)
 router.include_router(realtime_canvas_router)
+router.include_router(observability_router)
 

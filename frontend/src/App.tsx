@@ -79,6 +79,7 @@ const CronManager = lazyWithChunkRecovery(() => import('@/components/views/CronM
 const AlertCenter = lazyWithChunkRecovery(() => import('@/components/views/AlertCenter'))
 const RealtimeCanvas = lazyWithChunkRecovery(() => import('@/components/views/RealtimeCanvas'))
 const SystemConfigCenter = lazyWithChunkRecovery(() => import('@/components/views/SystemConfigCenter'))
+const Observability = lazyWithChunkRecovery(() => import('@/views/Observability'))
 const ConnectionModal = lazyWithChunkRecovery(() => import('@/components/modals/ConnectionModal'))
 const LLMConfigModal = lazyWithChunkRecovery(() => import('@/components/modals/LLMConfigModal'))
 const NotificationsModal = lazyWithChunkRecovery(() => import('@/components/modals/NotificationsModal'))
@@ -117,8 +118,9 @@ function ViewRouter() {
         {currentView === 'cron' && <CronManager />}
         {currentView === 'alerts' && <AlertCenter />}
         {currentView === 'approvals' && <ApprovalCenter />}
+        {currentView === 'observability' && <Observability />}
         {currentView === 'config' && <SystemConfigCenter />}
-        {!['dashboard', 'bigscreen', 'chat', 'assets', 'canvas', 'skills', 'knowledge', 'cron', 'alerts', 'approvals', 'config'].includes(currentView) && <ChatWindow />}
+        {!['dashboard', 'bigscreen', 'chat', 'observability', 'assets', 'canvas', 'skills', 'knowledge', 'cron', 'alerts', 'approvals', 'config'].includes(currentView) && <ChatWindow />}
       </Suspense>
     </ChunkErrorBoundary>
   )

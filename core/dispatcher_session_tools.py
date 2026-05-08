@@ -23,6 +23,9 @@ SESSION_TOOL_NAMES = SSH_COMMAND_TOOL_NAMES | {
     "snmp_get",
     "list_active_sessions",
     "dispatch_sub_agents",
+    "observability_read_business_profile",
+    "observability_append_evidence",
+    "observability_dispatch_investigation",
 }
 STORAGE_SSH_ASSET_TYPES = {item for item in STORAGE_ASSET_TYPES if item in {"ceph", "nfs", "hdfs", "glusterfs"}}
 
@@ -46,6 +49,12 @@ async def execute_session_tool(
         return await _list_active_sessions(log)
     if tool_call_name == "dispatch_sub_agents":
         return await _dispatch_sub_agents(args, context)
+    if tool_call_name == "observability_read_business_profile":
+        return await _observability_read_business_profile(args)
+    if tool_call_name == "observability_append_evidence":
+        return await _observability_append_evidence(args)
+    if tool_call_name == "observability_dispatch_investigation":
+        return await _observability_dispatch_investigation(args)
     return '{"error": "Unknown session tool"}'
 
 
@@ -208,3 +217,33 @@ async def _dispatch_sub_agents(args: dict[str, Any], context: dict[str, Any]) ->
     parent_allow_mod = context.get("allow_modifications", False)
     results = await dispatch_group_tasks(tasks, parent_allow_mod)
     return json.dumps({"status": "BATCH_COMPLETE", "results": results}, ensure_ascii=False)
+
+
+async def _observability_read_business_profile(args: dict[str, Any]) -> str:
+    from core.observability.agent_orchestrator import ObservabilityAgentOrchestrator
+
+    try:
+        profile = ObservabilityAgentOrchestrator().read_business_system_profile(str(args.get("system_id") or ""))
+        return json.dumps({"status": "OK", "profile": profile}, ensure_ascii=False, default=str)
+    except Exception as exc:
+        return json.dumps({"status": "ERROR", "error": str(exc)}, ensure_ascii=False)
+
+
+async def _observability_append_evidence(args: dict[str, Any]) -> str:
+    from core.observability.agent_orchestrator import ObservabilityAgentOrchestrator
+
+    try:
+        evidence = ObservabilityAgentOrchestrator().append_investigation_evidence(args)
+        return json.dumps({"status": "OK", "evidence": evidence}, ensure_ascii=False, default=str)
+    except Exception as exc:
+        return json.dumps({"status": "ERROR", "error": str(exc)}, ensure_ascii=False)
+
+
+async def _observability_dispatch_investigation(args: dict[str, Any]) -> str:
+    from core.observability.agent_orchestrator import ObservabilityAgentOrchestrator
+
+    try:
+        result = await ObservabilityAgentOrchestrator().dispatch_investigation_tasks(str(args.get("investigation_id") or ""))
+        return json.dumps({"status": "OK", "result": result}, ensure_ascii=False, default=str)
+    except Exception as exc:
+        return json.dumps({"status": "ERROR", "error": str(exc)}, ensure_ascii=False)

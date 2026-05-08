@@ -29,6 +29,7 @@ const VIEW_IDS = new Set<ViewId>([
   'dashboard',
   'bigscreen',
   'chat',
+  'observability',
   'assets',
   'canvas',
   'cron',

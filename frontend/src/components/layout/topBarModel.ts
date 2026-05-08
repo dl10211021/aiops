@@ -4,6 +4,7 @@ export const VIEW_LABELS: Record<ViewId, string> = {
   dashboard: '总览',
   bigscreen: '总览',
   chat: 'AI 会话',
+  observability: '可观测性',
   assets: '资产中心',
   canvas: '实时画板',
   cron: '巡检任务',

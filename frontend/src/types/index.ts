@@ -959,7 +959,7 @@ export interface ApiResponse<T = Record<string, unknown>> {
   message: string
 }
 
-export type ViewId = 'dashboard' | 'bigscreen' | 'chat' | 'assets' | 'canvas' | 'cron' | 'alerts' | 'approvals' | 'skills' | 'knowledge' | 'config'
+export type ViewId = 'dashboard' | 'bigscreen' | 'chat' | 'observability' | 'assets' | 'canvas' | 'cron' | 'alerts' | 'approvals' | 'skills' | 'knowledge' | 'config'
 
 export interface ApprovalRequest {
   id: string
