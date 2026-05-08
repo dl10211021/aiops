@@ -3,7 +3,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from core.dispatcher_utility_tools import execute_utility_tool, filter_assets_by_tags
+from core.dispatcher_utility_tools import execute_utility_tool, filter_assets_by_tags, _run_bing_html_search
 
 
 class DispatcherUtilityToolsTest(unittest.TestCase):
@@ -83,6 +83,40 @@ class DispatcherUtilityToolsTest(unittest.TestCase):
         payload = json.loads(result)
         self.assertEqual(payload["status"], "SUCCESS")
         self.assertEqual(payload["results"][0]["title"], "Python")
+
+    def test_web_search_falls_back_to_bing_html_when_duckduckgo_is_empty(self):
+        with (
+            patch("core.dispatcher_utility_tools._run_duckduckgo_search", return_value=[]),
+            patch(
+                "core.dispatcher_utility_tools._run_bing_html_search",
+                return_value=[{"title": "Python", "href": "https://www.python.org", "body": "Official"}],
+            ),
+        ):
+            result = asyncio.run(execute_utility_tool("web_search", {"query": "Python"}))
+
+        payload = json.loads(result)
+        self.assertEqual(payload["status"], "SUCCESS")
+        self.assertEqual(payload["results"][0]["body"], "Official")
+
+    def test_bing_html_search_parser_extracts_results(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, _limit):
+                return (
+                    '<li class="b_algo"><h2><a href="https://www.python.org/">'
+                    "Welcome to Python.org</a></h2><p>Official Python site.</p></li>"
+                ).encode("utf-8")
+
+        with patch("urllib.request.urlopen", return_value=FakeResponse()):
+            results = _run_bing_html_search("Python", logger=__import__("logging").getLogger("test"))
+
+        self.assertEqual(results[0]["title"], "Welcome to Python.org")
+        self.assertEqual(results[0]["href"], "https://www.python.org/")
 
 
 if __name__ == "__main__":

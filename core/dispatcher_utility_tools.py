@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import logging
+import re
 from typing import Any, Iterable
+import urllib.parse
+import urllib.request
 
 UTILITY_TOOL_NAMES = {
     "send_notification",
@@ -107,17 +111,49 @@ async def _search_knowledge_base(args: dict[str, Any]) -> str:
 
 
 def _run_duckduckgo_search(query: str, logger: logging.Logger) -> list[dict[str, Any]]:
+    import warnings
+
     try:
         from ddgs import DDGS
     except ImportError:
         from duckduckgo_search import DDGS
 
     logger.info(f"AI 发起了外网检索: {query}")
-    with DDGS() as ddgs:
-        results = [r for r in ddgs.text(query, max_results=5, backend="auto")]
-        if not results:
-            results = [r for r in ddgs.text(query, max_results=5, backend="html")]
-        return results
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        with DDGS() as ddgs:
+            results = [r for r in ddgs.text(query, max_results=5, backend="auto")]
+            if not results:
+                results = [r for r in ddgs.text(query, max_results=5, backend="html")]
+            return results
+
+
+def _strip_search_html(value: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html.unescape(value))).strip()
+
+
+def _run_bing_html_search(query: str, logger: logging.Logger) -> list[dict[str, str]]:
+    logger.info(f"AI 使用 Bing HTML 兜底检索: {query}")
+    url = "https://www.bing.com/search?q=" + urllib.parse.quote(query)
+    request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 OpsCore"})
+    with urllib.request.urlopen(request, timeout=15) as response:
+        page = response.read(300000).decode("utf-8", errors="ignore")
+
+    results: list[dict[str, str]] = []
+    for match in re.finditer(r'<li class="b_algo".*?</li>', page, flags=re.I | re.S):
+        block = match.group(0)
+        link_match = re.search(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', block, flags=re.I | re.S)
+        if not link_match:
+            continue
+        body_match = re.search(r"<p[^>]*>(.*?)</p>", block, flags=re.I | re.S)
+        title = _strip_search_html(link_match.group(2))
+        href = html.unescape(link_match.group(1))
+        body = _strip_search_html(body_match.group(1)) if body_match else ""
+        if title and href:
+            results.append({"title": title, "href": href, "body": body})
+        if len(results) >= 5:
+            break
+    return results
 
 
 async def _web_search(args: dict[str, Any], logger: logging.Logger) -> str:
@@ -125,10 +161,9 @@ async def _web_search(args: dict[str, Any], logger: logging.Logger) -> str:
     if not query:
         return json.dumps({"error": "联网搜索关键词不能为空。"}, ensure_ascii=False)
     try:
-        results = await asyncio.wait_for(
-            asyncio.to_thread(_run_duckduckgo_search, query, logger),
-            timeout=20.0,
-        )
+        results = await asyncio.wait_for(asyncio.to_thread(_run_duckduckgo_search, query, logger), timeout=20.0)
+        if not results:
+            results = await asyncio.wait_for(asyncio.to_thread(_run_bing_html_search, query, logger), timeout=20.0)
         return json.dumps({"status": "SUCCESS", "results": results}, ensure_ascii=False)
     except asyncio.TimeoutError:
         return json.dumps({"error": "联网搜索超时，请稍后重试或换一个更具体的关键词。"}, ensure_ascii=False)
