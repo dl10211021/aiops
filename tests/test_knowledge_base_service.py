@@ -508,14 +508,21 @@ class TestKnowledgeBaseService(unittest.TestCase):
 
     def test_rag_prompt_context_redacts_sensitive_values(self):
         redacted = redact_sensitive_rag_text(
-            "CPU 正常\n密码: TopSecret123\napi_token=token-abc\nPasswordAuthentication yes"
+            "CPU 正常\n密码: TopSecret123\napi_token=token-abc\nPasswordAuthentication yes\n"
+            "| 资产 | 账号 | 密码 |\n| --- | --- | --- |\n| kmstest | chroot | TableSecret123 |"
+            "\n| kmstest | chroot | WeakSecret123! |"
+            "\nkmstest 192.168.11.132 chroot PlainSecret123!"
         )
 
         self.assertIn("CPU 正常", redacted)
         self.assertIn("PasswordAuthentication yes", redacted)
+        self.assertIn("kmstest", redacted)
         self.assertIn("[已隐藏]", redacted)
         self.assertNotIn("TopSecret123", redacted)
         self.assertNotIn("token-abc", redacted)
+        self.assertNotIn("TableSecret123", redacted)
+        self.assertNotIn("WeakSecret123!", redacted)
+        self.assertNotIn("PlainSecret123!", redacted)
 
     def test_build_vault_rag_context_for_prompt_returns_redacted_evidence(self):
         kb = FakeKnowledgeBase("rag_context", message="注入成功")
@@ -538,6 +545,33 @@ class TestKnowledgeBaseService(unittest.TestCase):
         self.assertNotIn("TopSecret123", result["context"])
         self.assertGreaterEqual(len(result["references"]), 1)
         self.assertEqual(result["references"][0]["source_type"], "rag")
+
+    def test_rag_prompt_context_matches_natural_language_entity_query_without_vector_index(self):
+        kb = FakeKnowledgeBase("rag_entity_query", message="should not index")
+        upload = FakeUpload(
+            "账号台账.txt",
+            (
+                "| 资产 | 地址 | 用途 | 账号 | 密码 |\n"
+                "| --- | --- | --- | --- | --- |\n"
+                "| kmstest | 192.168.11.132 | Issue 服务器 | chroot | TopSecret123 |\n"
+            ).encode("utf-8"),
+        )
+
+        with patch("core.embedding_config.get_embedding_config", return_value=("", 3072)):
+            asyncio.run(ingest_knowledge_document(kb, upload))
+
+        search_results = search_vault_knowledge("请帮我查询 kmstest 账号信息", vault_dir=self.vault_dir)
+        result = build_vault_rag_context_for_prompt(
+            "请帮我查询 kmstest 账号信息",
+            vault_dir=self.vault_dir,
+        )
+
+        self.assertGreaterEqual(len(search_results), 1)
+        self.assertIn("kmstest", result["context"])
+        self.assertIn("192.168.11.132", result["context"])
+        self.assertIn("[已隐藏]", result["context"])
+        self.assertNotIn("TopSecret123", result["context"])
+        self.assertGreaterEqual(len(result["references"]), 1)
 
     def test_compile_vault_source_candidate_writes_review_candidate(self):
         kb = FakeKnowledgeBase("compile_candidate", message="注入成功")

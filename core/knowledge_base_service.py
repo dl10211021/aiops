@@ -471,11 +471,40 @@ def _search_snippet(content: str, query: str, width: int = 180) -> str:
     index = lower.find(needle)
     if index < 0:
         return content[:width].replace("\n", " ").strip()
+    lines = content.splitlines()
+    if lines:
+        offset = 0
+        for line_index, line in enumerate(lines):
+            next_offset = offset + len(line) + 1
+            if offset <= index < next_offset and "|" in line:
+                start_line = max(0, line_index - 2)
+                table_lines = lines[start_line : line_index + 1]
+                if len(table_lines) >= 2 and any("|" in item for item in table_lines[:-1]):
+                    return "\n".join(item.strip() for item in table_lines if item.strip())[: max(width * 2, width)]
+                break
+            offset = next_offset
     start = max(0, index - width // 2)
     end = min(len(content), index + len(query) + width // 2)
     prefix = "..." if start > 0 else ""
     suffix = "..." if end < len(content) else ""
     return (prefix + content[start:end] + suffix).replace("\n", " ").strip()
+
+
+def _extract_vault_search_terms(query: str) -> list[str]:
+    """Extract concrete lookup terms from a natural-language RAG question."""
+    raw_terms = re.findall(r"\d{1,3}(?:\.\d{1,3}){3}|[A-Za-z0-9_.:-]{3,}|[\u4e00-\u9fff]{2,}", query)
+    seen: set[str] = set()
+    terms: list[str] = []
+    for raw in raw_terms:
+        term = raw.strip().strip("，。；;：:、,.!?！？()（）[]【】")
+        if not term:
+            continue
+        key = term.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        terms.append(term)
+    return terms
 
 
 async def _generate_candidate_with_model(record: dict[str, Any], source_preview: str) -> str:
@@ -691,6 +720,7 @@ def search_vault_knowledge(
         raise KnowledgeBaseServiceError(400, "搜索关键词不能为空")
     root = Path(vault_dir) if vault_dir is not None else _vault_root()
     scope = scope if scope in {"all", "articles", "candidates", "sources", "raw"} else "all"
+    terms = _extract_vault_search_terms(term)
     results: list[dict[str, Any]] = []
     searchable_fields = [
         ("articles", "RAG 资料", "wiki_path"),
@@ -723,15 +753,28 @@ def search_vault_knowledge(
                 continue
             content = _read_vault_text_file(root, str(rel))
             haystack = f"{metadata_blob}\n{content}"
-            if term.lower() not in haystack.lower():
+            haystack_lower = haystack.lower()
+            term_lower = term.lower()
+            phrase_match = term_lower in haystack_lower
+            matched_terms = [item for item in terms if item.lower() in haystack_lower]
+            if not phrase_match and not matched_terms:
                 continue
             score = 1
-            if term.lower() in title.lower():
-                score += 5
-            if term.lower() in metadata_blob.lower():
+            title_lower = title.lower()
+            metadata_lower = metadata_blob.lower()
+            content_lower = content.lower() if content else ""
+            snippet_term = term if phrase_match else max(matched_terms, key=len)
+            if phrase_match:
+                score += 8
+            for matched in matched_terms:
+                matched_lower = matched.lower()
                 score += 2
-            if content and term.lower() in content.lower():
-                score += 3
+                if matched_lower in title_lower:
+                    score += 5
+                if matched_lower in metadata_lower:
+                    score += 2
+                if content and matched_lower in content_lower:
+                    score += 3
             results.append(
                 {
                     "id": record.get("id"),
@@ -742,7 +785,7 @@ def search_vault_knowledge(
                     "path": rel,
                     "compile_status": record.get("compile_status"),
                     "compile_stage": record.get("compile_stage"),
-                    "snippet": _search_snippet(content or metadata_blob, term),
+                    "snippet": _search_snippet(content or metadata_blob, snippet_term),
                     "score": score,
                     "updated_at": record.get("updated_at") or record.get("approved_at") or record.get("compiled_at"),
                 }
@@ -782,11 +825,80 @@ def redact_sensitive_rag_text(text: str) -> str:
         separator = "：" if "：" in match.group(0) else ":"
         return f"{label}{separator} [已隐藏]"
 
+    def markdown_cells(line: str) -> list[str]:
+        if "|" not in line:
+            return []
+        stripped = line.strip()
+        if not stripped.startswith("|") and stripped.count("|") < 2:
+            return []
+        return [cell.strip() for cell in stripped.strip("|").split("|")]
+
+    def is_separator_row(cells: list[str]) -> bool:
+        return bool(cells) and all(re.fullmatch(r":?-{2,}:?", cell.replace(" ", "")) for cell in cells)
+
+    def sensitive_column_indexes(cells: list[str]) -> set[int]:
+        indexes: set[int] = set()
+        for index, cell in enumerate(cells):
+            normalized = cell.strip(" `*_：:=（）()").lower()
+            if normalized in _SENSITIVE_TABLE_TOKENS:
+                indexes.add(index)
+        return indexes
+
+    def looks_like_secret_cell(cell: str) -> bool:
+        value = cell.strip().strip("`*_\"'")
+        if len(value) < 8:
+            return False
+        has_letter = bool(re.search(r"[A-Za-z]", value))
+        has_digit = bool(re.search(r"\d", value))
+        has_symbol = bool(re.search(r"[!@#$%^&*+=?~]", value))
+        return has_letter and has_digit and has_symbol
+
+    def secret_value_indexes(cells: list[str]) -> set[int]:
+        return {index for index, cell in enumerate(cells) if looks_like_secret_cell(cell)}
+
+    def replace_markdown_cells(line: str, indexes: set[int]) -> str:
+        cells = markdown_cells(line)
+        if not cells:
+            return line
+        for index in indexes:
+            if index < len(cells):
+                cells[index] = "[已隐藏]"
+        return "| " + " | ".join(cells) + " |"
+
     redacted = _SENSITIVE_FIELD_PATTERN.sub(replace_field, text)
     safe_lines: list[str] = []
+    pending_table_sensitive_columns: set[int] = set()
+    active_table_sensitive_columns: set[int] = set()
     for line in redacted.splitlines():
+        cells = markdown_cells(line)
+        if cells:
+            if is_separator_row(cells):
+                active_table_sensitive_columns = set(pending_table_sensitive_columns)
+                safe_lines.append(line)
+                continue
+            if active_table_sensitive_columns:
+                safe_lines.append(replace_markdown_cells(line, active_table_sensitive_columns))
+                pending_table_sensitive_columns = set()
+                continue
+            secret_columns = secret_value_indexes(cells)
+            if secret_columns:
+                safe_lines.append(replace_markdown_cells(line, secret_columns))
+                pending_table_sensitive_columns = set()
+                continue
+            pending_table_sensitive_columns = sensitive_column_indexes(cells)
+            safe_lines.append(line)
+            continue
+        else:
+            pending_table_sensitive_columns = set()
+            active_table_sensitive_columns = set()
+
         parts = line.split()
         hidden = False
+        if parts:
+            redacted_parts = ["[已隐藏]" if looks_like_secret_cell(part) else part for part in parts]
+            if redacted_parts != parts:
+                safe_lines.append(" ".join(redacted_parts))
+                continue
         for index, part in enumerate(parts):
             normalized = part.strip(":：=").lower()
             if normalized in _SENSITIVE_TABLE_TOKENS and index < len(parts) - 1:
