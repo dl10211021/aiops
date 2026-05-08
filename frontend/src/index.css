@@ -125,6 +125,21 @@ button, input, textarea, select {
   font: inherit;
 }
 
+select option,
+select optgroup {
+  background-color: var(--color-ops-panel);
+  color: var(--color-ops-text);
+}
+
+select option:disabled {
+  color: var(--color-ops-overlay);
+}
+
+select option:checked {
+  background-color: var(--color-ops-accent);
+  color: var(--color-ops-dark);
+}
+
 .ops-shell {
   background:
     var(--ops-shell-wash),
