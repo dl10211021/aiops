@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, MouseEvent } from 'react'
 import type { Session } from '@/types'
 import SessionItem from './SessionItem'
 import { DEFAULT_SESSION_GROUP } from './sessionGroups'
@@ -12,6 +12,8 @@ interface SessionGroupListProps {
   groupNames: string[]
   selectedGroup: string
   sessionList: Session[]
+  onDisconnect: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
+  onEdit: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
   onDeleteGroup: (group: string) => void
   onRenameGroup: (oldName: string, newName: string) => boolean
   onSelectGroup: (group: string) => void
@@ -27,6 +29,8 @@ export default function SessionGroupList({
   groupNames,
   selectedGroup,
   sessionList,
+  onDisconnect,
+  onEdit,
   onDeleteGroup,
   onRenameGroup,
   onSelectGroup,
@@ -167,6 +171,8 @@ export default function SessionGroupList({
                     session={session}
                     active={session.id === currentSessionId}
                     onSelect={() => onSelectSession(session.id, group)}
+                    onDisconnect={onDisconnect}
+                    onEdit={onEdit}
                   />
                 ))}
               </div>

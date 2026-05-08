@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react'
 import type { Session } from '@/types'
 import { protocolLabel } from '@/utils/assetDisplay'
 import { sessionAttention } from './sessionAttention'
@@ -18,12 +19,16 @@ interface SessionItemProps {
   session: Session
   active: boolean
   onSelect: () => void
+  onDisconnect: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
+  onEdit: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
 }
 
 export default function SessionItem({
   session,
   active,
   onSelect,
+  onDisconnect,
+  onEdit,
 }: SessionItemProps) {
   const attention = sessionAttention(session)
   const needsAttention = attention.type !== 'none'
@@ -33,7 +38,7 @@ export default function SessionItem({
   return (
     <div
       onClick={onSelect}
-      className={`group relative grid min-h-[58px] cursor-pointer grid-cols-[46px_minmax(0,1fr)_14px] items-center gap-3 overflow-hidden rounded-lg border px-2.5 py-2 text-sm transition-colors duration-150
+      className={`group relative grid min-h-[58px] cursor-pointer grid-cols-[46px_minmax(0,1fr)_54px] items-center gap-3 overflow-hidden rounded-lg border px-2.5 py-2 text-sm transition-colors duration-150
         ${active
           ? 'border-ops-accent/60 bg-[linear-gradient(135deg,rgba(40,208,168,0.16),rgba(15,36,56,0.76))] text-ops-accent shadow-[inset_0_0_0_1px_rgba(40,208,168,0.08)]'
           : needsAttention
@@ -57,17 +62,41 @@ export default function SessionItem({
           {session.user}@{session.host}
         </div>
       </div>
-      <span
-        className={`h-2.5 w-2.5 rounded-full border border-ops-panel ${
-          running
-            ? 'bg-ops-accent shadow-[0_0_10px_rgba(40,208,168,0.85)] animate-pulse'
-            : needsAttention
-              ? 'bg-yellow-300 shadow-[0_0_10px_rgba(253,224,71,0.58)]'
-              : 'bg-ops-success shadow-[0_0_9px_rgba(90,214,125,0.7)]'
-        }`}
-        title={statusTitle}
-        aria-label={statusTitle}
-      />
+      <div className="flex items-center justify-end gap-1">
+        <div className={`flex items-center gap-1 transition-opacity ${
+          active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        }`}>
+          <button
+            type="button"
+            onClick={(event) => onEdit(session.id, event)}
+            className="grid h-6 w-6 place-items-center rounded-md border border-ops-surface1/65 bg-ops-dark/45 text-[12px] font-black text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text"
+            title="编辑单个会话：名称、分组、标签"
+            aria-label="编辑单个会话"
+          >
+            ✎
+          </button>
+          <button
+            type="button"
+            onClick={(event) => onDisconnect(session.id, event)}
+            className="grid h-6 w-6 place-items-center rounded-md border border-ops-alert/35 bg-ops-alert/8 text-[12px] font-black text-ops-alert transition-colors hover:bg-ops-alert/14"
+            title="断开会话"
+            aria-label="断开会话"
+          >
+            ⏻
+          </button>
+        </div>
+        <span
+          className={`h-2.5 w-2.5 shrink-0 rounded-full border border-ops-panel ${
+            running
+              ? 'bg-ops-accent shadow-[0_0_10px_rgba(40,208,168,0.85)] animate-pulse'
+              : needsAttention
+                ? 'bg-yellow-300 shadow-[0_0_10px_rgba(253,224,71,0.58)]'
+                : 'bg-ops-success shadow-[0_0_9px_rgba(90,214,125,0.7)]'
+          }`}
+          title={statusTitle}
+          aria-label={statusTitle}
+        />
+      </div>
     </div>
   )
 }
