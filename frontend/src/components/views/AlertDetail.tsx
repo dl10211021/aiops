@@ -21,15 +21,15 @@ export function AlertDetail({
 }) {
   if (!alert) {
     return (
-      <aside className="ops-glass rounded-lg border p-5">
+      <aside className="ops-card p-5">
         <div className="py-20 text-center text-sm text-ops-subtext">选择一条告警后查看详情</div>
       </aside>
     )
   }
 
   return (
-    <aside className="ops-glass overflow-hidden rounded-lg border">
-      <div className="border-b border-ops-surface0 px-5 py-4">
+    <aside className="ops-card overflow-hidden">
+      <div className="ops-card-header px-5 py-4">
         <div className="flex flex-wrap items-center gap-2">
           <AlertStatusBadge status={alert.status} />
           <AlertSeverityBadge severity={alert.severity} />
@@ -48,47 +48,47 @@ export function AlertDetail({
           <AlertInfo label="关闭" value={alert.closed_at ? formatAlertDate(alert.closed_at) : '-'} />
         </div>
 
-        <div className="rounded-lg border border-ops-surface0 bg-ops-dark/30 p-4">
+        <div className="ops-data-panel p-4">
           <label className="text-xs text-ops-subtext">负责人</label>
           <input
             value={assignee}
             onChange={(event) => onAssigneeChange(event.target.value)}
-            className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control mt-1 w-full px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
           />
           <label className="mt-3 block text-xs text-ops-subtext">处置备注</label>
           <textarea
             value={note}
             onChange={(event) => onNoteChange(event.target.value)}
             rows={3}
-            className="mt-1 w-full resize-none rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control mt-1 w-full resize-none px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
             placeholder="记录定位、影响面、处置动作或关闭原因"
           />
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
               disabled={busy}
               onClick={() => onUpdate(alert, 'acknowledged')}
-              className="rounded-lg bg-ops-accent/85 px-3 py-2 text-sm font-semibold text-ops-dark transition-opacity disabled:opacity-50"
+              className="ops-primary-action px-3 py-2 text-sm disabled:opacity-50"
             >
               接手处理
             </button>
             <button
               disabled={busy}
               onClick={() => onUpdate(alert, 'closed')}
-              className="rounded-lg bg-ops-success/85 px-3 py-2 text-sm font-semibold text-ops-dark transition-opacity disabled:opacity-50"
+              className="ops-primary-action bg-ops-success px-3 py-2 text-sm disabled:opacity-50"
             >
               关闭事件
             </button>
             <button
               disabled={busy}
               onClick={() => onUpdate(alert, 'suppressed')}
-              className="rounded-lg bg-ops-surface0 px-3 py-2 text-sm text-ops-subtext transition-colors hover:text-ops-text disabled:opacity-50"
+              className="ops-muted-action px-3 py-2 text-sm disabled:opacity-50"
             >
               抑制
             </button>
             <button
               disabled={busy}
               onClick={() => onUpdate(alert)}
-              className="rounded-lg bg-ops-surface0 px-3 py-2 text-sm text-ops-subtext transition-colors hover:text-ops-text disabled:opacity-50"
+              className="ops-muted-action px-3 py-2 text-sm disabled:opacity-50"
             >
               保存备注
             </button>
@@ -99,12 +99,12 @@ export function AlertDetail({
           <div className="mb-2 text-sm font-semibold text-ops-text">处置记录</div>
           <div className="space-y-2">
             {(alert.notes || []).length === 0 && (
-              <div className="rounded-lg border border-ops-surface0 bg-ops-dark/25 px-3 py-3 text-xs text-ops-overlay">
+              <div className="ops-data-panel px-3 py-3 text-xs text-ops-overlay">
                 暂无备注
               </div>
             )}
             {(alert.notes || []).slice().reverse().map((item, index) => (
-              <div key={`${item.time}-${index}`} className="rounded-lg border border-ops-surface0 bg-ops-dark/25 px-3 py-3">
+              <div key={`${item.time}-${index}`} className="ops-data-panel px-3 py-3">
                 <div className="font-mono text-[11px] text-ops-overlay">{formatAlertDate(item.time)}</div>
                 <div className="mt-1 text-sm text-ops-subtext">{item.content}</div>
               </div>
@@ -114,7 +114,7 @@ export function AlertDetail({
 
         <section>
           <div className="mb-2 text-sm font-semibold text-ops-text">原始负载</div>
-          <pre className="max-h-72 overflow-auto rounded-lg border border-ops-surface0 bg-ops-dark/45 p-3 text-xs leading-relaxed text-ops-subtext">
+          <pre className="ops-data-panel max-h-72 overflow-auto p-3 text-xs leading-relaxed text-ops-subtext">
             {JSON.stringify(alert.payload || {}, null, 2)}
           </pre>
         </section>

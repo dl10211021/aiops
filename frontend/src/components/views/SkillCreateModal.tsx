@@ -12,16 +12,19 @@ export function SkillCreateModal({
   onSubmit: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="max-h-[86vh] w-full max-w-xl overflow-y-auto rounded-lg border border-ops-surface1 bg-ops-panel p-5" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-ops-text mb-4">创建新技能</h2>
-        <div className="space-y-3">
+    <div className="ops-modal-backdrop" onClick={onClose}>
+      <div className="ops-modal-surface flex max-h-[86vh] w-full max-w-xl flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="ops-modal-header">
+          <h2 className="text-lg font-bold text-ops-text">创建新技能</h2>
+          <button onClick={onClose} className="ops-icon-button h-9 w-9">x</button>
+        </div>
+        <div className="ops-modal-body space-y-3 p-5">
           <div>
             <label className="text-xs text-ops-subtext">技能 ID (英文+横线)</label>
             <input
               value={form.skill_id}
               onChange={(e) => onFormChange({ ...form, skill_id: e.target.value })}
-              className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent"
+              className="ops-control mt-1 w-full px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
               placeholder="my-custom-skill"
             />
           </div>
@@ -30,7 +33,7 @@ export function SkillCreateModal({
             <input
               value={form.description}
               onChange={(e) => onFormChange({ ...form, description: e.target.value })}
-              className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent"
+              className="ops-control mt-1 w-full px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
               placeholder="这个技能可以..."
             />
           </div>
@@ -40,14 +43,14 @@ export function SkillCreateModal({
               value={form.instructions}
               onChange={(e) => onFormChange({ ...form, instructions: e.target.value })}
               rows={8}
-              className="w-full bg-ops-dark border border-ops-surface1 rounded-lg px-3 py-2 text-sm text-ops-text mt-1 outline-none focus:border-ops-accent resize-none"
+              className="ops-control mt-1 w-full resize-none px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
               placeholder="# 技能名称&#10;&#10;## 技能职责&#10;..."
             />
           </div>
         </div>
-        <div className="flex justify-end gap-2 mt-4">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-ops-subtext hover:text-ops-text">取消</button>
-          <button onClick={onSubmit} className="bg-ops-accent text-ops-dark px-4 py-2 rounded-lg text-sm font-medium hover:bg-ops-accent/80">创建</button>
+        <div className="ops-modal-footer">
+          <button onClick={onClose} className="ops-muted-action px-4 py-2 text-sm">取消</button>
+          <button onClick={onSubmit} className="ops-primary-action px-4 py-2 text-sm">创建</button>
         </div>
       </div>
     </div>

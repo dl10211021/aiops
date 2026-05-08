@@ -36,7 +36,7 @@ export function CronJobCard({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="rounded bg-ops-dark px-2 py-0.5 text-xs text-ops-accent" title={job.cron_expr || ''}>{cronScheduleLabel(job.cron_expr)}</span>
+            <span className="ops-control px-2 py-0.5 text-xs text-ops-accent" title={job.cron_expr || ''}>{cronScheduleLabel(job.cron_expr)}</span>
             <span className={`rounded px-2 py-0.5 text-[11px] ${job.status === 'paused' ? 'bg-ops-alert/15 text-ops-alert' : 'bg-ops-success/15 text-ops-success'}`}>
               {job.status === 'paused' ? '已暂停' : '已调度'}
             </span>
@@ -133,7 +133,7 @@ export function CronField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+        className="ops-control mt-1 w-full px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
       />
     </div>
   )

@@ -11,7 +11,7 @@ export function RunHistory({
   const latest = runs[0]
   if (!latest) {
     return (
-      <div className="mt-4 rounded-lg border border-ops-surface0 bg-ops-dark/25 px-3 py-2 text-xs text-ops-overlay">
+      <div className="ops-data-panel mt-4 px-3 py-2 text-xs text-ops-overlay">
         暂无运行记录。手动执行或等待定时触发后会显示目标结果。
       </div>
     )
@@ -22,7 +22,7 @@ export function RunHistory({
       ? 'text-ops-accent bg-ops-accent/10'
       : 'text-ops-alert bg-ops-alert/10'
   return (
-    <div className="mt-4 rounded-lg border border-ops-surface0 bg-ops-dark/25 p-3">
+    <div className="ops-data-panel mt-4 p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className={`rounded px-2 py-0.5 text-[11px] ${tone}`}>{statusLabel(latest.status)}</span>
@@ -32,7 +32,7 @@ export function RunHistory({
           <span className="text-[11px] text-ops-overlay">{latest.completed_at}</span>
           <button
             onClick={() => onOpenReport(latest)}
-            className="rounded-lg bg-ops-accent/15 px-2.5 py-1 text-[11px] text-ops-accent hover:bg-ops-accent/25"
+            className="ops-muted-action px-2.5 py-1 text-[11px] text-ops-accent"
           >
             查看报告
           </button>
@@ -40,7 +40,7 @@ export function RunHistory({
       </div>
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
         {latest.targets.slice(0, 6).map((target) => (
-          <div key={`${target.asset_id || target.host}-${target.host}`} className="rounded-lg bg-ops-surface0/60 px-2.5 py-2 text-xs">
+          <div key={`${target.asset_id || target.host}-${target.host}`} className="ops-data-panel px-2.5 py-2 text-xs">
             <div className="flex items-center justify-between gap-2">
               <span className="truncate text-ops-text">{target.host}</span>
               <span className={target.status === 'success' ? 'text-ops-success' : 'text-ops-alert'}>{statusLabel(target.status)}</span>

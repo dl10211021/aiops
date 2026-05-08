@@ -78,11 +78,11 @@ export function ApprovalRow({
             </div>
           </div>
         )}
-        <pre className="mt-3 max-h-44 overflow-auto rounded-lg border border-ops-surface0 bg-ops-dark/45 p-3 text-xs leading-relaxed text-ops-subtext">
+        <pre className="ops-data-panel mt-3 max-h-44 overflow-auto p-3 text-xs leading-relaxed text-ops-subtext">
           {argsText}
         </pre>
         {approval.execution && (
-          <div className="mt-3 rounded-lg border border-ops-surface0 bg-ops-dark/30 p-3 text-xs text-ops-subtext">
+          <div className="ops-data-panel mt-3 p-3 text-xs text-ops-subtext">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <span className={approval.execution.status === 'success' ? 'text-ops-success' : 'text-ops-alert'}>
                 执行结果：{approval.execution.status === 'success' ? '成功' : '异常'}
@@ -115,7 +115,7 @@ export function ApprovalRow({
           </div>
         )}
       </div>
-      <aside className="rounded-lg border border-ops-surface0 bg-ops-dark/30 p-4">
+      <aside className="ops-data-panel p-4">
         <div className="space-y-2 text-xs text-ops-subtext">
           <ApprovalInfo label="资产" value={context.remark || context.host || '-'} />
           <ApprovalInfo label="协议" value={`${assetTypeLabel(String(context.asset_type || ''))} / ${protocolLabel(String(context.protocol || ''))}`} />
@@ -128,34 +128,34 @@ export function ApprovalRow({
             <button
               disabled={busy}
               onClick={onApprove}
-              className="rounded-lg bg-ops-success/85 px-3 py-2 text-sm font-semibold text-ops-dark transition-opacity disabled:opacity-50"
+              className="ops-primary-action bg-ops-success px-3 py-2 text-sm disabled:opacity-50"
             >
               批准
             </button>
             <button
               disabled={busy}
               onClick={onReject}
-              className="rounded-lg bg-ops-alert/85 px-3 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-50"
+              className="ops-danger-action px-3 py-2 text-sm disabled:opacity-50"
             >
               拒绝
             </button>
           </div>
         ) : canExecuteRollback ? (
           <div className="mt-4 grid gap-2">
-            <div className="rounded-lg bg-ops-surface0 px-3 py-2 text-xs text-ops-subtext">
+            <div className="ops-data-panel px-3 py-2 text-xs text-ops-subtext">
               处理结果：已批准，等待执行
               {approval.note ? `，备注：${approval.note}` : ''}
             </div>
             <button
               disabled={busy}
               onClick={onExecute}
-              className="rounded-lg bg-ops-accent px-3 py-2 text-sm font-semibold text-ops-dark transition-opacity disabled:opacity-50"
+              className="ops-primary-action px-3 py-2 text-sm disabled:opacity-50"
             >
               执行回滚
             </button>
           </div>
         ) : (
-          <div className="mt-4 rounded-lg bg-ops-surface0 px-3 py-2 text-xs text-ops-subtext">
+          <div className="ops-data-panel mt-4 px-3 py-2 text-xs text-ops-subtext">
             处理结果：{approval.decision || approval.status}
             {approval.note ? `，备注：${approval.note}` : ''}
           </div>
