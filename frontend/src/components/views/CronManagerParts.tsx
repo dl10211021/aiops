@@ -32,7 +32,7 @@ export function CronJobCard({
   onRunNow,
 }: CronJobCardProps) {
   return (
-    <div className="ops-glass rounded-lg border p-4 transition-all hover:border-ops-accent/40">
+    <div className="ops-data-panel p-4 transition-all hover:border-ops-accent/40">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -60,21 +60,21 @@ export function CronJobCard({
           <button
             disabled={busy}
             onClick={() => onRunNow(job)}
-            className="rounded-lg bg-ops-accent/15 px-3 py-1.5 text-xs text-ops-accent hover:bg-ops-accent/25 disabled:opacity-50"
+            className="ops-primary-action px-3 py-1.5 text-xs disabled:opacity-50"
           >
             立即执行
           </button>
           <button
             disabled={busy}
             onClick={() => onPauseResume(job)}
-            className="rounded-lg bg-ops-surface0 px-3 py-1.5 text-xs text-ops-subtext hover:text-ops-text disabled:opacity-50"
+            className="ops-muted-action px-3 py-1.5 text-xs disabled:opacity-50"
           >
             {job.status === 'paused' ? '恢复' : '暂停'}
           </button>
-          <button onClick={() => onEdit(job)} className="rounded-lg bg-ops-surface0 px-3 py-1.5 text-xs text-ops-subtext hover:text-ops-text">
+          <button onClick={() => onEdit(job)} className="ops-muted-action px-3 py-1.5 text-xs">
             编辑
           </button>
-          <button onClick={() => onDelete(job)} className="rounded-lg bg-ops-alert/10 px-3 py-1.5 text-xs text-ops-alert hover:bg-ops-alert/20">
+          <button onClick={() => onDelete(job)} className="ops-danger-action px-3 py-1.5 text-xs">
             删除
           </button>
         </div>
@@ -87,12 +87,12 @@ export function CronJobCard({
 export function CronEmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-      <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-6">
+      <section className="ops-data-panel p-6">
         <div className="text-sm font-semibold text-ops-text">暂无巡检计划</div>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-ops-subtext">
           创建定时任务后，AI 会按计划连接资产，执行只读巡检、风险分析和报告归档。建议先从核心主机、数据库和网络设备开始。
         </p>
-        <button onClick={onCreate} className="mt-5 rounded-lg bg-ops-accent px-4 py-2 text-sm font-semibold text-ops-dark transition-colors hover:bg-ops-accent/85">
+        <button onClick={onCreate} className="ops-primary-action mt-5 px-4 py-2 text-sm">
           新建巡检计划
         </button>
       </section>
@@ -102,7 +102,7 @@ export function CronEmptyState({ onCreate }: { onCreate: () => void }) {
           ['巡检范围', '支持单资产、资产组、标签和业务范围'],
           ['输出结果', '运行记录、巡检报告、风险项和告警联动'],
         ].map(([title, desc]) => (
-          <div key={title} className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-4">
+          <div key={title} className="ops-data-panel p-4">
             <div className="text-sm font-semibold text-ops-text">{title}</div>
             <p className="mt-2 text-xs leading-5 text-ops-subtext">{desc}</p>
           </div>

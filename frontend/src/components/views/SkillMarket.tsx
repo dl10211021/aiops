@@ -99,9 +99,10 @@ export default function SkillMarket() {
   const totalMarket = skillRegistry.filter((s) => s.is_market).length
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 lg:p-5">
-      <div className="w-full max-w-none">
+    <div className="ops-page">
+      <div className="ops-page-inner">
         <PageHeader
+          eyebrow="能力库"
           title="技能市场"
           description={`管理 AI 技能包，已安装 ${totalInstalled} 个，可安装 ${totalMarket} 个。`}
           actions={(
@@ -121,7 +122,7 @@ export default function SkillMarket() {
         )}
 
         {loading && (
-          <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-8 text-center text-sm text-ops-subtext">
+          <section className="ops-data-panel p-8 text-center text-sm text-ops-subtext">
             正在加载技能目录...
           </section>
         )}

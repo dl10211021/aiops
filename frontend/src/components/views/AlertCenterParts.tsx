@@ -42,7 +42,7 @@ export function AlertMetric({
     slate: 'text-ops-subtext',
   }[tone]
   return (
-    <div className="ops-glass rounded-lg border p-4">
+    <div className="ops-data-panel p-4">
       <div className="text-xs text-ops-subtext">{label}</div>
       <div className={`mt-2 font-mono text-2xl font-bold ${toneClass}`}>{value}</div>
     </div>
@@ -65,7 +65,7 @@ export function AlertFilters({
   onHostChange: (value: string) => void
 }) {
   return (
-    <div className="mb-5 grid gap-3 rounded-lg border border-ops-surface0 bg-ops-panel/55 p-4 lg:grid-cols-[1fr_220px_260px]">
+    <div className="ops-data-toolbar mb-5 grid gap-3 p-3 lg:grid-cols-[1fr_220px_260px]">
       <div className="flex flex-wrap gap-2">
         {STATUS_OPTIONS.map((item) => (
           <button
@@ -84,7 +84,7 @@ export function AlertFilters({
       <select
         value={severity}
         onChange={(event) => onSeverityChange(event.target.value)}
-        className="rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+        className="ops-control px-3 py-2 text-sm"
       >
         {SEVERITY_OPTIONS.map((item) => (
           <option key={item.id} value={item.id}>{item.label}</option>
@@ -94,7 +94,7 @@ export function AlertFilters({
         value={host}
         onChange={(event) => onHostChange(event.target.value)}
         placeholder="按主机过滤"
-        className="rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+        className="ops-control px-3 py-2 text-sm"
       />
     </div>
   )
@@ -112,14 +112,14 @@ export function AlertQueueList({
   onSelect: (alertId: string) => void
 }) {
   return (
-    <section className="ops-glass overflow-hidden rounded-lg border">
-      <div className="border-b border-ops-surface0 px-5 py-4">
+    <section className="ops-data-panel overflow-hidden">
+      <div className="ops-data-toolbar m-3 mb-0 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-bold text-ops-text">事件队列</h2>
             <p className="mt-1 text-xs text-ops-subtext">点击事件可查看原始负载和处置记录。</p>
           </div>
-          <span className="rounded-lg bg-ops-surface0 px-3 py-1 text-xs text-ops-accent">
+          <span className="ops-control px-3 py-1 text-xs text-ops-accent">
             当前 {alerts.length} 条
           </span>
         </div>
@@ -170,7 +170,7 @@ export function AlertEmptyState({
   onRefresh: () => void
 }) {
   return (
-    <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-6">
+    <section className="ops-data-panel p-6">
       <div className="text-sm font-semibold text-ops-text">当前筛选条件下暂无告警事件</div>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-ops-subtext">
         可以调整状态、级别或主机过滤条件；接入告警 Webhook 后，事件会在这里进入分派、处理、备注和闭环流程。
@@ -178,13 +178,13 @@ export function AlertEmptyState({
       <div className="mt-5 flex flex-wrap gap-2">
         <button
           onClick={onReset}
-          className="rounded-lg bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext hover:text-ops-text"
+          className="ops-muted-action px-3 py-1.5 text-sm"
         >
           重置过滤
         </button>
         <button
           onClick={onRefresh}
-          className="rounded-lg bg-ops-accent px-3 py-1.5 text-sm font-semibold text-ops-dark hover:bg-ops-accent/80"
+          className="ops-primary-action px-3 py-1.5 text-sm"
         >
           刷新事件
         </button>
