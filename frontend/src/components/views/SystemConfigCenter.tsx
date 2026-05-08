@@ -73,10 +73,21 @@ export default function SystemConfigCenter() {
       </section>
 
       <section className="ops-data-panel mt-4 p-4">
-        <div className="text-sm font-bold text-ops-text">使用说明</div>
-        <p className="mt-2 text-sm leading-6 text-ops-subtext">
-          这里只承载系统级配置，不承载业务资产数据。资产接入去“资产中心”，会话与工具执行去“会话”，知识资料去“知识库”。
-        </p>
+        <div className="text-sm font-bold text-ops-text">入口边界</div>
+        <div className="mt-3 grid gap-2 text-xs text-ops-subtext lg:grid-cols-3">
+          <div className="rounded-xl border border-ops-surface1/70 bg-ops-dark/28 px-3 py-2">
+            <div className="font-bold text-ops-text">系统配置</div>
+            <div className="mt-1 leading-5">模型、安全、通知等平台级开关。</div>
+          </div>
+          <div className="rounded-xl border border-ops-surface1/70 bg-ops-dark/28 px-3 py-2">
+            <div className="font-bold text-ops-text">资产中心</div>
+            <div className="mt-1 leading-5">资产接入、协议、凭据和分组管理。</div>
+          </div>
+          <div className="rounded-xl border border-ops-surface1/70 bg-ops-dark/28 px-3 py-2">
+            <div className="font-bold text-ops-text">会话 / 知识库</div>
+            <div className="mt-1 leading-5">工具执行、会话追踪和资料检索。</div>
+          </div>
+        </div>
       </section>
     </div>
   )
