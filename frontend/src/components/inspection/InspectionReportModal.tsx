@@ -46,12 +46,12 @@ export default function InspectionReportModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="ops-modal-backdrop" onClick={onClose}>
       <div
-        className="max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-lg border border-ops-surface1 bg-ops-panel shadow-2xl"
+        className="ops-modal-surface max-h-[92vh] w-full max-w-5xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ops-surface0 px-5 py-4">
+        <div className="ops-modal-header">
           <div>
             <p className="text-[11px] font-semibold text-ops-accent">自动巡检</p>
             <h2 className="mt-1 text-lg font-bold text-ops-text">巡检报告</h2>
@@ -60,24 +60,24 @@ export default function InspectionReportModal({
             <button
               disabled={!report}
               onClick={() => void handleExport('markdown')}
-              className="rounded-lg bg-ops-accent/15 px-3 py-1.5 text-xs text-ops-accent hover:bg-ops-accent/25 disabled:opacity-50"
+              className="ops-primary-action px-3 py-1.5 text-xs disabled:opacity-50"
             >
               导出 MD
             </button>
             <button
               disabled={!report}
               onClick={() => void handleExport('json')}
-              className="rounded-lg bg-ops-surface0 px-3 py-1.5 text-xs text-ops-subtext hover:text-ops-text disabled:opacity-50"
+              className="ops-muted-action px-3 py-1.5 text-xs disabled:opacity-50"
             >
               导出 JSON
             </button>
-            <button onClick={onClose} className="rounded-lg bg-ops-surface0 px-3 py-1.5 text-xs text-ops-subtext hover:text-ops-text">
+            <button onClick={onClose} className="ops-muted-action px-3 py-1.5 text-xs">
               关闭
             </button>
           </div>
         </div>
 
-        <div className="max-h-[calc(92vh-76px)] overflow-y-auto p-5">
+        <div className="ops-modal-body max-h-[calc(92vh-76px)] p-5">
           {loading && <div className="py-16 text-center text-sm text-ops-subtext">正在加载巡检报告...</div>}
           {error && (
             <div className="rounded-lg border border-ops-alert/35 bg-ops-alert/10 px-4 py-3 text-sm text-ops-alert">
@@ -93,7 +93,7 @@ export default function InspectionReportModal({
                 <ReportMetric label="成功率" value={`${report.summary.success_rate}%`} tone="amber" />
               </div>
 
-              <section className="rounded-lg border border-ops-surface0 bg-ops-dark/25 p-4">
+              <section className="ops-data-panel p-4">
                 <div className="grid gap-2 text-xs text-ops-subtext md:grid-cols-2">
                   <Info label="运行编号" value={report.run_id} />
                   <Info label="计划编号" value={report.job_id} />
@@ -107,8 +107,8 @@ export default function InspectionReportModal({
                 </div>
               </section>
 
-              <section className="rounded-lg border border-ops-surface0 bg-ops-dark/25">
-                <div className="border-b border-ops-surface0 px-4 py-3 text-sm font-semibold text-ops-text">目标结果</div>
+              <section className="ops-data-panel overflow-hidden">
+                <div className="ops-data-toolbar m-3 mb-0 px-4 py-3 text-sm font-semibold text-ops-text">目标结果</div>
                 <div className="divide-y divide-ops-surface0">
                   {report.targets.length === 0 && (
                     <div className="p-8 text-center text-sm text-ops-subtext">报告中暂无目标结果</div>
@@ -154,7 +154,7 @@ function ReportMetric({ label, value, tone = 'default' }: { label: string; value
     amber: 'text-ops-accent',
   }[tone]
   return (
-    <div className="rounded-lg border border-ops-surface0 bg-ops-dark/25 p-4">
+    <div className="ops-data-panel p-4">
       <div className="text-xs text-ops-subtext">{label}</div>
       <div className={`mt-2 font-mono text-2xl font-bold ${toneClass}`}>{value}</div>
     </div>
