@@ -27,13 +27,13 @@ export function SafetyPolicySidebar({
 }: SafetyPolicySidebarProps) {
   return (
     <aside className="flex w-72 flex-col border-r border-ops-surface0 bg-ops-dark">
-      <div className="border-b border-ops-surface0 p-4">
+      <div className="ops-data-toolbar m-3 mb-0 p-3">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="font-bold text-ops-text">安全策略</h2>
             <p className="mt-1 text-[11px] text-ops-subtext">以动作权限为主，网络边界和高级字段兜底</p>
           </div>
-          <button onClick={onClose} className="text-xl text-ops-subtext hover:text-ops-text">&times;</button>
+          <button onClick={onClose} className="ops-icon-button">&times;</button>
         </div>
       </div>
 
@@ -57,8 +57,8 @@ export function SafetyPolicySidebar({
           <button
             key={domain.id}
             onClick={() => onSwitchDomain(domain.id)}
-            className={`mb-1 flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
-              activeDomainId === domain.id ? 'bg-ops-surface1 text-ops-text' : 'text-ops-subtext hover:bg-ops-surface0'
+            className={`mb-1 flex w-full items-start gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
+              activeDomainId === domain.id ? 'border-ops-accent/45 bg-ops-accent/12 text-ops-text' : 'border-transparent text-ops-subtext hover:border-ops-surface0 hover:bg-ops-surface0/60'
             }`}
           >
             <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-ops-surface1 bg-ops-panel text-xs font-bold">
@@ -111,7 +111,7 @@ export function SafetyPolicyHeader({
           <select
             value={selectedPlatform}
             onChange={(e) => onPlatformChange(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control mt-1 w-full px-3 py-2 text-sm"
           >
             {activeDomain.platforms.map((platform) => (
               <option key={platform} value={platform}>{platform}</option>
@@ -157,7 +157,7 @@ export function SafetyPolicyDecisionGuide() {
         </div>
       </section>
 
-      <section className="mb-4 rounded-lg border border-ops-surface0 bg-ops-dark/45 p-4">
+      <section className="ops-data-panel mb-4 p-4">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="font-semibold text-ops-text">判定优先级</span>
           {[
@@ -168,7 +168,7 @@ export function SafetyPolicyDecisionGuide() {
             '默认放行',
           ].map((label, index) => (
             <span key={label} className="flex items-center gap-2">
-              <span className="rounded-full border border-ops-surface1 bg-ops-panel px-2 py-1 text-ops-subtext">
+              <span className="ops-control px-2 py-1 text-ops-subtext">
                 {index + 1}. {label}
               </span>
               {index < 4 && <span className="text-ops-overlay">→</span>}

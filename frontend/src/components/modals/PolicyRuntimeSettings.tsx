@@ -7,7 +7,7 @@ interface PolicyRuntimeSettingsProps {
 
 export function PolicyRuntimeSettings({ policy, updatePolicy }: PolicyRuntimeSettingsProps) {
   return (
-    <section className="mb-4 grid grid-cols-2 gap-4 rounded-lg border border-ops-surface0 bg-ops-dark/45 p-4">
+    <section className="ops-data-panel mb-4 grid grid-cols-2 gap-4 p-4">
       <label>
         <span className="text-xs text-ops-subtext">审批等待超时（秒）</span>
         <input
@@ -16,7 +16,7 @@ export function PolicyRuntimeSettings({ policy, updatePolicy }: PolicyRuntimeSet
           max={1800}
           value={policy.approval_timeout_seconds}
           onChange={(e) => updatePolicy({ approval_timeout_seconds: Number(e.target.value) || 300 })}
-          className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+          className="ops-control mt-1 w-full px-3 py-2 text-sm"
         />
       </label>
       <label className="flex items-center gap-2 pt-6 text-sm text-ops-text">

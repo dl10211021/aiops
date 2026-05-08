@@ -37,14 +37,14 @@ export function AdvancedPolicyFields({ activeCategory, category, updateCategory 
         value={lines(category[field] as string[] | undefined)}
         onChange={(e) => updateList(field, e.target.value)}
         rows={rows}
-        className="mt-1 w-full resize-y rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 font-mono text-xs text-ops-text outline-none focus:border-ops-accent"
+        className="ops-control mt-1 w-full resize-y px-3 py-2 font-mono text-xs"
         spellCheck={false}
       />
     </label>
   )
 
   return (
-    <section className="space-y-4 rounded-lg border border-ops-surface0 bg-ops-dark/55 p-4">
+    <section className="ops-data-panel space-y-4 p-4">
       <div>
         <h4 className="text-sm font-semibold text-ops-text">高级规则</h4>
         <p className="mt-1 text-xs text-ops-subtext">
@@ -62,7 +62,7 @@ export function AdvancedPolicyFields({ activeCategory, category, updateCategory 
       )}
 
       {activeCategory === 'linux' && (
-        <details className="rounded-lg border border-ops-surface0 bg-ops-panel/40 p-3">
+        <details className="ops-data-panel p-3">
           <summary className="cursor-pointer text-xs text-ops-subtext">只读未知命令策略</summary>
           <div className="mt-3 space-y-3">
             {textArea('只读安全根命令（每行一个）', 'readonly_safe_roots', 5)}
@@ -109,7 +109,7 @@ export function AdvancedPolicyFields({ activeCategory, category, updateCategory 
             <input
               value={category.approval_reason || ''}
               onChange={(e) => updateCategory(activeCategory, { approval_reason: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+              className="ops-control mt-1 w-full px-3 py-2 text-sm"
             />
           </label>
         </>

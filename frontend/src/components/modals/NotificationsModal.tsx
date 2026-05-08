@@ -35,7 +35,7 @@ export default function NotificationsModal() {
           )}
 
           {loading ? (
-            <div className="rounded-lg border border-ops-surface0 bg-ops-dark/35 py-10 text-center text-sm text-ops-subtext">
+            <div className="ops-data-panel py-10 text-center text-sm text-ops-subtext">
               正在加载告警通道配置...
             </div>
           ) : (

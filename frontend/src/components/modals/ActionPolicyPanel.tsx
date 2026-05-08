@@ -49,15 +49,15 @@ export function ActionPolicyPanel({
   return (
     <>
       {actionPolicy ? (
-        <section className="mb-4 rounded-lg border border-ops-surface0 bg-ops-dark/45">
-          <div className="flex items-center justify-between gap-3 border-b border-ops-surface0 px-4 py-3">
+        <section className="ops-data-panel mb-4 overflow-hidden">
+          <div className="ops-data-toolbar m-3 mb-0 flex items-center justify-between gap-3 px-4 py-3">
             <div>
               <h4 className="text-sm font-semibold text-ops-text">{actionPolicy.title}</h4>
               <p className="mt-1 text-xs leading-5 text-ops-subtext">
                 {actionPolicy.description}
               </p>
             </div>
-            <span className="rounded-lg border border-ops-surface1 px-2 py-1 text-[11px] text-ops-subtext">
+            <span className="ops-control px-2 py-1 text-[11px] text-ops-subtext">
               {actionPolicy.options.length} 个动作
             </span>
           </div>
@@ -96,7 +96,7 @@ export function ActionPolicyPanel({
           </div>
         </section>
       ) : (
-        <section className="mb-4 rounded-lg border border-ops-surface0 bg-ops-dark/45 p-4">
+        <section className="ops-data-panel mb-4 p-4">
           <div>
             <h4 className="text-sm font-semibold text-ops-text">当前平台使用自定义动作</h4>
             <p className="mt-1 text-xs leading-5 text-ops-subtext">
@@ -107,7 +107,7 @@ export function ActionPolicyPanel({
         </section>
       )}
 
-      <section className="mb-4 rounded-lg border border-ops-surface0 bg-ops-dark/45 p-4">
+      <section className="ops-data-panel mb-4 p-4">
         <div className="mb-3 flex items-start justify-between gap-4">
           <div>
             <h4 className="text-sm font-semibold text-ops-text">自定义动作策略</h4>
@@ -116,7 +116,7 @@ export function ActionPolicyPanel({
               临时关键词或正则兜底能力已移到“高级设置”，普通配置优先使用动作 ID。
             </p>
           </div>
-          <span className="shrink-0 rounded-lg border border-ops-surface1 px-2 py-1 text-[11px] text-ops-subtext">
+          <span className="ops-control shrink-0 px-2 py-1 text-[11px] text-ops-subtext">
             {ACTION_RULE_DOMAIN_OPTIONS.find((item) => item.value === customActionDomain)?.label || customActionDomain}
           </span>
         </div>
@@ -127,7 +127,7 @@ export function ActionPolicyPanel({
             <select
               value={customActionDomain}
               onChange={(e) => setCustomActionRule({ ...customActionRule, domain: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+              className="ops-control mt-1 w-full px-3 py-2 text-sm"
             >
               {ACTION_RULE_DOMAIN_OPTIONS.map((domain) => (
                 <option key={domain.value} value={domain.value}>{domain.label}</option>
@@ -140,7 +140,7 @@ export function ActionPolicyPanel({
               value={customActionRule.actionId}
               onChange={(e) => setCustomActionRule({ ...customActionRule, actionId: e.target.value })}
               placeholder={customActionPlaceholder}
-              className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 font-mono text-sm text-ops-text outline-none focus:border-ops-accent"
+              className="ops-control mt-1 w-full px-3 py-2 font-mono text-sm"
             />
           </label>
           <label>
@@ -158,7 +158,7 @@ export function ActionPolicyPanel({
           <button
             type="button"
             onClick={addCustomActionRule}
-            className="self-end rounded-lg bg-ops-accent px-4 py-2 text-sm font-medium text-ops-dark transition-colors hover:bg-ops-accent/80"
+            className="ops-primary-action self-end px-4 py-2 text-sm"
           >
             加入
           </button>
@@ -182,7 +182,7 @@ export function ActionPolicyPanel({
                   <button
                     type="button"
                     onClick={() => removeActionRule(customActionDomain, actionId)}
-                    className="shrink-0 rounded-md border border-red-400/30 px-2 py-1 text-xs text-red-200 hover:bg-red-400/10"
+                    className="ops-danger-action shrink-0 px-2 py-1 text-xs"
                   >
                     删除
                   </button>

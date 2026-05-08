@@ -50,13 +50,13 @@ export function PolicyTestPanel({
   applyTestActionRule,
 }: PolicyTestPanelProps) {
   return (
-    <section className="mb-4 rounded-lg border border-ops-surface0 bg-ops-dark/45 p-4">
+    <section className="ops-data-panel mb-4 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h4 className="text-sm font-semibold text-ops-text">规则测试器</h4>
           <p className="mt-1 text-xs text-ops-subtext">只做策略预演，不会连接或执行目标资产。适合保存前检查一条命令会被如何处理。</p>
         </div>
-        <span className="rounded-full border border-ops-surface1 px-2 py-1 text-[11px] text-ops-subtext">
+        <span className="ops-control px-2 py-1 text-[11px] text-ops-subtext">
           {selectedPlatform} · {testForm.mode === 'readwrite' ? '读写会话' : '只读会话'}
         </span>
       </div>
@@ -68,7 +68,7 @@ export function PolicyTestPanel({
             value={testForm.input}
             onChange={(e) => setTestForm({ ...testForm, input: e.target.value })}
             placeholder={activeCategory === 'http' ? '例如 /api/v1/namespaces/prod' : '例如 systemctl restart nginx'}
-            className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control mt-1 w-full px-3 py-2 text-sm"
           />
         </label>
         <label>
@@ -77,7 +77,7 @@ export function PolicyTestPanel({
             value={testForm.method}
             onChange={(e) => setTestForm({ ...testForm, method: e.target.value })}
             disabled={activeCategory !== 'http'}
-            className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent disabled:opacity-45"
+            className="ops-control mt-1 w-full px-3 py-2 text-sm disabled:opacity-45"
           >
             <option value="GET">GET</option>
             <option value="POST">POST</option>
@@ -91,7 +91,7 @@ export function PolicyTestPanel({
           <select
             value={testForm.mode}
             onChange={(e) => setTestForm({ ...testForm, mode: e.target.value as 'readonly' | 'readwrite' })}
-            className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control mt-1 w-full px-3 py-2 text-sm"
           >
             <option value="readonly">只读</option>
             <option value="readwrite">读写</option>
@@ -100,14 +100,14 @@ export function PolicyTestPanel({
         <button
           onClick={runPolicyTest}
           disabled={testing}
-          className="mt-5 rounded-lg border border-ops-accent/50 px-4 py-2 text-sm font-medium text-ops-accent transition-colors hover:bg-ops-accent/10 disabled:opacity-45"
+          className="ops-muted-action mt-5 px-4 py-2 text-sm disabled:opacity-45"
         >
           {testing ? '测试中...' : '测试'}
         </button>
       </div>
 
       {testResult && (
-        <div className="mt-3 rounded-lg border border-ops-surface0 bg-ops-panel/50 p-3">
+        <div className="ops-data-panel mt-3 p-3">
           <div className="flex items-center justify-between gap-3">
             <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${testResultStyle(testResult.decision)}`}>
               {testResult.label}
@@ -123,7 +123,7 @@ export function PolicyTestPanel({
           </div>
           <p className="mt-2 text-sm leading-6 text-ops-text">{testResult.reason}</p>
           {testResult.policy_layers?.length ? (
-            <div className="mt-3 rounded-lg border border-ops-surface0 bg-ops-dark/35 p-3">
+            <div className="ops-data-panel mt-3 p-3">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="text-xs font-semibold text-ops-text">判定优先级</div>
                 <div className="text-[11px] text-ops-overlay">从左到右依次判定，命中后按最高优先级生效</div>
@@ -148,7 +148,7 @@ export function PolicyTestPanel({
             </div>
           ) : null}
           {(testResult.primary_action || testResult.actions?.[0]) && (
-            <div className="mt-3 rounded-lg border border-ops-surface0 bg-ops-dark/45 p-3">
+            <div className="ops-data-panel mt-3 p-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-xs font-semibold text-ops-text">快速转为动作策略</div>

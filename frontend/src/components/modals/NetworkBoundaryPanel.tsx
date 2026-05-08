@@ -28,14 +28,14 @@ export function NetworkBoundaryPanel({ boundary, updateNetworkBoundary }: Networ
         value={lines(boundary[field])}
         onChange={(e) => updateBoundaryList(field, e.target.value)}
         rows={rows}
-        className="mt-1 w-full resize-y rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 font-mono text-xs text-ops-text outline-none focus:border-ops-accent"
+        className="ops-control mt-1 w-full resize-y px-3 py-2 font-mono text-xs"
         spellCheck={false}
       />
     </label>
   )
 
   return (
-    <section className="mb-4 space-y-4 rounded-lg border border-ops-surface0 bg-ops-dark/45 p-4">
+    <section className="ops-data-panel mb-4 space-y-4 p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h4 className="text-sm font-semibold text-ops-text">网络活动边界</h4>
@@ -43,7 +43,7 @@ export function NetworkBoundaryPanel({ boundary, updateNetworkBoundary }: Networ
             限制 AI 主动连接、探测或变更的地址范围。不在活动范围内的地址可以保留为只读资料来源，但不会被 AI 主动访问。
           </p>
         </div>
-        <label className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-ops-surface1 bg-ops-panel/50 px-3 py-2 text-sm text-ops-text">
+        <label className="ops-control inline-flex shrink-0 items-center gap-2 px-3 py-2 text-sm text-ops-text">
           <input
             type="checkbox"
             checked={boundary.enabled}
@@ -75,7 +75,7 @@ export function NetworkBoundaryPanel({ boundary, updateNetworkBoundary }: Networ
         {boundaryTextArea('禁止访问网段', 'blocked_cidrs', 4, '例如 0.0.0.0/0')}
         {boundaryTextArea('允许主机名 / IP', 'allowed_hosts', 4, '每行一个')}
         {boundaryTextArea('禁止主机名 / IP', 'blocked_hosts', 4, '每行一个')}
-        <div className="rounded-lg border border-ops-surface0 bg-ops-panel/45 p-3">
+        <div className="ops-data-panel p-3">
           <label className="flex items-start gap-2 text-sm text-ops-text">
             <input
               type="checkbox"

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export const notificationInputClass = 'w-full rounded-lg border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none transition-colors focus:border-ops-accent'
+export const notificationInputClass = 'ops-control w-full px-3 py-2 text-sm'
 
 export function ChannelSection({
   title,
@@ -20,7 +20,7 @@ export function ChannelSection({
   children: ReactNode
 }) {
   return (
-    <section className={`rounded-lg border p-4 transition-colors ${enabled ? 'border-ops-surface1 bg-ops-dark/35' : 'border-ops-surface0 bg-ops-dark/20 opacity-80'}`}>
+    <section className={`ops-data-panel p-4 transition-colors ${enabled ? '' : 'opacity-80'}`}>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <label className="flex min-w-0 items-start gap-3">
           <input
@@ -37,7 +37,7 @@ export function ChannelSection({
         <button
           onClick={onTest}
           disabled={testing || !enabled}
-          className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-3 py-1.5 text-xs text-ops-subtext transition-colors hover:text-ops-text disabled:opacity-45"
+          className="ops-muted-action px-3 py-1.5 text-xs disabled:opacity-45"
         >
           {testing ? '测试中...' : '测试通道'}
         </button>
