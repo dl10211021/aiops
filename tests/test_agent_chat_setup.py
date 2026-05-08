@@ -151,6 +151,8 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("RAG-CONTEXT", run.messages[0]["content"])
         self.assertIn("根据知识库资料", run.messages[0]["content"])
         self.assertIn("不要先调用当前会话的数据库/SSH/WinRM/CLI 工具", run.messages[0]["content"])
+        self.assertIn("优先调用 `web_search`", run.messages[0]["content"])
+        self.assertIn("不要把联网查询误当成当前资产巡检", run.messages[0]["content"])
         self.assertEqual(run.messages[1], {"role": "assistant", "content": "历史"})
         self.assertEqual(run.messages[-1], {"role": "user", "content": "检查技能"})
         self.assertEqual(
