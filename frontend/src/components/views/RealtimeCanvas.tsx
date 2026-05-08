@@ -296,7 +296,18 @@ function DynamicCanvasPanel({ item }: { item: RealtimeCanvasItem }) {
               </div>
             </div>
           ) : (
-            <svg viewBox="0 0 520 140" className="h-52 w-full overflow-visible rounded-xl bg-[#06111f] p-3">
+            <div className="rounded-xl bg-[#06111f] p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-ops-subtext">
+                <span>Y 轴：使用率百分比 / 负载归一化</span>
+                <span>X 轴：采样时间，左旧右新</span>
+                <span className="inline-flex items-center gap-3">
+                  <i className="h-2 w-5 rounded-full bg-[var(--canvas-accent)]" />
+                  CPU
+                  <i className="h-2 w-5 rounded-full bg-[#f7b955]" />
+                  内存
+                </span>
+              </div>
+              <svg viewBox="0 0 520 170" className="h-56 w-full overflow-visible">
               <defs>
                 <linearGradient id="cpuLine" x1="0" x2="1">
                   <stop offset="0%" stopColor="var(--canvas-accent)" />
@@ -313,13 +324,20 @@ function DynamicCanvasPanel({ item }: { item: RealtimeCanvasItem }) {
               </defs>
               {[0, 35, 70, 105, 140].map((y) => <line key={y} x1="0" x2="520" y1={y} y2={y} stroke="rgba(148,163,184,.13)" />)}
               {[0, 130, 260, 390, 520].map((x) => <line key={x} x1={x} x2={x} y1="0" y2="140" stroke="rgba(148,163,184,.07)" />)}
+              {[100, 75, 50, 25, 0].map((label, index) => (
+                <text key={label} x="0" y={8 + index * 35} fill="#8ba4c7" fontSize="10">{label}%</text>
+              ))}
+              <text x="0" y="164" fill="#8ba4c7" fontSize="10">{shortTime(firstTime)}</text>
+              <text x="260" y="164" fill="#8ba4c7" fontSize="10" textAnchor="middle">采样时间</text>
+              <text x="520" y="164" fill="#8ba4c7" fontSize="10" textAnchor="end">{shortTime(lastTime)}</text>
               {cpuPath && <path d={trendArea(cpuPath)} fill="url(#cpuArea)" opacity=".9" />}
               {cpuPath && <path d={cpuPath} fill="none" stroke="url(#cpuLine)" strokeWidth="4" strokeLinecap="round" filter="url(#chartGlow)" />}
               {memoryPath && <path d={memoryPath} fill="none" stroke="#f7b955" strokeWidth="3" strokeLinecap="round" opacity=".9" />}
               {cpuDots.slice(-12).map((dot, index) => <circle key={`cpu-${index}`} cx={dot.x} cy={dot.y} r={index === cpuDots.slice(-12).length - 1 ? 4.8 : 2.8} fill="var(--canvas-accent)" opacity=".95" />)}
               {memoryDots.slice(-12).map((dot, index) => <circle key={`mem-${index}`} cx={dot.x} cy={dot.y} r="2.4" fill="#f7b955" opacity={index === memoryDots.slice(-12).length - 1 ? 1 : .65} />)}
               {!cpuPath && !memoryPath && <text x="260" y="74" textAnchor="middle" fill="#8ba4c7">等待至少两个真实采样点</text>}
-            </svg>
+              </svg>
+            </div>
           )}
           <div className="mt-3 grid gap-2 text-xs text-ops-subtext md:grid-cols-3">
             <div className="rounded-lg bg-ops-surface0 px-3 py-2">起始：{firstTime}</div>
@@ -771,22 +789,22 @@ export default function RealtimeCanvas() {
         title="AI 画板"
           description="静态用于巡检、故障、风险等分析报告；动态用于指标数据、趋势曲线、实时状态和拓扑刷新。"
         actions={(
-          <button onClick={() => void load()} className="rounded-lg bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext hover:text-ops-text">
+          <button onClick={() => void load()} className="ops-muted-action px-3 py-1.5 text-sm">
             刷新
           </button>
         )}
       />
 
-      <section className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <section className="grid items-start gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
         <div className="space-y-4">
-          <section className="ops-glass rounded-xl border border-ops-surface1 p-4">
+          <section className="ops-data-panel p-4">
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-black text-ops-text">{editId ? '编辑画板' : '生成画板'}</h2>
                 <p className="text-xs text-ops-subtext">采集走平台已有会话和脚本，AI 只负责把真实数据变成画板。</p>
               </div>
               {editId && (
-                <button onClick={resetForm} className="rounded-lg border border-ops-surface1 px-2.5 py-1 text-xs text-ops-subtext hover:text-ops-text">
+                <button onClick={resetForm} className="ops-muted-action px-2.5 py-1 text-xs">
                   取消
                 </button>
               )}
@@ -796,7 +814,7 @@ export default function RealtimeCanvas() {
             <select
               value={form.session_id}
               onChange={(event) => setForm((current) => ({ ...current, session_id: event.target.value }))}
-              className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-bg px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+              className="ops-control mt-1 w-full px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
             >
               <option value="">选择一个会话资产</option>
               {sessionsList.map((session) => (
@@ -806,7 +824,7 @@ export default function RealtimeCanvas() {
               ))}
             </select>
 
-            <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-ops-surface1 bg-ops-bg p-1">
+            <div className="ops-control mt-4 grid grid-cols-2 gap-2 p-1">
               {(['static', 'dynamic'] as CanvasType[]).map((type) => (
                 <button
                   key={type}
@@ -814,7 +832,7 @@ export default function RealtimeCanvas() {
                   className={`rounded-lg px-3 py-2 text-sm font-bold transition ${
                     form.canvas_type === type
                       ? 'bg-ops-accent text-ops-bg shadow-[0_0_24px_rgba(45,212,191,.22)]'
-                      : 'text-ops-subtext hover:bg-ops-surface0 hover:text-ops-text'
+                      : 'text-ops-subtext hover:bg-ops-surface2 hover:text-ops-text'
                   }`}
                 >
                   {canvasTypeLabel(type)}
@@ -827,7 +845,7 @@ export default function RealtimeCanvas() {
               value={form.goal}
               onChange={(event) => setForm((current) => ({ ...current, goal: event.target.value }))}
               rows={7}
-              className="mt-1 w-full resize-none rounded-xl border border-ops-surface1 bg-ops-bg px-3 py-2 text-sm leading-6 text-ops-text outline-none focus:border-ops-accent"
+              className="ops-control mt-1 w-full resize-none px-3 py-2 text-sm leading-6 text-ops-text outline-none focus:border-ops-accent"
               placeholder="例如：帮我巡检这个 Oracle，生成数据库连接拓扑、慢查询风险和处理建议。"
             />
 
@@ -835,27 +853,27 @@ export default function RealtimeCanvas() {
             <input
               value={form.title}
               onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-              className="mt-1 w-full rounded-lg border border-ops-surface1 bg-ops-bg px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+              className="ops-control mt-1 w-full px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
               placeholder="不填则自动命名"
             />
 
             <button
               onClick={() => void handleGenerate()}
               disabled={busy}
-              className="mt-4 w-full rounded-xl bg-ops-accent px-4 py-3 text-sm font-black text-ops-bg transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ops-primary-action mt-4 w-full px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? '处理中...' : editId ? '保存并继续打磨' : '让 AI 生成画板'}
             </button>
           </section>
 
-          <section className="ops-glass rounded-xl border border-ops-surface1 p-4">
+          <section className="ops-data-panel p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-black text-ops-text">画板列表</h2>
               <span className="text-xs text-ops-subtext">{items.length} 个</span>
             </div>
             <div className="space-y-2">
               {items.length === 0 && (
-                <div className="rounded-xl border border-dashed border-ops-surface1 p-4 text-sm text-ops-subtext">
+                <div className="ops-data-panel border-dashed p-4 text-sm text-ops-subtext">
                   暂无画板。先输入一个巡检或故障目标，让 AI 生成第一张。
                 </div>
               )}
@@ -868,7 +886,7 @@ export default function RealtimeCanvas() {
                     className={`w-full rounded-xl border p-3 text-left transition ${
                       selected?.id === item.id
                         ? 'border-ops-accent bg-ops-accent/10'
-                        : 'border-ops-surface1 bg-ops-bg hover:border-ops-accent/60'
+                        : 'border-ops-surface1 bg-ops-surface2/60 hover:border-ops-accent/60'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -889,7 +907,7 @@ export default function RealtimeCanvas() {
           </section>
         </div>
 
-        <section className="ops-glass min-h-[640px] overflow-hidden rounded-xl border border-ops-surface1">
+        <section className="ops-card min-h-[640px] overflow-hidden">
           {!selected ? (
             <div className="flex h-full min-h-[640px] items-center justify-center p-8 text-center text-ops-subtext">
               选择左侧画板后查看预览、导出和编辑。
