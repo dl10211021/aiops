@@ -321,7 +321,7 @@ def _register_builtin_tools() -> None:
             description=(
                 "创建或更新 my_custom_skills 下的技能文件。支持 SKILL.md 以及 scripts/"
                 "references/assets/evals/agents/eval-viewer 下的 bundled resource 文件；"
-                "仅用于用户明确要求修改技能时。"
+                "仅用于用户明确要求修改技能时。全局指挥安装联网检索后的 Skill 时，也通过此工具写入私有技能。"
             ),
             parameters=_obj(
                 {
@@ -350,7 +350,7 @@ def _register_builtin_tools() -> None:
             name="web_search",
             toolset="knowledge",
             scope="base",
-            description="本地知识库没有答案时，联网搜索实时资料、官方文档或社区方案。",
+            description="本地知识库没有答案时，联网搜索实时资料、官方文档或社区方案；安装新 Skill 前应先用它检索可信来源。",
             parameters=_obj({"query": {"type": "string"}}, ["query"]),
         )
     )
