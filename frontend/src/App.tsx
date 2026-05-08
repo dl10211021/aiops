@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react'
+import { Component, lazy, Suspense, useEffect, useRef, type ComponentType, type ErrorInfo, type ReactNode } from 'react'
 import { useStore, viewFromLocationHash } from '@/store'
 import LeftNav from '@/components/layout/LeftNav'
 import Sidebar from '@/components/layout/Sidebar'
@@ -7,21 +7,83 @@ import ToastContainer from '@/components/layout/ToastContainer'
 import { getActiveSessions, pollAllSessions } from '@/api/client'
 import type { ChatMessage } from '@/types'
 
-const ChatWindow = lazy(() => import('@/components/chat/ChatWindow'))
-const Dashboard = lazy(() => import('@/components/views/Dashboard'))
-const AssetVault = lazy(() => import('@/components/views/AssetVault'))
-const ApprovalCenter = lazy(() => import('@/components/views/ApprovalCenter'))
-const SkillMarket = lazy(() => import('@/components/views/SkillMarket'))
-const KnowledgeBase = lazy(() => import('@/components/views/KnowledgeBase'))
-const CronManager = lazy(() => import('@/components/views/CronManager'))
-const AlertCenter = lazy(() => import('@/components/views/AlertCenter'))
-const RealtimeCanvas = lazy(() => import('@/components/views/RealtimeCanvas'))
-const ConnectionModal = lazy(() => import('@/components/modals/ConnectionModal'))
-const LLMConfigModal = lazy(() => import('@/components/modals/LLMConfigModal'))
-const NotificationsModal = lazy(() => import('@/components/modals/NotificationsModal'))
-const DynamicSkillsModal = lazy(() => import('@/components/modals/DynamicSkillsModal'))
-const SessionActionsModal = lazy(() => import('@/components/modals/SessionActionsModal'))
-const SafetyPolicyModal = lazy(() => import('@/components/modals/SafetyPolicyModal'))
+const CHUNK_RELOAD_KEY = 'opscore:chunk-reload-once'
+
+function isChunkLoadError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '')
+  return /Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk|ChunkLoadError/i.test(message)
+}
+
+function lazyWithChunkRecovery<T extends { default: ComponentType<unknown> }>(factory: () => Promise<T>) {
+  return lazy(() => factory().catch((error) => {
+    if (isChunkLoadError(error) && !window.sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+      window.sessionStorage.setItem(CHUNK_RELOAD_KEY, '1')
+      window.location.reload()
+      return new Promise<T>(() => undefined)
+    }
+    throw error
+  }))
+}
+
+class ChunkErrorBoundary extends Component<
+  { area: string; children: ReactNode },
+  { hasError: boolean; message: string }
+> {
+  state = { hasError: false, message: '' }
+
+  static getDerivedStateFromError(error: unknown) {
+    return {
+      hasError: true,
+      message: error instanceof Error ? error.message : '视图加载失败',
+    }
+  }
+
+  componentDidCatch(error: unknown, info: ErrorInfo) {
+    console.error('OpsCore view load failed', error, info)
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center bg-ops-dark p-6">
+        <div className="ops-card max-w-lg p-6 text-center">
+          <div className="text-sm font-black text-ops-alert">{this.props.area}加载失败</div>
+          <p className="mt-3 text-sm leading-6 text-ops-subtext">
+            当前页面资源可能已经更新，浏览器仍在使用旧版本缓存。请重新加载页面获取最新前端资源。
+          </p>
+          <pre className="ops-data-panel mt-4 max-h-32 overflow-auto p-3 text-left text-xs text-ops-overlay">
+            {this.state.message}
+          </pre>
+          <button
+            className="ops-primary-action mt-5 px-4 py-2 text-sm"
+            onClick={() => {
+              window.sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+              window.location.reload()
+            }}
+          >
+            重新加载
+          </button>
+        </div>
+      </div>
+    )
+  }
+}
+
+const ChatWindow = lazyWithChunkRecovery(() => import('@/components/chat/ChatWindow'))
+const Dashboard = lazyWithChunkRecovery(() => import('@/components/views/Dashboard'))
+const AssetVault = lazyWithChunkRecovery(() => import('@/components/views/AssetVault'))
+const ApprovalCenter = lazyWithChunkRecovery(() => import('@/components/views/ApprovalCenter'))
+const SkillMarket = lazyWithChunkRecovery(() => import('@/components/views/SkillMarket'))
+const KnowledgeBase = lazyWithChunkRecovery(() => import('@/components/views/KnowledgeBase'))
+const CronManager = lazyWithChunkRecovery(() => import('@/components/views/CronManager'))
+const AlertCenter = lazyWithChunkRecovery(() => import('@/components/views/AlertCenter'))
+const RealtimeCanvas = lazyWithChunkRecovery(() => import('@/components/views/RealtimeCanvas'))
+const ConnectionModal = lazyWithChunkRecovery(() => import('@/components/modals/ConnectionModal'))
+const LLMConfigModal = lazyWithChunkRecovery(() => import('@/components/modals/LLMConfigModal'))
+const NotificationsModal = lazyWithChunkRecovery(() => import('@/components/modals/NotificationsModal'))
+const DynamicSkillsModal = lazyWithChunkRecovery(() => import('@/components/modals/DynamicSkillsModal'))
+const SessionActionsModal = lazyWithChunkRecovery(() => import('@/components/modals/SessionActionsModal'))
+const SafetyPolicyModal = lazyWithChunkRecovery(() => import('@/components/modals/SafetyPolicyModal'))
 
 function ViewFallback() {
   return (
@@ -42,19 +104,21 @@ function ModalFallback() {
 function ViewRouter() {
   const currentView = useStore((s) => s.currentView)
   return (
-    <Suspense fallback={<ViewFallback />}>
-      {currentView === 'dashboard' && <Dashboard />}
-      {currentView === 'bigscreen' && <Dashboard />}
-      {currentView === 'chat' && <ChatWindow />}
-      {currentView === 'assets' && <AssetVault />}
-      {currentView === 'canvas' && <RealtimeCanvas />}
-      {currentView === 'skills' && <SkillMarket />}
-      {currentView === 'knowledge' && <KnowledgeBase />}
-      {currentView === 'cron' && <CronManager />}
-      {currentView === 'alerts' && <AlertCenter />}
-      {currentView === 'approvals' && <ApprovalCenter />}
-      {!['dashboard', 'bigscreen', 'chat', 'assets', 'canvas', 'skills', 'knowledge', 'cron', 'alerts', 'approvals'].includes(currentView) && <ChatWindow />}
-    </Suspense>
+    <ChunkErrorBoundary key={currentView} area="视图">
+      <Suspense fallback={<ViewFallback />}>
+        {currentView === 'dashboard' && <Dashboard />}
+        {currentView === 'bigscreen' && <Dashboard />}
+        {currentView === 'chat' && <ChatWindow />}
+        {currentView === 'assets' && <AssetVault />}
+        {currentView === 'canvas' && <RealtimeCanvas />}
+        {currentView === 'skills' && <SkillMarket />}
+        {currentView === 'knowledge' && <KnowledgeBase />}
+        {currentView === 'cron' && <CronManager />}
+        {currentView === 'alerts' && <AlertCenter />}
+        {currentView === 'approvals' && <ApprovalCenter />}
+        {!['dashboard', 'bigscreen', 'chat', 'assets', 'canvas', 'skills', 'knowledge', 'cron', 'alerts', 'approvals'].includes(currentView) && <ChatWindow />}
+      </Suspense>
+    </ChunkErrorBoundary>
   )
 }
 
@@ -62,14 +126,16 @@ function ModalRouter() {
   const activeModal = useStore((s) => s.activeModal)
   if (!activeModal) return null
   return (
-    <Suspense fallback={<ModalFallback />}>
-      {activeModal === 'connect' && <ConnectionModal />}
-      {activeModal === 'llm-config' && <LLMConfigModal />}
-      {activeModal === 'notifications' && <NotificationsModal />}
-      {activeModal === 'safety-policy' && <SafetyPolicyModal />}
-      {activeModal === 'dynamic-skills' && <DynamicSkillsModal />}
-      {activeModal === 'session-actions' && <SessionActionsModal />}
-    </Suspense>
+    <ChunkErrorBoundary key={activeModal} area="弹窗">
+      <Suspense fallback={<ModalFallback />}>
+        {activeModal === 'connect' && <ConnectionModal />}
+        {activeModal === 'llm-config' && <LLMConfigModal />}
+        {activeModal === 'notifications' && <NotificationsModal />}
+        {activeModal === 'safety-policy' && <SafetyPolicyModal />}
+        {activeModal === 'dynamic-skills' && <DynamicSkillsModal />}
+        {activeModal === 'session-actions' && <SessionActionsModal />}
+      </Suspense>
+    </ChunkErrorBoundary>
   )
 }
 
