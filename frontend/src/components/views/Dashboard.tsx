@@ -54,8 +54,8 @@ export default function Dashboard() {
         </div>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-          <section className="ops-glass overflow-hidden rounded-xl border">
-            <div className="border-b border-ops-surface0 px-5 py-4">
+          <section className="ops-data-panel overflow-hidden">
+            <div className="ops-data-toolbar m-3 mb-0 px-4 py-3">
               <h2 className="text-base font-bold text-ops-text">资产与协议分布</h2>
               <p className="mt-1 text-xs text-ops-subtext">用于判断当前平台是否覆盖数据中心关键对象。</p>
             </div>
@@ -65,21 +65,21 @@ export default function Dashboard() {
             </div>
           </section>
 
-          <section className="ops-glass overflow-hidden rounded-xl border">
-            <div className="border-b border-ops-surface0 px-5 py-4">
+          <section className="ops-data-panel overflow-hidden">
+            <div className="ops-data-toolbar m-3 mb-0 px-4 py-3">
               <h2 className="text-base font-bold text-ops-text">会话与工具覆盖</h2>
               <p className="mt-1 text-xs text-ops-subtext">确认 AI 是否知道当前资产对应的协议工具。</p>
             </div>
             <div className="space-y-4 p-5">
               <BarList title="在线会话协议" data={overview?.active_by_protocol || {}} empty="暂无在线会话" formatLabel={protocolLabel} />
-              <div className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-4">
+              <div className="ops-data-panel p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-ops-text">工具集</span>
                   <span className="font-mono text-xs text-ops-accent">{enabledToolsets.length} 组 / {enabledTools.length} 个工具</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {enabledToolsets.slice(0, 8).map((set) => (
-                    <span key={set.id} className="rounded-full bg-ops-surface0 px-2.5 py-1 text-[11px] text-ops-subtext">
+                    <span key={set.id} className="ops-control px-2.5 py-1 text-[11px] text-ops-subtext">
                       {toolsetLabel(set.id)}
                     </span>
                   ))}
@@ -91,22 +91,22 @@ export default function Dashboard() {
         </div>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-3">
-          <section className="ops-glass rounded-xl border p-5 xl:col-span-2">
+          <section className="ops-data-panel p-5 xl:col-span-2">
             <div className="mb-4 flex items-center justify-between">
               <div>
               <h2 className="text-base font-bold text-ops-text">数据中心告警趋势</h2>
               <p className="mt-1 text-xs text-ops-subtext">来自原趋势大屏的核心视角，按日期聚合展示告警波动。</p>
               </div>
-              <span className="rounded-full bg-ops-surface0 px-3 py-1 text-xs text-ops-subtext">{trend.length} 天</span>
+              <span className="ops-control px-3 py-1 text-xs text-ops-subtext">{trend.length} 天</span>
             </div>
             <TrendStrip points={trend} />
           </section>
 
-          <section className="ops-glass rounded-xl border p-5">
+          <section className="ops-data-panel p-5">
             <h2 className="text-base font-bold text-ops-text">风险主机排行</h2>
             <div className="mt-4 space-y-3">
               {ranking.slice(0, 8).map((item, index) => (
-                <div key={item.host} className="flex items-center gap-3 rounded-lg border border-ops-surface0 bg-ops-dark/30 px-3 py-2">
+                <div key={item.host} className="flex items-center gap-3 rounded-lg border border-ops-surface0/80 bg-ops-surface0/35 px-3 py-2">
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-ops-accent/15 font-mono text-xs text-ops-accent">{index + 1}</span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium text-ops-text">{item.host}</div>
@@ -120,18 +120,18 @@ export default function Dashboard() {
           </section>
         </div>
 
-        <section className="ops-glass mt-5 rounded-xl border p-5">
+        <section className="ops-data-panel mt-5 p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-bold text-ops-text">巡检运行健康度</h2>
               <p className="mt-1 text-xs text-ops-subtext">来自定时巡检运行记录，可直接用于后续大屏 SLA 指标。</p>
             </div>
-            <span className="rounded-full bg-ops-surface0 px-3 py-1 font-mono text-xs text-ops-accent">
+            <span className="ops-control px-3 py-1 font-mono text-xs text-ops-accent">
               目标 {inspectionRuns?.targets_success || 0}/{inspectionRuns?.targets_total || 0}
             </span>
           </div>
           <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-            <div className="rounded-lg border border-ops-surface0 bg-ops-dark/30 p-4">
+            <div className="ops-data-panel p-4">
               <BarList
                 title="运行状态"
                 data={{
@@ -142,7 +142,7 @@ export default function Dashboard() {
                 }}
               />
             </div>
-            <div className="rounded-lg border border-ops-surface0 bg-ops-dark/30 p-4">
+            <div className="ops-data-panel p-4">
               <div className="mb-3 text-sm font-semibold text-ops-text">最近失败/部分失败</div>
               <div className="space-y-2">
                 {(inspectionRuns?.recent_failures || []).slice(0, 5).map((run) => (
@@ -158,7 +158,7 @@ export default function Dashboard() {
                 )}
               </div>
             </div>
-            <div className="rounded-lg border border-ops-surface0 bg-ops-dark/30 p-4 lg:col-span-2">
+            <div className="ops-data-panel p-4 lg:col-span-2">
               <div className="mb-3 text-sm font-semibold text-ops-text">巡检成功率与耗时趋势</div>
               <InspectionTrendStrip points={inspectionTrend} />
             </div>

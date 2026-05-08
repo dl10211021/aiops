@@ -57,10 +57,10 @@ export default function BigScreen() {
             <h1 className="mt-2 text-5xl font-black tracking-tight">数据中心态势大屏</h1>
             <p className="mt-2 text-sm text-ops-subtext">资产、巡检、告警、风险的 60 秒自动刷新视图。</p>
           </div>
-          <div className="rounded-3xl border border-ops-accent/30 bg-ops-dark/50 px-5 py-4 text-right shadow-[0_0_50px_rgba(243,177,90,0.08)]">
+          <div className="ops-data-panel px-5 py-4 text-right shadow-[0_0_50px_rgba(243,177,90,0.08)]">
             <div className="text-xs text-ops-subtext">Last refresh</div>
             <div className="mt-1 font-mono text-lg text-ops-accent">{updatedAt || '-'}</div>
-            <button onClick={() => void load()} className="mt-3 rounded-full bg-ops-accent px-4 py-1.5 text-xs font-bold text-ops-dark">
+            <button onClick={() => void load()} className="ops-primary-action mt-3 px-4 py-1.5 text-xs">
               手动刷新
             </button>
           </div>
@@ -153,7 +153,7 @@ export default function BigScreen() {
 function BigMetric({ label, value, hint, suffix = '', tone = 'amber' }: { label: string; value: number; hint: string; suffix?: string; tone?: 'amber' | 'green' | 'red' }) {
   const color = tone === 'green' ? 'text-ops-success' : tone === 'red' ? 'text-ops-alert' : 'text-ops-accent'
   return (
-    <div className="rounded-3xl border border-ops-surface0 bg-ops-dark/55 p-5">
+    <div className="ops-data-panel p-5">
       <div className="text-xs uppercase tracking-[0.18em] text-ops-overlay">{hint}</div>
       <div className={`mt-3 font-mono text-5xl font-black ${color}`}>{value}{suffix}</div>
       <div className="mt-2 text-sm text-ops-subtext">{label}</div>
@@ -163,7 +163,7 @@ function BigMetric({ label, value, hint, suffix = '', tone = 'amber' }: { label:
 
 function Panel({ title, children, fill = false }: { title: string; children: ReactNode; fill?: boolean }) {
   return (
-    <section className={`rounded-3xl border border-ops-surface0 bg-ops-dark/50 p-5 ${fill ? 'flex h-full min-h-0 flex-col' : ''}`}>
+    <section className={`ops-data-panel p-5 ${fill ? 'flex h-full min-h-0 flex-col' : ''}`}>
       <h2 className="mb-4 text-lg font-black tracking-tight text-ops-text">{title}</h2>
       <div className={fill ? 'min-h-0 flex-1' : ''}>{children}</div>
     </section>
@@ -193,7 +193,7 @@ function Distribution({ data }: { data: Record<string, number> }) {
 
 function SmallMetric({ label, value, suffix = '' }: { label: string; value: number; suffix?: string }) {
   return (
-    <div className="rounded-2xl bg-ops-surface0 p-4">
+    <div className="ops-control p-4">
       <div className="text-xs text-ops-overlay">{label}</div>
       <div className="mt-2 font-mono text-2xl font-bold text-ops-text">{value}{suffix}</div>
     </div>
