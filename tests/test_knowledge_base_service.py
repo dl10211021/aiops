@@ -567,6 +567,8 @@ class TestKnowledgeBaseService(unittest.TestCase):
         )
 
         self.assertGreaterEqual(len(search_results), 1)
+        self.assertIn("[已隐藏]", search_results[0]["snippet"])
+        self.assertNotIn("TopSecret123", search_results[0]["snippet"])
         self.assertIn("kmstest", result["context"])
         self.assertIn("192.168.11.132", result["context"])
         self.assertIn("[已隐藏]", result["context"])

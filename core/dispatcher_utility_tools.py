@@ -114,7 +114,10 @@ def _run_duckduckgo_search(query: str, logger: logging.Logger) -> list[dict[str,
 
     logger.info(f"AI 发起了外网检索: {query}")
     with DDGS() as ddgs:
-        return [r for r in ddgs.text(query, max_results=5)]
+        results = [r for r in ddgs.text(query, max_results=5, backend="auto")]
+        if not results:
+            results = [r for r in ddgs.text(query, max_results=5, backend="html")]
+        return results
 
 
 async def _web_search(args: dict[str, Any], logger: logging.Logger) -> str:

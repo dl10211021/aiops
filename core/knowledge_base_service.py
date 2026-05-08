@@ -775,6 +775,7 @@ def search_vault_knowledge(
                     score += 2
                 if content and matched_lower in content_lower:
                     score += 3
+            snippet = redact_sensitive_rag_text(_search_snippet(content or metadata_blob, snippet_term))
             results.append(
                 {
                     "id": record.get("id"),
@@ -785,7 +786,7 @@ def search_vault_knowledge(
                     "path": rel,
                     "compile_status": record.get("compile_status"),
                     "compile_stage": record.get("compile_stage"),
-                    "snippet": _search_snippet(content or metadata_blob, snippet_term),
+                    "snippet": snippet,
                     "score": score,
                     "updated_at": record.get("updated_at") or record.get("approved_at") or record.get("compiled_at"),
                 }
