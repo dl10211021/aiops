@@ -38,7 +38,7 @@ export default function SessionItem({
   return (
     <div
       onClick={onSelect}
-      className={`group relative grid min-h-[58px] cursor-pointer grid-cols-[46px_minmax(0,1fr)_86px] items-center gap-3 overflow-hidden rounded-lg border px-2.5 py-2 text-sm transition-colors duration-150
+      className={`group relative grid min-h-[58px] cursor-pointer grid-cols-[46px_minmax(0,1fr)_54px] items-center gap-3 overflow-hidden rounded-lg border px-2.5 py-2 text-sm transition-colors duration-150
         ${active
           ? 'border-ops-accent/60 bg-[linear-gradient(135deg,rgba(40,208,168,0.16),rgba(15,36,56,0.76))] text-ops-accent shadow-[inset_0_0_0_1px_rgba(40,208,168,0.08)]'
           : needsAttention
@@ -72,11 +72,11 @@ export default function SessionItem({
               event.stopPropagation()
               onEdit(session.id, event)
             }}
-            className="h-6 rounded-md border border-ops-surface1/65 bg-ops-dark/45 px-2 text-[11px] font-bold text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text"
+            className="grid h-6 w-6 place-items-center rounded-md border border-ops-surface1/65 bg-ops-dark/45 text-[12px] font-black text-ops-subtext transition-colors hover:border-ops-accent/50 hover:text-ops-text"
             title="编辑单个会话：名称、分组、标签"
             aria-label="编辑单个会话"
           >
-            编辑会话
+            ✎
           </button>
           <button
             type="button"

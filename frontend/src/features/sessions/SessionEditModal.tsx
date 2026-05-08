@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import type { Session } from '@/types'
 import { protocolLabel } from '@/utils/assetDisplay'
 import { normalizeSessionGroupName, sessionPrimaryGroup, uniqueSessionGroups } from './sessionGroups'
@@ -64,14 +65,14 @@ export default function SessionEditModal({
     })
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4" onClick={onClose}>
+  const modal = (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/68 px-4 backdrop-blur-sm" onClick={onClose}>
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-[520px] rounded-lg border border-ops-surface1 bg-ops-panel p-4 shadow-[var(--ops-panel-shadow)]"
+        className="w-full max-w-[560px] overflow-hidden rounded-2xl border border-ops-surface1/80 bg-ops-panel shadow-[0_28px_90px_rgba(0,0,0,0.5)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3 border-b border-ops-surface0 bg-[linear-gradient(135deg,rgba(40,208,168,0.12),rgba(15,31,50,0.88))] px-5 py-4">
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-ops-text">编辑单个会话</h2>
             <div className="mt-1 truncate text-[11px] text-ops-overlay">
@@ -88,79 +89,81 @@ export default function SessionEditModal({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 rounded-lg border border-ops-surface0 bg-ops-dark/35 p-3 text-[11px]">
-          <ReadOnlyField label="资产" value={session.host || '-'} />
-          <ReadOnlyField label="账号" value={session.user || '-'} />
-          <ReadOnlyField label="协议" value={protocolLabel(session.protocol || session.asset_type)} />
-          <ReadOnlyField label="模式" value={session.isReadWriteMode ? '读写' : '只读'} />
-        </div>
+        <div className="px-5 py-4">
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-ops-surface0 bg-ops-dark/35 p-3 text-[11px]">
+            <ReadOnlyField label="资产" value={session.host || '-'} />
+            <ReadOnlyField label="账号" value={session.user || '-'} />
+            <ReadOnlyField label="协议" value={protocolLabel(session.protocol || session.asset_type)} />
+            <ReadOnlyField label="模式" value={session.isReadWriteMode ? '读写' : '只读'} />
+          </div>
 
-        <div className="mt-3 space-y-3">
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-ops-subtext">会话名称</span>
-            <input
-              value={remark}
-              onChange={(event) => setRemark(event.target.value)}
-              maxLength={200}
-              placeholder={`默认使用主机名：${session.host}`}
-              className="w-full rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-ops-subtext">所属分组</span>
-            <select
-              value={groupName}
-              onChange={(event) => {
-                setGroupName(event.target.value)
-                setFormError('')
-              }}
-              className="w-full rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors focus:border-ops-accent"
-            >
-              {selectableGroups.map((group) => (
-                <option key={group} value={group}>{group}</option>
-              ))}
-              <option value={CUSTOM_GROUP_OPTION}>输入新的会话组...</option>
-            </select>
-          </label>
-
-          {groupName === CUSTOM_GROUP_OPTION && (
+          <div className="mt-3 space-y-3">
             <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-ops-subtext">新会话组名称</span>
+              <span className="mb-1 block text-xs font-semibold text-ops-subtext">会话名称</span>
               <input
-                autoFocus
-                value={customGroupName}
-                onChange={(event) => {
-                  setCustomGroupName(event.target.value)
-                  setFormError('')
-                }}
-                maxLength={80}
-                placeholder="例如：生产数据库、网络设备"
+                value={remark}
+                onChange={(event) => setRemark(event.target.value)}
+                maxLength={200}
+                placeholder={`默认使用主机名：${session.host}`}
                 className="w-full rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
               />
             </label>
-          )}
 
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold text-ops-subtext">普通标签</span>
-            <input
-              value={tagsText}
-              onChange={(event) => setTagsText(event.target.value)}
-              placeholder="例如：P0, 数据库, 生产；这里不需要再填写分组名"
-              className="w-full rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
-            />
-          </label>
-          <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 px-3 py-2 text-[11px] leading-5 text-ops-overlay">
-            保存后会把「所属分组」写到会话分组字段，普通标签只作为辅助筛选；两者互不混用。
-          </div>
-          {formError && (
-            <div className="rounded-md border border-ops-alert/35 bg-ops-alert/10 px-3 py-2 text-xs text-ops-alert">
-              {formError}
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-ops-subtext">所属分组</span>
+              <select
+                value={groupName}
+                onChange={(event) => {
+                  setGroupName(event.target.value)
+                  setFormError('')
+                }}
+                className="w-full rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors focus:border-ops-accent"
+              >
+                {selectableGroups.map((group) => (
+                  <option key={group} value={group}>{group}</option>
+                ))}
+                <option value={CUSTOM_GROUP_OPTION}>输入新的会话组...</option>
+              </select>
+            </label>
+
+            {groupName === CUSTOM_GROUP_OPTION && (
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-ops-subtext">新会话组名称</span>
+                <input
+                  autoFocus
+                  value={customGroupName}
+                  onChange={(event) => {
+                    setCustomGroupName(event.target.value)
+                    setFormError('')
+                  }}
+                  maxLength={80}
+                  placeholder="例如：生产数据库、网络设备"
+                  className="w-full rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
+                />
+              </label>
+            )}
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-ops-subtext">普通标签</span>
+              <input
+                value={tagsText}
+                onChange={(event) => setTagsText(event.target.value)}
+                placeholder="例如：P0, 数据库, 生产；这里不需要再填写分组名"
+                className="w-full rounded-md border border-ops-surface1 bg-ops-dark/45 px-3 py-2 text-sm text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent"
+              />
+            </label>
+            <div className="rounded-md border border-ops-surface0 bg-ops-dark/30 px-3 py-2 text-[11px] leading-5 text-ops-overlay">
+              保存后会把「所属分组」写到会话分组字段，普通标签只作为辅助筛选；两者互不混用。
             </div>
-          )}
+            {formError && (
+              <div className="rounded-md border border-ops-alert/35 bg-ops-alert/10 px-3 py-2 text-xs text-ops-alert">
+                {formError}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="flex justify-end gap-2 border-t border-ops-surface0 px-5 py-3">
           <button
             type="button"
             onClick={onClose}
@@ -180,6 +183,7 @@ export default function SessionEditModal({
       </form>
     </div>
   )
+  return createPortal(modal, document.body)
 }
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
