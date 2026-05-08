@@ -155,6 +155,85 @@ button, input, textarea, select {
   box-shadow: 0 1px 0 color-mix(in oklab, var(--color-ops-surface1) 42%, transparent);
 }
 
+.ops-page {
+  min-height: 100%;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .ops-page {
+    padding: 1.25rem;
+  }
+}
+
+.ops-page-inner {
+  width: 100%;
+  max-width: none;
+  padding-bottom: 1rem;
+}
+
+.ops-page-header {
+  margin-bottom: 1rem;
+  border: 1px solid color-mix(in oklab, var(--color-ops-surface1) 44%, transparent);
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in oklab, var(--color-ops-accent) 10%, transparent), transparent 21rem),
+    color-mix(in oklab, var(--color-ops-panel) 84%, transparent);
+  box-shadow: var(--ops-panel-shadow);
+  padding: 1rem;
+}
+
+@media (min-width: 1280px) {
+  .ops-page-header {
+    padding: 1rem 1.15rem;
+  }
+}
+
+.ops-page-eyebrow {
+  color: var(--color-ops-accent);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.ops-page-title {
+  margin: 0;
+  color: var(--color-ops-text);
+  font-size: 1.45rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1.18;
+}
+
+.ops-page-description {
+  margin-top: 0.35rem;
+  max-width: 64rem;
+  color: var(--color-ops-subtext);
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+.ops-primary-action {
+  border-radius: 0.65rem;
+  background: var(--color-ops-accent);
+  color: var(--color-ops-dark);
+  font-weight: 800;
+  transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease;
+}
+
+.ops-primary-action:hover {
+  filter: brightness(0.95);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px color-mix(in oklab, var(--color-ops-accent) 22%, transparent);
+}
+
+.ops-primary-action:focus-visible {
+  outline: none;
+  box-shadow: var(--ops-focus-ring);
+}
+
 .ops-nav-rail {
   background:
     linear-gradient(180deg, color-mix(in oklab, var(--color-ops-sidebar) 98%, transparent), color-mix(in oklab, var(--color-ops-dark) 82%, var(--color-ops-sidebar)));

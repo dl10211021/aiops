@@ -128,8 +128,8 @@ export default function AssetVault() {
   const readyCount = verificationOverview?.summary.ready_assets || 0
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto">
-      <div className="w-full max-w-none pb-4">
+    <div className="ops-page">
+      <div className="ops-page-inner">
         <PageHeader
           title="资产台账"
           description="统一维护数据中心系统、数据库、网络、存储、虚拟化和平台类资产。"

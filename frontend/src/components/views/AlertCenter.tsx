@@ -94,8 +94,8 @@ export default function AlertCenter() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 lg:p-5">
-      <div className="w-full max-w-none">
+    <div className="ops-page">
+      <div className="ops-page-inner">
         <PageHeader
           eyebrow="告警事件台"
           title="告警事件"
@@ -103,7 +103,7 @@ export default function AlertCenter() {
           actions={(
             <button
               onClick={() => void load()}
-              className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-4 py-2 text-sm text-ops-text transition-colors hover:border-ops-accent/60"
+              className="ops-control rounded-lg px-4 py-2 text-sm font-semibold"
             >
               刷新
             </button>

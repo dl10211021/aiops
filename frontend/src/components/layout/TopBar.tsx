@@ -79,7 +79,7 @@ export default function TopBar() {
                 </button>
                 <button
                   onClick={() => openModal('connect')}
-                  className="h-8 rounded-lg bg-ops-accent px-3 text-xs font-bold text-ops-dark hover:bg-ops-accent/85"
+                  className="ops-primary-action h-8 px-3 text-xs"
                 >
                   新建会话
                 </button>

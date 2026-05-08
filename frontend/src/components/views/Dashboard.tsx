@@ -23,8 +23,8 @@ export default function Dashboard() {
   const enabledToolsets = (toolsets?.toolsets || []).filter((set) => set.enabled)
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 lg:p-5">
-      <div className="w-full max-w-none">
+    <div className="ops-page">
+      <div className="ops-page-inner">
         <PageHeader
           eyebrow="AIOps 运维指挥中心"
           title="总览大屏"
@@ -32,7 +32,7 @@ export default function Dashboard() {
           actions={(
             <button
               onClick={() => void load()}
-              className="rounded-lg border border-ops-surface1 bg-ops-surface0 px-4 py-2 text-sm text-ops-text transition-colors hover:border-ops-accent/60"
+              className="ops-control rounded-lg px-4 py-2 text-sm font-semibold"
             >
               刷新
             </button>
@@ -54,7 +54,7 @@ export default function Dashboard() {
         </div>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-          <section className="ops-glass overflow-hidden rounded-lg border">
+          <section className="ops-glass overflow-hidden rounded-xl border">
             <div className="border-b border-ops-surface0 px-5 py-4">
               <h2 className="text-base font-bold text-ops-text">资产与协议分布</h2>
               <p className="mt-1 text-xs text-ops-subtext">用于判断当前平台是否覆盖数据中心关键对象。</p>
@@ -65,7 +65,7 @@ export default function Dashboard() {
             </div>
           </section>
 
-          <section className="ops-glass overflow-hidden rounded-lg border">
+          <section className="ops-glass overflow-hidden rounded-xl border">
             <div className="border-b border-ops-surface0 px-5 py-4">
               <h2 className="text-base font-bold text-ops-text">会话与工具覆盖</h2>
               <p className="mt-1 text-xs text-ops-subtext">确认 AI 是否知道当前资产对应的协议工具。</p>
@@ -91,7 +91,7 @@ export default function Dashboard() {
         </div>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-3">
-          <section className="ops-glass rounded-lg border p-5 xl:col-span-2">
+          <section className="ops-glass rounded-xl border p-5 xl:col-span-2">
             <div className="mb-4 flex items-center justify-between">
               <div>
               <h2 className="text-base font-bold text-ops-text">数据中心告警趋势</h2>
@@ -102,7 +102,7 @@ export default function Dashboard() {
             <TrendStrip points={trend} />
           </section>
 
-          <section className="ops-glass rounded-lg border p-5">
+          <section className="ops-glass rounded-xl border p-5">
             <h2 className="text-base font-bold text-ops-text">风险主机排行</h2>
             <div className="mt-4 space-y-3">
               {ranking.slice(0, 8).map((item, index) => (
@@ -120,7 +120,7 @@ export default function Dashboard() {
           </section>
         </div>
 
-        <section className="ops-glass mt-5 rounded-lg border p-5">
+        <section className="ops-glass mt-5 rounded-xl border p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-bold text-ops-text">巡检运行健康度</h2>

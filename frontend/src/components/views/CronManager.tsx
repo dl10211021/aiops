@@ -32,18 +32,18 @@ export default function CronManager() {
   } = useCronJobActions({ assets, loadJobs, setJobs })
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 lg:p-5">
-      <div className="w-full max-w-none">
+    <div className="ops-page">
+      <div className="ops-page-inner">
         <PageHeader
           eyebrow="自动化巡检"
           title="定时巡检"
           description="面向资产中心的自动巡检计划，支持模板、通知渠道和立即执行。"
           actions={(
             <>
-            <button onClick={() => void loadJobs()} className="rounded-lg bg-ops-surface0 px-3 py-1.5 text-sm text-ops-subtext hover:text-ops-text">
+            <button onClick={() => void loadJobs()} className="ops-control rounded-lg px-3 py-1.5 text-sm font-semibold">
               刷新
             </button>
-            <button onClick={openCreate} className="rounded-lg bg-ops-accent px-3 py-1.5 text-sm font-medium text-ops-dark hover:bg-ops-accent/80">
+            <button onClick={openCreate} className="ops-primary-action px-3 py-1.5 text-sm">
               + 新建计划
             </button>
             </>

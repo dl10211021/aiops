@@ -12,14 +12,14 @@ export default function PageHeader({
   actions?: ReactNode
 }) {
   return (
-    <div className="mb-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+    <div className="ops-page-header flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
       <div className="min-w-0">
         {eyebrow && (
-          <p className="text-[11px] font-semibold text-ops-accent">{eyebrow}</p>
+          <p className="ops-page-eyebrow">{eyebrow}</p>
         )}
-        <h1 className="m-0 text-[22px] font-black leading-tight text-ops-text">{title}</h1>
+        <h1 className="ops-page-title">{title}</h1>
         {description && (
-          <p className="mt-1 max-w-4xl text-sm leading-6 text-ops-subtext">{description}</p>
+          <p className="ops-page-description">{description}</p>
         )}
       </div>
       {actions && (
