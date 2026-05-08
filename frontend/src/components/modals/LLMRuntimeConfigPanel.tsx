@@ -21,7 +21,7 @@ export default function LLMRuntimeConfigPanel({
   onSave,
 }: LLMRuntimeConfigPanelProps) {
   return (
-    <div className="mb-4 rounded-lg border border-ops-surface0 bg-ops-dark/35 p-4">
+    <div className="ops-data-panel mb-4 p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-sm font-semibold text-ops-text">Agent 执行保护</h3>
@@ -30,7 +30,7 @@ export default function LLMRuntimeConfigPanel({
           </p>
         </div>
         {runtimeConfig && (
-          <span className="rounded bg-ops-surface0 px-2 py-1 text-[10px] text-ops-overlay">
+          <span className="ops-control px-2 py-1 text-[10px] text-ops-overlay">
             范围 {runtimeConfig.min_steps}-{runtimeConfig.max_steps}
           </span>
         )}
@@ -44,7 +44,7 @@ export default function LLMRuntimeConfigPanel({
             max={runtimeConfig?.max_steps ?? 200}
             value={runtimeDraft.chat_max_steps}
             onChange={(e) => onDraftChange({ chat_max_steps: Number(e.target.value) })}
-            className="mt-1 w-full rounded border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control mt-1 w-full px-3 py-2 text-sm"
           />
           <span className="mt-1 block text-[11px] text-ops-overlay">普通 AI 会话使用，默认 80。</span>
         </label>
@@ -56,7 +56,7 @@ export default function LLMRuntimeConfigPanel({
             max={runtimeConfig?.max_steps ?? 200}
             value={runtimeDraft.headless_max_steps}
             onChange={(e) => onDraftChange({ headless_max_steps: Number(e.target.value) })}
-            className="mt-1 w-full rounded border border-ops-surface1 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control mt-1 w-full px-3 py-2 text-sm"
           />
           <span className="mt-1 block text-[11px] text-ops-overlay">巡检、定时任务、后台自治使用，默认 60。</span>
         </label>
@@ -68,7 +68,7 @@ export default function LLMRuntimeConfigPanel({
         <button
           onClick={onSave}
           disabled={runtimeSaving}
-          className="rounded bg-ops-surface1 px-3 py-1.5 text-xs font-medium text-ops-text transition-colors hover:bg-ops-surface2 disabled:opacity-50"
+          className="ops-muted-action px-3 py-1.5 text-xs disabled:opacity-50"
         >
           {runtimeSaving ? '保存中...' : '保存执行保护'}
         </button>

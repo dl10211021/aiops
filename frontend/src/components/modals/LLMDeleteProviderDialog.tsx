@@ -13,8 +13,8 @@ export default function LLMDeleteProviderDialog({
 }: LLMDeleteProviderDialogProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onClick={(event) => event.stopPropagation()}>
-      <section className="w-full max-w-md rounded-lg border border-ops-surface1 bg-ops-panel shadow-2xl">
-        <div className="border-b border-ops-surface0 px-5 py-4">
+      <section className="ops-modal-surface w-full max-w-md">
+        <div className="ops-modal-header">
           <div className="text-xs font-semibold text-ops-alert">删除模型供应商</div>
           <h2 className="mt-1 text-lg font-bold text-ops-text">确认删除配置</h2>
           <p className="mt-1 text-sm leading-6 text-ops-subtext">
@@ -30,13 +30,13 @@ export default function LLMDeleteProviderDialog({
         <div className="flex justify-end gap-2 border-t border-ops-surface0 px-5 py-4">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm text-ops-subtext hover:text-ops-text"
+            className="ops-muted-action px-4 py-2 text-sm"
           >
             取消
           </button>
           <button
             onClick={onConfirm}
-            className="rounded-lg bg-ops-alert px-4 py-2 text-sm font-semibold text-white"
+            className="ops-danger-action px-4 py-2 text-sm"
           >
             确认删除
           </button>

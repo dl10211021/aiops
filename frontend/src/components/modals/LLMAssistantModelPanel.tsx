@@ -35,7 +35,7 @@ export default function LLMAssistantModelPanel({
   const assistantModelValue = config.model_id || ''
 
   return (
-    <section className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-4">
+    <section className="ops-data-panel p-4">
       <div className="mb-3">
         <div className="text-sm font-semibold text-ops-text">主模型 / 辅助思维模型</div>
         <p className="mt-1 text-[11px] leading-5 text-ops-subtext">
@@ -49,7 +49,7 @@ export default function LLMAssistantModelPanel({
           <select
             value={mainModelValue}
             onChange={(event) => onChange({ main_model_id: event.target.value })}
-            className="mt-1 w-full rounded border border-ops-surface1 bg-ops-panel px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control mt-1 w-full px-3 py-2 text-sm"
           >
             <option value="">默认第一个可用模型</option>
             {modelOptions.map((model) => (
@@ -66,7 +66,7 @@ export default function LLMAssistantModelPanel({
             value={assistantModelValue}
             onChange={(event) => onChange({ model_id: event.target.value })}
             disabled={!config.enabled}
-            className="mt-1 w-full rounded border border-ops-surface1 bg-ops-panel px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent disabled:cursor-not-allowed disabled:opacity-50"
+            className="ops-control mt-1 w-full px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="">未指定，使用主模型</option>
             {modelOptions.map((model) => (
@@ -92,7 +92,7 @@ export default function LLMAssistantModelPanel({
           <select
             value={config.thinking_mode || 'high'}
             onChange={(event) => onChange({ thinking_mode: event.target.value })}
-            className="mt-1 w-full rounded border border-ops-surface1 bg-ops-panel px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-accent"
+            className="ops-control mt-1 w-full px-3 py-2 text-sm"
           >
             <option value="off">关闭思考</option>
             <option value="low">低</option>
@@ -105,7 +105,7 @@ export default function LLMAssistantModelPanel({
 
       <div className="mt-3 grid gap-2 md:grid-cols-2">
         {taskLabels.map(([task, label]) => (
-          <label key={task} className="flex items-center gap-2 rounded-md border border-ops-surface0 bg-ops-panel/45 px-3 py-2 text-xs text-ops-subtext">
+          <label key={task} className="flex items-center gap-2 rounded-md border border-ops-surface0 bg-ops-panel/45 px-3 py-2 text-xs text-ops-subtext transition-colors hover:border-ops-surface1 hover:text-ops-text">
             <input
               type="checkbox"
               checked={config.tasks?.[task] !== false}
@@ -125,7 +125,7 @@ export default function LLMAssistantModelPanel({
           type="button"
           onClick={onSave}
           disabled={saving}
-          className="rounded-md bg-ops-accent px-3 py-1.5 text-xs font-semibold text-ops-dark disabled:opacity-50"
+          className="ops-primary-action px-3 py-1.5 text-xs disabled:opacity-50"
         >
           {saving ? '保存中...' : '保存模型角色'}
         </button>
