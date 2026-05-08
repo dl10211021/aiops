@@ -31,11 +31,11 @@ export function UserMessageBubble({
   const userTime = formatMessageTime(message.timestamp)
   return (
     <div className="group flex justify-end">
-      <div className="max-w-[86%] rounded-lg rounded-br-sm bg-ops-accent/15 px-4 py-2.5 text-sm text-ops-text">
+      <div tabIndex={0} className="max-w-[86%] rounded-lg rounded-br-sm bg-ops-accent/15 px-4 py-2.5 text-sm text-ops-text outline-none focus-visible:ring-1 focus-visible:ring-ops-accent/55">
         <div className="mb-1 flex items-center justify-end gap-2">
           <span className="font-mono text-[11px] text-ops-overlay">{userTime}</span>
-          <button onClick={() => onEdit?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-subtext opacity-0 transition-opacity hover:bg-ops-dark/50 hover:text-ops-text group-hover:opacity-100">编辑消息</button>
-          <button onClick={() => onDelete?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-alert opacity-0 transition-opacity hover:bg-ops-alert/10 group-hover:opacity-100">删除消息</button>
+          <button onClick={() => onEdit?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-subtext opacity-0 transition-opacity hover:bg-ops-dark/50 hover:text-ops-text group-hover:opacity-100 group-focus-within:opacity-100">编辑消息</button>
+          <button onClick={() => onDelete?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-alert opacity-0 transition-opacity hover:bg-ops-alert/10 group-hover:opacity-100 group-focus-within:opacity-100">删除消息</button>
         </div>
         <div className="whitespace-pre-wrap">{message.content}</div>
         {message.attachments && message.attachments.length > 0 && (
@@ -143,11 +143,12 @@ export function AssistantReportBubble({
     <>
     <article
       ref={bubbleRef}
+      tabIndex={0}
       className={`w-full overflow-hidden rounded-xl border bg-[linear-gradient(180deg,rgba(18,31,48,0.94),rgba(11,22,36,0.98))] shadow-[0_14px_34px_rgba(0,0,0,0.2)] transition-all ${
         focusedByAudit
           ? 'border-ops-accent shadow-[0_0_0_1px_rgba(45,212,191,0.35),0_16px_36px_rgba(45,212,191,0.12)]'
           : 'border-ops-surface1/55'
-      }`}
+      } outline-none focus-visible:border-ops-accent/70`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ops-surface0/80 bg-ops-surface0/35 px-4 py-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -158,7 +159,7 @@ export function AssistantReportBubble({
           <button
             onClick={() => openFeedbackDialog('up')}
             title="回答很好，写入会话成功经验记忆"
-            className={`rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
+            className={`rounded-full border px-2 py-0.5 text-[12px] opacity-0 transition-all group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 ${
               feedbackRating === 'up'
                 ? 'border-ops-success/70 bg-ops-success/15 text-ops-success'
                 : 'border-ops-surface1 text-ops-subtext hover:border-ops-success/55 hover:text-ops-success'
@@ -169,7 +170,7 @@ export function AssistantReportBubble({
           <button
             onClick={() => openFeedbackDialog('down')}
             title="回答较差，只做纠错审计，不作为成功经验"
-            className={`rounded-full border px-2 py-0.5 text-[12px] transition-colors ${
+            className={`rounded-full border px-2 py-0.5 text-[12px] opacity-0 transition-all group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 ${
               feedbackRating === 'down'
                 ? 'border-ops-alert/70 bg-ops-alert/15 text-ops-alert'
                 : 'border-ops-surface1 text-ops-subtext hover:border-ops-alert/55 hover:text-ops-alert'
@@ -177,8 +178,8 @@ export function AssistantReportBubble({
           >
             👎
           </button>
-          <button onClick={() => onEdit?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-subtext transition-colors hover:bg-ops-dark/50 hover:text-ops-text">编辑消息</button>
-          <button onClick={() => onDelete?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-alert transition-colors hover:bg-ops-alert/10">删除消息</button>
+          <button onClick={() => onEdit?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-subtext opacity-0 transition-all hover:bg-ops-dark/50 hover:text-ops-text group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100">编辑消息</button>
+          <button onClick={() => onDelete?.(message)} className="rounded px-1.5 py-0.5 text-[11px] text-ops-alert opacity-0 transition-all hover:bg-ops-alert/10 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100">删除消息</button>
           <span className="font-mono text-[11px] text-ops-overlay">{assistantTime}</span>
         </div>
       </div>
@@ -383,7 +384,6 @@ function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
   const setView = useStore((state) => state.setView)
   const openModal = useStore((state) => state.openModal)
   const refs = message.memoryRefs || message.memory_refs || []
-  if (!refs.length) return null
   const ragCount = refs.filter((ref) => referenceSourceType(ref) === 'rag').length
   const profileCount = refs.filter((ref) => referenceSourceType(ref) === 'asset_profile').length
   const promptCount = refs.filter((ref) => referenceSourceType(ref) === 'system_prompt').length
@@ -430,10 +430,14 @@ function MemoryReferenceStrip({ message }: { message: ChatMessage }) {
         {memoryCount > 0 ? ` · 长期记忆 ${memoryCount}` : ''}
       </summary>
       <p className="mt-1 leading-5 text-ops-overlay">
-        这里展示本轮回答使用过的画像、默认提示词、资料和记忆。它们都只做辅助上下文，最终仍以当前用户要求、安全策略和资产实时证据为准。
+        这里展示本轮回答使用过的画像、默认提示词、资料和记忆。它们默认折叠但不会隐藏；最终仍以当前用户要求、安全策略和资产实时证据为准。
       </p>
       <div className="mt-2 grid gap-1.5">
-        {refs.map((ref, index) => (
+        {refs.length === 0 ? (
+          <div className="rounded-md border border-ops-surface1/60 bg-ops-panel/45 px-2.5 py-2 text-ops-overlay">
+            本轮暂无可展示的引用来源。若回答使用了画像、记忆或 RAG 资料，这里会列出来源和说明。
+          </div>
+        ) : refs.map((ref, index) => (
           <div
             key={`${ref.path || ref.scope_id || ref.title || ref.source_session_id || 'ref'}-${index}`}
             className={`rounded-md border px-2.5 py-1.5 ${
