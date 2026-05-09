@@ -145,6 +145,87 @@ class ObservableSource(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class DiscoveryCandidate(BaseModel):
+    id: str = Field(..., min_length=1, max_length=120)
+    system_id: str = Field(..., min_length=1, max_length=120)
+    candidate_type: Literal["component", "relationship", "source"]
+    title: str = Field(..., min_length=1, max_length=160)
+    summary: str = Field(default="", max_length=600)
+    status: Literal["pending_review", "confirmed", "rejected", "postponed"] = "pending_review"
+    confidence: Confidence = "pending_review"
+    proposed_component: Component | None = None
+    proposed_relationship: Relationship | None = None
+    evidence_ids: list[str] = Field(default_factory=list)
+    evidence_summary: list[str] = Field(default_factory=list)
+    suggested_actions: list[str] = Field(default_factory=list)
+    created_at: str = ""
+
+
+class InvestigationItem(BaseModel):
+    id: str = Field(..., min_length=1, max_length=120)
+    system_id: str = Field(..., min_length=1, max_length=120)
+    title: str = Field(..., min_length=1, max_length=160)
+    symptom: str = Field(default="", max_length=600)
+    time_window: str = Field(default="", max_length=120)
+    status: Literal["draft", "running", "waiting_review", "closed"] = "draft"
+    severity: Literal["unknown", "info", "warning", "critical"] = "unknown"
+    agent_plan: list[str] = Field(default_factory=list)
+    evidence_count: int = Field(default=0, ge=0)
+    root_cause_candidates: list[str] = Field(default_factory=list)
+    tasks: list["InvestigationTask"] = Field(default_factory=list)
+    evidence: list["EvidenceItem"] = Field(default_factory=list)
+    root_causes: list["RootCauseCandidate"] = Field(default_factory=list)
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class InvestigationTask(BaseModel):
+    id: str = Field(..., min_length=1, max_length=120)
+    investigation_id: str = Field(..., min_length=1, max_length=120)
+    agent_role: str = Field(..., min_length=1, max_length=80)
+    target_component_id: str | None = Field(default=None, max_length=120)
+    source_id: str | None = Field(default=None, max_length=120)
+    task_type: str = Field(..., min_length=1, max_length=80)
+    status: Literal["pending", "running", "completed", "failed", "skipped"] = "pending"
+    input_json: dict[str, Any] = Field(default_factory=dict)
+    output_summary: str = Field(default="", max_length=800)
+    started_at: str = ""
+    finished_at: str = ""
+    error_message: str = ""
+
+
+class EvidenceItem(BaseModel):
+    id: str = Field(..., min_length=1, max_length=120)
+    investigation_id: str = Field(..., min_length=1, max_length=120)
+    task_id: str | None = Field(default=None, max_length=120)
+    component_id: str | None = Field(default=None, max_length=120)
+    source_id: str | None = Field(default=None, max_length=120)
+    evidence_type: str = Field(..., min_length=1, max_length=80)
+    title: str = Field(..., min_length=1, max_length=160)
+    summary: str = Field(default="", max_length=1000)
+    raw_ref: str = Field(default="", max_length=240)
+    raw_excerpt: str = Field(default="", max_length=1200)
+    confidence: Confidence = "pending_review"
+    timestamp: str = ""
+    created_at: str = ""
+
+
+class RootCauseCandidate(BaseModel):
+    id: str = Field(..., min_length=1, max_length=120)
+    investigation_id: str = Field(..., min_length=1, max_length=120)
+    title: str = Field(..., min_length=1, max_length=160)
+    description: str = Field(default="", max_length=1000)
+    likelihood: str = Field(default="unknown", max_length=40)
+    impact: str = Field(default="unknown", max_length=40)
+    confidence: Confidence = "pending_review"
+    supporting_evidence_ids: list[str] = Field(default_factory=list)
+    contradicting_evidence_ids: list[str] = Field(default_factory=list)
+    recommended_next_steps: list[str] = Field(default_factory=list)
+    status: Literal["open", "confirmed", "rejected", "watching"] = "open"
+    created_at: str = ""
+    updated_at: str = ""
+
+
 class ProfilePack(BaseModel):
     id: str = Field(..., min_length=1, max_length=120)
     name: str = Field(..., min_length=1, max_length=120)
@@ -193,11 +274,24 @@ class BusinessSystemProfile(BaseModel):
         return {layer: count for layer, count in counts.items() if count}
 
     def summary(self) -> dict[str, Any]:
+        all_components = [*self.components, *self.unknowns]
+        bound_asset_ids = {
+            str(component.metadata.get("asset_id"))
+            for component in all_components
+            if component.metadata.get("asset_id") is not None
+        }
+        bound_session_ids = {
+            str(component.metadata.get("session_id"))
+            for component in all_components
+            if component.metadata.get("session_id") is not None
+        }
         return {
             "system": self.system.model_dump(),
             "component_count": len(self.components),
             "unknown_count": len(self.unknowns),
             "relationship_count": len(self.relationships),
             "source_count": len(self.observable_sources),
+            "bound_asset_count": len(bound_asset_ids),
+            "bound_session_count": len(bound_session_ids),
             "layer_counts": self.layer_counts(),
         }

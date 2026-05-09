@@ -965,6 +965,8 @@ export interface ObservabilityOverview {
   profile_pack_count: number
   unknown_count: number
   pending_review_count: number
+  discovery_candidate_count?: number
+  investigation_count?: number
 }
 
 export interface ObservabilityBusinessSystem {
@@ -1040,6 +1042,8 @@ export interface ObservabilitySystemSummary {
   unknown_count: number
   relationship_count: number
   source_count: number
+  bound_asset_count?: number
+  bound_session_count?: number
   layer_counts: Record<string, number>
 }
 
@@ -1049,6 +1053,87 @@ export interface ObservabilityProfile {
   relationships: ObservabilityRelationship[]
   observable_sources: ObservabilitySource[]
   unknowns: ObservabilityComponent[]
+}
+
+export interface ObservabilityDiscoveryCandidate {
+  id: string
+  system_id: string
+  candidate_type: 'component' | 'relationship' | 'source' | string
+  title: string
+  summary: string
+  status: 'pending_review' | 'confirmed' | 'rejected' | 'postponed' | string
+  confidence: string
+  proposed_component?: ObservabilityComponent | null
+  proposed_relationship?: ObservabilityRelationship | null
+  evidence_ids: string[]
+  evidence_summary: string[]
+  suggested_actions: string[]
+  created_at: string
+}
+
+export interface ObservabilityInvestigation {
+  id: string
+  system_id: string
+  title: string
+  symptom: string
+  time_window: string
+  status: 'draft' | 'running' | 'waiting_review' | 'closed' | string
+  severity: 'unknown' | 'info' | 'warning' | 'critical' | string
+  agent_plan: string[]
+  evidence_count: number
+  root_cause_candidates: string[]
+  tasks: ObservabilityInvestigationTask[]
+  evidence: ObservabilityEvidence[]
+  root_causes: ObservabilityRootCause[]
+  created_at: string
+  updated_at: string
+}
+
+export interface ObservabilityInvestigationTask {
+  id: string
+  investigation_id: string
+  agent_role: string
+  target_component_id?: string | null
+  source_id?: string | null
+  task_type: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | string
+  input_json: Record<string, unknown>
+  output_summary: string
+  started_at: string
+  finished_at: string
+  error_message: string
+}
+
+export interface ObservabilityEvidence {
+  id: string
+  investigation_id: string
+  task_id?: string | null
+  component_id?: string | null
+  source_id?: string | null
+  evidence_type: string
+  title: string
+  summary: string
+  raw_ref: string
+  raw_excerpt: string
+  confidence: string
+  timestamp: string
+  created_at: string
+}
+
+export interface ObservabilityRootCause {
+  id: string
+  investigation_id: string
+  title: string
+  description: string
+  likelihood: string
+  impact: string
+  confidence: string
+  supporting_evidence_ids: string[]
+  contradicting_evidence_ids: string[]
+  recommended_next_steps: string[]
+  status: 'open' | 'confirmed' | 'rejected' | 'watching' | string
+  created_at: string
+  updated_at: string
 }
 
 export type ViewId = 'dashboard' | 'bigscreen' | 'chat' | 'observability' | 'assets' | 'canvas' | 'cron' | 'alerts' | 'approvals' | 'skills' | 'knowledge' | 'config'

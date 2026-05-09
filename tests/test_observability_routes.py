@@ -39,3 +39,185 @@ class TestObservabilityRoutes(unittest.TestCase):
         packs = response.data["profile_packs"]
         prometheus = next(pack for pack in packs if pack["id"] == "prometheus-source")
         self.assertIn("query_promql", prometheus["capabilities"])
+
+    def test_discovery_candidates_endpoint_exposes_pending_review_items(self):
+        response = asyncio.run(observability_routes.list_observability_discovery_candidates())
+
+        candidates = response.data["candidates"]
+        self.assertGreaterEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["status"], "pending_review")
+        self.assertTrue(candidates[0]["evidence_summary"])
+
+    def test_investigations_endpoint_exposes_agent_plan(self):
+        response = asyncio.run(observability_routes.list_observability_investigations())
+
+        investigations = response.data["investigations"]
+        self.assertEqual(investigations[0]["system_id"], "global-portal-test")
+        self.assertTrue(investigations[0]["agent_plan"])
+
+    def test_create_investigation_builds_read_only_agent_tasks(self):
+        response = asyncio.run(
+            observability_routes.create_observability_investigation(
+                observability_routes.InvestigationCreateRequest(
+                    system_id="global-portal-test",
+                    title="测试环境门户慢",
+                    symptom="页面响应时间升高",
+                    time_window="最近 30 分钟",
+                    severity="warning",
+                )
+            )
+        )
+
+        investigation = response.data["investigation"]
+        self.assertEqual(investigation["status"], "draft")
+        self.assertGreaterEqual(len(investigation["tasks"]), 2)
+        self.assertTrue(all(task["input_json"].get("read_only") for task in investigation["tasks"]))
+
+    def test_append_evidence_and_root_cause_updates_investigation(self):
+        evidence_response = asyncio.run(
+            observability_routes.append_observability_evidence(
+                "inv-global-portal-slow",
+                observability_routes.EvidenceAppendRequest(
+                    title="Prometheus target 正常",
+                    summary="up 指标为 1",
+                    evidence_type="metric",
+                    source_id="src-prometheus-session",
+                    confidence="confirmed",
+                ),
+            )
+        )
+        root_response = asyncio.run(
+            observability_routes.append_observability_root_cause(
+                "inv-global-portal-slow",
+                observability_routes.RootCauseAppendRequest(
+                    title="等待更多证据",
+                    description="当前证据不足以确认单一根因",
+                    supporting_evidence_ids=[evidence_response.data["evidence"]["id"]],
+                ),
+            )
+        )
+
+        self.assertEqual(evidence_response.data["investigation"]["evidence_count"], 1)
+        self.assertIn("等待更多证据", root_response.data["investigation"]["root_cause_candidates"])
+
+    def test_create_investigation_route_returns_tasks(self):
+        req = observability_routes.InvestigationCreateRequest(
+            system_id="global-portal-test",
+            title="系统慢",
+            symptom="global 门户访问变慢",
+            time_window="最近 2 小时",
+            severity="warning",
+        )
+
+        response = asyncio.run(observability_routes.create_observability_investigation(req))
+
+        investigation = response.data["investigation"]
+        self.assertEqual(investigation["title"], "系统慢")
+        self.assertTrue(investigation["tasks"])
+        self.assertEqual(investigation["evidence_count"], 0)
+
+    def test_append_evidence_route_updates_investigation_summary(self):
+        create_req = observability_routes.InvestigationCreateRequest(
+            system_id="global-portal-test",
+            title="证据回收测试",
+            symptom="排查事件需要挂证据",
+            severity="warning",
+        )
+        create_response = asyncio.run(observability_routes.create_observability_investigation(create_req))
+        investigation_id = create_response.data["investigation"]["id"]
+        evidence_req = observability_routes.EvidenceAppendRequest(
+            title="Prometheus 告警为空",
+            summary="当前窗口没有 firing 告警。",
+            evidence_type="metric",
+            confidence="confirmed",
+        )
+
+        response = asyncio.run(
+            observability_routes.append_observability_evidence(investigation_id, evidence_req)
+        )
+
+        self.assertEqual(response.data["evidence"]["title"], "Prometheus 告警为空")
+        self.assertEqual(response.data["investigation"]["evidence_count"], 1)
+
+    def test_bind_asset_and_session_routes_return_updated_profile(self):
+        asset_response = asyncio.run(
+            observability_routes.bind_observability_asset(
+                "global-portal-test",
+                observability_routes.AssetBindingRequest(
+                    asset={
+                        "id": 1,
+                        "remark": "业务应用服务器",
+                        "host": "172.17.8.10",
+                        "asset_type": "linux",
+                        "protocol": "ssh",
+                    }
+                ),
+            )
+        )
+        self.assertGreaterEqual(asset_response.data["summary"]["bound_asset_count"], 1)
+
+        session_response = asyncio.run(
+            observability_routes.bind_observability_session(
+                "global-portal-test",
+                observability_routes.SessionBindingRequest(
+                    session={
+                        "id": "sid-1",
+                        "remark": "业务系统总控会话",
+                        "host": "localhost",
+                        "asset_type": "linux",
+                        "protocol": "virtual",
+                    },
+                    role="control_session",
+                ),
+            )
+        )
+        self.assertGreaterEqual(session_response.data["summary"]["bound_session_count"], 1)
+
+    def test_unbind_component_route_removes_asset_binding(self):
+        asset_response = asyncio.run(
+            observability_routes.bind_observability_asset(
+                "global-portal-test",
+                observability_routes.AssetBindingRequest(
+                    asset={
+                        "id": "remove-me",
+                        "remark": "待移除资产",
+                        "host": "172.17.8.11",
+                        "asset_type": "linux",
+                        "protocol": "ssh",
+                    }
+                ),
+            )
+        )
+        component = next(
+            item for item in asset_response.data["profile"]["components"]
+            if item["metadata"].get("asset_id") == "remove-me"
+        )
+
+        response = asyncio.run(
+            observability_routes.unbind_observability_component("global-portal-test", component["id"])
+        )
+
+        component_ids = {item["id"] for item in response.data["profile"]["components"]}
+        self.assertNotIn(component["id"], component_ids)
+
+    def test_update_unknown_component_turns_it_into_known_profile_item(self):
+        response = asyncio.run(
+            observability_routes.update_observability_component(
+                "global-portal-test",
+                "unk-entry",
+                observability_routes.ComponentUpdateRequest(
+                    name="global 门户 nginx 入口",
+                    component_type="load_balancer",
+                    layer="entry",
+                    workload_family="entry",
+                    confidence="confirmed",
+                    metadata={"source_note": "人工补充"},
+                ),
+            )
+        )
+
+        profile = response.data["profile"]
+        component_names = {item["name"] for item in profile["components"]}
+        unknown_ids = {item["id"] for item in profile["unknowns"]}
+        self.assertIn("global 门户 nginx 入口", component_names)
+        self.assertNotIn("unk-entry", unknown_ids)
