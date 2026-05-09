@@ -65,4 +65,3 @@ def builtin_profile_packs() -> list[ProfilePack]:
             {"availability": ["up"], "cpu": ["node_cpu_seconds_total"], "memory": ["node_memory_MemAvailable_bytes"]},
         ),
     ]
-

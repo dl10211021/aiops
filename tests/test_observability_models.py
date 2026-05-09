@@ -55,4 +55,3 @@ def test_relationship_endpoint_cannot_be_same_component():
             to_component_id=component.id,
             relationship_type="depends_on",
         )
-

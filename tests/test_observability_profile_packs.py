@@ -17,4 +17,3 @@ def test_builtin_profile_packs_load_with_required_fields():
         assert pack.component_types
         assert pack.relationship_types
         assert pack.investigation_playbooks
-

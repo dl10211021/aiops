@@ -69,4 +69,3 @@ class EvidenceService:
 
 def get_evidence_service(store: ObservabilityStore | None = None) -> EvidenceService:
     return EvidenceService(store)
-

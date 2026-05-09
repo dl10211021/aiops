@@ -49,4 +49,3 @@ class BindingService:
 
 def get_binding_service(store: ObservabilityStore | None = None) -> BindingService:
     return BindingService(store)
-

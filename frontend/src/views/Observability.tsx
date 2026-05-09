@@ -9,6 +9,7 @@ import {
   createDiscoveryRun,
   createInvestigation,
   createObservabilityComponent,
+  createObservabilityRelationship,
   createObservabilitySystem,
   createSourceFromSession,
   dispatchInvestigation,
@@ -31,6 +32,7 @@ import type {
   DiscoveryRun,
   Investigation,
   ObservableSource,
+  ObservabilityArchitectureTemplate,
   ObservabilitySystem,
   ObservabilityTopology,
   ProfilePack,
@@ -122,6 +124,46 @@ export default function Observability() {
     addToast('节点已添加', 'success')
     await load()
     await loadTopology(selectedSystem.id)
+  }
+
+  const createArchitectureTemplate = async (template: ObservabilityArchitectureTemplate) => {
+    if (!selectedSystem) return
+    try {
+      const created: Record<string, string> = {}
+      for (const node of template.nodes) {
+        const res = await createObservabilityComponent(selectedSystem.id, {
+          name: node.name,
+          component_type: node.component_type,
+          workload_family: node.workload_family,
+          status: node.status || 'active',
+          confidence: node.confidence || 'inferred',
+          source: 'architecture_template',
+          metadata: { ...(node.metadata || {}), template_id: template.id, template_title: template.title, template_layer: node.layer },
+        })
+        created[node.key] = res.data.component.id
+      }
+
+      for (const relationship of template.relationships) {
+        const fromComponentId = created[relationship.from]
+        const toComponentId = created[relationship.to]
+        if (!fromComponentId || !toComponentId) continue
+        await createObservabilityRelationship(selectedSystem.id, {
+          from_component_id: fromComponentId,
+          to_component_id: toComponentId,
+          relationship_type: relationship.relationship_type,
+          status: relationship.status || 'pending_review',
+          confidence: relationship.confidence || 'inferred',
+          source: 'architecture_template',
+          metadata: { ...(relationship.metadata || {}), template_id: template.id, template_title: template.title },
+        })
+      }
+
+      addToast(`${template.title} 模板已添加`, 'success')
+      await load()
+      await loadTopology(selectedSystem.id)
+    } catch (exc) {
+      addToast(exc instanceof Error ? exc.message : '添加架构模板失败', 'error')
+    }
   }
 
   const bindAsset = async (componentId: string, assetId: string) => {
@@ -222,6 +264,7 @@ export default function Observability() {
               system={selectedSystem}
               topology={topology}
               onAddComponent={createComponent}
+              onCreateTemplate={createArchitectureTemplate}
               onBindAsset={bindAsset}
               onBindSession={bindSession}
             />
@@ -281,4 +324,3 @@ export default function Observability() {
     </div>
   )
 }
-

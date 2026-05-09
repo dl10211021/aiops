@@ -60,4 +60,3 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
     </div>
   )
 }
-

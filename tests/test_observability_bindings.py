@@ -38,4 +38,3 @@ def test_bind_components_to_assets_sessions_and_prometheus_source():
     assert len(persisted) == 3
     assert any(item["relation_type"] == "queried_through_session" for item in persisted)
     assert source["capabilities"] == ["query_metrics", "query_alerts", "discover_targets", "query_promql", "map_exporter_to_component"]
-

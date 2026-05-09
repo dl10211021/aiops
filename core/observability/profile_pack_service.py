@@ -25,4 +25,3 @@ class ProfilePackService:
 
 def get_profile_pack_service(store: ObservabilityStore | None = None) -> ProfilePackService:
     return ProfilePackService(store)
-

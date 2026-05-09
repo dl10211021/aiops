@@ -132,4 +132,3 @@ class TopologyService:
 
 def get_topology_service(store: ObservabilityStore | None = None) -> TopologyService:
     return TopologyService(store)
-

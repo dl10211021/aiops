@@ -62,4 +62,3 @@ def test_discovery_proposals_require_manual_confirmation():
     confirmed = discovery.confirm_review_item(run["review_items"][0]["id"])
     assert confirmed["status"] == "confirmed"
     assert topology.list_relationships(system["id"])[0]["status"] == "confirmed"
-

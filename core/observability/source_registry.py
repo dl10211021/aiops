@@ -96,4 +96,3 @@ class SourceRegistry:
 
 def get_source_registry(store: ObservabilityStore | None = None) -> SourceRegistry:
     return SourceRegistry(store)
-

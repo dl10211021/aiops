@@ -22,4 +22,3 @@ class ProfilePack:
 
     def to_record(self) -> dict[str, Any]:
         return dict(self.__dict__)
-

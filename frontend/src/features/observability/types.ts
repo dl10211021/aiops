@@ -44,6 +44,34 @@ export interface ObservabilityRelationship {
   source?: string
 }
 
+export interface ObservabilityTemplateNode {
+  key: string
+  name: string
+  component_type: string
+  workload_family: string
+  layer?: string
+  status?: string
+  confidence?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface ObservabilityTemplateRelationship {
+  from: string
+  to: string
+  relationship_type: string
+  status?: string
+  confidence?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface ObservabilityArchitectureTemplate {
+  id: string
+  title: string
+  description: string
+  nodes: ObservabilityTemplateNode[]
+  relationships: ObservabilityTemplateRelationship[]
+}
+
 export interface ObservabilityTopologyLayer {
   id: string
   label: string
@@ -139,4 +167,3 @@ export interface RootCauseCandidate {
   confidence?: string
   status?: string
 }
-

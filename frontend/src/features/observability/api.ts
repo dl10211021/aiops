@@ -110,4 +110,3 @@ export async function planInvestigation(investigationId: string) {
 export async function dispatchInvestigation(investigationId: string) {
   return request(`/observability/investigations/${investigationId}/dispatch`, { method: 'POST' })
 }
-

@@ -233,4 +233,3 @@ def get_observability_store() -> ObservabilityStore:
 def set_observability_store(store: ObservabilityStore | None) -> None:
     global _default_store
     _default_store = store
-

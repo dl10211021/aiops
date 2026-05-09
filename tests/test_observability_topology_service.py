@@ -45,4 +45,3 @@ def test_layered_topology_is_product_neutral():
     assert layers["bigdata"]["nodes"]
     assert layers["mpp"]["nodes"]
     assert layers["unknown"]["nodes"]
-

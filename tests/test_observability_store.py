@@ -45,4 +45,3 @@ def test_store_crud_preserves_json_metadata():
     assert loaded is not None
     assert loaded["metadata"]["labels"]["env"] == "test"
     assert store.delete("components", saved["id"])
-
