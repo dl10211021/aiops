@@ -5,6 +5,7 @@ import type { ViewId } from '@/types'
 const NAV_ITEMS: Array<{ id: ViewId; icon: string; label: string }> = [
   { id: 'dashboard', icon: '⌂', label: '总览' },
   { id: 'chat', icon: '◉', label: '会话' },
+  { id: 'observability', icon: '◎', label: '可观测性' },
   { id: 'assets', icon: '▦', label: '资产' },
   { id: 'canvas', icon: '◇', label: '画板' },
   { id: 'cron', icon: '◷', label: '巡检' },

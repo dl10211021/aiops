@@ -959,7 +959,99 @@ export interface ApiResponse<T = Record<string, unknown>> {
   message: string
 }
 
-export type ViewId = 'dashboard' | 'bigscreen' | 'chat' | 'assets' | 'canvas' | 'cron' | 'alerts' | 'approvals' | 'skills' | 'knowledge' | 'config'
+export interface ObservabilityOverview {
+  system_count: number
+  source_count: number
+  profile_pack_count: number
+  unknown_count: number
+  pending_review_count: number
+}
+
+export interface ObservabilityBusinessSystem {
+  id: string
+  name: string
+  environment: string
+  description: string
+  criticality: string
+  owner: string
+  aliases: string[]
+  tags: string[]
+  status: string
+  profile_completeness: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ObservabilityComponent {
+  id: string
+  system_id: string
+  name: string
+  component_type: string
+  layer: string
+  workload_family: string
+  profile_pack_id?: string | null
+  environment: string
+  status: string
+  confidence: string
+  source: string
+  metadata: Record<string, unknown>
+}
+
+export interface ObservabilityRelationship {
+  id: string
+  system_id: string
+  from_component_id: string
+  to_component_id: string
+  relationship_type: string
+  confidence: string
+  source: string
+  evidence_ids: string[]
+  metadata: Record<string, unknown>
+}
+
+export interface ObservabilitySource {
+  id: string
+  name: string
+  source_type: string
+  source_origin: string
+  status: string
+  capabilities: string[]
+  bound_system_ids: string[]
+  bound_component_ids: string[]
+  session_id?: string | null
+  metadata: Record<string, unknown>
+}
+
+export interface ObservabilityProfilePack {
+  id: string
+  name: string
+  workload_family: string
+  layer: string
+  component_types: string[]
+  source_types: string[]
+  capabilities: string[]
+  signals: string[]
+  read_only: boolean
+}
+
+export interface ObservabilitySystemSummary {
+  system: ObservabilityBusinessSystem
+  component_count: number
+  unknown_count: number
+  relationship_count: number
+  source_count: number
+  layer_counts: Record<string, number>
+}
+
+export interface ObservabilityProfile {
+  system: ObservabilityBusinessSystem
+  components: ObservabilityComponent[]
+  relationships: ObservabilityRelationship[]
+  observable_sources: ObservabilitySource[]
+  unknowns: ObservabilityComponent[]
+}
+
+export type ViewId = 'dashboard' | 'bigscreen' | 'chat' | 'observability' | 'assets' | 'canvas' | 'cron' | 'alerts' | 'approvals' | 'skills' | 'knowledge' | 'config'
 
 export interface ApprovalRequest {
   id: string

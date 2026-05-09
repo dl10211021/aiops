@@ -78,6 +78,7 @@ const KnowledgeBase = lazyWithChunkRecovery(() => import('@/components/views/Kno
 const CronManager = lazyWithChunkRecovery(() => import('@/components/views/CronManager'))
 const AlertCenter = lazyWithChunkRecovery(() => import('@/components/views/AlertCenter'))
 const RealtimeCanvas = lazyWithChunkRecovery(() => import('@/components/views/RealtimeCanvas'))
+const ObservabilityCenter = lazyWithChunkRecovery(() => import('@/components/views/ObservabilityCenter'))
 const SystemConfigCenter = lazyWithChunkRecovery(() => import('@/components/views/SystemConfigCenter'))
 const ConnectionModal = lazyWithChunkRecovery(() => import('@/components/modals/ConnectionModal'))
 const LLMConfigModal = lazyWithChunkRecovery(() => import('@/components/modals/LLMConfigModal'))
@@ -110,6 +111,7 @@ function ViewRouter() {
         {currentView === 'dashboard' && <Dashboard />}
         {currentView === 'bigscreen' && <Dashboard />}
         {currentView === 'chat' && <ChatWindow />}
+        {currentView === 'observability' && <ObservabilityCenter />}
         {currentView === 'assets' && <AssetVault />}
         {currentView === 'canvas' && <RealtimeCanvas />}
         {currentView === 'skills' && <SkillMarket />}
@@ -118,7 +120,7 @@ function ViewRouter() {
         {currentView === 'alerts' && <AlertCenter />}
         {currentView === 'approvals' && <ApprovalCenter />}
         {currentView === 'config' && <SystemConfigCenter />}
-        {!['dashboard', 'bigscreen', 'chat', 'assets', 'canvas', 'skills', 'knowledge', 'cron', 'alerts', 'approvals', 'config'].includes(currentView) && <ChatWindow />}
+        {!['dashboard', 'bigscreen', 'chat', 'observability', 'assets', 'canvas', 'skills', 'knowledge', 'cron', 'alerts', 'approvals', 'config'].includes(currentView) && <ChatWindow />}
       </Suspense>
     </ChunkErrorBoundary>
   )
