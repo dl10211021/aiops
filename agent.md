@@ -20,6 +20,30 @@ short, current, and grounded in source files. For hard rules, always prefer
 - The worktree may contain user edits. Check `git status --short` before edits
   and keep unrelated changes untouched.
 
+## Coding Baseline
+
+This section adapts `bartonzzb/barton-ai-coding-baseline` reviewed at commit
+`5f746bf`. Keep `agent.md` as OpsCore's durable baseline/context snapshot; do
+not add a separate `BASELINE.md` unless the user asks for it.
+
+- Think before coding. State assumptions when they matter, surface tradeoffs,
+  and ask only when local context cannot answer a risky ambiguity.
+- Simplicity first. Ship the minimum change that solves the stated problem. Do
+  not add speculative features, one-off abstractions, or unused configurability.
+- Surgical changes. Touch only the files required for the task, match the local
+  style, and mention unrelated cleanup opportunities instead of doing them
+  opportunistically.
+- Goal-driven execution. Convert work into verifiable success criteria, use
+  focused tests or smoke checks that match the blast radius, and loop until the
+  evidence supports the conclusion.
+- Baseline context discipline. Before significant work, reread `AGENTS.md`,
+  this file, and the relevant source entry points. Stay inside the declared
+  scope; no deploy, release, destructive cleanup, or out-of-scope subsystem
+  changes without explicit user approval.
+- Preserve durable context. Update this file when project architecture,
+  boundaries, commands, or recurring workflows change. Do not turn it into a
+  task log; keep it short, current, and useful to the next agent.
+
 ## Stack
 
 - Backend: Python 3.11, FastAPI, Uvicorn, Pydantic v2.
