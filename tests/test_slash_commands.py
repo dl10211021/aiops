@@ -52,22 +52,6 @@ def test_database_inspection_shortcuts_do_not_pollute_linux_sessions():
     assert "/db-slow 慢SQL分析" not in labels
 
 
-def test_global_skill_install_shortcut_guides_web_search_and_evolution():
-    commands = render_slash_commands(
-        {"target_scope": "global", "asset_type": "virtual", "protocol": "virtual", "host": "global"},
-        ["web_search", "evolve_skill"],
-    )
-    command = next(item for item in commands if item["id"] == "skill-install-web")
-
-    assert command["label"] == "/skill-install 联网安装Skill"
-    assert command["category"] == "全局指挥"
-    assert command["pinned"] is True
-    assert "web_search" in command["prompt"]
-    assert "evolve_skill" in command["prompt"]
-    assert "不要直接执行网上下载的脚本" in command["prompt"]
-    assert "my_custom_skills" in command["prompt"]
-
-
 def test_builtin_template_override_replaces_default_command():
     context = {"asset_type": "linux", "protocol": "ssh", "host": "10.0.0.1"}
     override = {

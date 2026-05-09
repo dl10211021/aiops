@@ -153,15 +153,6 @@ COMMANDS = [
         sort_order=5,
     ),
     SlashCommand(
-        "skill-install-web",
-        "/skill-install 联网安装Skill",
-        "联网搜索可信资料，并安装成 OpsCore 私有 Skill",
-        "请根据我的目标联网安装一个 OpsCore Skill。先询问或识别我要安装的技能主题；然后调用 web_search 搜索官方文档、GitHub 和成熟实践；不要直接执行网上下载的脚本或安装包；把可信流程整理成中文 SKILL.md，并调用 evolve_skill 写入 my_custom_skills；如有来源链接，写入 references/source_links.md；安装完成后说明技能名称、用途、触发方式和是否需要审批。",
-        category="全局指挥",
-        pinned=True,
-        sort_order=6,
-    ),
-    SlashCommand(
         "database-inspect",
         "/db-inspect 数据库巡检",
         "按当前数据库类型执行完整只读巡检",
