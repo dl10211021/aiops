@@ -115,8 +115,8 @@ ASSET_PROTOCOL_MAP = {
     "卓豪": "http_api",
     "ceph": "ssh",
     "nfs": "ssh",
-    "nas": "snmp",
-    "san": "snmp",
+    "nas": "ssh",
+    "san": "ssh",
     "backup": "backup",
     "ipmi": "ipmi",
     "redfish": "redfish",
@@ -124,7 +124,6 @@ ASSET_PROTOCOL_MAP = {
     "bastion": "http_api",
     "ldap": "ldap",
     "jmx": "jmx",
-    "kafka": "kafka",
     "ad": "http_api",
     "audit": "http_api",
     "virtual": "virtual",
@@ -203,12 +202,25 @@ API_PROTOCOLS = (
     | SERVICE_PROBE_PROTOCOLS
 )
 SNMP_PROTOCOLS = {"snmp"}
-NETWORK_CLI_ASSET_TYPES = {"switch", "firewall", "vpn"}
+NETWORK_CLI_ASSET_TYPES = {
+    "switch",
+    "firewall",
+    "vpn",
+    "cisco_switch",
+    "h3c_switch",
+    "hpe_switch",
+    "huawei_switch",
+    "tplink_switch",
+}
+NETWORK_DUAL_PROTOCOL_ASSET_TYPES = {
+    "firewall",
+}
 CONTAINER_ASSET_TYPES = {"docker", "containerd", "podman"}
 MIDDLEWARE_ASSET_TYPES = {
     "nginx",
     "tomcat",
     "kafka",
+    "process",
     "rabbitmq",
     "rocketmq",
     "zookeeper",
@@ -230,7 +242,12 @@ MONITORING_ASSET_TYPES = {
     "tdengine_promql",
 }
 VIRTUALIZATION_ASSET_TYPES = {"vmware", "kvm", "openstack", "proxmox", "hyperv", "zstack"}
-STORAGE_ASSET_TYPES = {"ceph", "nfs", "nas", "minio", "s3", "hdfs", "glusterfs", "backup"}
+STORAGE_ASSET_TYPES = {"ceph", "nfs", "nas", "synology_nas", "minio", "s3", "hdfs", "glusterfs", "backup"}
+STORAGE_SSH_ASSET_TYPES = {
+    item
+    for item in STORAGE_ASSET_TYPES
+    if item in {"ceph", "nfs", "nas", "synology_nas", "hdfs", "glusterfs"}
+}
 SERVICE_ASSET_TYPES = {item["id"] for item in ASSET_CATALOG if item.get("category") == "service"}
 
 
@@ -245,7 +262,8 @@ def _category_asset_types(category: str, protocol: str | None = None) -> set[str
 BIGDATA_API_ASSET_TYPES = _category_asset_types("bigdata", "http_api")
 CONTAINER_API_ASSET_TYPES = _category_asset_types("container", "http_api")
 MIDDLEWARE_API_ASSET_TYPES = _category_asset_types("middleware", "http_api")
-NETWORK_API_ASSET_TYPES = _category_asset_types("network", "http_api")
+NETWORK_API_ASSET_TYPES = _category_asset_types("network", "http_api") | NETWORK_DUAL_PROTOCOL_ASSET_TYPES
+NETWORK_SSH_ASSET_TYPES = NETWORK_CLI_ASSET_TYPES | NETWORK_API_ASSET_TYPES
 SECURITY_API_ASSET_TYPES = _category_asset_types("security", "http_api")
 OOB_API_ASSET_TYPES = _category_asset_types("oob", "http_api")
 DISCOVERY_API_ASSET_TYPES = _category_asset_types("discovery", "http_api")

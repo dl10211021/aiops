@@ -1,4 +1,9 @@
-from core.session_profile import _fallback_profile, profile_to_markdown, profile_to_system_prompt
+from core.session_profile import (
+    _fallback_profile,
+    _normalize_profile,
+    profile_to_markdown,
+    profile_to_system_prompt,
+)
 
 
 def test_fallback_profile_marks_database_focus_area():
@@ -30,6 +35,95 @@ def test_fallback_profile_marks_database_focus_area():
     assert "v$session" in profile["relation_strategies"][0]["evidence"].lower()
     assert "数据库" in profile_to_markdown(profile)
     assert "互联采集策略" in profile_to_markdown(profile)
+
+
+def test_fallback_profile_uses_catalog_domain_for_network_storage_and_middleware_ssh_assets():
+    samples = [
+        (
+            "h3c_switch",
+            "ssh",
+            "network",
+            "网络",
+            "网络邻居与上下联",
+        ),
+        (
+            "synology_nas",
+            "ssh",
+            "storage",
+            "存储",
+            "业务到存储的访问",
+        ),
+        (
+            "kafka",
+            "ssh",
+            "middleware",
+            "中间件",
+            "业务到中间件的连接",
+        ),
+        (
+            "process",
+            "ssh",
+            "middleware",
+            "中间件",
+            "业务到中间件的连接",
+        ),
+    ]
+
+    for asset_type, protocol, role_category, role_text, strategy_title in samples:
+        profile = _fallback_profile(
+            f"sid-{asset_type}",
+            {
+                "session_id": f"sid-{asset_type}",
+                "asset_key": f"{asset_type}:{protocol}:10.0.0.3:22",
+                "host": "10.0.0.3",
+                "port": 22,
+                "asset_type": asset_type,
+                "protocol": protocol,
+                "tags": [],
+            },
+            {"checks": []},
+            "fallback",
+        )
+
+        assert profile["role_category"] == role_category, asset_type
+        assert role_text in profile["role_label"], asset_type
+        assert profile["focus_areas"][0]["priority"] == "P0"
+        assert profile["relation_strategies"][0]["title"] == strategy_title
+        assert "Linux/Unix 主机" not in profile["role_label"]
+
+
+def test_normalize_profile_corrects_stale_protocol_fallback_for_catalog_assets():
+    context = {
+        "session_id": "sid-h3c",
+        "asset_key": "h3c_switch:ssh:10.0.0.3:22",
+        "host": "10.0.0.3",
+        "port": 22,
+        "asset_type": "h3c_switch",
+        "protocol": "ssh",
+        "tags": [],
+    }
+    profile = _normalize_profile(
+        {
+            "role_label": "Linux/Unix 主机",
+            "role_category": "linux",
+            "purpose": "旧画像按 SSH 协议误判为 Linux 主机。",
+            "relation_strategies": [
+                {
+                    "direction": "inbound",
+                    "title": "业务/用户到主机的连接",
+                    "method": "通过 ss/netstat 读取监听端口。",
+                    "evidence": "ss -lntup",
+                    "tool_hint": "ssh_execute_command",
+                }
+            ],
+        },
+        context,
+    )
+
+    assert profile["role_category"] == "network"
+    assert "网络" in profile["role_label"]
+    assert profile["relation_strategies"][0]["title"] == "网络邻居与上下联"
+    assert "ssh_execute_command" not in profile["relation_strategies"][0]["tool_hint"]
 
 
 def test_fallback_profile_raises_risk_for_multiple_failed_checks():

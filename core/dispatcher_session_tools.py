@@ -7,7 +7,12 @@ import json
 import logging
 from typing import Any
 
-from core.asset_protocols import NETWORK_CLI_ASSET_TYPES, STORAGE_ASSET_TYPES, resolve_asset_identity
+from core.asset_protocols import (
+    MIDDLEWARE_ASSET_TYPES,
+    NETWORK_SSH_ASSET_TYPES,
+    STORAGE_SSH_ASSET_TYPES,
+    resolve_asset_identity,
+)
 from core.safety_policy import check_readonly_block
 from core.tool_policy_response import blocked_tool_response
 
@@ -24,8 +29,6 @@ SESSION_TOOL_NAMES = SSH_COMMAND_TOOL_NAMES | {
     "list_active_sessions",
     "dispatch_sub_agents",
 }
-STORAGE_SSH_ASSET_TYPES = {item for item in STORAGE_ASSET_TYPES if item in {"ceph", "nfs", "hdfs", "glusterfs"}}
-
 
 async def execute_session_tool(
     tool_call_name: str,
@@ -65,7 +68,7 @@ async def _execute_ssh_command(tool_call_name: str, args: dict[str, Any], contex
             {"status": "ERROR", "error": f"当前资产协议是 {identity['protocol']}，不能使用 {tool_call_name}；请使用对应的原生协议工具。"},
             ensure_ascii=False,
         )
-    if identity["asset_type"] in NETWORK_CLI_ASSET_TYPES:
+    if identity["asset_type"] in NETWORK_SSH_ASSET_TYPES:
         return json.dumps(
             {
                 "status": "ERROR",
@@ -81,11 +84,27 @@ async def _execute_ssh_command(tool_call_name: str, args: dict[str, Any], contex
             },
             ensure_ascii=False,
         )
+    if tool_call_name == "linux_execute_command" and identity["asset_type"] in MIDDLEWARE_ASSET_TYPES:
+        return json.dumps(
+            {
+                "status": "ERROR",
+                "error": "当前资产是中间件主机，不能使用通用 Linux 命令工具；请使用 middleware_execute_command。",
+            },
+            ensure_ascii=False,
+        )
     if tool_call_name == "storage_execute_command" and identity["asset_type"] not in STORAGE_SSH_ASSET_TYPES:
         return json.dumps(
             {
                 "status": "ERROR",
-                "error": "storage_execute_command 仅用于 Ceph/NFS/HDFS/GlusterFS 等存储节点；当前资产请使用对应协议工具。",
+                "error": "storage_execute_command 仅用于 Ceph/NFS/NAS/HDFS/GlusterFS 等存储节点；当前资产请使用对应协议工具。",
+            },
+            ensure_ascii=False,
+        )
+    if tool_call_name == "middleware_execute_command" and identity["asset_type"] not in MIDDLEWARE_ASSET_TYPES:
+        return json.dumps(
+            {
+                "status": "ERROR",
+                "error": "middleware_execute_command 仅用于 Nginx/Tomcat/Kafka/RocketMQ/ZooKeeper/进程等中间件主机；当前资产请使用对应协议工具。",
             },
             ensure_ascii=False,
         )

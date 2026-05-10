@@ -233,7 +233,11 @@ class TestInspectionTemplates(unittest.TestCase):
         store_path = self._store_path("builtin_network_virtualization")
         with patch.object(inspection_templates, "TEMPLATE_STORE_PATH", store_path):
             network = inspection_templates.find_matching_template("firewall", "ssh")
+            h3c = inspection_templates.find_matching_template("h3c_switch", "ssh")
             snmp = inspection_templates.find_matching_template("nas", "snmp")
+            nas = inspection_templates.find_matching_template("nas", "ssh")
+            synology = inspection_templates.find_matching_template("synology_nas", "ssh")
+            process = inspection_templates.find_matching_template("process", "ssh")
             vmware = inspection_templates.find_matching_template("vmware", "vmware")
             proxmox = inspection_templates.find_matching_template("proxmox", "proxmox")
             kvm = inspection_templates.find_matching_template("kvm", "ssh")
@@ -242,6 +246,7 @@ class TestInspectionTemplates(unittest.TestCase):
             backup = inspection_templates.find_matching_template("backup", "backup")
 
         self.assertEqual(network["id"], "builtin-network-cli-core-readonly")
+        self.assertEqual(h3c["id"], "builtin-network-cli-core-readonly")
         self.assertEqual({step["tool"] for step in network["steps"]}, {"network_cli_execute_command"})
         self.assertTrue(
             {"version", "interfaces", "interface_errors", "neighbors"}.issubset(
@@ -252,6 +257,11 @@ class TestInspectionTemplates(unittest.TestCase):
         self.assertEqual(snmp["id"], "builtin-snmp-core-readonly")
         self.assertEqual({step["tool"] for step in snmp["steps"]}, {"snmp_get"})
         self.assertIn("1.3.6.1.2.1.1.1.0", {step["oid"] for step in snmp["steps"]})
+        self.assertEqual(nas["id"], "builtin-nas-ssh-core-readonly")
+        self.assertEqual(synology["id"], "builtin-nas-ssh-core-readonly")
+        self.assertEqual({step["tool"] for step in nas["steps"]}, {"storage_execute_command"})
+        self.assertEqual(process["id"], "builtin-middleware-shell-core-readonly")
+        self.assertEqual({step["tool"] for step in process["steps"]}, {"middleware_execute_command"})
 
         self.assertEqual(vmware["id"], "builtin-vmware-core-readonly")
         self.assertEqual(proxmox["id"], "builtin-proxmox-core-readonly")
@@ -549,13 +559,13 @@ class TestInspectionTemplates(unittest.TestCase):
         from core import inspection_templates, session_inspector
 
         fake_sessions = {
-            "sid-firewall": {
+            "sid-h3c": {
                 "info": {
-                    "host": "firewall.local",
+                    "host": "h3c.local",
                     "port": 22,
                     "username": "admin",
                     "password": "secret",
-                    "asset_type": "firewall",
+                    "asset_type": "h3c_switch",
                     "protocol": "ssh",
                     "extra_args": {},
                 }
@@ -578,12 +588,92 @@ class TestInspectionTemplates(unittest.TestCase):
             patch.object(inspection_templates, "TEMPLATE_STORE_PATH", store_path),
             patch.object(session_inspector, "ssh_manager", fake_ssh),
         ):
-            report = asyncio.run(session_inspector.inspect_session("sid-firewall"))
+            report = asyncio.run(session_inspector.inspect_session("sid-h3c"))
 
         self.assertEqual(report["status"], "success")
         self.assertEqual(report["profile"], "template")
         self.assertEqual(report["template_id"], "builtin-network-cli-core-readonly")
         self.assertTrue(any("lldp" in command.lower() for command in fake_ssh.commands))
+
+    def test_inspector_uses_builtin_storage_template_for_nas_ssh_subtypes(self):
+        from core import inspection_templates, session_inspector
+
+        fake_sessions = {
+            "sid-nas": {
+                "info": {
+                    "host": "nas.local",
+                    "port": 22,
+                    "username": "admin",
+                    "password": "secret",
+                    "asset_type": "nas",
+                    "protocol": "ssh",
+                    "extra_args": {},
+                }
+            }
+        }
+
+        class FakeSSH:
+            active_sessions = fake_sessions
+
+            def __init__(self):
+                self.commands = []
+
+            def execute_command(self, session_id, command, timeout=None):
+                self.commands.append(command)
+                return {"success": True, "output": command, "exit_status": 0}
+
+        fake_ssh = FakeSSH()
+        store_path = self._store_path("builtin_nas_inspector")
+        with (
+            patch.object(inspection_templates, "TEMPLATE_STORE_PATH", store_path),
+            patch.object(session_inspector, "ssh_manager", fake_ssh),
+        ):
+            report = asyncio.run(session_inspector.inspect_session("sid-nas"))
+
+        self.assertEqual(report["status"], "success")
+        self.assertEqual(report["profile"], "template")
+        self.assertEqual(report["template_id"], "builtin-nas-ssh-core-readonly")
+        self.assertTrue(any("df -hT" in command for command in fake_ssh.commands))
+
+    def test_inspector_uses_builtin_middleware_template_for_process_shell_subtypes(self):
+        from core import inspection_templates, session_inspector
+
+        fake_sessions = {
+            "sid-process": {
+                "info": {
+                    "host": "process.local",
+                    "port": 22,
+                    "username": "ops",
+                    "password": "secret",
+                    "asset_type": "process",
+                    "protocol": "ssh",
+                    "extra_args": {},
+                }
+            }
+        }
+
+        class FakeSSH:
+            active_sessions = fake_sessions
+
+            def __init__(self):
+                self.commands = []
+
+            def execute_command(self, session_id, command, timeout=None):
+                self.commands.append(command)
+                return {"success": True, "output": command, "exit_status": 0}
+
+        fake_ssh = FakeSSH()
+        store_path = self._store_path("builtin_process_inspector")
+        with (
+            patch.object(inspection_templates, "TEMPLATE_STORE_PATH", store_path),
+            patch.object(session_inspector, "ssh_manager", fake_ssh),
+        ):
+            report = asyncio.run(session_inspector.inspect_session("sid-process"))
+
+        self.assertEqual(report["status"], "success")
+        self.assertEqual(report["profile"], "template")
+        self.assertEqual(report["template_id"], "builtin-middleware-shell-core-readonly")
+        self.assertTrue(any("ps -eo" in command for command in fake_ssh.commands))
 
 
 if __name__ == "__main__":

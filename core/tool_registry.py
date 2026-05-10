@@ -28,6 +28,7 @@ from core.asset_protocols import (
     MONITORING_ASSET_TYPES,
     NETWORK_API_ASSET_TYPES,
     NETWORK_CLI_ASSET_TYPES,
+    NETWORK_SSH_ASSET_TYPES,
     OOB_API_ASSET_TYPES,
     SECURITY_API_ASSET_TYPES,
     SERVICE_ASSET_TYPES,
@@ -35,6 +36,7 @@ from core.asset_protocols import (
     SQL_PROTOCOLS,
     STORAGE_API_PROTOCOLS,
     STORAGE_ASSET_TYPES,
+    STORAGE_SSH_ASSET_TYPES,
     VIRTUALIZATION_ASSET_TYPES,
     VIRTUALIZATION_API_PROTOCOLS,
     resolve_asset_identity,
@@ -42,7 +44,6 @@ from core.asset_protocols import (
 
 
 JsonSchema = dict[str, Any]
-STORAGE_SSH_ASSET_TYPES = {item for item in STORAGE_ASSET_TYPES if item in {"ceph", "nfs", "hdfs", "glusterfs"}}
 STORAGE_API_ASSET_TYPES = set(STORAGE_ASSET_TYPES) - STORAGE_SSH_ASSET_TYPES - {"nas"}
 SERVICE_PROBE_ASSET_TYPES = set(SERVICE_ASSET_TYPES) | {
     "dns_sd",
@@ -433,7 +434,7 @@ def _register_builtin_tools() -> None:
             toolset="network-cli",
             scope="asset",
             protocols={"ssh"},
-            asset_types=set(NETWORK_CLI_ASSET_TYPES),
+            asset_types=set(NETWORK_SSH_ASSET_TYPES),
             safety_category="network_cli",
             description="当前已连接交换机/路由器/防火墙/VPN SSH CLI；直接执行 display/show/ping 等巡检命令，凭据由资产中心注入。",
             parameters=_obj({"command": {"type": "string"}}, ["command"]),
@@ -445,7 +446,7 @@ def _register_builtin_tools() -> None:
             toolset="linux-ssh",
             scope="asset",
             protocols={"ssh"},
-            excluded_asset_types=set(NETWORK_CLI_ASSET_TYPES) | STORAGE_SSH_ASSET_TYPES,
+            excluded_asset_types=set(NETWORK_SSH_ASSET_TYPES) | STORAGE_SSH_ASSET_TYPES | set(MIDDLEWARE_ASSET_TYPES),
             safety_category="linux",
             description="当前已连接 Linux/Unix/KVM SSH 会话；直接在目标资产执行 CLI/巡检命令，凭据由资产中心注入。",
             parameters=_obj({"command": {"type": "string"}}, ["command"]),
@@ -494,7 +495,7 @@ def _register_builtin_tools() -> None:
             protocols={"ssh"},
             asset_types=STORAGE_SSH_ASSET_TYPES,
             safety_category="linux",
-            description="当前已连接存储节点；执行 Ceph/NFS/HDFS/GlusterFS 等只读巡检命令。",
+            description="当前已连接存储节点；执行 Ceph/NFS/NAS/HDFS/GlusterFS 等只读巡检命令。",
             parameters=_obj({"command": {"type": "string"}}, ["command"]),
         )
     )

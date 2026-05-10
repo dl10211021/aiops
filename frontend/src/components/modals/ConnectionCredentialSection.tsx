@@ -56,7 +56,10 @@ export default function ConnectionCredentialSection({
           <input
             type="number"
             value={port}
-            onChange={(event) => onPortChange(parseInt(event.target.value) || 22)}
+            onChange={(event) => {
+              const nextPort = Number.parseInt(event.target.value, 10)
+              onPortChange(Number.isFinite(nextPort) ? nextPort : 0)
+            }}
             className="ops-control mt-1 w-full px-3 py-2 text-sm"
           />
         </div>

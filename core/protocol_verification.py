@@ -12,6 +12,8 @@ from typing import Any
 
 from core.asset_protocols import (
     API_PROTOCOLS,
+    MIDDLEWARE_ASSET_TYPES,
+    NETWORK_SSH_ASSET_TYPES,
     SERVICE_ASSET_TYPES,
     SERVICE_PROBE_PROTOCOLS,
     SQL_PROTOCOLS,
@@ -147,8 +149,12 @@ def _active_tool_details(active_tools: list[str]) -> list[dict[str, Any]]:
 def _access_method_label(asset_type: str, protocol: str) -> str:
     if protocol == "virtual":
         return "虚拟会话能力"
-    if protocol == "ssh" and asset_type in {"switch", "router", "firewall", "f5", "a10", "waf", "vpn"}:
+    if protocol == "ssh" and asset_type in NETWORK_SSH_ASSET_TYPES:
         return "网络设备 SSH CLI"
+    if protocol == "ssh" and asset_type in STORAGE_ASSET_TYPES:
+        return "存储设备 SSH CLI"
+    if protocol == "ssh" and asset_type in MIDDLEWARE_ASSET_TYPES:
+        return "中间件主机 SSH Shell"
     if protocol == "ssh":
         return "SSH Shell"
     if protocol == "winrm":

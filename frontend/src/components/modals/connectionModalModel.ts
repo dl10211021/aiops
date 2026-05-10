@@ -1,4 +1,4 @@
-import type { AssetParamDefinition } from '@/types'
+import type { AssetAccessProtocol, AssetParamDefinition } from '@/types'
 import type {
   AssetCategoryOption,
   AssetSubType,
@@ -29,6 +29,32 @@ export function getProtocolForSubType(
   return assetSubTypes[category]?.find((item) => item.id === subType)?.asset_type || subType
 }
 
+export function operationAccessProtocols(subInfo?: AssetSubType): AssetAccessProtocol[] {
+  const protocols = (subInfo?.access_protocols || []).filter((item) => (item.purpose || 'operation') === 'operation')
+  if (protocols.length > 0) return protocols
+  if (!subInfo) return []
+  return [{
+    protocol: subInfo.asset_type,
+    label: subInfo.asset_type.toUpperCase(),
+    purpose: 'operation',
+    purpose_label: '运维接入',
+    role: 'default',
+    role_label: '默认',
+    source: '资产类型默认协议',
+    default_port: subInfo.defaultPort,
+    is_default: true,
+    supported: true,
+  }]
+}
+
+function resolveCurrentProtocol(subInfo: AssetSubType | undefined, requestedProtocol: string) {
+  const protocols = operationAccessProtocols(subInfo)
+  if (requestedProtocol && protocols.some((item) => item.protocol === requestedProtocol)) {
+    return requestedProtocol
+  }
+  return protocols.find((item) => item.is_default)?.protocol || subInfo?.asset_type || requestedProtocol
+}
+
 export function buildConnectionExtraArgs(
   category: string,
   subInfo: AssetSubType,
@@ -56,12 +82,14 @@ export function buildConnectionModalModel({
   databaseDrivers: Record<string, DatabaseDriverCapability>
   form: ConnectionFormState
 }) {
-  const currentProtocol = getProtocolForSubType(assetSubTypes, form.category, form.sub_type)
   const selectedSubInfo = assetSubTypes[form.category]?.find((item) => item.id === form.sub_type)
-  const selectedConnectorLabel = selectedSubInfo?.capability?.connector_group?.label || selectedSubInfo?.capability?.connector || currentProtocol
-  const selectedConnectorGroup = selectedSubInfo?.capability?.connector_group?.group || '连接方式'
+  const accessProtocolOptions = operationAccessProtocols(selectedSubInfo)
+  const currentProtocol = resolveCurrentProtocol(selectedSubInfo, form.protocol)
+  const currentAccessProtocol = accessProtocolOptions.find((item) => item.protocol === currentProtocol)
+  const selectedConnectorLabel = currentAccessProtocol?.label || selectedSubInfo?.capability?.connector_group?.label || selectedSubInfo?.capability?.connector || currentProtocol
+  const selectedConnectorGroup = currentAccessProtocol?.purpose_label || selectedSubInfo?.capability?.connector_group?.group || '连接方式'
   const selectedMaturity = selectedSubInfo?.capability?.maturity || 'generic'
-  const selectedTools = selectedSubInfo?.capability?.tools || selectedSubInfo?.capability?.connector_group?.tools || []
+  const selectedTools = toolsForCurrentProtocol(form.category, currentProtocol, selectedSubInfo)
   const selectedToolDetails = selectedSubInfo?.capability?.tool_details?.length
     ? selectedSubInfo.capability.tool_details
     : selectedTools.map((name) => ({ name }))
@@ -87,7 +115,8 @@ export function buildConnectionModalModel({
   const normalizedAssetTypeSearch = assetTypeSearch.trim().toLowerCase()
   const searchedSubTypeOptions = normalizedAssetTypeSearch
     ? subTypeOptions.filter((item) => {
-        const haystack = `${item.id} ${item.label} ${item.asset_type} ${item.capability?.connector_group?.label || ''}`.toLowerCase()
+        const accessText = (item.access_protocols || []).map((protocol) => `${protocol.protocol} ${protocol.label}`).join(' ')
+        const haystack = `${item.id} ${item.label} ${item.asset_type} ${accessText} ${item.capability?.connector_group?.label || ''}`.toLowerCase()
         return haystack.includes(normalizedAssetTypeSearch)
       })
     : subTypeOptions
@@ -110,7 +139,9 @@ export function buildConnectionModalModel({
 
   return {
     authVisibility,
+    accessProtocolOptions,
     categoryGroups,
+    currentAccessProtocol,
     currentProtocol,
     databaseDriverInfo,
     extensionParamGroups,
@@ -133,6 +164,32 @@ export function buildConnectionModalModel({
     subTypeGroups,
     subTypeOptions,
   }
+}
+
+function toolsForCurrentProtocol(category: string, currentProtocol: string, subInfo?: AssetSubType) {
+  const defaultTools = subInfo?.capability?.tools || subInfo?.capability?.connector_group?.tools || []
+  if (currentProtocol === subInfo?.asset_type) return defaultTools
+  if (currentProtocol === 'ssh') {
+    if (category === 'network') return ['network_cli_execute_command']
+    if (category === 'storage') return ['storage_execute_command']
+    if (category === 'middleware') return ['middleware_execute_command']
+    if (category === 'container') return ['container_execute_command']
+    return ['linux_execute_command']
+  }
+  if (currentProtocol === 'http_api') {
+    if (category === 'network') return ['network_api_request']
+    if (category === 'monitor') return ['monitoring_api_query']
+    if (category === 'container') return ['container_api_request']
+    if (category === 'middleware') return ['middleware_api_request']
+    if (category === 'bigdata') return ['bigdata_api_request']
+    if (category === 'security') return ['security_api_request']
+    if (category === 'oob') return ['oob_api_request']
+    if (category === 'discovery') return ['discovery_api_request']
+    if (category === 'ai') return ['ai_platform_api_request']
+    if (category === 'cicd') return ['cicd_api_request']
+    return ['http_api_request']
+  }
+  return defaultTools
 }
 
 function defaultsFromParams(params: AssetParamDefinition[] = []) {

@@ -62,23 +62,58 @@ def _asset_label(asset_type: str, protocol: str) -> str:
 
 
 def _role_for(asset_type: str, protocol: str) -> tuple[str, str]:
-    database = {"oracle", "mysql", "postgresql", "mssql", "sqlserver", "mariadb", "db2", "clickhouse"}
-    cache = {"redis", "memcached", "mongodb", "elasticsearch"}
-    network = {"switch", "router", "firewall", "load_balancer", "f5", "network_device"}
-    storage = {"s3", "minio", "oss", "cos", "obs", "storage", "nas", "san", "ceph"}
-    virtualization = {"vmware", "proxmox", "openstack", "zstack", "kvm", "hyperv"}
+    definition = get_asset_definition(asset_type)
+    category = str((definition or {}).get("category") or "").lower()
+    database_protocols = {
+        "oracle",
+        "mysql",
+        "postgresql",
+        "mssql",
+        "sqlserver",
+        "db2",
+        "dameng",
+        "xugu",
+        "hive",
+        "iotdb",
+        "clickhouse",
+        "elasticsearch",
+        "nebula_graph",
+    }
+    datastore_protocols = {"redis", "memcached", "mongodb"}
     os_hosts = {"linux", "ssh", "redhat", "centos", "ubuntu", "debian", "windows"}
 
-    if protocol in database or asset_type in database:
-        return "数据库服务", "database"
-    if protocol in cache or asset_type in cache:
+    if category == "db" and (protocol in datastore_protocols or asset_type in datastore_protocols):
         return "数据/缓存服务", "datastore"
-    if asset_type in network or protocol in {"snmp", "network_cli"}:
+    if category == "db" or protocol in database_protocols:
+        return "数据库服务", "database"
+    if protocol in datastore_protocols or asset_type in datastore_protocols:
+        return "数据/缓存服务", "datastore"
+    if category == "network" or protocol in {"network_cli"}:
         return "网络与安全设备", "network"
-    if asset_type in storage:
+    if category == "storage":
         return "存储服务", "storage"
-    if asset_type in virtualization:
+    if category == "middleware":
+        return "中间件/应用支撑", "middleware"
+    if category == "bigdata":
+        return "大数据/分析平台", "bigdata"
+    if category == "container":
+        return "容器/云原生平台", "container"
+    if category == "virtualization":
         return "虚拟化/云平台", "virtualization"
+    if category == "monitor":
+        return "监控告警平台", "monitor"
+    if category == "service":
+        return "应用/网络服务", "service"
+    if category == "discovery":
+        return "服务发现/注册中心", "discovery"
+    if category == "oob":
+        return "硬件带外管理", "oob"
+    if category == "security":
+        return "安全/身份平台", "security"
+    if category == "ai":
+        return "AI/模型平台", "ai"
+    if category == "cicd":
+        return "CI/CD 发布平台", "cicd"
     if protocol == "winrm" or asset_type == "windows":
         return "Windows 主机", "windows"
     if protocol == "ssh" or asset_type in os_hosts:
@@ -276,16 +311,46 @@ def _relation_strategy_for(context: dict[str, Any]) -> list[dict[str, str]]:
             item("inbound", "管理入口", "检查 SSH/Telnet/SNMP 管理会话和 ACL，区分运维入口与业务转发流量。", "show users、show ssh、snmp session、ACL/VTY 配置", "network_cli_execute_command"),
         ]
 
+    if role_category == "storage":
+        return [
+            item("inbound", "业务到存储的访问", "读取导出、共享、Bucket、卷或客户端连接，确认哪些业务主机正在访问该存储。", "NFS exports、SMB sessions、ceph status、bucket policy、NAS 会话/日志", "storage_execute_command / storage_api_request"),
+            item("outbound", "存储到下游依赖", "检查复制、备份、远端池、对象存储网关、DNS/NTP/认证等外部依赖。", "复制任务、远端集群、备份任务、认证/时间同步配置", "storage_execute_command / storage_api_request"),
+        ]
+
+    if role_category == "middleware":
+        return [
+            item("inbound", "业务到中间件的连接", "读取监听端口、客户端连接、Topic/Queue/Consumer、访问日志和服务注册信息。", "ss/netstat、broker/client stats、consumer group、访问日志", "middleware_execute_command / middleware_api_request"),
+            item("outbound", "中间件到下游依赖", "检查配置文件、注册中心、数据库连接、集群节点和外部 API 依赖。", "配置文件、集群成员、注册中心、连接池、错误日志", "middleware_execute_command / middleware_api_request"),
+        ]
+
+    if role_category == "bigdata":
+        return [
+            item("inbound", "作业/用户到大数据平台", "读取队列、作业、提交端、租户和用户维度，确认谁在使用该集群或组件。", "YARN/Spark/Flink/调度平台 API、作业历史、队列指标", "bigdata_api_request / db_execute_query"),
+            item("outbound", "大数据平台到存储/元数据依赖", "检查 HDFS、Hive Metastore、对象存储、数据库、调度器和外部 Catalog 依赖。", "metastore、catalog、warehouse、HDFS/ObjectStore、调度任务", "bigdata_api_request / db_execute_query"),
+        ]
+
+    if role_category == "container":
+        return [
+            item("inbound", "用户/流水线到容器平台", "读取集群事件、API 审计、镜像仓库访问和工作负载变更记录。", "K8s events/audit、Harbor project、runtime logs、部署记录", "k8s_api_request / container_execute_command"),
+            item("outbound", "容器平台到外部依赖", "识别镜像仓库、存储类、服务发现、Ingress/Service、外部数据库和 API。", "Service/Ingress、PVC/StorageClass、image registry、Pod env/config", "k8s_api_request / container_execute_command"),
+        ]
+
     if role_category == "virtualization":
         return [
             item("inbound", "平台管理与租户访问", "通过平台 API 读取管理连接、集群、宿主机、虚拟机和租户入口。", "vCenter/ESXi/云平台 API 会话、任务、事件", "virtualization_api_request"),
             item("outbound", "虚拟化平台下游", "读取宿主机、存储、网络、备份和镜像仓库依赖。", "host/datastore/network/task/event API", "virtualization_api_request"),
         ]
 
-    if role_category == "api":
+    if role_category in {"api", "service", "discovery"}:
         return [
             item("inbound", "业务到 API 的调用", "通过访问日志、网关日志、请求头和证书信息确认调用方。", "HTTP access log、gateway log、TLS cert、request headers", "service_probe_request / http_api_request"),
             item("outbound", "API 到下游服务", "结合配置、健康检查、调用日志和依赖接口列表识别下游。", "配置只读读取、健康检查、应用日志、OpenAPI/Swagger", "http_api_request"),
+        ]
+
+    if role_category in {"monitor", "security", "oob", "ai", "cicd"}:
+        return [
+            item("inbound", "平台使用方与采集入口", "读取登录/审计/任务/采集目标，确认哪些系统、用户或 Agent 正在调用该平台。", "审计日志、API token 使用、采集目标、任务/告警事件", "当前资产协议工具"),
+            item("outbound", "平台管理或采集的对象", "读取目标清单、规则、任务、Webhook、通知和外部系统配置，确认平台连接到哪些对象。", "targets、rules、jobs、webhook、integration、endpoint list", "当前资产协议工具"),
         ]
 
     return [
@@ -329,6 +394,8 @@ def _normalize_relations(value: Any) -> list[dict[str, Any]]:
 
 def _normalize_relation_strategies(value: Any, context: dict[str, Any]) -> list[dict[str, str]]:
     source = value if isinstance(value, list) and value else _relation_strategy_for(context)
+    if _looks_like_stale_relation_strategy(source, context):
+        source = _relation_strategy_for(context)
     normalized: list[dict[str, str]] = []
     allowed = {"inbound", "outbound", "bidirectional", "unknown"}
     for item in source[:6]:
@@ -353,6 +420,50 @@ def _normalize_relation_strategies(value: Any, context: dict[str, Any]) -> list[
             }
         )
     return normalized
+
+
+def _looks_like_stale_relation_strategy(source: Any, context: dict[str, Any]) -> bool:
+    if not isinstance(source, list) or not source:
+        return False
+    _, role_category = _role_for(
+        str(context.get("asset_type") or ""),
+        str(context.get("protocol") or ""),
+    )
+    if role_category in {"linux", "windows", "api", "general"}:
+        return False
+    joined = "\n".join(
+        " ".join(str(item.get(field) or "") for field in ("title", "method", "evidence", "tool_hint"))
+        for item in source
+        if isinstance(item, dict)
+    ).lower()
+    stale_markers = {
+        "ssh_execute_command",
+        "winrm_execute_command",
+        "ss -lntup",
+        "get-nettcpconnection",
+        "业务/用户到主机",
+        "windows 到下游",
+        "http access log",
+    }
+    return any(marker in joined for marker in stale_markers)
+
+
+def _normalized_role_fields(profile: dict[str, Any], context: dict[str, Any]) -> tuple[str, str]:
+    role_label, role_category = _role_for(
+        str(context.get("asset_type") or ""),
+        str(context.get("protocol") or ""),
+    )
+    profile_label = str(profile.get("role_label") or "").strip()
+    profile_category = str(profile.get("role_category") or "").strip().lower()
+    fallback_categories = {"", "linux", "windows", "api", "general"}
+    stale_labels = {"linux/unix 主机", "linux 主机", "windows 主机", "http/api 服务", "运维资产"}
+    catalog_specific = role_category not in {"linux", "windows", "api", "general"}
+    if catalog_specific and (
+        profile_category in fallback_categories
+        or profile_label.strip().lower() in stale_labels
+    ):
+        return role_label, role_category
+    return (profile_label or role_label)[:80], (profile_category or role_category)[:60]
 
 
 def _fallback_profile(
@@ -392,6 +503,18 @@ def _fallback_profile(
         focus_areas.insert(0, {"title": "系统服务与安全日志", "reason": "优先确认 failed units、认证失败、磁盘挂载和关键进程。", "priority": "P0"})
     elif role_category == "network":
         focus_areas.insert(0, {"title": "接口与邻居稳定性", "reason": "优先检查接口错误、STP/ARP、路由和防火墙策略。", "priority": "P0"})
+    elif role_category == "storage":
+        focus_areas.insert(0, {"title": "容量与数据保护", "reason": "优先检查容量水位、卷/池状态、复制、快照和备份任务。", "priority": "P0"})
+    elif role_category == "middleware":
+        focus_areas.insert(0, {"title": "进程、端口和业务队列", "reason": "优先检查服务进程、监听端口、队列/Topic、集群状态和近期错误日志。", "priority": "P0"})
+    elif role_category == "bigdata":
+        focus_areas.insert(0, {"title": "集群组件与作业状态", "reason": "优先检查组件健康、作业失败、队列资源、元数据和存储依赖。", "priority": "P0"})
+    elif role_category == "container":
+        focus_areas.insert(0, {"title": "工作负载与节点状态", "reason": "优先检查节点、Pod/容器、事件、镜像仓库和存储挂载。", "priority": "P0"})
+    elif role_category == "virtualization":
+        focus_areas.insert(0, {"title": "集群、宿主机和存储", "reason": "优先检查宿主机状态、资源池、Datastore、虚机告警和快照风险。", "priority": "P0"})
+    elif role_category in {"monitor", "security", "oob", "ai", "cicd", "service", "discovery", "api"}:
+        focus_areas.insert(0, {"title": "平台连通与外部依赖", "reason": "优先检查 API/协议连通、认证状态、目标清单、规则/任务和外部集成。", "priority": "P0"})
 
     risk_level = "high" if len(failed) >= 3 else ("watch" if failed else "normal")
     return _normalize_profile(
@@ -424,7 +547,7 @@ def _fallback_profile(
 
 
 def _normalize_profile(profile: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-    role_label, role_category = _role_for(str(context.get("asset_type") or ""), str(context.get("protocol") or ""))
+    role_label, role_category = _normalized_role_fields(profile, context)
     normalized = {
         "version": PROFILE_VERSION,
         "session_id": context.get("session_id"),
@@ -434,8 +557,8 @@ def _normalize_profile(profile: dict[str, Any], context: dict[str, Any]) -> dict
         "remark": context.get("remark") or "",
         "asset_type": context.get("asset_type") or profile.get("asset_type") or "",
         "protocol": context.get("protocol") or profile.get("protocol") or "",
-        "role_label": str(profile.get("role_label") or role_label)[:80],
-        "role_category": str(profile.get("role_category") or role_category)[:60],
+        "role_label": role_label,
+        "role_category": role_category,
         "purpose": str(profile.get("purpose") or "")[:700],
         "confidence": int(profile.get("confidence") or 50),
         "risk_level": str(profile.get("risk_level") or "watch"),

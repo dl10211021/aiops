@@ -1,7 +1,7 @@
 import { toolLabel } from '@/utils/assetDisplay'
-import type { ToolDisplayDetail } from '@/types'
+import type { AssetAccessProtocol, ToolDisplayDetail } from '@/types'
 import { MATURITY_LABELS } from './connectionModalHelpers'
-import type { AssetCategoryOption, AssetSubType } from './connectionModalHelpers'
+import type { AssetCatalogStatus, AssetCategoryOption, AssetSubType } from './connectionModalHelpers'
 
 interface OptionGroup<T> {
   group: string
@@ -11,9 +11,12 @@ interface OptionGroup<T> {
 interface ConnectionAssetTypeSelectorProps {
   assetCategories: AssetCategoryOption[]
   assetTypeSearch: string
+  catalogStatus: AssetCatalogStatus
   category: string
   categoryGroups: Array<OptionGroup<AssetCategoryOption>>
+  currentAccessProtocol?: AssetAccessProtocol
   currentProtocol: string
+  accessProtocolOptions: AssetAccessProtocol[]
   filteredSubTypeOptions: AssetSubType[]
   normalizedAssetTypeSearch: string
   searchedSubTypeOptions: AssetSubType[]
@@ -28,6 +31,7 @@ interface ConnectionAssetTypeSelectorProps {
   subTypeGroups: Array<OptionGroup<AssetSubType>>
   subTypeOptions: AssetSubType[]
   onCategoryChange: (category: string) => void
+  onProtocolChange: (protocol: string) => void
   onSearchChange: (value: string) => void
   onSubTypeChange: (subType: string) => void
 }
@@ -35,9 +39,12 @@ interface ConnectionAssetTypeSelectorProps {
 export default function ConnectionAssetTypeSelector({
   assetCategories,
   assetTypeSearch,
+  catalogStatus,
   category,
   categoryGroups,
+  currentAccessProtocol,
   currentProtocol,
+  accessProtocolOptions,
   filteredSubTypeOptions,
   normalizedAssetTypeSearch,
   searchedSubTypeOptions,
@@ -52,12 +59,18 @@ export default function ConnectionAssetTypeSelector({
   subTypeGroups,
   subTypeOptions,
   onCategoryChange,
+  onProtocolChange,
   onSearchChange,
   onSubTypeChange,
 }: ConnectionAssetTypeSelectorProps) {
   const displayTools: ToolDisplayDetail[] = selectedToolDetails.length > 0
     ? selectedToolDetails
     : selectedTools.map((name) => ({ name }))
+  const catalogLabel = catalogStatus.loading
+    ? '目录加载中'
+    : catalogStatus.source === 'backend'
+      ? `后端真实目录 ${catalogStatus.total} 类`
+      : `离线兜底 ${catalogStatus.total} 类`
 
   return (
     <section className="ops-data-panel p-3">
@@ -68,9 +81,18 @@ export default function ConnectionAssetTypeSelector({
             当前分类 {subTypeOptions.length} 类资产，只展示 AI 运维最常用的登录、查询或 API 接入。
           </div>
         </div>
-        <span className="ops-control px-2 py-0.5 text-[10px] text-ops-subtext">
-          {currentProtocol.toUpperCase()}
-        </span>
+        <div className="flex flex-wrap justify-end gap-1.5">
+          <span className={`ops-control px-2 py-0.5 text-[10px] ${
+            catalogStatus.source === 'backend' && !catalogStatus.loading
+              ? 'text-ops-success'
+              : 'text-ops-alert'
+          }`}>
+            {catalogLabel}
+          </span>
+          <span className="ops-control px-2 py-0.5 text-[10px] text-ops-subtext">
+            {currentProtocol.toUpperCase()}
+          </span>
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -147,6 +169,28 @@ export default function ConnectionAssetTypeSelector({
                 {MATURITY_LABELS[selectedMaturity] || selectedMaturity}
               </span>
             </div>
+            {accessProtocolOptions.length > 1 && (
+              <div className="mt-3 grid gap-2 md:grid-cols-[180px_minmax(0,1fr)]">
+                <div>
+                  <label className="mb-1 block text-[11px] text-ops-overlay">接入协议</label>
+                  <select
+                    value={currentProtocol}
+                    onChange={(event) => onProtocolChange(event.target.value)}
+                    className="ops-control w-full appearance-none px-2.5 py-1.5 text-xs"
+                  >
+                    {accessProtocolOptions.map((item) => (
+                      <option key={`${item.protocol}-${item.purpose || 'operation'}`} value={item.protocol}>
+                        {item.label || item.protocol.toUpperCase()}
+                        {item.role === 'default' || item.is_default ? '（默认）' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="rounded bg-ops-surface0/55 px-2.5 py-2 text-[11px] leading-5 text-ops-subtext">
+                  {currentAccessProtocol?.description || '同一资产类型可按现场接入条件选择 SSH、API 等不同原生协议。'}
+                </div>
+              </div>
+            )}
             {selectedConnectionHint && (
               <p className="mt-2 rounded-lg bg-ops-surface0/55 px-2.5 py-2 text-[11px] leading-5 text-ops-subtext">
                 {selectedConnectionHint}

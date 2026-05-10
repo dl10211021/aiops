@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.asset_protocol_constants import NETWORK_CLI_ASSET_TYPES
+
 
 ALLOWED_TOOLS = {
     "linux_execute_command",
@@ -674,7 +676,7 @@ BUILTIN_TEMPLATES: list[dict[str, Any]] = [
         "id": "builtin-network-cli-core-readonly",
         "name": "网络设备 SSH CLI 核心只读巡检",
         "asset_type": "network_cli",
-        "asset_types": ["switch", "firewall", "vpn"],
+        "asset_types": sorted(NETWORK_CLI_ASSET_TYPES),
         "protocol": "ssh",
         "enabled": True,
         "builtin": True,
@@ -1303,6 +1305,79 @@ BUILTIN_TEMPLATES: list[dict[str, Any]] = [
                 "tool": "storage_execute_command",
                 "command": "gluster volume status all",
                 "timeout": 45,
+            },
+        ],
+    },
+    {
+        "id": "builtin-nas-ssh-core-readonly",
+        "name": "NAS / Synology SSH 核心只读巡检",
+        "asset_type": "nas",
+        "asset_types": ["nas", "synology_nas"],
+        "protocol": "ssh",
+        "enabled": True,
+        "builtin": True,
+        "readonly": True,
+        "steps": [
+            {
+                "name": "system",
+                "title": "系统与运行时间",
+                "tool": "storage_execute_command",
+                "command": "uname -a && uptime",
+                "timeout": 20,
+            },
+            {
+                "name": "capacity",
+                "title": "文件系统容量",
+                "tool": "storage_execute_command",
+                "command": "df -hT",
+                "timeout": 25,
+            },
+            {
+                "name": "mounts",
+                "title": "挂载与共享视图",
+                "tool": "storage_execute_command",
+                "command": "mount | head -100",
+                "timeout": 20,
+            },
+            {
+                "name": "ports",
+                "title": "监听端口",
+                "tool": "storage_execute_command",
+                "command": "ss -lntup | head -100",
+                "timeout": 20,
+            },
+        ],
+    },
+    {
+        "id": "builtin-middleware-shell-core-readonly",
+        "name": "中间件主机 SSH 核心只读巡检",
+        "asset_type": "middleware_shell",
+        "asset_types": ["nginx", "tomcat", "kafka", "rocketmq", "zookeeper", "process"],
+        "protocol": "ssh",
+        "enabled": True,
+        "builtin": True,
+        "readonly": True,
+        "steps": [
+            {
+                "name": "uptime",
+                "title": "主机运行时间",
+                "tool": "middleware_execute_command",
+                "command": "uptime",
+                "timeout": 15,
+            },
+            {
+                "name": "top_processes",
+                "title": "高占用进程",
+                "tool": "middleware_execute_command",
+                "command": "ps -eo pid,ppid,user,stat,pcpu,pmem,comm --sort=-pcpu | head -40",
+                "timeout": 20,
+            },
+            {
+                "name": "ports",
+                "title": "监听端口",
+                "tool": "middleware_execute_command",
+                "command": "ss -lntup | head -100",
+                "timeout": 20,
             },
         ],
     },

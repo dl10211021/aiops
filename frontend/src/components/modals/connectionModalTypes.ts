@@ -1,4 +1,4 @@
-import type { AssetParamDefinition, ToolDisplayDetail } from '@/types'
+import type { AssetAccessProtocol, AssetParamDefinition, ToolDisplayDetail } from '@/types'
 
 export type AssetCategoryOption = {
   id: string
@@ -15,6 +15,7 @@ export type AssetSubType = {
   authMode?: 'basic' | 'password_only' | 'custom_snmp' | 'none'
   source?: string
   hertzbeat_protocols?: string[]
+  access_protocols?: AssetAccessProtocol[]
   params?: AssetParamDefinition[]
   capability?: {
     family: string
@@ -32,6 +33,13 @@ export type AssetSubType = {
     }
     parameter_template?: AssetParamDefinition[]
   }
+}
+
+export type AssetCatalogStatus = {
+  source: 'backend' | 'fallback'
+  loading: boolean
+  total: number
+  error?: string
 }
 
 export type OracleClientConfig = {

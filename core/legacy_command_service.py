@@ -8,7 +8,7 @@ from core.asset_protocols import (
     API_PROTOCOLS,
     CONTAINER_ASSET_TYPES,
     MIDDLEWARE_ASSET_TYPES,
-    NETWORK_CLI_ASSET_TYPES,
+    NETWORK_SSH_ASSET_TYPES,
     SQL_PROTOCOLS,
     STORAGE_ASSET_TYPES,
     resolve_asset_identity,
@@ -50,7 +50,7 @@ def map_legacy_execute_tool_call(identity: dict[str, Any], command: str, tool_re
     asset_type = identity["asset_type"]
     command = str(command or "").strip()
 
-    if protocol == "ssh" and asset_type in NETWORK_CLI_ASSET_TYPES:
+    if protocol == "ssh" and asset_type in NETWORK_SSH_ASSET_TYPES:
         return "network_cli_execute_command", {"command": command}
     if protocol == "ssh" and asset_type in CONTAINER_ASSET_TYPES:
         return "container_execute_command", {"command": command}

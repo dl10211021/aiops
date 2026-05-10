@@ -1,3 +1,4 @@
+from core.asset_protocols import get_asset_catalog
 from core.slash_commands import COMMANDS, render_builtin_templates, render_slash_commands
 
 
@@ -63,6 +64,79 @@ def test_database_inspection_shortcuts_do_not_pollute_linux_sessions():
 
     assert "/db-inspect 数据库巡检" not in labels
     assert "/db-slow 慢SQL分析" not in labels
+
+
+def test_vendor_network_subtypes_get_network_shortcuts_not_linux_templates():
+    labels = labels_for({"asset_type": "h3c_switch", "protocol": "ssh", "host": "192.168.100.100"})
+
+    assert "/net-health 网络设备健康" in labels
+    assert "/services 服务状态" not in labels
+
+
+def test_storage_ssh_subtypes_get_storage_shortcuts():
+    labels = labels_for({"asset_type": "synology_nas", "protocol": "ssh", "host": "nas.local"})
+
+    assert "/storage 存储健康" in labels
+    assert "/services 服务状态" not in labels
+
+
+def test_middleware_shell_subtypes_get_middleware_shortcuts():
+    labels = labels_for({"asset_type": "process", "protocol": "ssh", "host": "app.local"})
+
+    assert "/middleware 中间件健康" in labels
+    assert "/services 服务状态" not in labels
+
+
+def test_middleware_probe_subtypes_get_middleware_shortcuts():
+    labels = labels_for({"asset_type": "kafka_client", "protocol": "kafka", "host": "kafka.local"})
+
+    assert "/middleware 中间件健康" in labels
+    assert "/api-health API 健康" not in labels
+
+
+def test_database_catalog_types_get_data_service_inspection_shortcut():
+    expected_samples = {
+        "clickhouse",
+        "db2",
+        "doris_fe",
+        "hive",
+        "iotdb",
+        "mongodb_atlas",
+        "redis_cluster",
+        "starrocks_fe",
+        "xugu",
+    }
+    by_id = {item["id"]: item for item in get_asset_catalog()}
+
+    for asset_id in expected_samples:
+        item = by_id[asset_id]
+        labels = labels_for({"asset_type": asset_id, "protocol": item["protocol"], "host": "db.local"})
+
+        assert "/db-inspect 数据库巡检" in labels, asset_id
+
+
+def test_category_specific_shortcuts_cover_current_asset_catalog():
+    required_by_category = {
+        "db": "/db-inspect 数据库巡检",
+        "middleware": "/middleware 中间件健康",
+        "network": "/net-health 网络设备健康",
+        "storage": "/storage 存储健康",
+        "container": "/container 容器平台健康",
+        "bigdata": "/bigdata 大数据健康",
+        "virtualization": "/vmware-health 虚拟化健康",
+        "monitor": "/alerts 告警摘要",
+        "service": "/service 服务探测",
+        "discovery": "/discovery 服务发现",
+        "security": "/security 安全平台健康",
+    }
+
+    for item in get_asset_catalog():
+        expected = required_by_category.get(item["category"])
+        if not expected:
+            continue
+        labels = labels_for({"asset_type": item["id"], "protocol": item["protocol"], "host": "asset.local"})
+
+        assert expected in labels, item["id"]
 
 
 def test_builtin_template_override_replaces_default_command():

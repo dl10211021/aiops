@@ -6,10 +6,13 @@ import asyncio
 import json
 from typing import Any
 
-from core.asset_protocols import NETWORK_CLI_ASSET_TYPES, STORAGE_ASSET_TYPES, resolve_asset_identity
+from core.asset_protocols import (
+    MIDDLEWARE_ASSET_TYPES,
+    NETWORK_SSH_ASSET_TYPES,
+    STORAGE_SSH_ASSET_TYPES,
+    resolve_asset_identity,
+)
 from core.safety_policy import check_hard_block, check_readonly_block
-
-STORAGE_SSH_ASSET_TYPES = {item for item in STORAGE_ASSET_TYPES if item in {"ceph", "nfs", "hdfs", "glusterfs"}}
 
 
 async def execute_on_scope_tool(args: dict[str, Any], context: dict[str, Any]) -> str:
@@ -62,10 +65,12 @@ async def execute_on_scope_tool(args: dict[str, Any], context: dict[str, Any]) -
 
     async def _run_single(target_session_id: str, target_host: str, target_asset_type: str):
         async with semaphore:
-            if target_asset_type in NETWORK_CLI_ASSET_TYPES:
+            if target_asset_type in NETWORK_SSH_ASSET_TYPES:
                 actual_tool = "network_cli_execute_command"
             elif target_asset_type in STORAGE_SSH_ASSET_TYPES:
                 actual_tool = "storage_execute_command"
+            elif target_asset_type in MIDDLEWARE_ASSET_TYPES:
+                actual_tool = "middleware_execute_command"
             else:
                 actual_tool = "linux_execute_command"
 

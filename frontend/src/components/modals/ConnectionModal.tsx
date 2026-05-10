@@ -14,21 +14,25 @@ export default function ConnectionModal() {
   const {
     assetCategories,
     assetTypeSearch,
+    accessProtocolOptions,
     oracleClientConfig,
     oracleThickDefaults,
     skills,
     authVisibility,
     canSubmitAsset,
+    catalogStatus,
     categoryGroups,
     closeModal,
     connecting,
     currentProtocol,
+    currentAccessProtocol,
     databaseDriverInfo,
     extensionParamGroups,
     filteredSubTypeOptions,
     form,
     handleCategoryChange,
     handleConnect,
+    handleProtocolChange,
     handleSaveOnly,
     handleSubTypeChange,
     handleTest,
@@ -82,9 +86,12 @@ export default function ConnectionModal() {
             <ConnectionAssetTypeSelector
               assetCategories={assetCategories}
               assetTypeSearch={assetTypeSearch}
+              catalogStatus={catalogStatus}
               category={form.category}
               categoryGroups={categoryGroups}
+              currentAccessProtocol={currentAccessProtocol}
               currentProtocol={currentProtocol}
+              accessProtocolOptions={accessProtocolOptions}
               filteredSubTypeOptions={filteredSubTypeOptions}
               normalizedAssetTypeSearch={normalizedAssetTypeSearch}
               searchedSubTypeOptions={searchedSubTypeOptions}
@@ -99,6 +106,7 @@ export default function ConnectionModal() {
               subTypeGroups={subTypeGroups}
               subTypeOptions={subTypeOptions}
               onCategoryChange={handleCategoryChange}
+              onProtocolChange={handleProtocolChange}
               onSearchChange={setAssetTypeSearch}
               onSubTypeChange={handleSubTypeChange}
             />

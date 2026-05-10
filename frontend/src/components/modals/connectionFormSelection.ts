@@ -53,6 +53,28 @@ export function formForSubTypeSelection({
   }
 }
 
+export function formForProtocolSelection({
+  form,
+  protocol,
+  selectedSubInfo,
+}: {
+  form: ConnectionFormState
+  protocol: string
+  selectedSubInfo?: AssetSubType
+}) {
+  const selectedAccess = (selectedSubInfo?.access_protocols || []).find((item) => item.protocol === protocol)
+  return {
+    ...form,
+    protocol,
+    port: selectedAccess?.default_port || (selectedSubInfo && protocol === selectedSubInfo.asset_type ? selectedSubInfo.defaultPort : form.port),
+    extra_args: {
+      ...form.extra_args,
+      login_protocol: protocol,
+      protocol,
+    },
+  }
+}
+
 export function setConnectionExtraArg(
   form: ConnectionFormState,
   field: string,

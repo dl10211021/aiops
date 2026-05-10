@@ -201,6 +201,27 @@ class TestAssetProtocolLayer(unittest.TestCase):
             self.assertEqual(by_id[asset_type]["protocol"], protocol)
             self.assertEqual(normalize_protocol(asset_type), protocol)
 
+    def test_explicit_catalog_asset_protocol_aliases_follow_catalog_defaults(self):
+        cases = [
+            ("nas", "nas", "nas", "ssh"),
+            ("san", "san", "nas", "ssh"),
+            ("kafka", "kafka", "kafka", "ssh"),
+            ("kafka_client", "kafka", "kafka_client", "kafka"),
+        ]
+
+        for asset_type, protocol, expected_asset_type, expected_protocol in cases:
+            with self.subTest(asset_type=asset_type, protocol=protocol):
+                identity = resolve_asset_identity(
+                    asset_type=asset_type,
+                    protocol=protocol,
+                    extra_args={},
+                    host="192.0.2.10",
+                    port=22,
+                )
+
+                self.assertEqual(identity["asset_type"], expected_asset_type)
+                self.assertEqual(identity["protocol"], expected_protocol)
+
     def test_asset_catalog_includes_hertzbeat_extension_assets(self):
         catalog = get_asset_catalog()
         by_id = {item["id"]: item for item in catalog}
@@ -568,6 +589,19 @@ class TestAssetProtocolLayer(unittest.TestCase):
         self.assertIn("access_key", {param["field"] for param in by_id["s3"].get("params", [])})
         self.assertIn("endpoint_url", {param["field"] for param in by_id["s3"].get("params", [])})
         self.assertIn("use_ssl", {param["field"] for param in by_id["minio"].get("params", [])})
+
+    def test_firewall_catalog_keeps_ssh_default_and_api_alternate(self):
+        firewall = next(asset for asset in get_asset_catalog() if asset["id"] == "firewall")
+        protocols = {
+            (item["protocol"], item["purpose"]): item
+            for item in firewall.get("access_protocols", [])
+        }
+
+        self.assertEqual(firewall["protocol"], "ssh")
+        self.assertTrue(protocols[("ssh", "operation")]["is_default"])
+        self.assertEqual(protocols[("ssh", "operation")]["default_port"], 22)
+        self.assertEqual(protocols[("http_api", "operation")]["role"], "alternate")
+        self.assertEqual(protocols[("http_api", "operation")]["default_port"], 443)
 
     def test_hertzbeat_raw_params_do_not_pollute_asset_forms(self):
         noisy_fields = {"snmpVersion", "ssl", "timeout", "__sd_host__", "__sd_port__"}

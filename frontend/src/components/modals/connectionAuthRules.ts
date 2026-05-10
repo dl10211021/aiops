@@ -10,7 +10,7 @@ export const authModeFor = (id: string, protocol?: string, capability?: AssetSub
     if (!credentialFields.includes('username') && !credentialFields.includes('password')) return 'none'
   }
   if (id === 'redis') return 'password_only'
-  if (protocol === 'snmp' || ['snmp', 'nas'].includes(id)) return 'custom_snmp'
+  if (protocol === 'snmp' || id === 'snmp') return 'custom_snmp'
   if (protocol && NO_AUTH_PROTOCOLS.has(protocol)) return 'none'
   return 'basic'
 }
@@ -29,7 +29,17 @@ export const getAuthVisibility = (
   return { showUser: true, showPass: true }
 }
 
-const DEFAULT_USERNAMES = new Set(['', 'root', 'admin', 'administrator', 'system', 'postgres', 'sa'])
+const DEFAULT_USERNAMES = new Set([
+  '',
+  'root',
+  'admin',
+  'administrator',
+  'system',
+  'postgres',
+  'sa',
+  'sysdba',
+  'db2inst1',
+])
 
 const defaultUsernameFor = (category: string, subInfo: AssetSubType) => {
   if (subInfo.id === 'windows' || subInfo.asset_type === 'winrm') return 'Administrator'
@@ -40,7 +50,7 @@ const defaultUsernameFor = (category: string, subInfo: AssetSubType) => {
   if (subInfo.id === 'postgresql') return 'postgres'
   if (subInfo.id === 'mssql') return 'sa'
   if (subInfo.id === 'ldap') return ''
-  if (['redis', 'memcached', 'snmp', 'nas'].includes(subInfo.id) || subInfo.asset_type === 'snmp') return ''
+  if (['redis', 'memcached', 'snmp'].includes(subInfo.id) || subInfo.asset_type === 'snmp') return ''
   if (['http_api', 'redfish', 'k8s'].includes(subInfo.asset_type)) return ''
   if (category === 'db') return 'root'
   if (category === 'network') return 'admin'

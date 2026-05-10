@@ -1,0 +1,145 @@
+{
+  "summary": {
+    "total": 177,
+    "issue_count": 0,
+    "by_category": {
+      "os": 17,
+      "db": 39,
+      "container": 6,
+      "middleware": 21,
+      "storage": 9,
+      "monitor": 12,
+      "virtualization": 7,
+      "network": 11,
+      "service": 20,
+      "oob": 7,
+      "security": 3,
+      "bigdata": 13,
+      "discovery": 6,
+      "ai": 5,
+      "cicd": 1
+    },
+    "by_protocol": {
+      "ssh": 41,
+      "winrm": 3,
+      "mysql": 7,
+      "oracle": 1,
+      "postgresql": 5,
+      "mssql": 2,
+      "redis": 5,
+      "mongodb": 2,
+      "clickhouse": 1,
+      "dameng": 2,
+      "elasticsearch": 1,
+      "http_api": 62,
+      "k8s": 2,
+      "minio": 1,
+      "vmware": 1,
+      "openstack": 1,
+      "proxmox": 1,
+      "zstack": 1,
+      "dns": 2,
+      "s3": 1,
+      "backup": 1,
+      "snmp": 1,
+      "redfish": 2,
+      "ipmi": 1,
+      "ldap": 1,
+      "http": 4,
+      "db2": 1,
+      "ftp": 1,
+      "hive": 1,
+      "iotdb": 1,
+      "jmx": 1,
+      "kafka": 1,
+      "memcached": 1,
+      "modbus": 1,
+      "mqtt": 1,
+      "nebula_graph": 2,
+      "imap": 2,
+      "ntp": 1,
+      "icmp": 1,
+      "pop3": 1,
+      "tcp": 2,
+      "registry": 1,
+      "s7": 1,
+      "smtp": 1,
+      "tls": 1,
+      "udp": 1,
+      "websocket": 1,
+      "xugu": 1
+    },
+    "wrong_generic_linux_count": 0,
+    "domain_shortcut_missing_count": 0,
+    "protocol_verification_domain_label_mismatch_count": 0,
+    "live_assets_types_verified": true,
+    "live_assets_types_total": 177,
+    "frontend_catalog_source_badge_verified": true,
+    "slash_command_category_gap_count": 0,
+    "profile_role_category_gap_count": 0,
+    "profile_interconnection_strategy_gap_count": 0,
+    "stale_profile_protocol_fallback_gap_count": 0,
+    "frontend_slash_command_fallback_aligned": true,
+    "multi_protocol_asset_selector_verified": true,
+    "firewall_dual_protocol_verified": true
+  },
+  "live_samples": {
+    "oracle": {
+      "protocol": "oracle",
+      "default_port": 1521,
+      "connector": "native_sql",
+      "tools": ["db_execute_query"],
+      "parameter_defaults": {
+        "oracle_connect_type": "sid",
+        "connect_timeout": 10,
+        "use_thick_mode": true
+      }
+    },
+    "mysql": {
+      "protocol": "mysql",
+      "default_port": 3306,
+      "connector": "native_sql",
+      "tools": ["db_execute_query"],
+      "parameter_defaults": {
+        "ssl_mode": "preferred",
+        "charset": "utf8mb4",
+        "connect_timeout": 10
+      }
+    },
+    "h3c_switch": {
+      "protocol": "ssh",
+      "default_port": 22,
+      "connector": "ssh_network_cli",
+      "tools": ["network_cli_execute_command"],
+      "access_protocols": ["网络设备 SSH CLI", "SNMP 只读采集"]
+    },
+    "firewall": {
+      "protocol": "ssh",
+      "default_port": 22,
+      "connector": "ssh_network_cli",
+      "tools": ["network_cli_execute_command"],
+      "access_protocols": ["网络设备 SSH CLI", "网络设备 HTTP/API 管理接口"],
+      "alternate_protocol_tools": {
+        "http_api": ["network_api_request"]
+      }
+    },
+    "nas": {
+      "protocol": "ssh",
+      "default_port": 22,
+      "connector": "storage_shell",
+      "tools": ["storage_execute_command"],
+      "access_protocols": ["存储设备 SSH CLI", "SNMP 只读采集"]
+    },
+    "kafka_client": {
+      "protocol": "kafka",
+      "default_port": 9092,
+      "connector": "service_probe",
+      "tools": ["service_probe_request"],
+      "parameter_defaults": {
+        "security_protocol": "PLAINTEXT",
+        "sasl_mechanism": "PLAIN"
+      }
+    }
+  },
+  "issues": []
+}

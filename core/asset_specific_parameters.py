@@ -215,7 +215,7 @@ def apply_asset_parameter_template(capability: dict[str, Any], asset_id: str) ->
             _text_parameter("sid", "SID", group="oracle"),
             _text_parameter("tns_alias", "TNS Alias", group="oracle"),
             _number_parameter("connect_timeout", "连接超时(秒)", group="oracle", default=10),
-            _boolean_parameter("use_thick_mode", "启用旧库兼容模式", group="oracle", default=False),
+            _boolean_parameter("use_thick_mode", "启用旧库兼容模式", group="oracle", default=True),
         ]
     elif asset_id in {"redis", "valkey", "kvrocks"}:
         capability["parameter_template"] = [

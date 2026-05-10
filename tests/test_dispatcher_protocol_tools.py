@@ -107,6 +107,22 @@ class TestDispatcherProtocolTools(unittest.TestCase):
         self.assertIn("monitoring_api_query", names)
         self.assertNotIn("http_api_request", names)
 
+    def test_firewall_http_api_session_exposes_network_api_not_cli(self):
+        dispatcher = SkillDispatcher.__new__(SkillDispatcher)
+        tools = dispatcher.get_available_tools(
+            {
+                "target_scope": "asset",
+                "asset_type": "firewall",
+                "protocol": "http_api",
+                "extra_args": {"category": "network", "sub_type": "firewall"},
+            }
+        )
+
+        names = tool_names(tools)
+        self.assertIn("network_api_request", names)
+        self.assertNotIn("http_api_request", names)
+        self.assertNotIn("network_cli_execute_command", names)
+
     def test_bigdata_api_request_routes_through_managed_http_executor(self):
         dispatcher = SkillDispatcher.__new__(SkillDispatcher)
         context = {
@@ -146,46 +162,136 @@ class TestDispatcherProtocolTools(unittest.TestCase):
 
     def test_switch_session_exposes_network_cli_not_linux_tool(self):
         dispatcher = SkillDispatcher.__new__(SkillDispatcher)
-        tools = dispatcher.get_available_tools(
-            {
-                "target_scope": "asset",
-                "asset_type": "switch",
-                "protocol": "ssh",
-                "extra_args": {"category": "network"},
-            }
-        )
 
-        names = tool_names(tools)
-        self.assertIn("network_cli_execute_command", names)
-        self.assertNotIn("linux_execute_command", names)
-        self.assertNotIn("local_execute_script", names)
+        for asset_type in ("switch", "h3c_switch", "huawei_switch"):
+            with self.subTest(asset_type=asset_type):
+                tools = dispatcher.get_available_tools(
+                    {
+                        "target_scope": "asset",
+                        "asset_type": asset_type,
+                        "protocol": "ssh",
+                        "extra_args": {"category": "network"},
+                    }
+                )
+
+                names = tool_names(tools)
+                self.assertIn("network_cli_execute_command", names)
+                self.assertNotIn("linux_execute_command", names)
+                self.assertNotIn("local_execute_script", names)
 
     def test_switch_rejects_linux_command_even_if_model_calls_it(self):
         dispatcher = SkillDispatcher.__new__(SkillDispatcher)
-        result = asyncio.run(
-            dispatcher.route_and_execute(
-                "linux_execute_command",
-                {"command": "uname -a"},
-                {
-                    "session_id": "sid",
-                    "asset_type": "switch",
-                    "protocol": "ssh",
-                    "extra_args": {"category": "network"},
-                    "allow_modifications": False,
-                },
-            )
-        )
 
-        payload = json.loads(result)
-        self.assertEqual(payload["status"], "ERROR")
-        self.assertIn("network_cli_execute_command", payload["error"])
+        for asset_type in ("switch", "h3c_switch"):
+            with self.subTest(asset_type=asset_type):
+                result = asyncio.run(
+                    dispatcher.route_and_execute(
+                        "linux_execute_command",
+                        {"command": "uname -a"},
+                        {
+                            "session_id": "sid",
+                            "asset_type": asset_type,
+                            "protocol": "ssh",
+                            "extra_args": {"category": "network"},
+                            "allow_modifications": False,
+                        },
+                    )
+                )
+
+                payload = json.loads(result)
+                self.assertEqual(payload["status"], "ERROR")
+                self.assertIn("network_cli_execute_command", payload["error"])
 
     def test_storage_session_exposes_storage_command_not_linux_tool(self):
+        dispatcher = SkillDispatcher.__new__(SkillDispatcher)
+
+        for asset_type in ("ceph", "nas", "synology_nas"):
+            with self.subTest(asset_type=asset_type):
+                tools = dispatcher.get_available_tools(
+                    {
+                        "target_scope": "asset",
+                        "asset_type": asset_type,
+                        "protocol": "ssh",
+                        "extra_args": {"category": "storage"},
+                    }
+                )
+
+                names = tool_names(tools)
+                self.assertIn("storage_execute_command", names)
+                self.assertNotIn("linux_execute_command", names)
+                self.assertNotIn("local_execute_script", names)
+
+    def test_storage_session_rejects_linux_command_even_if_model_calls_it(self):
+        dispatcher = SkillDispatcher.__new__(SkillDispatcher)
+
+        for asset_type in ("ceph", "nas", "synology_nas"):
+            with self.subTest(asset_type=asset_type):
+                result = asyncio.run(
+                    dispatcher.route_and_execute(
+                        "linux_execute_command",
+                        {"command": "df -h"},
+                        {
+                            "session_id": "sid",
+                            "asset_type": asset_type,
+                            "protocol": "ssh",
+                            "extra_args": {"category": "storage"},
+                            "allow_modifications": False,
+                        },
+                    )
+                )
+
+                payload = json.loads(result)
+                self.assertEqual(payload["status"], "ERROR")
+                self.assertIn("storage_execute_command", payload["error"])
+
+    def test_middleware_session_exposes_middleware_command_not_linux_tool(self):
+        dispatcher = SkillDispatcher.__new__(SkillDispatcher)
+
+        for asset_type in ("nginx", "kafka", "process"):
+            with self.subTest(asset_type=asset_type):
+                tools = dispatcher.get_available_tools(
+                    {
+                        "target_scope": "asset",
+                        "asset_type": asset_type,
+                        "protocol": "ssh",
+                        "extra_args": {"category": "middleware"},
+                    }
+                )
+
+                names = tool_names(tools)
+                self.assertIn("middleware_execute_command", names)
+                self.assertNotIn("linux_execute_command", names)
+                self.assertNotIn("local_execute_script", names)
+
+    def test_middleware_session_rejects_linux_command_even_if_model_calls_it(self):
+        dispatcher = SkillDispatcher.__new__(SkillDispatcher)
+
+        for asset_type in ("kafka", "process"):
+            with self.subTest(asset_type=asset_type):
+                result = asyncio.run(
+                    dispatcher.route_and_execute(
+                        "linux_execute_command",
+                        {"command": "ps -ef | head"},
+                        {
+                            "session_id": "sid",
+                            "asset_type": asset_type,
+                            "protocol": "ssh",
+                            "extra_args": {"category": "middleware"},
+                            "allow_modifications": False,
+                        },
+                    )
+                )
+
+                payload = json.loads(result)
+                self.assertEqual(payload["status"], "ERROR")
+                self.assertIn("middleware_execute_command", payload["error"])
+
+    def test_legacy_storage_asset_without_catalog_definition_stays_protected(self):
         dispatcher = SkillDispatcher.__new__(SkillDispatcher)
         tools = dispatcher.get_available_tools(
             {
                 "target_scope": "asset",
-                "asset_type": "ceph",
+                "asset_type": "glusterfs",
                 "protocol": "ssh",
                 "extra_args": {"category": "storage"},
             }
@@ -194,17 +300,16 @@ class TestDispatcherProtocolTools(unittest.TestCase):
         names = tool_names(tools)
         self.assertIn("storage_execute_command", names)
         self.assertNotIn("linux_execute_command", names)
-        self.assertNotIn("local_execute_script", names)
 
-    def test_storage_session_rejects_linux_command_even_if_model_calls_it(self):
+    def test_legacy_storage_rejects_linux_command_even_if_model_calls_it(self):
         dispatcher = SkillDispatcher.__new__(SkillDispatcher)
         result = asyncio.run(
             dispatcher.route_and_execute(
                 "linux_execute_command",
-                {"command": "ceph status"},
+                {"command": "gluster volume status"},
                 {
                     "session_id": "sid",
-                    "asset_type": "ceph",
+                    "asset_type": "glusterfs",
                     "protocol": "ssh",
                     "extra_args": {"category": "storage"},
                     "allow_modifications": False,

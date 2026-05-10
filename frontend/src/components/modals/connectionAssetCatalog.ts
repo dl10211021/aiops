@@ -1,4 +1,32 @@
+import type { AssetAccessProtocol } from '@/types'
 import type { AssetCategoryOption, AssetSubType } from './connectionModalHelpers'
+
+const accessProtocol = (
+  protocol: string,
+  label: string,
+  role: 'default' | 'alternate',
+  defaultPort: number,
+  description: string,
+): AssetAccessProtocol => ({
+  protocol,
+  label,
+  purpose: 'operation',
+  purpose_label: '运维接入',
+  role,
+  role_label: role === 'default' ? '默认' : '可选',
+  source: 'OpsCore 离线兜底',
+  default_port: defaultPort,
+  security: protocol === 'ssh' ? 'recommended' : 'read_only',
+  description,
+  is_default: role === 'default',
+  supported: true,
+})
+
+const NETWORK_SSH_ACCESS = (role: 'default' | 'alternate' = 'default') =>
+  accessProtocol('ssh', '网络设备 SSH CLI', role, 22, '适合执行 show/display 等网络设备只读巡检命令。')
+
+const NETWORK_API_ACCESS = (role: 'default' | 'alternate' = 'alternate') =>
+  accessProtocol('http_api', '网络设备 HTTP/API 管理接口', role, 443, '适合通过设备管理 API 做状态、策略和告警查询。')
 
 export const ASSET_CATEGORIES: AssetCategoryOption[] = [
   { id: 'os', label: '操作系统与主机', group: '基础设施' },
@@ -67,17 +95,17 @@ export const ASSET_SUB_TYPES: Record<string, AssetSubType[]> = {
     { id: 'zstack', label: 'ZStack', asset_type: 'zstack', defaultPort: 8080 },
   ],
   network: [
-    { id: 'f5', label: 'F5 BIG-IP 负载均衡', asset_type: 'http_api', defaultPort: 443 },
+    { id: 'f5', label: 'F5 BIG-IP 负载均衡', asset_type: 'http_api', defaultPort: 443, access_protocols: [NETWORK_API_ACCESS('default'), NETWORK_SSH_ACCESS('alternate')] },
     { id: 'switch', label: '交换机 / 路由器', asset_type: 'ssh', defaultPort: 22 },
-    { id: 'firewall', label: '防火墙', asset_type: 'ssh', defaultPort: 22 },
-    { id: 'a10', label: 'A10 负载均衡', asset_type: 'http_api', defaultPort: 443 },
-    { id: 'waf', label: 'WAF', asset_type: 'http_api', defaultPort: 443 },
+    { id: 'firewall', label: '防火墙', asset_type: 'ssh', defaultPort: 22, access_protocols: [NETWORK_SSH_ACCESS('default'), NETWORK_API_ACCESS('alternate')] },
+    { id: 'a10', label: 'A10 负载均衡', asset_type: 'http_api', defaultPort: 443, access_protocols: [NETWORK_API_ACCESS('default'), NETWORK_SSH_ACCESS('alternate')] },
+    { id: 'waf', label: 'WAF', asset_type: 'http_api', defaultPort: 443, access_protocols: [NETWORK_API_ACCESS('default'), NETWORK_SSH_ACCESS('alternate')] },
     { id: 'vpn', label: 'VPN 网关', asset_type: 'ssh', defaultPort: 22 },
   ],
   storage: [
     { id: 'ceph', label: 'Ceph 集群', asset_type: 'ssh', defaultPort: 22 },
     { id: 'nfs', label: 'NFS 服务', asset_type: 'ssh', defaultPort: 22 },
-    { id: 'nas', label: 'NAS / SAN (SNMP)', asset_type: 'snmp', defaultPort: 161, authMode: 'custom_snmp' },
+    { id: 'nas', label: 'NAS / SAN (SSH)', asset_type: 'ssh', defaultPort: 22 },
     { id: 'minio', label: 'MinIO', asset_type: 'minio', defaultPort: 9000 },
     { id: 's3', label: 'S3 / 对象存储', asset_type: 's3', defaultPort: 443 },
     { id: 'hdfs', label: 'HDFS', asset_type: 'ssh', defaultPort: 22 },

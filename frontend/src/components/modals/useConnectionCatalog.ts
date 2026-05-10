@@ -5,6 +5,7 @@ import type { SkillInfo } from '@/types'
 import { ASSET_CATEGORIES, ASSET_SUB_TYPES, CATEGORY_LABELS } from './connectionAssetCatalog'
 import type {
   AssetCategoryOption,
+  AssetCatalogStatus,
   AssetSubType,
   DatabaseDriverCapability,
   OracleClientConfig,
@@ -20,6 +21,9 @@ const oracleThickDefaultsFromConfig = (config: OracleClientConfig | null) =>
     ? {}
     : { use_thick_mode: true }
 
+const countAssetSubTypes = (items: Record<string, AssetSubType[]>) =>
+  Object.values(items).reduce((total, group) => total + group.length, 0)
+
 export function useConnectionCatalog({
   form,
   setForm,
@@ -32,6 +36,11 @@ export function useConnectionCatalog({
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [assetCategories, setAssetCategories] = useState<AssetCategoryOption[]>(ASSET_CATEGORIES)
   const [assetSubTypes, setAssetSubTypes] = useState<Record<string, AssetSubType[]>>(ASSET_SUB_TYPES)
+  const [catalogStatus, setCatalogStatus] = useState<AssetCatalogStatus>({
+    source: 'fallback',
+    loading: true,
+    total: countAssetSubTypes(ASSET_SUB_TYPES),
+  })
   const [oracleClientConfig, setOracleClientConfig] = useState<OracleClientConfig | null>(null)
   const [databaseDrivers, setDatabaseDrivers] = useState<Record<string, DatabaseDriverCapability>>({})
 
@@ -57,6 +66,7 @@ export function useConnectionCatalog({
           authMode: authModeFor(item.id, item.protocol, item.capability),
           source: item.source,
           hertzbeat_protocols: item.hertzbeat_protocols,
+          access_protocols: item.access_protocols,
           params: item.params || [],
           capability: item.capability,
         })
@@ -64,6 +74,11 @@ export function useConnectionCatalog({
       if (Object.keys(grouped).length > 0) {
         effectiveSubTypes = grouped
         setAssetSubTypes(grouped)
+        setCatalogStatus({
+          source: 'backend',
+          loading: false,
+          total: assetResponse?.data.types.length || countAssetSubTypes(grouped),
+        })
         const backendCategories = assetResponse?.data.categories || []
         setAssetCategories(
           backendCategories.length > 0
@@ -77,8 +92,15 @@ export function useConnectionCatalog({
                 id,
                 label: CATEGORY_LABELS[id] || id.toUpperCase(),
                 group: '其它',
-              }))
+            }))
         )
+      } else {
+        setCatalogStatus({
+          source: 'fallback',
+          loading: false,
+          total: countAssetSubTypes(effectiveSubTypes),
+          error: 'asset_catalog_unavailable',
+        })
       }
 
       const protocolFor = (category: string, subType: string) =>
@@ -154,6 +176,7 @@ export function useConnectionCatalog({
   return {
     assetCategories,
     assetSubTypes,
+    catalogStatus,
     databaseDrivers,
     oracleClientConfig,
     oracleThickDefaults: (config: OracleClientConfig | null = oracleClientConfig) => oracleThickDefaultsFromConfig(config),

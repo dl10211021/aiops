@@ -3,10 +3,13 @@ from __future__ import annotations
 from core.asset_protocols import (
     API_PROTOCOLS,
     DATABASE_HTTP_PROTOCOLS,
+    MIDDLEWARE_ASSET_TYPES,
+    NETWORK_SSH_ASSET_TYPES,
     SERVICE_ASSET_TYPES,
     SERVICE_PROBE_PROTOCOLS,
     SQL_PROTOCOLS,
     STORAGE_API_PROTOCOLS,
+    STORAGE_SSH_ASSET_TYPES,
     VIRTUALIZATION_API_PROTOCOLS,
     normalize_protocol,
 )
@@ -48,17 +51,23 @@ def format_extra_args_for_prompt(extra_args: dict) -> str:
 
 def protocol_tool_guidance(protocol: str, asset_type: str, host: str) -> str:
     protocol = normalize_protocol(asset_type, protocol)
-    if protocol == "ssh" and asset_type in {"switch"}:
+    if protocol == "ssh" and asset_type in NETWORK_SSH_ASSET_TYPES:
         return (
             f"连接状态：后端已经建立到网络设备 {host} 的 SSH CLI 会话。你已经在该交换机/路由器上下文内，"
             f"直接调用 {_tool_call_text('network_cli_execute_command')} 执行 display/show/ping 等只读巡检命令；"
             "不要使用 Linux 命令，不要编写连接脚本或重新登录。"
         )
-    if protocol == "ssh" and asset_type in {"ceph", "nfs", "hdfs", "glusterfs"}:
+    if protocol == "ssh" and asset_type in STORAGE_SSH_ASSET_TYPES:
         return (
             f"连接状态：后端已经建立到存储节点 {host} 的 SSH 会话。"
-            f"直接调用 {_tool_call_text('storage_execute_command')} 执行 Ceph/NFS/HDFS/GlusterFS 只读巡检命令；"
+            f"直接调用 {_tool_call_text('storage_execute_command')} 执行 Ceph/NFS/NAS/HDFS/GlusterFS 只读巡检命令；"
             "不要把它当普通 Linux 主机泛化操作，扩容、删除、修复、重平衡等动作必须走审批。"
+        )
+    if protocol == "ssh" and asset_type in MIDDLEWARE_ASSET_TYPES:
+        return (
+            f"连接状态：后端已经建立到中间件主机 {host} 的 SSH 会话。"
+            f"直接调用 {_tool_call_text('middleware_execute_command')} 执行服务、进程、端口、日志路径等只读巡检命令；"
+            "不要编写连接脚本或重新登录，重启服务、修改配置、清理日志等动作必须走审批。"
         )
     if protocol == "ssh":
         return (

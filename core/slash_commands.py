@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from core.asset_protocols import get_asset_catalog, get_asset_definition
 from core.tool_display import tool_label
 
 
@@ -31,7 +32,13 @@ class SlashCommand:
         asset_match = not self.asset_types or asset_type in self.asset_types
         protocol_match = not self.protocols or protocol in self.protocols
         if self.scope_type == "asset_type":
-            return bool(self.asset_types and asset_match and protocol_match)
+            if not (self.asset_types and asset_match and protocol_match):
+                return False
+            definition = get_asset_definition(asset_type)
+            default_protocol = str((definition or {}).get("protocol") or "").lower()
+            if default_protocol and protocol != default_protocol and protocol not in {"sql", "jdbc"}:
+                return False
+            return True
         if self.scope_type == "protocol":
             return bool(self.protocols and protocol_match)
         return False
@@ -86,32 +93,84 @@ def _tool_list_text(active_tools: list[str] | None) -> str:
     return "、".join(labels) or "当前会话原生协议工具"
 
 
-DATABASE_COMMAND_ASSET_TYPES = (
-    "oracle",
-    "mysql",
-    "mariadb",
-    "tidb",
-    "oceanbase",
-    "postgresql",
-    "postgres",
-    "opengauss",
-    "kingbase",
-    "vastbase",
-    "mssql",
-    "sqlserver",
-    "dameng",
-    "dm",
-)
+def _category_asset_types(category: str, extra: set[str] | None = None) -> tuple[str, ...]:
+    items = {item["id"] for item in get_asset_catalog() if item.get("category") == category}
+    return tuple(sorted(items | (extra or set())))
 
-DATABASE_COMMAND_PROTOCOLS = (
+
+def _category_protocols(category: str, extra: set[str] | None = None) -> tuple[str, ...]:
+    items = {
+        str(item.get("protocol") or "").lower()
+        for item in get_asset_catalog()
+        if item.get("category") == category and item.get("protocol")
+    }
+    return tuple(sorted(items | (extra or set())))
+
+
+def _category_asset_types_by_protocol(
+    category: str,
+    protocols: set[str],
+    extra: set[str] | None = None,
+) -> tuple[str, ...]:
+    normalized_protocols = {item.lower() for item in protocols}
+    items = {
+        item["id"]
+        for item in get_asset_catalog()
+        if item.get("category") == category
+        and str(item.get("protocol") or "").lower() in normalized_protocols
+    }
+    return tuple(sorted(items | (extra or set())))
+
+
+DATABASE_COMMAND_ASSET_TYPES = _category_asset_types("db", {"postgres", "mongo", "elastic", "opensearch"})
+DATABASE_COMMAND_PROTOCOLS = _category_protocols("db", {"sql", "jdbc"})
+SQL_DATABASE_COMMAND_ASSET_TYPES = _category_asset_types_by_protocol(
+    "db",
+    {
+        "oracle",
+        "mysql",
+        "postgresql",
+        "mssql",
+        "db2",
+        "dameng",
+        "xugu",
+        "hive",
+        "iotdb",
+        "clickhouse",
+    },
+    {"postgres", "sqlserver", "dm"},
+)
+SQL_DATABASE_COMMAND_PROTOCOLS = (
     "oracle",
     "mysql",
     "postgresql",
     "mssql",
+    "db2",
     "dameng",
+    "xugu",
+    "hive",
+    "iotdb",
+    "clickhouse",
     "sql",
     "jdbc",
 )
+MYSQL_COMPAT_COMMAND_ASSET_TYPES = _category_asset_types_by_protocol("db", {"mysql"}, {"mysql", "mariadb"})
+POSTGRES_COMPAT_COMMAND_ASSET_TYPES = _category_asset_types_by_protocol("db", {"postgresql"}, {"postgres"})
+REDIS_COMPAT_COMMAND_ASSET_TYPES = _category_asset_types_by_protocol("db", {"redis"}, {"redis"})
+MONGODB_COMPAT_COMMAND_ASSET_TYPES = _category_asset_types_by_protocol("db", {"mongodb"}, {"mongo"})
+ELASTIC_COMPAT_COMMAND_ASSET_TYPES = _category_asset_types_by_protocol("db", {"elasticsearch"}, {"elastic", "opensearch"})
+MIDDLEWARE_COMMAND_ASSET_TYPES = _category_asset_types("middleware", {"harbor"})
+NETWORK_COMMAND_ASSET_TYPES = _category_asset_types("network", {"network_device", "router"})
+STORAGE_COMMAND_ASSET_TYPES = _category_asset_types("storage", {"san", "object_storage", "oss", "cos", "obs"})
+STORAGE_COMMAND_PROTOCOLS = ("ssh", "snmp", "http_api", "s3", "minio", "backup")
+VIRTUALIZATION_COMMAND_ASSET_TYPES = _category_asset_types("virtualization", {"vcenter"})
+VIRTUALIZATION_COMMAND_PROTOCOLS = _category_protocols("virtualization", {"virtual", "http_api"})
+MONITORING_COMMAND_ASSET_TYPES = _category_asset_types("monitor")
+CONTAINER_COMMAND_ASSET_TYPES = _category_asset_types("container")
+SERVICE_COMMAND_ASSET_TYPES = _category_asset_types("service")
+DISCOVERY_COMMAND_ASSET_TYPES = _category_asset_types("discovery")
+BIGDATA_COMMAND_ASSET_TYPES = _category_asset_types("bigdata")
+SECURITY_COMMAND_ASSET_TYPES = _category_asset_types("security")
 
 
 COMMANDS = [
@@ -155,8 +214,8 @@ COMMANDS = [
     SlashCommand(
         "database-inspect",
         "/db-inspect 数据库巡检",
-        "按当前数据库类型执行完整只读巡检",
-        "请对当前数据库 {target} 做一次完整只读巡检。使用当前会话数据库工具，不要本地脚本，不要写入。先识别数据库类型和版本，再按该类型选择只读 SQL：连接/会话、容量、锁等待、慢 SQL/高耗 SQL、错误/告警、复制/集群、关键配置。输出：健康结论、证据 SQL 摘要、风险等级、P0/P1/P2 建议。",
+        "按当前数据服务类型执行完整只读巡检",
+        "请对当前数据服务 {target} 做一次完整只读巡检。必须使用当前会话的数据库、缓存、文档库或数据服务原生工具，不要本地脚本，不要写入。先识别具体类型和版本，再选择对应只读 SQL、命令或 API：连接/会话、容量、锁等待或慢操作、高耗请求、错误/告警、复制/集群、关键配置。输出：健康结论、证据命令/SQL/API 摘要、风险等级、P0/P1/P2 建议。",
         category="数据库巡检",
         scope_type="asset_type",
         asset_types=DATABASE_COMMAND_ASSET_TYPES,
@@ -171,8 +230,8 @@ COMMANDS = [
         "请对当前数据库 {target} 做只读慢 SQL 和高耗 SQL 分析。先判断数据库类型，再使用对应系统视图或性能视图查询。不要执行写入、kill、flush 或参数变更。输出：Top SQL、耗时/等待/锁、影响范围、证据 SQL 摘要、优化建议。",
         category="数据库巡检",
         scope_type="asset_type",
-        asset_types=DATABASE_COMMAND_ASSET_TYPES,
-        protocols=DATABASE_COMMAND_PROTOCOLS,
+        asset_types=SQL_DATABASE_COMMAND_ASSET_TYPES,
+        protocols=SQL_DATABASE_COMMAND_PROTOCOLS,
         sort_order=34,
     ),
     SlashCommand(
@@ -182,8 +241,8 @@ COMMANDS = [
         "请对当前数据库 {target} 做只读配置基线检查。先识别数据库类型，再检查版本、关键参数、账号状态、权限风险、审计/日志、备份线索和高危默认配置。不要修改任何参数或账号。输出：异常项、风险等级、证据 SQL 摘要和整改建议。",
         category="数据库巡检",
         scope_type="asset_type",
-        asset_types=DATABASE_COMMAND_ASSET_TYPES,
-        protocols=DATABASE_COMMAND_PROTOCOLS,
+        asset_types=SQL_DATABASE_COMMAND_ASSET_TYPES,
+        protocols=SQL_DATABASE_COMMAND_PROTOCOLS,
         sort_order=35,
     ),
     SlashCommand(
@@ -193,8 +252,8 @@ COMMANDS = [
         "请对当前数据库 {target} 做只读索引和对象健康分析。先识别数据库类型，再检查大表、索引失效/未使用、表空间或数据文件水位、膨胀/碎片、热点对象和容量风险。不要 rebuild、analyze、vacuum 或执行任何写入。输出：对象清单、风险等级、证据 SQL 摘要和建议动作。",
         category="数据库巡检",
         scope_type="asset_type",
-        asset_types=DATABASE_COMMAND_ASSET_TYPES,
-        protocols=DATABASE_COMMAND_PROTOCOLS,
+        asset_types=SQL_DATABASE_COMMAND_ASSET_TYPES,
+        protocols=SQL_DATABASE_COMMAND_PROTOCOLS,
         sort_order=36,
     ),
     SlashCommand(
@@ -306,7 +365,7 @@ COMMANDS = [
         "请使用当前 MySQL 会话只读检查 {target}：版本、运行时长、连接数、慢查询、错误计数、复制状态和容量风险。不要执行写入 SQL。",
         category="数据库巡检",
         scope_type="asset_type",
-        asset_types=("mysql", "mariadb"),
+        asset_types=MYSQL_COMPAT_COMMAND_ASSET_TYPES,
         protocols=("mysql", "sql"),
         pinned=True,
         sort_order=41,
@@ -318,7 +377,7 @@ COMMANDS = [
         "请只读检查 {target} 的 processlist、长查询、锁等待和异常来源 IP，输出可能影响业务的 SQL 线索。",
         category="数据库巡检",
         scope_type="asset_type",
-        asset_types=("mysql", "mariadb"),
+        asset_types=MYSQL_COMPAT_COMMAND_ASSET_TYPES,
         protocols=("mysql", "sql"),
         sort_order=42,
     ),
@@ -329,7 +388,7 @@ COMMANDS = [
         "请使用当前 PostgreSQL 会话只读检查 {target}：版本、连接数、复制状态、锁等待、长事务、膨胀风险、慢查询线索和容量风险。不要执行写入 SQL。",
         category="数据库巡检",
         scope_type="asset_type",
-        asset_types=("postgresql", "postgres", "opengauss", "kingbase", "vastbase"),
+        asset_types=POSTGRES_COMPAT_COMMAND_ASSET_TYPES,
         protocols=("postgresql", "sql"),
         pinned=True,
         sort_order=43,
@@ -353,7 +412,7 @@ COMMANDS = [
         "请只读检查 {target} 的 MongoDB 状态：版本、副本集/分片状态、连接数、慢操作、锁/队列、存储空间和高风险配置。",
         category="数据库巡检",
         scope_type="asset_type",
-        asset_types=("mongodb", "mongo"),
+        asset_types=MONGODB_COMPAT_COMMAND_ASSET_TYPES,
         protocols=("mongodb",),
         pinned=True,
         sort_order=45,
@@ -365,7 +424,7 @@ COMMANDS = [
         "请只读检查 {target} 的 Elasticsearch 健康：cluster health、节点状态、索引异常、未分配分片、磁盘水位、慢查询和安全配置风险。",
         category="数据库巡检",
         scope_type="asset_type",
-        asset_types=("elasticsearch", "elastic", "opensearch"),
+        asset_types=ELASTIC_COMPAT_COMMAND_ASSET_TYPES,
         protocols=("http_api",),
         pinned=True,
         sort_order=46,
@@ -377,7 +436,7 @@ COMMANDS = [
         "请只读检查 {target} 的 Redis info、内存水位、客户端连接、持久化状态、复制状态、慢日志摘要和高风险配置。",
         category="数据库巡检",
         scope_type="asset_type",
-        asset_types=("redis",),
+        asset_types=REDIS_COMPAT_COMMAND_ASSET_TYPES,
         protocols=("redis",),
         pinned=True,
         sort_order=51,
@@ -389,8 +448,8 @@ COMMANDS = [
         "请只读检查 {target} 的中间件健康状态：进程/服务、监听端口、版本、集群/队列状态、近期错误日志、资源水位和业务影响。",
         category="中间件",
         scope_type="asset_type",
-        asset_types=("nginx", "tomcat", "kafka", "rabbitmq", "rocketmq", "zookeeper", "nacos", "consul", "harbor"),
-        protocols=("ssh", "http_api"),
+        asset_types=MIDDLEWARE_COMMAND_ASSET_TYPES,
+        protocols=("ssh", "http_api", "jmx", "kafka"),
         pinned=True,
         sort_order=56,
     ),
@@ -407,14 +466,38 @@ COMMANDS = [
         sort_order=61,
     ),
     SlashCommand(
+        "container-health",
+        "/container 容器平台健康",
+        "检查容器平台、运行时、镜像仓库和节点状态",
+        "请只读检查 {target} 的容器平台健康：节点/运行时状态、镜像仓库/API 连通、工作负载或容器异常、近期事件、资源水位和安全风险。必须使用当前会话原生工具，不要修改工作负载或镜像。",
+        category="容器平台",
+        scope_type="asset_type",
+        asset_types=CONTAINER_COMMAND_ASSET_TYPES,
+        protocols=("ssh", "http_api", "k8s"),
+        pinned=True,
+        sort_order=62,
+    ),
+    SlashCommand(
+        "bigdata-health",
+        "/bigdata 大数据健康",
+        "检查大数据、分析计算、调度和数据平台状态",
+        "请只读检查 {target} 的大数据/分析平台健康：组件状态、作业/任务、队列/集群、存储水位、失败事件、延迟和关键配置。必须使用当前会话原生工具，不要提交、停止或修改任务。",
+        category="大数据",
+        scope_type="asset_type",
+        asset_types=BIGDATA_COMMAND_ASSET_TYPES,
+        protocols=("http_api", "ssh", "hive", "iotdb"),
+        pinned=True,
+        sort_order=63,
+    ),
+    SlashCommand(
         "vmware-health",
         "/vmware-health 虚拟化健康",
         "检查虚拟化平台主机、集群、存储和虚机风险",
         "请只读检查 {target} 的虚拟化平台健康：主机状态、集群资源、Datastore 水位、异常虚机、快照风险和告警摘要。",
         category="虚拟化",
         scope_type="asset_type",
-        asset_types=("vmware", "esxi", "vcenter", "proxmox", "openstack"),
-        protocols=("vmware", "virtual", "http_api"),
+        asset_types=VIRTUALIZATION_COMMAND_ASSET_TYPES,
+        protocols=VIRTUALIZATION_COMMAND_PROTOCOLS,
         pinned=True,
         sort_order=71,
     ),
@@ -425,7 +508,7 @@ COMMANDS = [
         "请只读检查 {target} 的网络设备健康：设备型号/版本、CPU/内存、接口状态、错误包、路由/邻居摘要、HA 状态和近期告警。不要修改配置。",
         category="网络",
         scope_type="asset_type",
-        asset_types=("network_device", "switch", "router", "firewall", "f5", "a10", "waf", "vpn"),
+        asset_types=NETWORK_COMMAND_ASSET_TYPES,
         protocols=("ssh", "snmp", "http_api"),
         pinned=True,
         sort_order=76,
@@ -449,8 +532,8 @@ COMMANDS = [
         "请只读检查 {target} 的存储健康：容量水位、卷/池状态、副本/恢复状态、近期告警、性能瓶颈和数据保护风险。",
         category="存储",
         scope_type="asset_type",
-        asset_types=("ceph", "nfs", "nas", "san", "hdfs", "glusterfs", "backup"),
-        protocols=("ssh", "snmp", "http_api"),
+        asset_types=STORAGE_COMMAND_ASSET_TYPES,
+        protocols=STORAGE_COMMAND_PROTOCOLS,
         pinned=True,
         sort_order=82,
     ),
@@ -461,7 +544,7 @@ COMMANDS = [
         "请只读检查 {target} 的监控平台状态：当前告警、采集目标在线性、规则/通知异常、近期错误和需要优先处置的对象。",
         category="监控告警",
         scope_type="asset_type",
-        asset_types=("prometheus", "alertmanager", "grafana", "loki", "victoriametrics", "zabbix", "manageengine"),
+        asset_types=MONITORING_COMMAND_ASSET_TYPES,
         protocols=("http_api",),
         pinned=True,
         sort_order=86,
@@ -487,6 +570,42 @@ COMMANDS = [
         scope_type="protocol",
         protocols=("http_api", "rest", "api"),
         sort_order=91,
+    ),
+    SlashCommand(
+        "service-probe-health",
+        "/service 服务探测",
+        "检查应用、端口、DNS、证书、消息和网络服务可用性",
+        "请只读检查 {target} 的服务可用性：协议握手、响应时间、证书/解析/端口状态、错误响应、重试和依赖线索。必须使用当前会话的服务探测或协议工具，不要发起大范围扫描。",
+        category="服务探测",
+        scope_type="asset_type",
+        asset_types=SERVICE_COMMAND_ASSET_TYPES,
+        protocols=("http", "https", "tcp", "udp", "icmp", "dns", "tls", "ftp", "smtp", "pop3", "imap", "mqtt", "ntp", "modbus", "s7", "registry", "websocket"),
+        pinned=True,
+        sort_order=92,
+    ),
+    SlashCommand(
+        "discovery-health",
+        "/discovery 服务发现",
+        "检查注册中心、服务发现和目标发现状态",
+        "请只读检查 {target} 的服务发现状态：注册服务清单、健康实例、异常节点、同步延迟、认证/API 错误和依赖线索。必须使用当前协议工具，不要注册、下线或修改服务。",
+        category="服务发现",
+        scope_type="asset_type",
+        asset_types=DISCOVERY_COMMAND_ASSET_TYPES,
+        protocols=("http_api", "dns", "tcp"),
+        pinned=True,
+        sort_order=93,
+    ),
+    SlashCommand(
+        "security-platform-health",
+        "/security 安全平台健康",
+        "检查安全、身份、堡垒机和审计平台状态",
+        "请只读检查 {target} 的安全/身份平台健康：认证连通、策略/审计事件、账号或目录状态、近期错误、告警和高风险配置。必须使用当前协议工具，不要修改策略或账号。",
+        category="安全身份",
+        scope_type="asset_type",
+        asset_types=SECURITY_COMMAND_ASSET_TYPES,
+        protocols=("http_api", "ldap"),
+        pinned=True,
+        sort_order=94,
     ),
 ]
 

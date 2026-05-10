@@ -30,6 +30,21 @@ class TestAgentProtocolContext(unittest.TestCase):
         self.assertIn("network_cli_execute_command", guidance)
         self.assertIn("不要使用 Linux 命令", guidance)
 
+    def test_protocol_tool_guidance_uses_domain_tools_for_catalog_ssh_subtypes(self):
+        cases = [
+            ("h3c_switch", "network_cli_execute_command", "网络设备 CLI"),
+            ("nas", "storage_execute_command", "存储节点"),
+            ("synology_nas", "storage_execute_command", "存储节点"),
+            ("process", "middleware_execute_command", "中间件主机"),
+        ]
+
+        for asset_type, tool_name, expected_text in cases:
+            with self.subTest(asset_type=asset_type):
+                guidance = protocol_tool_guidance("ssh", asset_type, "10.0.0.1")
+
+                self.assertIn(tool_name, guidance)
+                self.assertIn(expected_text, guidance)
+
     def test_protocol_tool_list_filters_local_execute_script_by_default(self):
         filtered = protocol_tool_list("virtual", has_skill_scripts=False)
         allowed = protocol_tool_list("virtual", has_skill_scripts=True)

@@ -310,6 +310,69 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
             [item["protocol"] for item in matrix["supported_protocols"] if item["purpose"] == "operation"],
         )
 
+    def test_vendor_switch_matrix_uses_network_cli_and_real_catalog_data(self):
+        from core import protocol_verification
+
+        matrix = protocol_verification.build_asset_matrix({
+            "id": 13,
+            "remark": "h3c-core",
+            "host": "10.0.0.13",
+            "port": 22,
+            "username": "admin",
+            "password": "switch-secret",
+            "asset_type": "h3c_switch",
+            "protocol": "ssh",
+            "extra_args": {"category": "network", "sub_type": "h3c_switch"},
+        })
+        descriptions = " ".join(step["description"] for step in matrix["steps"])
+
+        self.assertIn("网络设备 SSH CLI", descriptions)
+        self.assertNotIn("SSH Shell", descriptions)
+        self.assertIn("network_cli_execute_command", matrix["active_tools"])
+        self.assertTrue(any(
+            item["protocol"] == "ssh"
+            and item["purpose"] == "operation"
+            and item["default_port"] == 22
+            and item["is_current"]
+            for item in matrix["supported_protocols"]
+        ))
+        self.assertTrue(any(
+            item["protocol"] == "snmp" and item["purpose"] == "monitoring" and item["default_port"] == 161
+            for item in matrix["supported_protocols"]
+        ))
+
+    def test_storage_ssh_matrix_uses_storage_tool_and_real_catalog_data(self):
+        from core import protocol_verification
+
+        matrix = protocol_verification.build_asset_matrix({
+            "id": 14,
+            "remark": "office-nas",
+            "host": "10.0.0.14",
+            "port": 22,
+            "username": "admin",
+            "password": "storage-secret",
+            "asset_type": "nas",
+            "protocol": "ssh",
+            "extra_args": {"category": "storage", "sub_type": "nas"},
+        })
+        descriptions = " ".join(step["description"] for step in matrix["steps"])
+
+        self.assertIn("存储设备 SSH CLI", descriptions)
+        self.assertNotIn("Linux", descriptions)
+        self.assertIn("storage_execute_command", matrix["active_tools"])
+        self.assertTrue(any(
+            item["label"] == "存储设备 SSH CLI"
+            and item["protocol"] == "ssh"
+            and item["purpose"] == "operation"
+            and item["default_port"] == 22
+            and item["is_current"]
+            for item in matrix["supported_protocols"]
+        ))
+        self.assertTrue(any(
+            item["protocol"] == "snmp" and item["purpose"] == "monitoring" and item["default_port"] == 161
+            for item in matrix["supported_protocols"]
+        ))
+
     def test_asset_catalog_access_protocols_cover_all_types(self):
         from core.asset_protocols import get_asset_catalog
 
@@ -329,6 +392,33 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
             for item in protocols
         ))
         self.assertFalse(any(item["protocol"] == "jdbc" for item in protocols))
+
+    def test_catalog_exposes_real_defaults_for_core_new_asset_types(self):
+        from core.asset_protocols import get_asset_definition
+
+        expected = {
+            "oracle": ("oracle", 1521, "native_sql", "db_execute_query"),
+            "mysql": ("mysql", 3306, "native_sql", "db_execute_query"),
+            "h3c_switch": ("ssh", 22, "ssh_network_cli", "network_cli_execute_command"),
+            "nas": ("ssh", 22, "storage_shell", "storage_execute_command"),
+            "kafka_client": ("kafka", 9092, "service_probe", "service_probe_request"),
+        }
+
+        for asset_id, (protocol, port, connector, tool) in expected.items():
+            with self.subTest(asset_id=asset_id):
+                item = get_asset_definition(asset_id)
+                capability = item["capability"]
+
+                self.assertEqual(item["protocol"], protocol)
+                self.assertEqual(item["default_port"], port)
+                self.assertEqual(capability["connector"], connector)
+                self.assertIn(tool, capability["tools"])
+                self.assertTrue(any(
+                    access["protocol"] == protocol
+                    and access["purpose"] == "operation"
+                    and access["default_port"] == port
+                    for access in item["access_protocols"]
+                ))
 
     def test_linux_catalog_keeps_only_ssh_operation_default(self):
         from core.asset_protocols import get_asset_definition

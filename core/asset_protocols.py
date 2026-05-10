@@ -42,6 +42,7 @@ from core.asset_protocol_constants import (
     MONITORING_ASSET_TYPES,
     NETWORK_API_ASSET_TYPES,
     NETWORK_CLI_ASSET_TYPES,
+    NETWORK_SSH_ASSET_TYPES,
     OOB_API_ASSET_TYPES,
     PORT_ASSET_HINTS,
     SECURITY_API_ASSET_TYPES,
@@ -52,6 +53,7 @@ from core.asset_protocol_constants import (
     SSH_PROTOCOLS,
     STORAGE_API_PROTOCOLS,
     STORAGE_ASSET_TYPES,
+    STORAGE_SSH_ASSET_TYPES,
     VIRTUALIZATION_API_PROTOCOLS,
     VIRTUALIZATION_ASSET_TYPES,
     _category_asset_types,
@@ -281,6 +283,19 @@ def normalize_protocol(
         return "virtual"
 
     if value and value != "virtual":
+        if _clean(asset_type) and _alias_asset_type(value) == subtype and (definition := get_asset_definition(subtype)):
+            return definition["protocol"]
+        if value in (
+            SQL_PROTOCOLS
+            | DATASTORE_PROTOCOLS
+            | DATABASE_HTTP_PROTOCOLS
+            | API_PROTOCOLS
+            | SERVICE_PROBE_PROTOCOLS
+            | SNMP_PROTOCOLS
+            | SSH_PROTOCOLS
+            | {"winrm"}
+        ):
+            return value
         return ASSET_PROTOCOL_MAP.get(value, value)
 
     definition = get_asset_definition(subtype)

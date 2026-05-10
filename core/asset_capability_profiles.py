@@ -153,7 +153,7 @@ SPECIAL_CAPABILITY_OVERRIDES: dict[str, dict[str, Any]] = {
         "credential_fields": ["host", "port", "username", "password", "sid_or_service_name"],
         "setup": {
             "python_package": "oracledb",
-            "external_client": "Oracle Instant Client（可选兼容模式）",
+            "external_client": "Oracle Instant Client（默认兼容模式）",
             "external_client_required": False,
             "recommended_path_windows": r"D:\AIOPS\oracle_instantclient\instantclient_23_0",
             "recommended_path_linux": "/opt/opscore/oracle/instantclient",
@@ -162,7 +162,7 @@ SPECIAL_CAPABILITY_OVERRIDES: dict[str, dict[str, Any]] = {
                 "OPSCORE_ORACLE_CLIENT_LIB_DIR",
                 "OPSCORE_ORACLE_CLIENT_ROOT",
             ],
-            "note": "默认使用 python-oracledb Thin Mode；只有旧版 10G password verifier、OCI/TNS 或老版本兼容场景才启用 Thick Mode。",
+            "note": "默认使用 python-oracledb Thick Mode 兼容旧库、TNS 和老版本密码校验；需要纯 Thin Mode 时可通过资产参数或环境变量关闭。",
         },
         "maturity": "native",
     },

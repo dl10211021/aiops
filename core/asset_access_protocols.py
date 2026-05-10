@@ -131,8 +131,19 @@ SQL_NATIVE_PROTOCOLS = {
     "iotdb",
 }
 DATASTORE_PROTOCOLS = {"redis", "mongodb", "memcached", "nebula_graph", "ngql"}
-NETWORK_CLI_ASSET_TYPES = {"switch", "router", "firewall", "vpn", "network_device"}
-NETWORK_API_ASSET_TYPES = {"f5", "a10", "waf"}
+NETWORK_CLI_ASSET_TYPES = {
+    "switch",
+    "router",
+    "firewall",
+    "vpn",
+    "network_device",
+    "cisco_switch",
+    "h3c_switch",
+    "hpe_switch",
+    "huawei_switch",
+    "tplink_switch",
+}
+NETWORK_API_ASSET_TYPES = {"f5", "a10", "waf", "firewall"}
 OS_ASSET_TYPES = {
     "linux",
     "unix",
@@ -208,6 +219,7 @@ def _entry(
     source: str,
     default_protocol: str,
     default_port: int | None = None,
+    label: str | None = None,
     security: str = "recommended",
     description: str | None = None,
     supported: bool = True,
@@ -215,7 +227,7 @@ def _entry(
     protocol = _normalize_protocol(protocol)
     return {
         "protocol": protocol,
-        "label": protocol_label(protocol),
+        "label": label or protocol_label(protocol),
         "purpose": purpose,
         "purpose_label": _purpose_label(purpose),
         "role": role,
@@ -276,6 +288,7 @@ def build_access_protocols(item: dict[str, Any]) -> list[dict[str, Any]]:
             role="default" if default_protocol == "ssh" else "alternate",
             source="网络设备运维规则",
             default_protocol=default_protocol,
+            label="网络设备 SSH CLI",
             description="网络设备主推荐方式，适合执行 show/display 等只读或经审批操作。",
         ))
 
@@ -299,7 +312,8 @@ def build_access_protocols(item: dict[str, Any]) -> list[dict[str, Any]]:
             role="default" if default_protocol == "http_api" else "alternate",
             source="网络设备运维规则",
             default_protocol=default_protocol,
-            description="适合负载均衡、WAF 等平台化网络设备管理接口。",
+            label="网络设备 HTTP/API 管理接口",
+            description="适合防火墙、负载均衡、WAF 等平台化网络设备管理接口。",
         ))
         _add(entries, _entry(
             "ssh",
@@ -307,6 +321,7 @@ def build_access_protocols(item: dict[str, Any]) -> list[dict[str, Any]]:
             role="alternate",
             source="网络设备运维规则",
             default_protocol=default_protocol,
+            label="网络设备 SSH CLI",
             description="保留 CLI 只读排查能力。",
         ))
 
@@ -370,6 +385,7 @@ def build_access_protocols(item: dict[str, Any]) -> list[dict[str, Any]]:
                 source="中间件运维规则",
                 default_protocol=default_protocol,
                 default_port=default_port,
+                label="中间件主机 SSH Shell" if default_protocol == "ssh" else None,
                 description="中间件默认运维入口，用于只读巡检、状态查询和经审批动作。",
             ))
 
@@ -393,6 +409,7 @@ def build_access_protocols(item: dict[str, Any]) -> list[dict[str, Any]]:
                 source="存储/带外接入规则",
                 default_protocol=default_protocol,
                 default_port=default_port,
+                label="存储设备 SSH CLI" if category == "storage" and default_protocol == "ssh" else None,
                 description="平台默认接入方式。",
             ))
 

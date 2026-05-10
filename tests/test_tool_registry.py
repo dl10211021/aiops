@@ -110,6 +110,30 @@ class TestToolRegistry(unittest.TestCase):
         self.assertIn("network_cli_execute_command", names)
         self.assertNotIn("linux_execute_command", names)
 
+    def test_firewall_can_use_ssh_or_api_tooling(self):
+        ssh_names = enabled_tool_names(
+            {
+                "target_scope": "asset",
+                "asset_type": "firewall",
+                "protocol": "ssh",
+                "extra_args": {"category": "network", "sub_type": "firewall"},
+            }
+        )
+        api_names = enabled_tool_names(
+            {
+                "target_scope": "asset",
+                "asset_type": "firewall",
+                "protocol": "http_api",
+                "extra_args": {"category": "network", "sub_type": "firewall"},
+            }
+        )
+
+        self.assertIn("network_cli_execute_command", ssh_names)
+        self.assertNotIn("linux_execute_command", ssh_names)
+        self.assertIn("network_api_request", api_names)
+        self.assertNotIn("http_api_request", api_names)
+        self.assertNotIn("network_cli_execute_command", api_names)
+
     def test_virtual_session_is_the_only_scope_with_local_script(self):
         names = enabled_tool_names(
             {
@@ -181,18 +205,71 @@ class TestToolRegistry(unittest.TestCase):
         self.assertIn("storage_execute_command", names)
         self.assertNotIn("linux_execute_command", names)
 
-    def test_nas_session_uses_snmp_not_storage_api(self):
+    def test_nas_session_enables_storage_command_not_linux(self):
         names = enabled_tool_names(
             {
                 "target_scope": "asset",
                 "asset_type": "nas",
-                "protocol": "snmp",
+                "protocol": "ssh",
                 "extra_args": {"category": "storage", "sub_type": "nas"},
             }
         )
 
-        self.assertIn("snmp_get", names)
+        self.assertIn("storage_execute_command", names)
+        self.assertNotIn("linux_execute_command", names)
         self.assertNotIn("storage_api_request", names)
+
+    def test_catalog_declared_tools_are_enabled_for_new_asset_types(self):
+        missing = []
+        for item in get_asset_catalog():
+            capability = item.get("capability") or {}
+            declared_tools = capability.get("tools") or []
+            if not declared_tools:
+                continue
+
+            names = enabled_tool_names(
+                {
+                    "target_scope": "asset",
+                    "asset_type": item["id"],
+                    "protocol": item.get("protocol"),
+                    "extra_args": {
+                        "category": item.get("category"),
+                        "sub_type": item["id"],
+                        "db_type": capability.get("driver_key") or item["id"],
+                    },
+                }
+            )
+            missing.extend(
+                f"{item['id']}:{tool_name}"
+                for tool_name in declared_tools
+                if tool_name not in names
+            )
+
+        self.assertEqual(missing, [])
+
+    def test_specific_catalog_ssh_types_use_domain_tools_not_linux(self):
+        cases = [
+            ("h3c_switch", "network_cli_execute_command", True),
+            ("huawei_switch", "network_cli_execute_command", True),
+            ("synology_nas", "storage_execute_command", True),
+            ("kafka", "middleware_execute_command", True),
+            ("process", "middleware_execute_command", True),
+        ]
+        for asset_type, tool_name, excludes_linux in cases:
+            with self.subTest(asset_type=asset_type):
+                item = next(asset for asset in get_asset_catalog() if asset["id"] == asset_type)
+                names = enabled_tool_names(
+                    {
+                        "target_scope": "asset",
+                        "asset_type": item["id"],
+                        "protocol": item.get("protocol"),
+                        "extra_args": {"category": item.get("category"), "sub_type": item["id"]},
+                    }
+                )
+
+                self.assertIn(tool_name, names)
+                if excludes_linux:
+                    self.assertNotIn("linux_execute_command", names)
 
     def test_clickhouse_session_uses_database_http_tooling(self):
         names = enabled_tool_names(

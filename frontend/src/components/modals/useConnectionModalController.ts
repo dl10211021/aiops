@@ -7,6 +7,7 @@ import {
 import { buildConnectionModalModel } from './connectionModalModel'
 import {
   formForCategorySelection,
+  formForProtocolSelection,
   formForSubTypeSelection,
   patchConnectionExtraArgs,
   setConnectionExtraArg,
@@ -26,6 +27,7 @@ export function useConnectionModalController() {
   const {
     assetCategories,
     assetSubTypes,
+    catalogStatus,
     databaseDrivers,
     oracleClientConfig,
     oracleThickDefaults,
@@ -78,6 +80,14 @@ export function useConnectionModalController() {
     setSelectedSkills(skillsForSelectedSubType(newSubTypeId, skills))
   }
 
+  const handleProtocolChange = (protocol: string) => {
+    setForm(formForProtocolSelection({
+      form,
+      protocol,
+      selectedSubInfo: model.selectedSubInfo,
+    }))
+  }
+
   const toggleSkill = (id: string) => {
     setSelectedSkills(toggleConnectionSkillSelection(selectedSkills, id))
   }
@@ -97,6 +107,7 @@ export function useConnectionModalController() {
     ...connectionActions,
     assetCategories,
     assetTypeSearch,
+    catalogStatus,
     canSubmitAsset,
     closeModal,
     form,
@@ -112,6 +123,7 @@ export function useConnectionModalController() {
     skills,
     toggleSkill,
     handleCategoryChange,
+    handleProtocolChange,
     handleSubTypeChange,
   }
 }
