@@ -7,6 +7,8 @@ import { normalizeHistoryMessages } from './sessionHistory'
 
 const sessionHistoryRestoreLimit = 160
 const SESSION_HISTORY_FETCH_DELAY_MS = 120
+const STREAM_RECOVERY_POLL_MS = 8000
+const STREAM_RECOVERY_HIDDEN_POLL_MS = 30000
 
 export function useSessionHistorySync(
   currentSessionId: string | null,
@@ -64,14 +66,37 @@ export function useSessionHistorySync(
     const sessionId = currentSessionId
     if (!sessionId || !session?.backendStreaming) return
     if (hasActiveStream(sessionId)) return
+    const recoverySessionId = sessionId
 
     let cancelled = false
+    let inFlight = false
+    let timer: ReturnType<typeof window.setTimeout> | null = null
     const controller = new AbortController()
-    const refreshHistory = async () => {
+
+    function scheduleNext(delay: number) {
+      if (cancelled) return
+      if (timer) window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        void refreshHistory()
+      }, delay)
+    }
+
+    async function refreshHistory() {
+      if (cancelled || inFlight) return
+      if (hasActiveStream(recoverySessionId)) {
+        updateSession(recoverySessionId, { isStreaming: true, backendStreaming: true })
+        return
+      }
+      if (document.hidden) {
+        scheduleNext(STREAM_RECOVERY_HIDDEN_POLL_MS)
+        return
+      }
+      inFlight = true
+      let shouldContinue = true
       try {
-        const history = await getSessionHistory(sessionId, sessionHistoryRestoreLimit, { signal: controller.signal })
+        const history = await getSessionHistory(recoverySessionId, sessionHistoryRestoreLimit, { signal: controller.signal })
         if (!cancelled) {
-          setSessionMessages(sessionId, normalizeHistoryMessages(sessionId, history.data.messages || []))
+          setSessionMessages(recoverySessionId, normalizeHistoryMessages(recoverySessionId, history.data.messages || []))
         }
       } catch (error) {
         if (isAbortError(error) || controller.signal.aborted) return
@@ -80,17 +105,29 @@ export function useSessionHistorySync(
       try {
         const active = await getActiveSessions()
         if (cancelled) return
-        const running = Boolean(active.data.sessions?.[sessionId]?.isStreaming)
-        updateSession(sessionId, { isStreaming: running, backendStreaming: running })
+        const running = Boolean(active.data.sessions?.[recoverySessionId]?.isStreaming)
+        shouldContinue = running
+        updateSession(recoverySessionId, { isStreaming: running, backendStreaming: running })
       } catch {
         // Keep the current running indicator if the status check is transiently unavailable.
+      } finally {
+        inFlight = false
+        if (!cancelled && shouldContinue) {
+          scheduleNext(document.hidden ? STREAM_RECOVERY_HIDDEN_POLL_MS : STREAM_RECOVERY_POLL_MS)
+        }
       }
     }
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) void refreshHistory()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
     void refreshHistory()
-    const timer = window.setInterval(refreshHistory, 5000)
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      if (timer) window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       controller.abort()
     }
   }, [currentSessionId, hasActiveStream, session?.backendStreaming, setSessionMessages, updateSession])

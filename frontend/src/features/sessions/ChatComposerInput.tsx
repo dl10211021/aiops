@@ -41,6 +41,7 @@ export default function ChatComposerInput({
   const hasLocalTextRef = useRef(Boolean(input.trim()))
   const lastSyncedInputRef = useRef(input)
   const lastDraftKeyRef = useRef(draftKey)
+  const historyResetRef = useRef(false)
 
   const updateHasLocalText = (value: string) => {
     const next = Boolean(value.trim())
@@ -90,6 +91,7 @@ export default function ChatComposerInput({
     lastDraftKeyRef.current = draftKey
     lastSyncedInputRef.current = input
     localInputRef.current = input
+    historyResetRef.current = false
     if (el && el.value !== input) {
       el.value = input
     }
@@ -140,7 +142,10 @@ export default function ChatComposerInput({
           updateHasLocalText(nextInput)
           scheduleResize()
           scheduleInputSync(nextInput)
-          onHistoryReset()
+          if (!historyResetRef.current) {
+            historyResetRef.current = true
+            onHistoryReset()
+          }
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
