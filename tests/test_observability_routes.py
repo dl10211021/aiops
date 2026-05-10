@@ -139,6 +139,47 @@ class TestObservabilityRoutes(unittest.TestCase):
         self.assertEqual(response.data["evidence"]["title"], "Prometheus 告警为空")
         self.assertEqual(response.data["investigation"]["evidence_count"], 1)
 
+    def test_append_evidence_route_preserves_tool_evidence_contract(self):
+        create_response = asyncio.run(
+            observability_routes.create_observability_investigation(
+                observability_routes.InvestigationCreateRequest(
+                    system_id="global-portal-test",
+                    title="工具证据接入测试",
+                    symptom="需要把会话工具结果转成观测证据",
+                    severity="warning",
+                )
+            )
+        )
+        investigation_id = create_response.data["investigation"]["id"]
+        tool_evidence = {
+            "evidence_id": "tev-sid-1-call-1",
+            "session_id": "sid-1",
+            "tool_name": "db_execute_query",
+            "tool_family": "database",
+            "input_summary": "select 1 from dual",
+            "output_preview": "1",
+            "result_status": "done",
+        }
+
+        response = asyncio.run(
+            observability_routes.append_observability_evidence(
+                investigation_id,
+                observability_routes.EvidenceAppendRequest(
+                    title="数据库只读检查完成",
+                    summary="select 1 返回正常",
+                    evidence_type="tool_result",
+                    tool_evidence=tool_evidence,
+                    confidence="confirmed",
+                ),
+            )
+        )
+
+        evidence = response.data["evidence"]
+        self.assertEqual(evidence["tool_evidence"], tool_evidence)
+        self.assertEqual(evidence["raw_ref"], "tev-sid-1-call-1")
+        self.assertEqual(evidence["raw_excerpt"], "1")
+        self.assertEqual(response.data["investigation"]["evidence_count"], 1)
+
     def test_bind_asset_and_session_routes_return_updated_profile(self):
         asset_response = asyncio.run(
             observability_routes.bind_observability_asset(

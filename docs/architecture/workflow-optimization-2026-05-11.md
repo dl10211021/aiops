@@ -24,6 +24,7 @@ OpsCore 的核心工作流应保持为：
 - 目录类数据采用短 TTL 缓存，避免技能市场、资产类型、数据库驱动能力在页面生命周期内永久过期。
 - 数据库驱动能力和 Oracle Client 探测接口支持 `refresh=true`，便于安装驱动或变更环境变量后主动刷新。
 - Chat Loop 引入结构化 `ExecutionIntent`，兼容原有中文关键词，但允许快捷指令、会话动作和可观测调查直接声明 `requires_live_evidence`。
+- 工具执行结果开始输出标准 `ToolEvidence`，并在 chat trace 与可观测调查证据中保留同一份证据契约。
 
 ## 可观测分支合流规则
 
@@ -60,8 +61,8 @@ ToolEvidence
 落地顺序：
 
 1. 保持当前 `exec_trace` 兼容字段不变。
-2. 在生成 `tool_end` 时补齐 `result_meta` 和可选 `evidence_id`。
-3. 会话历史继续读取旧字段，但优先展示 `ToolEvidence` 字段。
+2. 在生成 `tool_end` 时补齐 `result_meta`、`evidence_id` 和 `evidence`。
+3. 会话历史继续读取旧字段，同时透传 `ToolEvidence` 字段。
 4. 可观测调查追加证据时复用同一对象，不再复制一份只属于观测模块的证据结构。
 
 ## Dispatcher 收敛方向

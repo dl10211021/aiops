@@ -27,6 +27,7 @@ class EvidenceAppendRequest(BaseModel):
     source_id: str | None = Field(default=None, max_length=120)
     raw_ref: str = Field(default="", max_length=240)
     raw_excerpt: str = Field(default="", max_length=1200)
+    tool_evidence: dict = Field(default_factory=dict)
     confidence: str = Field(default="pending_review", pattern="^(confirmed|inferred|unknown|pending_review)$")
 
 
@@ -166,6 +167,7 @@ async def append_observability_evidence(investigation_id: str, req: EvidenceAppe
         source_id=req.source_id,
         raw_ref=req.raw_ref,
         raw_excerpt=req.raw_excerpt,
+        tool_evidence=req.tool_evidence,
         confidence=req.confidence,
     )
     if not evidence:

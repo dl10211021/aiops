@@ -205,6 +205,7 @@ class EvidenceItem(BaseModel):
     summary: str = Field(default="", max_length=1000)
     raw_ref: str = Field(default="", max_length=240)
     raw_excerpt: str = Field(default="", max_length=1200)
+    tool_evidence: dict[str, Any] = Field(default_factory=dict)
     confidence: Confidence = "pending_review"
     timestamp: str = ""
     created_at: str = ""

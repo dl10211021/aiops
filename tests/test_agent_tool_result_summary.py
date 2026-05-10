@@ -120,6 +120,38 @@ def test_build_tool_end_event_includes_structured_error_metadata():
     assert "PowerShell 脚本语法错误" in safe_text
 
 
+def test_build_tool_end_event_can_attach_standard_tool_evidence():
+    message, _safe_text = build_tool_end_event(
+        "call-1",
+        "db_execute_query",
+        {"success": True, "data": [{"one": 1}]},
+        session_id="sid-db",
+        context={
+            "target_scope": "asset",
+            "asset_type": "oracle",
+            "protocol": "oracle",
+            "host": "db.local",
+            "port": 1521,
+        },
+        input_summary="select 1 from dual",
+        started_at=100,
+        finished_at=150,
+    )
+
+    payload = json.loads(message)
+
+    assert payload["evidence_id"] == "tev-sid-db-call-1"
+    assert payload["started_at"] == 100
+    assert payload["finished_at"] == 150
+    assert payload["evidence"]["session_id"] == "sid-db"
+    assert payload["evidence"]["tool_name"] == "db_execute_query"
+    assert payload["evidence"]["tool_family"] == "database"
+    assert payload["evidence"]["input_summary"] == "select 1 from dual"
+    assert payload["evidence"]["asset_ref"]["host"] == "db.local"
+    assert payload["evidence"]["started_at"] == 100
+    assert payload["evidence"]["finished_at"] == 150
+
+
 def test_agent_max_steps_defaults_and_bounds(monkeypatch):
     monkeypatch.delenv("OPSCORE_AGENT_MAX_STEPS", raising=False)
     monkeypatch.delenv("OPSCORE_HEADLESS_AGENT_MAX_STEPS", raising=False)

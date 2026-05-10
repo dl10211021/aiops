@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import Awaitable, Callable, AsyncIterator
 from typing import Any, Protocol
 
@@ -45,7 +46,16 @@ async def process_chat_tool_calls(
 
         if prepared_call.parse_error:
             tool_res = invalid_tool_arguments_result(prepared_call.parse_error)
-            msg_end, safe_tool_res = build_tool_end_event(tc_id, func_name, tool_res)
+            finished_at = int(time.time() * 1000)
+            msg_end, safe_tool_res = build_tool_end_event(
+                tc_id,
+                func_name,
+                tool_res,
+                session_id=session_id,
+                context=context,
+                input_summary=display_cmd,
+                finished_at=finished_at,
+            )
             _collect_tool_end_trace(trace_collector, msg_end)
             yield sse_raw(msg_end)
             tool_msg = {
@@ -191,10 +201,16 @@ async def process_chat_tool_calls(
                     },
                     ensure_ascii=False,
                 )
+                finished_at = int(time.time() * 1000)
                 msg_end, safe_tool_res = build_tool_end_event(
                     tc_id,
                     func_name,
                     tool_res,
+                    session_id=session_id,
+                    context=context,
+                    input_summary=display_cmd,
+                    finished_at=finished_at,
+                    approval_ref=tc_id,
                 )
                 _collect_tool_end_trace(trace_collector, msg_end)
                 yield sse_raw(msg_end)
@@ -209,6 +225,7 @@ async def process_chat_tool_calls(
                 memory_store.append_message(session_id, tool_msg)
                 continue
 
+        started_at = int(time.time() * 1000)
         msg_start = json.dumps(
             {
                 "type": "tool_start",
@@ -216,6 +233,7 @@ async def process_chat_tool_calls(
                 "tool": func_name,
                 "args": display_cmd,
                 "cmd": display_cmd,
+                "started_at": started_at,
             }
         )
         if trace_collector:
@@ -224,6 +242,7 @@ async def process_chat_tool_calls(
                     "type": "tool_start",
                     "tool": func_name,
                     "args": display_cmd,
+                    "startedAt": started_at,
                 }
             )
         yield sse_raw(msg_start)
@@ -237,7 +256,18 @@ async def process_chat_tool_calls(
                 record_approval_execution(tc_id, tool_res)
             except KeyError:
                 pass
-        msg_end, safe_tool_res = build_tool_end_event(tc_id, func_name, tool_res)
+        finished_at = int(time.time() * 1000)
+        msg_end, safe_tool_res = build_tool_end_event(
+            tc_id,
+            func_name,
+            tool_res,
+            session_id=session_id,
+            context=context,
+            input_summary=display_cmd,
+            started_at=started_at,
+            finished_at=finished_at,
+            approval_ref=tc_id if approval_required else None,
+        )
         _collect_tool_end_trace(trace_collector, msg_end)
         yield sse_raw(msg_end)
         await sleep(0.05)
@@ -277,6 +307,9 @@ def _collect_tool_end_trace(
             "tool": payload.get("tool") or "unknown",
             "result": payload.get("result") or "",
             "resultMeta": payload.get("result_meta") or {},
+            "evidenceId": payload.get("evidence_id") or "",
+            "evidence": payload.get("evidence") or {},
             "status": payload.get("result_status") or "done",
+            "completedAt": payload.get("finished_at"),
         }
     )

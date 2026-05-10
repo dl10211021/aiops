@@ -76,6 +76,10 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payloads[0]["args"], "uptime")
         self.assertEqual(payloads[1]["type"], "tool_end")
         self.assertEqual(payloads[1]["result_status"], "done")
+        self.assertEqual(payloads[1]["evidence"]["session_id"], "sid-tool")
+        self.assertEqual(payloads[1]["evidence"]["tool_name"], "linux_execute_command")
+        self.assertEqual(payloads[1]["evidence"]["tool_family"], "os")
+        self.assertEqual(payloads[1]["evidence"]["input_summary"], "uptime")
         self.assertEqual(payloads[2]["type"], "status")
         self.assertEqual(
             dispatcher.executed,
@@ -113,6 +117,8 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payloads[0]["type"], "tool_end")
         self.assertEqual(payloads[0]["result_status"], "error")
         self.assertEqual(payloads[0]["result_meta"]["error_type"], "tool_arguments_invalid")
+        self.assertEqual(payloads[0]["evidence"]["result_status"], "error")
+        self.assertEqual(payloads[0]["evidence"]["input_summary"], "JSON解析失败: bad json")
         self.assertEqual(dispatcher.executed, [])
         self.assertEqual(messages[0]["tool_call_id"], "call-bad")
         self.assertIn("bad json", messages[0]["content"])

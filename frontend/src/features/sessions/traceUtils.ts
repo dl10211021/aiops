@@ -118,6 +118,17 @@ export function completeLastTrace(items: ExecTraceItem[], data: Record<string, u
   const resultMeta = data.result_meta && typeof data.result_meta === 'object' && !Array.isArray(data.result_meta)
     ? data.result_meta as Record<string, unknown>
     : undefined
+  const evidence = data.evidence && typeof data.evidence === 'object' && !Array.isArray(data.evidence)
+    ? data.evidence as ExecTraceItem['evidence']
+    : undefined
+  const evidenceId = typeof data.evidence_id === 'string'
+    ? data.evidence_id
+    : evidence?.evidence_id
+  const completedAt = typeof data.finished_at === 'number'
+    ? data.finished_at
+    : typeof evidence?.finished_at === 'number'
+      ? evidence.finished_at
+      : Date.now()
   const next = [...items]
   for (let i = next.length - 1; i >= 0; i--) {
     if (next[i].type === 'tool_start' && next[i].status === 'running') {
@@ -126,8 +137,10 @@ export function completeLastTrace(items: ExecTraceItem[], data: Record<string, u
         type: 'tool_end',
         result,
         resultMeta,
+        evidenceId,
+        evidence,
         status,
-        completedAt: Date.now(),
+        completedAt,
       }
       return next
     }
@@ -137,8 +150,10 @@ export function completeLastTrace(items: ExecTraceItem[], data: Record<string, u
     tool: String(data.tool || 'unknown'),
     result,
     resultMeta,
+    evidenceId,
+    evidence,
     status,
-    completedAt: Date.now(),
+    completedAt,
   })
   return next
 }

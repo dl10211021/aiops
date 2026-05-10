@@ -331,7 +331,7 @@ async def run_chat_agent_loop(
                         "tool": str(event.get("tool") or "unknown"),
                         "args": str(event.get("args") or ""),
                         "status": "running",
-                        "startedAt": now_ms,
+                        "startedAt": event.get("startedAt") or now_ms,
                     }
                 )
                 return
@@ -342,8 +342,10 @@ async def run_chat_agent_loop(
                 "tool": str(event.get("tool") or "unknown"),
                 "result": str(event.get("result") or ""),
                 "resultMeta": event.get("resultMeta") or {},
+                "evidenceId": str(event.get("evidenceId") or ""),
+                "evidence": event.get("evidence") or {},
                 "status": event.get("status") if event.get("status") in {"done", "error"} else "done",
-                "completedAt": now_ms,
+                "completedAt": event.get("completedAt") or now_ms,
             }
             for index in range(len(exec_trace) - 1, -1, -1):
                 item = exec_trace[index]
@@ -948,7 +950,7 @@ async def _run_split_model_chat_agent_loop(
                         "tool": str(event.get("tool") or "unknown"),
                         "args": str(event.get("args") or ""),
                         "status": "running",
-                        "startedAt": now_ms,
+                        "startedAt": event.get("startedAt") or now_ms,
                     }
                 )
                 return
@@ -959,8 +961,10 @@ async def _run_split_model_chat_agent_loop(
                 "tool": str(event.get("tool") or "unknown"),
                 "result": str(event.get("result") or ""),
                 "resultMeta": event.get("resultMeta") or {},
+                "evidenceId": str(event.get("evidenceId") or ""),
+                "evidence": event.get("evidence") or {},
                 "status": event.get("status") if event.get("status") in {"done", "error"} else "done",
-                "completedAt": now_ms,
+                "completedAt": event.get("completedAt") or now_ms,
             }
             for index in range(len(exec_trace) - 1, -1, -1):
                 item = exec_trace[index]

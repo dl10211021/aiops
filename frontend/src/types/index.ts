@@ -238,9 +238,34 @@ export interface ExecTraceItem {
   args?: string
   result?: string
   resultMeta?: Record<string, unknown>
+  evidenceId?: string
+  evidence?: ToolEvidence
   status?: 'running' | 'done' | 'error'
   startedAt?: number
   completedAt?: number
+}
+
+export interface ToolEvidence {
+  evidence_id: string
+  session_id: string
+  asset_ref?: {
+    asset_id?: string | number | null
+    target_scope?: string
+    asset_type?: string | null
+    protocol?: string | null
+    host?: string | null
+    port?: number | string | null
+  }
+  tool_name: string
+  tool_family: string
+  input_summary?: string
+  redacted_input?: string
+  output_preview?: string
+  result_status?: 'done' | 'error' | string
+  result_meta?: Record<string, unknown>
+  approval_ref?: string
+  started_at?: number
+  finished_at?: number
 }
 
 export interface SafetyPolicyAction {

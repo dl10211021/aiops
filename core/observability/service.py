@@ -652,12 +652,17 @@ class ObservabilityCatalogService:
         source_id: str | None = None,
         raw_ref: str = "",
         raw_excerpt: str = "",
+        tool_evidence: dict | None = None,
         confidence: str = "pending_review",
     ) -> EvidenceItem | None:
         investigation = self.get_investigation(investigation_id)
         if not investigation:
             return None
         now = _now()
+        tool_evidence = tool_evidence or {}
+        if tool_evidence:
+            raw_ref = raw_ref or str(tool_evidence.get("evidence_id") or "")
+            raw_excerpt = raw_excerpt or str(tool_evidence.get("output_preview") or "")
         evidence = EvidenceItem(
             id=f"ev-{investigation_id}-{len(investigation.evidence) + 1}",
             investigation_id=investigation_id,
@@ -669,6 +674,7 @@ class ObservabilityCatalogService:
             summary=summary,
             raw_ref=raw_ref,
             raw_excerpt=raw_excerpt,
+            tool_evidence=tool_evidence,
             confidence=confidence,  # type: ignore[arg-type]
             timestamp=now,
             created_at=now,

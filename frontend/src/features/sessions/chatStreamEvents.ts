@@ -49,7 +49,7 @@ export function applyChatStreamEvent({
           tool: streamString(data.tool, 'unknown'),
           args: streamArgs(data.args ?? data.cmd),
           status: 'running',
-          startedAt: Date.now(),
+          startedAt: typeof data.started_at === 'number' ? data.started_at : Date.now(),
         } as ExecTraceItem],
       }))
       return { done: false, accumulatedMarkdown }

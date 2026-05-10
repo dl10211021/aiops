@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 
 from core.redaction import redact_json_text, redact_text
+from core.tool_evidence import build_tool_evidence
 
 
 @dataclass(frozen=True)
@@ -92,19 +93,44 @@ def build_tool_end_event(
     tool_call_id: str,
     tool_name: str,
     tool_result,
+    *,
+    session_id: str = "",
+    context: dict | None = None,
+    input_summary: str = "",
+    started_at: int | None = None,
+    finished_at: int | None = None,
+    approval_ref: str | None = None,
 ) -> tuple[str, str]:
     result_summary = summarize_tool_result_for_sse(tool_result)
-    message = json.dumps(
-        {
-            "type": "tool_end",
-            "id": tool_call_id,
-            "tool": tool_name,
-            "result": result_summary["preview"],
-            "result_status": result_summary["status"],
-            "result_meta": result_summary["metadata"],
-        },
-        ensure_ascii=False,
-    )
+    payload = {
+        "type": "tool_end",
+        "id": tool_call_id,
+        "tool": tool_name,
+        "result": result_summary["preview"],
+        "result_status": result_summary["status"],
+        "result_meta": result_summary["metadata"],
+    }
+    if started_at is not None:
+        payload["started_at"] = started_at
+    if finished_at is not None:
+        payload["finished_at"] = finished_at
+    if session_id:
+        evidence = build_tool_evidence(
+            tool_call_id=tool_call_id,
+            session_id=session_id,
+            context=context,
+            tool_name=tool_name,
+            input_summary=input_summary,
+            output_preview=result_summary["preview"],
+            result_status=result_summary["status"],
+            result_meta=result_summary["metadata"],
+            started_at=started_at,
+            finished_at=finished_at,
+            approval_ref=approval_ref,
+        )
+        payload["evidence_id"] = evidence["evidence_id"]
+        payload["evidence"] = evidence
+    message = json.dumps(payload, ensure_ascii=False)
     return message, result_summary["safe_text"]
 
 
