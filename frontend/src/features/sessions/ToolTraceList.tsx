@@ -46,6 +46,10 @@ function ToolTraceCard({
   const isPolicyBlocked = isPolicyBlockedResult(parsedResult)
   const isToolError = !isPolicyBlocked && isToolErrorResult(parsedResult)
   const executionText = traceExecutionText(item)
+  const evidence = item.evidence
+  const evidenceId = item.evidenceId || evidence?.evidence_id || ''
+  const evidenceInput = evidence?.input_summary || evidence?.redacted_input || ''
+  const evidenceOutput = evidence?.output_preview || ''
   const elapsed = item.startedAt && item.completedAt
     ? `${Math.max(0, ((item.completedAt - item.startedAt) / 1000)).toFixed(1)}s`
     : item.startedAt
@@ -62,14 +66,39 @@ function ToolTraceCard({
       <div className="flex items-center gap-2 px-3 py-2 text-xs">
         <span className={`h-2 w-2 rounded-full ${status === 'running' ? 'bg-ops-accent animate-pulse' : status === 'error' ? 'bg-ops-alert' : 'bg-ops-success'}`} />
         <span title={item.tool} className="font-semibold text-ops-text">{toolLabel(item.tool)}</span>
+        {evidence?.tool_family && (
+          <span className="rounded-full border border-ops-surface1 px-2 py-0.5 font-mono text-[10px] text-ops-overlay">
+            {evidence.tool_family}
+          </span>
+        )}
         {elapsed && <span className="ml-auto font-mono text-[10px] text-ops-overlay">{elapsed}</span>}
       </div>
+      {evidenceId && (
+        <div className="border-t border-ops-surface0/80 px-3 py-1.5 font-mono text-[10px] text-ops-overlay">
+          evidence: {evidenceId}
+        </div>
+      )}
       {executionText && (
         <div className="border-t border-ops-surface0/80 px-3 py-2">
           <div className="mb-1 text-[11px] text-ops-overlay">执行内容</div>
           <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-ops-subtext">
             {executionText.substring(0, 600)}
           </pre>
+        </div>
+      )}
+      {(evidenceInput || evidenceOutput) && (
+        <div className="border-t border-ops-surface0/80 px-3 py-2">
+          <div className="mb-1 text-[11px] text-ops-overlay">证据摘要</div>
+          {evidenceInput && (
+            <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-ops-subtext">
+              {evidenceInput.substring(0, 600)}
+            </pre>
+          )}
+          {evidenceOutput && evidenceOutput !== item.result && (
+            <pre className="mt-2 max-h-24 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-ops-subtext">
+              {evidenceOutput.substring(0, 600)}
+            </pre>
+          )}
         </div>
       )}
       {item.result && (

@@ -21,6 +21,7 @@ from core.assistant_model_config import (
 )
 from core.chat_execution_intent import ExecutionIntent, classify_execution_intent
 from core.tool_display import tool_label
+from core.tool_trace import make_tool_trace_collector
 
 
 NATIVE_ASSET_TOOL_NAMES = {
@@ -320,39 +321,7 @@ async def run_chat_agent_loop(
             break
 
         exec_trace: list[dict] = []
-
-        def record_exec_trace(event: dict) -> None:
-            event_type = event.get("type")
-            now_ms = int(time.time() * 1000)
-            if event_type == "tool_start":
-                exec_trace.append(
-                    {
-                        "type": "tool_start",
-                        "tool": str(event.get("tool") or "unknown"),
-                        "args": str(event.get("args") or ""),
-                        "status": "running",
-                        "startedAt": event.get("startedAt") or now_ms,
-                    }
-                )
-                return
-            if event_type != "tool_end":
-                return
-            completed = {
-                "type": "tool_end",
-                "tool": str(event.get("tool") or "unknown"),
-                "result": str(event.get("result") or ""),
-                "resultMeta": event.get("resultMeta") or {},
-                "evidenceId": str(event.get("evidenceId") or ""),
-                "evidence": event.get("evidence") or {},
-                "status": event.get("status") if event.get("status") in {"done", "error"} else "done",
-                "completedAt": event.get("completedAt") or now_ms,
-            }
-            for index in range(len(exec_trace) - 1, -1, -1):
-                item = exec_trace[index]
-                if item.get("type") == "tool_start" and item.get("status") == "running":
-                    exec_trace[index] = {**item, **completed}
-                    return
-            exec_trace.append(completed)
+        record_exec_trace = make_tool_trace_collector(exec_trace)
 
         async for event in tool_call_processor(
             tool_calls=tool_calls,
@@ -939,39 +908,7 @@ async def _run_split_model_chat_agent_loop(
         messages.append(safe_msg)
         assistant_memory_id = memory_store.append_message(session_id, safe_msg)
         exec_trace: list[dict] = []
-
-        def record_exec_trace(event: dict) -> None:
-            event_type = event.get("type")
-            now_ms = int(time.time() * 1000)
-            if event_type == "tool_start":
-                exec_trace.append(
-                    {
-                        "type": "tool_start",
-                        "tool": str(event.get("tool") or "unknown"),
-                        "args": str(event.get("args") or ""),
-                        "status": "running",
-                        "startedAt": event.get("startedAt") or now_ms,
-                    }
-                )
-                return
-            if event_type != "tool_end":
-                return
-            completed = {
-                "type": "tool_end",
-                "tool": str(event.get("tool") or "unknown"),
-                "result": str(event.get("result") or ""),
-                "resultMeta": event.get("resultMeta") or {},
-                "evidenceId": str(event.get("evidenceId") or ""),
-                "evidence": event.get("evidence") or {},
-                "status": event.get("status") if event.get("status") in {"done", "error"} else "done",
-                "completedAt": event.get("completedAt") or now_ms,
-            }
-            for index in range(len(exec_trace) - 1, -1, -1):
-                item = exec_trace[index]
-                if item.get("type") == "tool_start" and item.get("status") == "running":
-                    exec_trace[index] = {**item, **completed}
-                    return
-            exec_trace.append(completed)
+        record_exec_trace = make_tool_trace_collector(exec_trace)
 
         yield sse_event({"type": "status", "content": "⚙️ 主流程正在执行工具调用并记录证据..."})
         async for event in tool_call_processor(

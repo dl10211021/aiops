@@ -108,6 +108,7 @@ function dedupeTraces(traces: ExecTraceItem[]) {
       trace.tool,
       trace.args || '',
       trace.result || '',
+      trace.evidenceId || trace.evidence?.evidence_id || '',
       trace.status || '',
       trace.startedAt || '',
       trace.completedAt || '',
@@ -136,6 +137,7 @@ function traceResultLabel(trace: ExecTraceItem) {
 }
 
 function traceResultDetail(trace: ExecTraceItem) {
+  if (trace.evidence?.output_preview?.trim()) return trace.evidence.output_preview.trim()
   const parsed = parseJsonRecord(trace.result || '')
   if (parsed) {
     const output = parsed.output || parsed.stdout || parsed.result || parsed.data
@@ -147,7 +149,13 @@ function traceResultDetail(trace: ExecTraceItem) {
 }
 
 function traceExecutionDetail(trace: ExecTraceItem) {
+  const evidenceInput = trace.evidence?.input_summary || trace.evidence?.redacted_input || ''
+  if (evidenceInput.trim()) return evidenceInput.trim()
   return traceExecutionText(trace).trim()
+}
+
+function traceEvidenceId(trace: ExecTraceItem) {
+  return trace.evidenceId || trace.evidence?.evidence_id || ''
 }
 
 function recordResultLabel(record: Record<string, unknown>) {
@@ -199,6 +207,11 @@ function groupSearchText(group: ThinkingChainGroup) {
       trace.tool,
       trace.args || '',
       trace.result || '',
+      traceEvidenceId(trace),
+      trace.evidence?.tool_family || '',
+      trace.evidence?.input_summary || '',
+      trace.evidence?.redacted_input || '',
+      trace.evidence?.output_preview || '',
       traceTargetLabel(trace),
     ]),
   ].join(' ').toLowerCase()
@@ -433,6 +446,20 @@ export default function AiThinkingChainPanel({
                             <span className="font-semibold text-ops-overlay">执行：</span>
                             {compactText(traceTargetLabel(trace), trace.tool, 160)}
                           </div>
+                          {(trace.evidence?.tool_family || traceEvidenceId(trace)) && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {trace.evidence?.tool_family && (
+                                <span className="rounded-full border border-ops-surface1 px-2 py-0.5 font-mono text-[10px] text-ops-overlay">
+                                  {trace.evidence.tool_family}
+                                </span>
+                              )}
+                              {traceEvidenceId(trace) && (
+                                <span className="rounded-full border border-ops-surface1 px-2 py-0.5 font-mono text-[10px] text-ops-overlay">
+                                  evidence: {traceEvidenceId(trace)}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           {traceExecutionDetail(trace) && (
                             <div className="mt-2 rounded-md border border-ops-surface0 bg-ops-dark/35">
                               <div className="border-b border-ops-surface0 px-2.5 py-1.5 text-[11px] font-semibold text-ops-overlay">
