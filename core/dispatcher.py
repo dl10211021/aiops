@@ -2,7 +2,6 @@ import os
 import json
 import asyncio
 import logging
-import time
 from typing import Dict, Any, List
 
 from core.dispatcher_api_tools import API_TOOL_NAMES, execute_api_tool
@@ -24,11 +23,7 @@ from core.safety_policy import (
     check_readonly_block,
 )
 from core.skill_lifecycle import validate_skill_frontmatter
-from core.skill_registry_scanner import (
-    format_skills_for_ui,
-    parse_installed_skill_md,
-    parse_market_skill_md,
-)
+from core.skill_registry_service import SkillRegistryService
 from core.tool_policy_response import blocked_tool_response
 from core.tool_registry import tool_registry
 
@@ -46,125 +41,79 @@ class SkillDispatcher:
     """
 
     def __init__(self):
-        self.skills_registry = {}
         self.pending_approvals = {}
         self.pending_interactions = {}
-        self._last_refresh_time = 0
-        self._refresh_interval = 30  # 30 秒缓存，避免每次调用都全量扫描文件系统
-        self.skill_directories = [
-            os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), "skills"
-            ),  # 项目自带技能
-            os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), "my_custom_skills"
-            ),  # 你的专属私有技能目录
-        ]
-        # 外部插件市场目录（只看，不用，可点击复制入库）
-        self.market_directories = [
-            os.path.expanduser(r"~/.gemini/skills"),
-            r"D:\AI\.claude\skills",
-        ]
+        self.skill_registry_service = SkillRegistryService(logger=logger)
+        self.skills_registry = self.skill_registry_service.skills_registry
+        self.skill_directories = self.skill_registry_service.skill_directories
+        self.market_directories = self.skill_registry_service.market_directories
+        self._last_refresh_time = self.skill_registry_service._last_refresh_time
+        self._refresh_interval = self.skill_registry_service._refresh_interval
         self.refresh_skills()
+
+    def _get_skill_registry_service(self) -> SkillRegistryService:
+        service = getattr(self, "skill_registry_service", None)
+        if service is None:
+            service = SkillRegistryService(
+                skill_directories=getattr(self, "skill_directories", None),
+                market_directories=getattr(self, "market_directories", None),
+                refresh_interval=getattr(self, "_refresh_interval", 30),
+                logger=logger,
+            )
+            existing_registry = getattr(self, "skills_registry", None)
+            if existing_registry:
+                service.skills_registry = existing_registry
+            self.skill_registry_service = service
+            self.skill_directories = service.skill_directories
+            self.market_directories = service.market_directories
+            self._refresh_interval = service._refresh_interval
+        return service
+
+    def _sync_skill_registry_state(self) -> None:
+        service = self._get_skill_registry_service()
+        self.skills_registry = service.skills_registry
+        self.skill_directories = service.skill_directories
+        self.market_directories = service.market_directories
+        self._last_refresh_time = service._last_refresh_time
+        self._refresh_interval = service._refresh_interval
 
     def refresh_skills(self, force: bool = False):
         """扫描目录并解析所有 SKILL.md，带时间戳缓存"""
-        now = time.time()
-        if (
-            not force
-            and (now - self._last_refresh_time) < self._refresh_interval
-            and self.skills_registry
-        ):
-            return  # 缓存尚未过期，跳过全量扫描
-
-        new_registry = {}
-
-        for base_dir in self.skill_directories:
-            if not os.path.exists(base_dir):
-                continue
-
-            for skill_folder in os.listdir(base_dir):
-                folder_path = os.path.join(base_dir, skill_folder)
-                skill_md_path = os.path.join(folder_path, "SKILL.md")
-
-                if os.path.isdir(folder_path) and os.path.exists(skill_md_path):
-                    try:
-                        skill = parse_installed_skill_md(skill_md_path, folder_path)
-                        if skill:
-                            new_registry[skill["id"]] = skill
-                    except Exception as e:
-                        logger.error(f"解析 {skill_md_path} 失败: {e}")
-
-        self.skills_registry = new_registry
-        self._last_refresh_time = time.time()
+        service = self._get_skill_registry_service()
+        service.refresh_skills(force=force)
+        self._sync_skill_registry_state()
 
     def _parse_skill_md(self, md_path: str, folder_path: str, registry: dict):
         """解析带有 YAML frontmatter 的 Markdown 文件"""
-        skill = parse_installed_skill_md(md_path, folder_path)
-        if skill:
-            registry[skill["id"]] = skill
+        self._get_skill_registry_service().parse_skill_md(md_path, folder_path, registry)
 
     def get_all_registered_skills(self) -> List[Dict[str, Any]]:
         """给前端提供本地已安装技能的摘要信息"""
         self.refresh_skills()
-        return format_skills_for_ui(self.skills_registry.values())
+        return self._get_skill_registry_service().format_skills_for_ui(
+            self.skills_registry.values()
+        )
 
     def get_market_skills(self) -> List[Dict[str, Any]]:
         """扫描外部插件市场，但不入库，仅供前端展示和复制"""
-        market_skills = []
-        for base_dir in self.market_directories:
-            if not os.path.exists(base_dir):
-                continue
-
-            for skill_folder in os.listdir(base_dir):
-                folder_path = os.path.join(base_dir, skill_folder)
-                skill_md_path = os.path.join(folder_path, "SKILL.md")
-
-                if os.path.isdir(folder_path) and os.path.exists(skill_md_path):
-                    # 如果该文件夹名已经在本地有了，就不在市场里展示为可下载（避免重复）
-                    if skill_folder in self.skills_registry:
-                        continue
-
-                    try:
-                        skill = parse_market_skill_md(skill_md_path, folder_path)
-                        if skill:
-                            market_skills.append(skill)
-                    except Exception as e:
-                        logger.error(f"解析市场卡带 {skill_md_path} 失败: {e}")
-
-        return format_skills_for_ui(market_skills)
+        service = self._get_skill_registry_service()
+        service.skills_registry = self.skills_registry
+        return service.get_market_skills()
 
     def _format_skills_for_ui(self, skills_list) -> List[Dict[str, Any]]:
         """通用UI格式化"""
-        return format_skills_for_ui(skills_list)
+        return self._get_skill_registry_service().format_skills_for_ui(skills_list)
 
     def get_skill_instructions(
         self, active_skill_ids: List[str], allow_local_scripts: bool = True
     ) -> str:
         """把用户勾选的所有技能的说明书（Markdown）拼接到一起，作为系统提示词给 AI 看"""
-        instructions = ""
-        if active_skill_ids and not allow_local_scripts:
-            instructions += (
-                "\n\n【协议优先约束】：当前是真实资产的原生协议会话，已挂载 Skill 只能作为知识/SOP 参考；"
-                "禁止执行 Skill 中的 python/bash/本地脚本示例，必须使用当前会话暴露的原生协议工具完成操作。\n"
-            )
-        for s_id in active_skill_ids:
-            if s_id in self.skills_registry:
-                skill = self.skills_registry[s_id]
-                source_path = skill.get("source_path", "")
-                instructions += f"\n\n<!-- 激活技能: {skill['name']} -->\n"
-                instructions += "<ACTIVATED_SKILL>\n"
-                if allow_local_scripts:
-                    instructions += (
-                        f"<SKILL_ABSOLUTE_PATH>{source_path}</SKILL_ABSOLUTE_PATH>\n"
-                    )
-                    instructions += f"【重要指令】：此技能存放于物理路径 `{source_path}`。当你需要调用此技能内的 python 脚本时，请务必使用绝对路径，或者在使用 `local_execute_script` 工具时将 `cwd` 参数严格设置为该绝对路径，切勿自行猜测。\n"
-                else:
-                    instructions += "【重要指令】：当前会话禁止执行此 Skill 内的本地脚本；其中脚本示例仅作知识参考。\n"
-                instructions += (
-                    f"<INSTRUCTIONS>\n{skill['instructions']}\n</INSTRUCTIONS>\n"
-                )
-                instructions += "</ACTIVATED_SKILL>\n"
-        return instructions
+        service = self._get_skill_registry_service()
+        service.skills_registry = self.skills_registry
+        return service.get_skill_instructions(
+            active_skill_ids,
+            allow_local_scripts=allow_local_scripts,
+        )
 
     def get_active_skill_paths(self, active_skill_ids: List[str]) -> List[str]:
         self.refresh_skills()
