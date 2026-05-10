@@ -32,6 +32,25 @@ class AgentRuntimeConfigRequest(BaseModel):
     headless_max_steps: int = Field(60, ge=10, le=200)
 
 
+class SessionRetentionConfigRequest(BaseModel):
+    enabled: bool = True
+    raw_result_days: int = Field(30, ge=1, le=3650)
+    compressed_history_days: int = Field(180, ge=1, le=3650)
+    audit_metadata_days: int = Field(365, ge=1, le=3650)
+    max_result_chars: int = Field(2000, ge=200, le=100000)
+    preview_chars: int = Field(1200, ge=200, le=20000)
+
+    @model_validator(mode="after")
+    def validate_retention_order(self):
+        if self.raw_result_days > self.compressed_history_days:
+            raise ValueError("工具结果摘要化周期不能大于压缩历史删除周期。")
+        if self.compressed_history_days > self.audit_metadata_days:
+            raise ValueError("压缩历史删除周期不能大于审计元数据保留周期。")
+        if self.preview_chars > self.max_result_chars:
+            raise ValueError("摘要预览长度不能大于结果最大保留长度。")
+        return self
+
+
 class AssistantModelConfigRequest(BaseModel):
     main_model_id: str = ""
     enabled: bool = False

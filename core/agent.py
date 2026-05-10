@@ -5,6 +5,7 @@ from core.agent_errors import build_agent_loop_error_payload
 from core.agent_headless_loop import run_headless_agent_loop
 from core.agent_headless_setup import prepare_headless_agent_run
 from core.agent_chat_setup import prepare_chat_agent_run
+from core.agent_session_context import build_agent_session_context
 from core.agent_runtime_config import (
     DEFAULT_AGENT_MAX_STEPS,
     DEFAULT_HEADLESS_AGENT_MAX_STEPS,
@@ -18,6 +19,10 @@ from core.agent_runtime_config import (
 from core.agent_sse import sse_event
 from core.agent_task_dispatch import dispatch_group_tasks as run_group_tasks
 from core.model_catalog import get_available_models, get_available_models_for_provider
+from core.session_target_guard import (
+    find_session_target_mismatch,
+    target_mismatch_message,
+)
 from core.embedding_config import (
     EMBEDDING_DIM,
     EMBEDDING_MODEL,
@@ -45,6 +50,28 @@ async def chat_stream_agent(
     cancel_flags[session_id] = False
     from connections.ssh_manager import ssh_manager
     from core.llm_factory import get_default_model_id, get_embedding_client_and_model
+
+    session_info = ssh_manager.active_sessions[session_id]["info"]
+    session_context = build_agent_session_context(
+        session_id,
+        session_info,
+        skill_path_resolver=dispatcher.get_active_skill_paths,
+    )
+    mismatch = find_session_target_mismatch(
+        user_display_message or user_message,
+        session_context,
+    )
+    if mismatch:
+        safe_user_msg = {"role": "user", "content": user_display_message or user_message}
+        assistant_msg = {
+            "role": "assistant",
+            "content": target_mismatch_message(mismatch),
+        }
+        memory_db.append_message(session_id, safe_user_msg)
+        memory_db.append_message(session_id, assistant_msg)
+        yield sse_event({"type": "chunk", "content": assistant_msg["content"]})
+        yield sse_event({"type": "done"})
+        return
 
     run = await prepare_chat_agent_run(
         session_id=session_id,

@@ -4,18 +4,17 @@ import {
   batchImportAssets,
   bulkDeleteAssets,
   bulkUpdateAssetGroup,
-  connectSession,
   deleteAsset,
   deleteAssetGroup,
   getAssetVerificationMatrix,
   getAssetVerificationRuns,
-  listInspectionRuns,
   previewAssetNormalization,
   renameAssetGroup,
   updateAsset,
   verifyAsset,
-} from '@/api/client'
+} from '@/api/assets'
 import { useStore } from '@/store'
+import type { connectSession as connectSessionType } from '@/api/sessionConnection'
 import type { Asset, AssetVerificationMatrix, AssetVerificationRun, InspectionRun } from '@/types'
 import { normalizeSessionGroupName, withPrimaryGroup } from '@/features/sessions/sessionGroups'
 import { statusLabel } from '@/utils/assetDisplay'
@@ -29,6 +28,12 @@ type VerificationPanelState = {
   inspectionRuns: InspectionRun[]
   loading: boolean
   running: boolean
+}
+type ConnectionPayload = Parameters<typeof connectSessionType>[0]
+
+async function connectManagedAsset(payload: ConnectionPayload) {
+  const { connectSession } = await import('@/api/sessionConnection')
+  return connectSession(payload)
 }
 
 type UseAssetVaultActionsArgs = {
@@ -185,6 +190,7 @@ export function useAssetVaultActions({
     const display = displayForAsset(asset)
     setVerificationPanel({ asset, display, matrix: null, runs: [], inspectionRuns: [], loading: true, running: false })
     try {
+      const { listInspectionRuns } = await import('@/api/cron')
       const [matrixRes, runsRes, inspectionRunsRes] = await Promise.all([
         getAssetVerificationMatrix(asset.id),
         getAssetVerificationRuns(asset.id, 10),
@@ -291,7 +297,7 @@ export function useAssetVaultActions({
         const primaryGroup = normalizeSessionGroupName(tags[0])
         if (primaryGroup) createSessionGroup(primaryGroup)
         try {
-          const res = await connectSession(withManagedSecret({
+          const res = await connectManagedAsset(withManagedSecret({
             host: asset.host,
             port: asset.port,
             username: asset.username,
@@ -305,7 +311,7 @@ export function useAssetVaultActions({
             tags,
             target_scope: 'asset',
             scope_value: asset.host,
-          } as Parameters<typeof connectSession>[0]))
+          } as ConnectionPayload))
           addSession({
             id: res.data.session_id,
             host: asset.host,
@@ -435,7 +441,7 @@ export function useAssetVaultActions({
       for (const asset of groupAssets) {
         const tags = withPrimaryGroup(asset.tags, normalized)
         try {
-          const res = await connectSession(withManagedSecret({
+          const res = await connectManagedAsset(withManagedSecret({
             host: asset.host,
             port: asset.port,
             username: asset.username,
@@ -449,7 +455,7 @@ export function useAssetVaultActions({
             tags,
             target_scope: 'asset',
             scope_value: asset.host,
-          } as Parameters<typeof connectSession>[0]))
+          } as ConnectionPayload))
           addSession({
             id: res.data.session_id,
             host: asset.host,

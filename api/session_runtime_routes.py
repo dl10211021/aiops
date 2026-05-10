@@ -47,6 +47,7 @@ from core.session_tool_context import (
     SessionToolContextError,
     build_session_tools_payload_for_session,
 )
+from core.tool_center_service import build_tool_center_catalog
 from core.tool_registry import tool_registry
 
 
@@ -190,6 +191,12 @@ async def get_active_sessions():
 async def get_tool_catalog():
     """返回平台内置工具目录。仅包含工具元数据，不包含任何资产凭据。"""
     return ResponseModel(**tool_catalog_response_kwargs(tool_registry.catalog()))
+
+
+@router.get("/tools/center", response_model=ResponseModel)
+async def get_tool_center():
+    """返回工具中心只读目录，包含当前模型工具和受控未开放工具。"""
+    return ResponseModel(**tool_catalog_response_kwargs(build_tool_center_catalog(tool_registry)))
 
 
 @router.get("/session/{session_id}/tools", response_model=ResponseModel)

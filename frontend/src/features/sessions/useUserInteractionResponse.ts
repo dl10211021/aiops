@@ -1,12 +1,9 @@
 import { respondUserInteraction } from '@/api/client'
 import { useStore } from '@/store'
-import type { ChatMessage, Session } from '@/types'
+import type { ChatMessage } from '@/types'
 import { findInteractionMessageId } from './chatAttention'
 
-export function useUserInteractionResponse(
-  currentSessionId: string | null,
-  sessions: Record<string, Session>,
-) {
+export function useUserInteractionResponse(currentSessionId: string | null) {
   const updateMessage = useStore((state) => state.updateMessage)
   const updateLastAssistantMessage = useStore((state) => state.updateLastAssistantMessage)
   const addToast = useStore((state) => state.addToast)
@@ -14,6 +11,7 @@ export function useUserInteractionResponse(
   const respond = async (requestId: string, value: string, label = '') => {
     const sessionId = currentSessionId
     if (!sessionId) return
+    const sessions = useStore.getState().sessions
     const targetMessages = sessions[sessionId]?.messages || []
     const targetMessageId = findInteractionMessageId(targetMessages, requestId)
     try {

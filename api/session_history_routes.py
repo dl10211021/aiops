@@ -29,10 +29,10 @@ router = APIRouter()
 
 
 @router.get("/session/{session_id}/history", response_model=ResponseModel)
-async def get_session_history(session_id: str):
+async def get_session_history(session_id: str, limit: int | None = None):
     """【新功能】获取会话的历史消息记录，用于前端恢复"""
     try:
-        messages = list_session_history_messages(session_id)
+        messages = list_session_history_messages(session_id, limit=limit)
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_history_response_kwargs(messages))

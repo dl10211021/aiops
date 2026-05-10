@@ -13,6 +13,7 @@ from typing import Any
 ROOT_DIR = Path(__file__).resolve().parent.parent
 INSPECTION_RUN_STORE_PATH = ROOT_DIR / "inspection_runs.json"
 _LOCK = threading.Lock()
+_RUN_STORE_CACHE: tuple[str, float, int, list[dict[str, Any]]] | None = None
 SECRET_PATTERNS = [
     re.compile(r"managed-secret", re.IGNORECASE),
     re.compile(r"secret-key", re.IGNORECASE),
@@ -42,22 +43,36 @@ def _duration_ms(started_at: str | None, completed_at: str | None) -> int:
 
 
 def _load() -> list[dict[str, Any]]:
+    global _RUN_STORE_CACHE
     if not INSPECTION_RUN_STORE_PATH.exists():
+        _RUN_STORE_CACHE = None
+        return []
+    try:
+        stat = INSPECTION_RUN_STORE_PATH.stat()
+        cache_path = str(INSPECTION_RUN_STORE_PATH)
+        if _RUN_STORE_CACHE and _RUN_STORE_CACHE[0] == cache_path and _RUN_STORE_CACHE[1] == stat.st_mtime and _RUN_STORE_CACHE[2] == stat.st_size:
+            return [dict(item) for item in _RUN_STORE_CACHE[3]]
+    except OSError:
         return []
     try:
         with INSPECTION_RUN_STORE_PATH.open("r", encoding="utf-8") as f:
             data = json.load(f)
-        return data if isinstance(data, list) else []
+        items = [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
+        stat = INSPECTION_RUN_STORE_PATH.stat()
+        _RUN_STORE_CACHE = (str(INSPECTION_RUN_STORE_PATH), stat.st_mtime, stat.st_size, [dict(item) for item in items])
+        return items
     except (OSError, json.JSONDecodeError):
         return []
 
 
 def _save(items: list[dict[str, Any]]) -> None:
+    global _RUN_STORE_CACHE
     INSPECTION_RUN_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = INSPECTION_RUN_STORE_PATH.with_suffix(".tmp")
     with tmp_path.open("w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
     tmp_path.replace(INSPECTION_RUN_STORE_PATH)
+    _RUN_STORE_CACHE = None
 
 
 def _redact(value: Any) -> Any:
@@ -216,7 +231,8 @@ def export_report_markdown(run_id: str) -> str | None:
 
 
 def run_summary(limit: int = 5000) -> dict[str, Any]:
-    runs = list_runs(limit=limit)
+    with _LOCK:
+        runs = _load()[: max(1, min(int(limit or 5000), 500))]
     total = len(runs)
     completed = sum(1 for run in runs if run.get("status") == "completed")
     failed = sum(1 for run in runs if run.get("status") == "failed")
@@ -232,7 +248,7 @@ def run_summary(limit: int = 5000) -> dict[str, Any]:
         targets_success += sum(1 for target in targets if target.get("status") == "success")
         targets_error += sum(1 for target in targets if target.get("status") == "error")
     recent_failures = [
-        run
+        _redact(run)
         for run in runs
         if run.get("status") in {"failed", "partial"}
     ][:10]

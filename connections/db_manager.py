@@ -15,6 +15,7 @@ from connections.db_execution_result import (
 )
 from connections.oracle_client_discovery import (
     discover_oracle_client_lib_dir,
+    oracle_thick_mode_default_enabled,
     truthy as _truthy,
 )
 from connections.native_sql_executor import (
@@ -29,6 +30,13 @@ logger = logging.getLogger(__name__)
 
 _ORACLE_CLIENT_LOCK = threading.Lock()
 _ORACLE_CLIENT_INIT_ATTEMPTED = False
+
+
+def _oracle_thick_mode_enabled(extra_args: dict | None) -> bool:
+    config = extra_args or {}
+    if "use_thick_mode" in config:
+        return _truthy(config.get("use_thick_mode"))
+    return oracle_thick_mode_default_enabled()
 
 DATABASE_DRIVER_ALIASES = {
     "tidb": "mysql",
@@ -134,8 +142,8 @@ DATABASE_OPERATION_PROFILES: dict[str, dict] = {
         "write_requires_approval": True,
         "hard_block_examples": ["DROP DATABASE", "DROP USER", "DROP TABLESPACE"],
         "operator_note": (
-            "Oracle 资产默认使用 python-oracledb Thin Mode，AI 只需要提供 SQL。SID/Service Name/"
-            "TNS Alias、账号和密码由资产中心注入；仅旧版密码校验或 OCI/TNS 特殊场景才启用 Thick Mode。"
+            "Oracle 资产默认使用 python-oracledb Thick Mode，AI 只需要提供 SQL。SID/Service Name/"
+            "TNS Alias、账号和密码由资产中心注入；请在后端启动前准备 Oracle Instant Client。"
         ),
     },
     "mysql": {
@@ -394,6 +402,7 @@ def _preferred_mssql_odbc_driver(drivers: list[str]) -> str:
 def get_database_driver_capabilities() -> dict:
     """Return database connector readiness and installation hints for the UI."""
     oracle_client = discover_oracle_client_lib_dir()
+    oracle_package_installed = _module_installed("oracledb")
     mssql_drivers = _mssql_odbc_drivers()
     preferred_mssql_driver = _preferred_mssql_odbc_driver(mssql_drivers)
     dameng_jdbc_driver = discover_jdbc_driver("dameng")
@@ -406,23 +415,30 @@ def get_database_driver_capabilities() -> dict:
             "connector": "native_sql",
             "python_package": "oracledb",
             "python_import": "oracledb",
-            "default_mode": "thin",
-            "python_package_installed": _module_installed("oracledb"),
-            "external_client_required": False,
+            "default_mode": "thick",
+            "python_package_installed": oracle_package_installed,
+            "external_client_required": True,
             "external_client_detected": oracle_client["detected"],
-            "external_client_name": "Oracle Instant Client（可选兼容模式）",
-            "status": "ready" if _module_installed("oracledb") else "missing_python_package",
+            "external_client_name": "Oracle Instant Client",
+            "status": (
+                "ready"
+                if oracle_package_installed and oracle_client["detected"]
+                else "missing_python_package"
+                if not oracle_package_installed
+                else "missing_external_client"
+            ),
             "recommended_path_windows": r"D:\AIOPS\oracle_instantclient\instantclient_23_0",
             "recommended_path_linux": "/opt/opscore/oracle/instantclient",
             "env_vars": {
-                "OPSCORE_ORACLE_THICK_MODE": "false",
+                "OPSCORE_ORACLE_THICK_MODE": "true",
                 "OPSCORE_ORACLE_CLIENT_LIB_DIR": "${ORACLE_INSTANT_CLIENT_DIR}",
                 "OPSCORE_ORACLE_CLIENT_ROOT": "${ORACLE_INSTANT_CLIENT_ROOT}",
             },
             "install_hint": (
-                "默认使用 python-oracledb Thin Mode，不需要下载 Oracle Instant Client。只有遇到 "
-                "DPY-3015、旧版 10G password verifier、OCI/TNS 等兼容场景时，才设置 "
-                "use_thick_mode=true 或 OPSCORE_ORACLE_THICK_MODE=true，并配置 Instant Client 路径。"
+                "默认使用 python-oracledb Thick Mode。请安装 Oracle Instant Client，"
+                "并配置 OPSCORE_ORACLE_CLIENT_LIB_DIR 或放到自动发现目录。只有确认目标库支持 "
+                "Thin Mode 时，才显式设置 use_thick_mode=false 或 OPSCORE_ORACLE_THICK_MODE=false "
+                "并重启后端。"
             ),
             "test_sql": "SELECT 1 FROM DUAL",
             "operation_profile": get_database_operation_profile("oracle"),
@@ -600,26 +616,13 @@ class DatabaseExecutor:
     def _init_oracle_client_if_requested(oracledb, extra_args: dict | None) -> None:
         global _ORACLE_CLIENT_INIT_ATTEMPTED
         config = extra_args or {}
-        explicit_lib_dir = (
-            config.get("oracle_client_lib_dir")
-            or config.get("instant_client_dir")
-            or os.getenv("OPSCORE_ORACLE_CLIENT_LIB_DIR")
-            or None
-        )
-        use_thick = _truthy(config.get("use_thick_mode")) or _truthy(
-            os.getenv("OPSCORE_ORACLE_THICK_MODE")
-        )
-        if not use_thick:
+        if not _oracle_thick_mode_enabled(config):
             return
 
         with _ORACLE_CLIENT_LOCK:
             if _ORACLE_CLIENT_INIT_ATTEMPTED:
                 return
-            lib_dir = (
-                os.path.expandvars(str(explicit_lib_dir)).strip()
-                if explicit_lib_dir
-                else discover_oracle_client_lib_dir(config).get("lib_dir")
-            )
+            lib_dir = discover_oracle_client_lib_dir(config).get("lib_dir")
             kwargs = {"lib_dir": str(lib_dir)} if lib_dir else {}
             oracledb.init_oracle_client(**kwargs)
             _ORACLE_CLIENT_INIT_ATTEMPTED = True
@@ -650,13 +653,29 @@ class DatabaseExecutor:
     @staticmethod
     def _oracle_error_message(error: Exception) -> str:
         raw = str(error)
+        if "DPY-2019" in raw:
+            return (
+                f"{raw}\n"
+                "OpsCore Oracle 现在默认使用 python-oracledb Thick Mode，但当前 Python "
+                "后端进程已经创建过 thin mode 连接，同一进程内不能再切换到 thick mode。"
+                "处理方式：停止并重新启动后端，让 Oracle 在第一次连接前完成 Thick Mode "
+                "初始化；同时确认 OPSCORE_ORACLE_CLIENT_LIB_DIR 指向 Oracle Instant Client。"
+            )
+        if "DPI-1047" in raw or "Oracle Client library cannot be loaded" in raw:
+            return (
+                f"{raw}\n"
+                "OpsCore Oracle 默认使用 python-oracledb Thick Mode，但当前后端没有加载到 "
+                "Oracle Instant Client。请安装 Instant Client，并设置 "
+                "OPSCORE_ORACLE_CLIENT_LIB_DIR；如果确实要使用 Thin Mode，请显式设置 "
+                "use_thick_mode=false 或 OPSCORE_ORACLE_THICK_MODE=false 后重启后端。"
+            )
         if "DPY-3015" in raw:
             return (
                 f"{raw}\n"
-                "OpsCore 当前 Oracle 连接使用 python-oracledb thin mode；目标账号使用了旧版 "
-                "10G password verifier，thin mode 不支持。处理方式：让 DBA 重置该用户密码生成 "
-                "11G/12C verifier，或安装 Oracle Instant Client 并设置 "
-                "OPSCORE_ORACLE_THICK_MODE=true 和 OPSCORE_ORACLE_CLIENT_LIB_DIR。"
+                "当前 Oracle 连接仍落到了 python-oracledb Thin Mode；目标账号使用了旧版 "
+                "10G password verifier，Thin Mode 不支持。处理方式：重启后端，让 Oracle "
+                "在第一次连接前按默认 Thick Mode 初始化；或让 DBA 重置该用户密码生成 "
+                "11G/12C verifier。"
             )
         return raw
 

@@ -6,13 +6,14 @@ from api.schema_models.chat import ChatRequest
 
 
 def chat_stream_agent_kwargs(req: ChatRequest) -> dict[str, Any]:
+    orchestration_mode = req.orchestration_mode or "single"
     return {
         "session_id": req.session_id,
         "user_message": req.message,
         "user_display_message": req.display_message,
         "model_name": req.model_name,
-        "thinking_mode": req.thinking_mode or "off",
-        "orchestration_mode": req.orchestration_mode or "single",
+        "thinking_mode": "off" if orchestration_mode == "fast" else (req.thinking_mode or "off"),
+        "orchestration_mode": orchestration_mode,
         "user_attachments": req.attachments,
     }
 

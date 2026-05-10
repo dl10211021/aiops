@@ -15,15 +15,19 @@ export function useAssetProfile(currentSessionId: string | null, modelName: stri
     setProfile(null)
     setOpen(false)
     if (!currentSessionId) return
-    getSessionProfile(currentSessionId)
-      .then((res) => {
-        if (!cancelled) setProfile(res.data.profile)
-      })
-      .catch(() => {
-        if (!cancelled) setProfile(null)
-      })
+    const timer = window.setTimeout(() => {
+      if (useStore.getState().currentView !== 'chat') return
+      getSessionProfile(currentSessionId)
+        .then((res) => {
+          if (!cancelled) setProfile(res.data.profile)
+        })
+        .catch(() => {
+          if (!cancelled) setProfile(null)
+        })
+    }, 800)
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
     }
   }, [currentSessionId])
 

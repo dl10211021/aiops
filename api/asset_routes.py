@@ -25,7 +25,7 @@ from api.schema_models.assets import (
     BatchAssetImportItem,
 )
 from api.schema_models.common import ResponseModel
-from core.asset_catalog_response import build_asset_types_response
+from core.asset_catalog_response import build_asset_type_summary_response, build_asset_types_response
 from core.asset_cleanup_service import (
     apply_asset_cleanup_record,
     build_asset_cleanup_plan_record,
@@ -40,6 +40,7 @@ from core.asset_service import (
     save_asset_record,
     update_saved_asset_record,
 )
+from core.protocol_verification_service import invalidate_protocol_verification_overview_cache
 
 
 router = APIRouter()
@@ -123,6 +124,13 @@ def _asset_types_response() -> ResponseModel:
 async def get_asset_types():
     """返回后端认可的资产类型与默认登录协议目录。"""
     return _asset_types_response()
+
+
+@router.get("/assets/types/summary", response_model=ResponseModel)
+async def get_asset_type_summary():
+    """返回资产台账首屏筛选所需的轻量资产类型目录。"""
+    data = build_asset_type_summary_response(get_asset_catalog())
+    return ResponseModel(**asset_types_response_kwargs(data))
 
 
 @router.get("/assets/{asset_id}", response_model=ResponseModel)
@@ -260,6 +268,7 @@ async def preview_asset_normalization():
 async def apply_asset_normalization():
     """执行资产规范化清理；执行前会生成本地备份文件。"""
     report = await asyncio.to_thread(apply_asset_cleanup_record)
+    invalidate_protocol_verification_overview_cache()
     return ResponseModel(**asset_normalization_applied_response_kwargs(report))
 
 

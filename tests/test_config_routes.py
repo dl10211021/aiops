@@ -9,6 +9,7 @@ from api.schemas import (
     ProviderConfig,
     SafetyPolicyTestRequest,
     SafetyPolicyUpdateRequest,
+    SessionRetentionConfigRequest,
 )
 
 
@@ -19,6 +20,8 @@ class TestConfigRoutes(unittest.TestCase):
         self.assertIn("/models", paths)
         self.assertIn("/config/llm", paths)
         self.assertIn("/config/agent-runtime", paths)
+        self.assertIn("/config/session-retention", paths)
+        self.assertIn("/config/session-retention/run", paths)
         self.assertIn("/config/embedding", paths)
         self.assertIn("/config/providers", paths)
         self.assertIn("/config/safety-policy", paths)
@@ -63,6 +66,51 @@ class TestConfigRoutes(unittest.TestCase):
         self.assertEqual(post_response.status, "success")
         self.assertEqual(post_response.message, "Agent 执行保护配置已保存")
         self.assertEqual(post_response.data, {"config": config})
+
+    def test_session_retention_config_routes_preserve_response_shape(self):
+        config = {
+            "enabled": True,
+            "raw_result_days": 30,
+            "compressed_history_days": 180,
+            "audit_metadata_days": 365,
+            "max_result_chars": 2000,
+            "preview_chars": 1200,
+            "preview": {"rows_scanned": 0},
+        }
+
+        with patch("api.config_routes.get_session_retention_config_record", return_value=config) as get_config:
+            get_response = asyncio.run(config_routes.get_session_retention_config_endpoint(preview=False))
+
+        request = SessionRetentionConfigRequest(
+            enabled=True,
+            raw_result_days=30,
+            compressed_history_days=180,
+            audit_metadata_days=365,
+            max_result_chars=2000,
+            preview_chars=1200,
+        )
+        with patch("api.config_routes.save_session_retention_config_record", return_value=config) as save_config:
+            post_response = asyncio.run(
+                config_routes.update_session_retention_config_endpoint(request)
+            )
+
+        get_config.assert_called_once_with(include_preview=False)
+        save_config.assert_called_once_with(**request.model_dump())
+        self.assertEqual(get_response.status, "success")
+        self.assertEqual(get_response.data, {"config": config})
+        self.assertEqual(post_response.status, "success")
+        self.assertEqual(post_response.message, "会话保留策略已保存")
+        self.assertEqual(post_response.data, {"config": config})
+
+    def test_session_retention_run_route_preserves_response_shape(self):
+        result = {"rows_scanned": 10, "rows_compacted": 1, "rows_deleted": 0}
+
+        with patch("api.config_routes.run_session_retention_policy_record", return_value=result):
+            response = asyncio.run(config_routes.run_session_retention_config_endpoint())
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.message, "会话保留策略已执行")
+        self.assertEqual(response.data, {"result": result})
 
     def test_update_embedding_config_preserves_response_shape(self):
         with patch("api.config_routes.save_embedding_config_record") as save_embedding:

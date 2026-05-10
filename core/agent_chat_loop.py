@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -21,10 +22,141 @@ from core.assistant_model_config import (
 from core.tool_display import tool_label
 
 
+NATIVE_ASSET_TOOL_NAMES = {
+    "ai_platform_api_request",
+    "bigdata_api_request",
+    "cicd_api_request",
+    "container_api_request",
+    "container_execute_command",
+    "database_api_request",
+    "db_execute_query",
+    "discovery_api_request",
+    "http_api_request",
+    "k8s_api_request",
+    "linux_execute_command",
+    "memcached_execute_command",
+    "middleware_api_request",
+    "middleware_execute_command",
+    "mongodb_find",
+    "monitoring_api_query",
+    "network_api_request",
+    "network_cli_execute_command",
+    "oob_api_request",
+    "redis_execute_command",
+    "security_api_request",
+    "service_probe_request",
+    "snmp_get",
+    "storage_api_request",
+    "storage_execute_command",
+    "virtualization_api_request",
+    "winrm_execute_command",
+}
+
+EXECUTION_REQUEST_KEYWORDS = (
+    "当前资产",
+    "当前会话",
+    "原生协议工具",
+    "执行",
+    "巡检",
+    "检查",
+    "查看",
+    "查询",
+    "排查",
+    "诊断",
+    "健康",
+    "状态",
+    "风险",
+    "配置",
+    "表空间",
+    "锁",
+    "慢 sql",
+    "慢sql",
+    "高耗",
+    "sql",
+)
+
+NON_EXECUTION_TOOL_INFO_KEYWORDS = (
+    "可用工具",
+    "工具和正确使用边界",
+    "说明当前资产",
+    "解释当前",
+)
+
+
 def _display_tool_name(tool_name: Any) -> str:
     name = str(tool_name or "unknown")
     label = tool_label(name)
     return f"{label} (`{name}`)" if label != name else name
+
+
+def _tool_name(tool: dict[str, Any]) -> str:
+    function = tool.get("function") if isinstance(tool, dict) else None
+    if isinstance(function, dict):
+        return str(function.get("name") or "")
+    return ""
+
+
+def _native_asset_tools(tools: list[dict] | None) -> list[dict]:
+    return [
+        tool
+        for tool in (tools or [])
+        if _tool_name(tool) in NATIVE_ASSET_TOOL_NAMES
+    ]
+
+
+def _message_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                parts.append(str(block.get("text") or block.get("content") or ""))
+            else:
+                parts.append(str(block))
+        return "\n".join(parts)
+    return str(content or "")
+
+
+def _latest_user_message_text(messages: list[dict]) -> str:
+    for message in reversed(messages):
+        if message.get("role") == "user":
+            return _message_text(message.get("content"))
+    return ""
+
+
+def _should_force_native_tool_first(
+    *,
+    messages: list[dict],
+    context: dict,
+    tools: list[dict] | None,
+) -> bool:
+    if str(context.get("target_scope") or "asset") != "asset":
+        return False
+    if str(context.get("protocol") or "").lower() == "virtual":
+        return False
+    if not _native_asset_tools(tools):
+        return False
+    text = _latest_user_message_text(messages).lower()
+    if not text:
+        return False
+    if any(keyword in text for keyword in NON_EXECUTION_TOOL_INFO_KEYWORDS):
+        return False
+    return any(keyword in text for keyword in EXECUTION_REQUEST_KEYWORDS)
+
+
+def _native_tool_required_prompt(context: dict, native_tools: list[dict]) -> dict:
+    tool_names = "、".join(_tool_name(tool) for tool in native_tools if _tool_name(tool))
+    return {
+        "role": "user",
+        "content": (
+            "【平台强制工具调用指令】本轮用户要求对当前资产做现场执行/检查/巡检，"
+            "必须先调用当前会话原生协议工具取得实时证据。"
+            f"当前资产是 {context.get('asset_type')}/{context.get('protocol')} {context.get('host')}:{context.get('port')}。"
+            f"本轮第一步只允许从这些原生工具中选择：{tool_names}。"
+            "不要直接输出巡检报告、状态结论或历史总结；没有工具结果前只能发起工具调用。"
+        ),
+    }
 
 
 class ChatLoopMemoryStore(Protocol):
@@ -107,6 +239,14 @@ async def run_chat_agent_loop(
 
     max_steps = max_steps_resolver("chat")
     pending_memory_references = list(memory_references or [])
+    turn_exec_trace: list[dict] = []
+    force_native_tool_pending = _should_force_native_tool_first(
+        messages=messages,
+        context=context,
+        tools=tools,
+    )
+    force_native_attempts = 0
+    native_tools = _native_asset_tools(tools)
     for iteration in range(max_steps):
         event_logger.info(
             f"Loop {iteration} for {session_id}, cancel_flags: {cancel_flags.get(session_id)}"
@@ -119,20 +259,66 @@ async def run_chat_agent_loop(
 
         yield sse_event({"type": "status", "content": "💭 思考中..."})
 
+        use_forced_native_tool = force_native_tool_pending and force_native_attempts < 2
+        turn_tools = native_tools if use_forced_native_tool else tools
+        turn_messages = (
+            [*messages, _native_tool_required_prompt(context, native_tools)]
+            if use_forced_native_tool
+            else messages
+        )
+        turn_tool_choice = "required" if use_forced_native_tool else "auto"
+        if turn_tool_choice == "required":
+            force_native_attempts += 1
+            yield sse_event({"type": "status", "content": "🧰 正在强制调用当前会话原生工具采集证据..."})
+
         stream_state = AgentStreamState()
         async for event in assistant_streamer(
             model_name=model_name,
-            messages=messages,
+            messages=turn_messages,
             thinking_mode=thinking_mode,
-            tools=tools,
+            tools=turn_tools,
+            tool_choice=turn_tool_choice,
             state=stream_state,
             cancel_requested=lambda: cancel_flags.get(session_id) is True,
         ):
             yield event
 
         tool_calls = stream_state.tool_calls
+        if use_forced_native_tool and not tool_calls:
+            event_logger.warning(
+                "Model returned no native tool call for forced execution request in session %s; discarding direct answer.",
+                session_id,
+            )
+            if force_native_attempts < 2:
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "上一轮响应没有调用当前会话原生工具，已被平台丢弃。"
+                            "必须调用原生工具取得实时证据；不要直接输出报告。"
+                        ),
+                    }
+                )
+                yield sse_event({"type": "status", "content": "⚠️ 模型未发起工具调用，已丢弃直接回答并重新约束工具调用..."})
+                continue
+            safe_msg = {
+                "role": "assistant",
+                "content": (
+                    "本轮已被平台拦截：模型没有发起当前会话原生工具调用，因此不会输出无证据巡检报告。"
+                    "请重试，或检查当前模型是否支持工具调用。"
+                ),
+            }
+            messages.append(safe_msg)
+            memory_store.append_message(session_id, safe_msg)
+            yield sse_event({"type": "chunk", "content": safe_msg["content"]})
+            yield sse_event({"type": "done"})
+            break
+        if tool_calls:
+            force_native_tool_pending = False
         safe_msg = stream_state.assistant_message()
         if not tool_calls:
+            if turn_exec_trace:
+                safe_msg["exec_trace"] = list(turn_exec_trace)
             pending_memory_references = _attach_memory_references_if_visible(
                 safe_msg,
                 pending_memory_references,
@@ -197,7 +383,7 @@ async def run_chat_agent_loop(
             yield sse_event({"type": "error", "content": "任务已被手动中止。"})
             yield sse_event({"type": "done"})
         if assistant_memory_id and exec_trace:
-            if assistant_task_enabled("trace_review") or assistant_task_enabled("risk_advice"):
+            if orchestration.get("trace_review") or orchestration.get("risk_advice"):
                 yield sse_event({"type": "status", "content": "🧩 正在审查本轮思维链和风险建议..."})
                 await append_assistant_trace_review(
                     model_name=resolve_assistant_model_id(model_name),
@@ -213,6 +399,7 @@ async def run_chat_agent_loop(
                 assistant_memory_id,
                 exec_trace,
             )
+            turn_exec_trace.extend(exec_trace)
             success_memory = build_successful_execution_memory(
                 session_id=session_id,
                 context=context,
@@ -248,10 +435,11 @@ async def run_chat_agent_loop(
 def _resolve_model_orchestration(primary_model_id: str, orchestration_mode: str = "single") -> dict[str, Any]:
     config = get_assistant_model_config()
     assistant_model_id = resolve_assistant_model_id(primary_model_id)
-    mode = orchestration_mode if orchestration_mode in {"single", "split", "auto"} else "single"
+    mode = orchestration_mode if orchestration_mode in {"single", "split", "fast", "auto"} else "single"
     assistant_configured = bool(config.get("enabled") and config.get("model_id"))
     assistant_delegated = bool(assistant_configured and assistant_model_id != primary_model_id)
     enabled = mode == "split" or (mode == "auto" and assistant_configured)
+    fast_mode = mode == "fast"
     return {
         "enabled": enabled,
         "mode": mode,
@@ -259,9 +447,9 @@ def _resolve_model_orchestration(primary_model_id: str, orchestration_mode: str 
         "assistant_model_id": assistant_model_id,
         "assistant_delegated": assistant_delegated,
         "assistant_thinking_mode": assistant_thinking_mode(),
-        "completion_check": assistant_task_enabled("completion_check"),
-        "trace_review": assistant_task_enabled("trace_review"),
-        "risk_advice": assistant_task_enabled("risk_advice"),
+        "completion_check": False if fast_mode else assistant_task_enabled("completion_check"),
+        "trace_review": False if fast_mode else assistant_task_enabled("trace_review"),
+        "risk_advice": False if fast_mode else assistant_task_enabled("risk_advice"),
     }
 
 
@@ -286,6 +474,7 @@ async def _collect_model_turn(
     messages: list[dict],
     thinking_mode: str,
     tools: list[dict] | None = None,
+    tool_choice: str = "auto",
 ) -> AgentStreamState:
     from core.llm_execution import execute_chat_stream
 
@@ -295,6 +484,7 @@ async def _collect_model_turn(
         messages,
         thinking_mode,
         tools=tools,
+        tool_choice=tool_choice,
     ):
         if chunk["type"] == "thinking":
             state.thinking_content += chunk["content"]
@@ -318,6 +508,45 @@ async def _collect_model_text(
         tools=None,
     )
     return (state.assistant_content or "").strip()
+
+
+def _assistant_review_timeout_seconds() -> float:
+    raw = os.environ.get("OPSCORE_ASSISTANT_REVIEW_TIMEOUT_SECONDS")
+    if not raw:
+        return 12.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 12.0
+    return max(3.0, value)
+
+
+def _assistant_review_thinking_mode(fallback: str) -> str:
+    mode = os.environ.get("OPSCORE_ASSISTANT_REVIEW_THINKING_MODE", "").strip()
+    if mode in {"off", "low", "medium", "high", "enabled"}:
+        return mode
+    return fallback
+
+
+def _review_messages(history: list[dict], prompt: str) -> list[dict]:
+    cleaned_history = [message for message in history if message.get("role") != "system"]
+    return [{"role": "system", "content": prompt}, *cleaned_history]
+
+
+async def _collect_review_model_text(
+    *,
+    model_name: str,
+    messages: list[dict],
+    thinking_mode: str,
+) -> str:
+    return await asyncio.wait_for(
+        _collect_model_text(
+            model_name=model_name,
+            messages=messages,
+            thinking_mode=_assistant_review_thinking_mode(thinking_mode),
+        ),
+        timeout=_assistant_review_timeout_seconds(),
+    )
 
 
 def _split_text_for_sse(text: str, chunk_size: int = 800) -> list[str]:
@@ -452,23 +681,23 @@ async def append_assistant_trace_review(
     if not exec_trace or not (want_trace_review or want_risk_advice):
         return
     try:
-        review_text = await _collect_model_text(
+        review_text = await _collect_review_model_text(
             model_name=model_name,
-            messages=[
-                *messages[-10:],
-                {
-                    "role": "system",
-                    "content": _build_trace_review_prompt(
-                        context,
-                        exec_trace,
-                        assistant_content,
-                        want_trace_review=want_trace_review,
-                        want_risk_advice=want_risk_advice,
-                    ),
-                },
-            ],
+            messages=_review_messages(
+                messages[-10:],
+                _build_trace_review_prompt(
+                    context,
+                    exec_trace,
+                    assistant_content,
+                    want_trace_review=want_trace_review,
+                    want_risk_advice=want_risk_advice,
+                ),
+            ),
             thinking_mode=thinking_mode,
         )
+    except asyncio.TimeoutError:
+        event_logger.warning("Assistant trace review timed out after %.1fs", _assistant_review_timeout_seconds())
+        return
     except Exception as exc:
         event_logger.warning("Assistant trace review failed: %s", exc)
         return
@@ -528,6 +757,14 @@ async def _run_split_model_chat_agent_loop(
     assistant_mode = str(orchestration.get("assistant_thinking_mode") or "high")
     pending_memory_references = list(memory_references or [])
     labels = _assistant_orchestration_labels(orchestration)
+    turn_exec_trace: list[dict] = []
+    force_native_tool_pending = _should_force_native_tool_first(
+        messages=messages,
+        context=context,
+        tools=tools,
+    )
+    force_native_attempts = 0
+    native_tools = _native_asset_tools(tools)
 
     yield sse_event(
         {
@@ -571,23 +808,68 @@ async def _run_split_model_chat_agent_loop(
 
         yield sse_event({"type": "status", "content": labels["tool"]})
 
+        use_forced_native_tool = force_native_tool_pending and force_native_attempts < 2
+        turn_tools = native_tools if use_forced_native_tool else tools
+        turn_messages = (
+            [*messages, _native_tool_required_prompt(context, native_tools)]
+            if use_forced_native_tool
+            else messages
+        )
+        turn_tool_choice = "required" if use_forced_native_tool else "auto"
+        if turn_tool_choice == "required":
+            force_native_attempts += 1
+            yield sse_event({"type": "status", "content": "🧰 正在强制调用当前会话原生工具采集证据..."})
+
         try:
             stream_state = await _collect_model_turn(
                 model_name=assistant_model_id,
-                messages=messages,
+                messages=turn_messages,
                 thinking_mode=assistant_mode,
-                tools=tools,
+                tools=turn_tools,
+                tool_choice=turn_tool_choice,
             )
         except Exception as exc:
             event_logger.warning("Assistant tool planning failed, falling back to primary model: %s", exc)
             stream_state = await _collect_model_turn(
                 model_name=primary_model_id,
-                messages=messages,
+                messages=turn_messages,
                 thinking_mode=thinking_mode,
-                tools=tools,
+                tools=turn_tools,
+                tool_choice=turn_tool_choice,
             )
 
         tool_calls = stream_state.tool_calls
+        if use_forced_native_tool and not tool_calls:
+            event_logger.warning(
+                "Model returned no native tool call for forced split execution request in session %s; discarding direct answer.",
+                session_id,
+            )
+            if force_native_attempts < 2:
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "上一轮响应没有调用当前会话原生工具，已被平台丢弃。"
+                            "必须调用原生工具取得实时证据；不要直接输出报告。"
+                        ),
+                    }
+                )
+                yield sse_event({"type": "status", "content": "⚠️ 模型未发起工具调用，已丢弃直接回答并重新约束工具调用..."})
+                continue
+            safe_msg = {
+                "role": "assistant",
+                "content": (
+                    "本轮已被平台拦截：模型没有发起当前会话原生工具调用，因此不会输出无证据巡检报告。"
+                    "请重试，或检查当前模型是否支持工具调用。"
+                ),
+            }
+            messages.append(safe_msg)
+            memory_store.append_message(session_id, safe_msg)
+            yield sse_event({"type": "chunk", "content": safe_msg["content"]})
+            yield sse_event({"type": "done"})
+            return
+        if tool_calls:
+            force_native_tool_pending = False
         safe_msg = stream_state.assistant_message()
 
         if not tool_calls:
@@ -597,12 +879,27 @@ async def _run_split_model_chat_agent_loop(
                 {"role": "system", "content": _build_final_writer_prompt(context)},
             ]
             yield sse_event({"type": "status", "content": labels["final"]})
+            final_streamed = False
             try:
-                final_text = await _collect_model_text(
-                    model_name=assistant_model_id,
-                    messages=draft_messages,
-                    thinking_mode=assistant_mode,
-                )
+                if orchestration.get("completion_check"):
+                    final_text = await _collect_model_text(
+                        model_name=assistant_model_id,
+                        messages=draft_messages,
+                        thinking_mode=assistant_mode,
+                    )
+                else:
+                    final_state = AgentStreamState()
+                    async for event in stream_assistant_response(
+                        model_name=assistant_model_id,
+                        messages=draft_messages,
+                        thinking_mode=assistant_mode,
+                        tools=None,
+                        state=final_state,
+                        cancel_requested=lambda: cancel_flags.get(session_id) is True,
+                    ):
+                        final_streamed = True
+                        yield event
+                    final_text = str(final_state.assistant_content or "").strip()
             except Exception as exc:
                 event_logger.warning("Assistant final writer failed, using planner text: %s", exc)
                 final_text = str(safe_msg.get("content") or "").strip()
@@ -610,30 +907,37 @@ async def _run_split_model_chat_agent_loop(
             if orchestration.get("completion_check"):
                 yield sse_event({"type": "status", "content": "🛡️ 主模型正在审核最终回复..."})
                 try:
-                    reviewed_text = await _collect_model_text(
+                    reviewed_text = await _collect_review_model_text(
                         model_name=primary_model_id,
-                        messages=[
-                            *messages,
-                            {"role": "assistant", "content": final_text},
-                            {"role": "system", "content": _build_final_review_prompt(context, final_text)},
-                        ],
+                        messages=_review_messages(
+                            [*messages, {"role": "assistant", "content": final_text}],
+                            _build_final_review_prompt(context, final_text),
+                        ),
                         thinking_mode=thinking_mode,
                     )
                     if reviewed_text:
                         final_text = reviewed_text
+                except asyncio.TimeoutError:
+                    event_logger.warning(
+                        "Primary model final review timed out after %.1fs, keeping assistant final",
+                        _assistant_review_timeout_seconds(),
+                    )
                 except Exception as exc:
                     event_logger.warning("Primary model final review failed, keeping assistant final: %s", exc)
 
             final_msg = {"role": "assistant", "content": final_text}
+            if turn_exec_trace:
+                final_msg["exec_trace"] = list(turn_exec_trace)
             pending_memory_references = _attach_memory_references_if_visible(
                 final_msg,
                 pending_memory_references,
             )
             messages.append(final_msg)
             memory_store.append_message(session_id, final_msg)
-            for chunk in _split_text_for_sse(final_text):
-                yield sse_event({"type": "chunk", "content": chunk})
-                await sleep(0.01)
+            if not final_streamed:
+                for chunk in _split_text_for_sse(final_text):
+                    yield sse_event({"type": "chunk", "content": chunk})
+                    await sleep(0.01)
             memory_ref_event = _memory_references_sse_event(final_msg)
             if memory_ref_event:
                 yield memory_ref_event
@@ -713,6 +1017,7 @@ async def _run_split_model_chat_agent_loop(
                 assistant_memory_id,
                 exec_trace,
             )
+            turn_exec_trace.extend(exec_trace)
             success_memory = build_successful_execution_memory(
                 session_id=session_id,
                 context=context,

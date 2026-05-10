@@ -848,7 +848,7 @@ class TestSafetyPolicy(unittest.TestCase):
         self.assertFalse(needs_approval)
         self.assertFalse(blocked)
 
-    def test_default_policy_allows_network_display_but_blocks_config(self):
+    def test_default_policy_allows_network_status_reads_but_gates_config_reads_and_changes(self):
         path = self.policy_path("safety_policy_test_missing_5.json")
         self.cleanup_policy_file(path)
         try:
@@ -863,6 +863,16 @@ class TestSafetyPolicy(unittest.TestCase):
                     {"command": "display version"},
                     {"allow_modifications": False},
                 )
+                config_needs_approval, _ = check_approval_needed(
+                    "network_cli_execute_command",
+                    {"command": "display current-configuration"},
+                    {"allow_modifications": False, "asset_type": "h3c_switch", "protocol": "ssh"},
+                )
+                config_display_blocked, _ = check_readonly_block(
+                    "network_cli_execute_command",
+                    {"command": "display current-configuration"},
+                    {"allow_modifications": False, "asset_type": "h3c_switch", "protocol": "ssh"},
+                )
                 config_blocked, _ = check_readonly_block(
                     "network_cli_execute_command",
                     {"command": "system-view\ninterface GigabitEthernet1/0/1"},
@@ -873,6 +883,8 @@ class TestSafetyPolicy(unittest.TestCase):
 
         self.assertFalse(display_needs_approval)
         self.assertFalse(display_blocked)
+        self.assertTrue(config_needs_approval)
+        self.assertTrue(config_display_blocked)
         self.assertTrue(config_blocked)
 
     def test_hard_block_applies_to_linux_and_network_tools(self):

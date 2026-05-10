@@ -3,9 +3,25 @@ import DOMPurify from 'dompurify'
 
 marked.setOptions({ breaks: true, gfm: true })
 
+const markdownCache = new Map<string, string>()
+const MARKDOWN_CACHE_LIMIT = 80
+const MARKDOWN_CACHE_MAX_SOURCE_CHARS = 60_000
+
 export function renderMarkdown(md: string): string {
+  const cached = markdownCache.get(md)
+  if (cached !== undefined) return cached
   const raw = marked.parse(md)
-  if (typeof raw === 'string') return addCodeCopyButtons(DOMPurify.sanitize(raw))
+  if (typeof raw === 'string') {
+    const rendered = addCodeCopyButtons(DOMPurify.sanitize(raw))
+    if (md.length <= MARKDOWN_CACHE_MAX_SOURCE_CHARS) {
+      markdownCache.set(md, rendered)
+      if (markdownCache.size > MARKDOWN_CACHE_LIMIT) {
+        const oldest = markdownCache.keys().next().value
+        if (oldest !== undefined) markdownCache.delete(oldest)
+      }
+    }
+    return rendered
+  }
   return ''
 }
 

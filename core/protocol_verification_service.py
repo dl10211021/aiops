@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import threading
+import time
 from typing import Any
 
 from core import memory as memory_module
 from core.protocol_verification import (
     build_asset_matrix,
     build_overview,
+    build_status_overview,
     list_verification_runs,
     run_asset_verification,
 )
@@ -19,13 +22,53 @@ class ProtocolVerificationServiceError(Exception):
         self.detail = detail
 
 
+_OVERVIEW_CACHE_TTL_SECONDS = 15.0
+_overview_cache_lock = threading.Lock()
+_overview_cache: tuple[float, dict[str, Any]] | None = None
+_status_overview_cache: tuple[float, dict[str, Any]] | None = None
+
+
 def _resolve_memory_db(memory_db: Any | None = None) -> Any:
     return memory_db if memory_db is not None else memory_module.memory_db
 
 
+def invalidate_protocol_verification_overview_cache() -> None:
+    global _overview_cache, _status_overview_cache
+    with _overview_cache_lock:
+        _overview_cache = None
+        _status_overview_cache = None
+
+
 def build_protocol_verification_overview(memory_db: Any | None = None) -> dict[str, Any]:
+    global _overview_cache
+    if memory_db is None:
+        now = time.monotonic()
+        with _overview_cache_lock:
+            if _overview_cache and _overview_cache[0] > now:
+                return _overview_cache[1]
+
     store = _resolve_memory_db(memory_db)
-    return build_overview(store.get_all_assets())
+    overview = build_overview(store.get_all_assets())
+    if memory_db is None:
+        with _overview_cache_lock:
+            _overview_cache = (time.monotonic() + _OVERVIEW_CACHE_TTL_SECONDS, overview)
+    return overview
+
+
+def build_protocol_verification_status_overview(memory_db: Any | None = None) -> dict[str, Any]:
+    global _status_overview_cache
+    if memory_db is None:
+        now = time.monotonic()
+        with _overview_cache_lock:
+            if _status_overview_cache and _status_overview_cache[0] > now:
+                return _status_overview_cache[1]
+
+    store = _resolve_memory_db(memory_db)
+    overview = build_status_overview(store.get_all_assets())
+    if memory_db is None:
+        with _overview_cache_lock:
+            _status_overview_cache = (time.monotonic() + _OVERVIEW_CACHE_TTL_SECONDS, overview)
+    return overview
 
 
 def get_protocol_verification_asset(asset_id: int, memory_db: Any | None = None) -> dict[str, Any]:

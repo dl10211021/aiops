@@ -85,6 +85,25 @@ class TestHttpMiddlewareService(unittest.TestCase):
             if header != "X-Frame-Options":
                 self.assertEqual(response.headers[header], value)
 
+    def test_dispatch_security_headers_sets_frontend_cache_policy(self):
+        async def call_next(_request):
+            return Response()
+
+        asset_response = asyncio.run(dispatch_security_headers(
+            SimpleNamespace(url=SimpleNamespace(path="/assets/index-abcd.js")),
+            call_next,
+        ))
+        index_response = asyncio.run(dispatch_security_headers(
+            SimpleNamespace(url=SimpleNamespace(path="/")),
+            call_next,
+        ))
+
+        self.assertEqual(
+            asset_response.headers["Cache-Control"],
+            "public, max-age=31536000, immutable",
+        )
+        self.assertEqual(index_response.headers["Cache-Control"], "no-cache")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -551,6 +551,73 @@ select option:checked {
   background: rgba(248, 250, 252, 0.84);
 }
 
+@media (max-width: 1320px) {
+  .ops-command-panel {
+    flex-direction: column;
+  }
+
+  .ops-chat-resize-handle {
+    display: none;
+  }
+
+  .ops-chat-intel-panel {
+    width: 100% !important;
+    max-height: 40vh;
+    border-left: 0;
+    border-top: 1px solid color-mix(in oklab, var(--color-ops-surface1) 70%, transparent);
+  }
+
+  .ops-chat-intel-panel[style*="48px"] {
+    min-height: 48px;
+    max-height: 48px;
+  }
+}
+
+@media (max-width: 900px) {
+  .ops-shell {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .ops-command-panel {
+    border-radius: 14px;
+  }
+
+  .ops-chat-message-list,
+  .ops-chat-composer {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .ops-chat-composer-input {
+    flex-wrap: wrap;
+  }
+
+  .ops-chat-composer-input textarea {
+    order: 1;
+    flex-basis: 100%;
+  }
+
+  .ops-chat-attachment-button,
+  .ops-chat-send-button {
+    order: 2;
+    flex: 1 1 0;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .ops-chat-workspace {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .ops-session-sidebar {
+    display: none;
+  }
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;

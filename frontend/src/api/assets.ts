@@ -5,6 +5,7 @@ import type {
   AssetTypeDefinition,
   AssetVerificationRun,
   ProtocolVerificationOverview,
+  ProtocolVerificationStatusOverview,
 } from '@/types'
 import { request } from './http'
 
@@ -49,12 +50,17 @@ export async function getProtocolVerificationOverview() {
   return request<ProtocolVerificationOverview>('/verification/protocols')
 }
 
+export async function getProtocolVerificationStatusOverview() {
+  return request<ProtocolVerificationStatusOverview>('/verification/protocols/status')
+}
+
 export async function getOracleClientConfig() {
   return request<{
     detected: boolean
     lib_dir: string
     source: string
     thick_mode_env_enabled: boolean
+    thick_mode_default_enabled?: boolean
   }>('/oracle/client-config')
 }
 
@@ -93,6 +99,7 @@ export async function getDatabaseDriverCapabilities() {
         lib_dir: string
         source: string
         thick_mode_env_enabled: boolean
+        thick_mode_default_enabled?: boolean
       }
     }>
     oracle_client: {
@@ -100,6 +107,7 @@ export async function getDatabaseDriverCapabilities() {
       lib_dir: string
       source: string
       thick_mode_env_enabled: boolean
+      thick_mode_default_enabled?: boolean
     }
   }>('/database/driver-capabilities')
 }
@@ -156,4 +164,12 @@ export async function getAssetTypes() {
     categories: AssetCategoryDefinition[]
     connector_groups: Array<AssetCategoryDefinition & { tools?: string[] }>
   }>('/assets/types')
+}
+
+export async function getAssetTypeSummary() {
+  return request<{
+    types: AssetTypeDefinition[]
+    categories: AssetCategoryDefinition[]
+    connector_groups: Array<AssetCategoryDefinition & { tools?: string[] }>
+  }>('/assets/types/summary')
 }

@@ -45,6 +45,19 @@ def test_database_sessions_get_database_inspection_shortcuts():
     assert "不要本地脚本" in db_inspect["prompt"]
 
 
+def test_oracle_commands_use_current_oracle_context_not_linux_templates():
+    context = {"asset_type": "oracle", "protocol": "oracle", "host": "172.17.1.207"}
+    commands = render_slash_commands(context, ["db_execute_query"])
+    labels = {item["label"] for item in commands}
+    inspect = next(item for item in commands if item["id"] == "inspect")
+
+    assert "/oracle-health 实例健康" in labels
+    assert "/services 服务状态" not in labels
+    assert "/network 网络监听" not in labels
+    assert "oracle/oracle 172.17.1.207" in inspect["prompt"]
+    assert "linux/ssh" not in inspect["prompt"].lower()
+
+
 def test_database_inspection_shortcuts_do_not_pollute_linux_sessions():
     labels = labels_for({"asset_type": "linux", "protocol": "ssh", "host": "10.0.0.1"})
 

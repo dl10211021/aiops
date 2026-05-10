@@ -1,8 +1,12 @@
-import type { SessionToolCatalog, SlashCommand } from '@/types'
+import type { SessionToolCatalog, SlashCommand, ToolCenterCatalog } from '@/types'
 import { request } from './http'
 
 export async function getToolCatalog() {
   return request<SessionToolCatalog>('/tools/catalog')
+}
+
+export async function getToolCenterCatalog() {
+  return request<ToolCenterCatalog>('/tools/center')
 }
 
 export async function getSessionCommands(sessionId: string) {

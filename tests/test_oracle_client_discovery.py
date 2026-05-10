@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from connections.oracle_client_discovery import (
     discover_oracle_client_lib_dir,
+    oracle_thick_mode_default_enabled,
     truthy,
     valid_oracle_client_dir,
 )
@@ -28,6 +29,17 @@ class OracleClientDiscoveryTest(unittest.TestCase):
         self.assertTrue(truthy("1"))
         self.assertFalse(truthy("false"))
         self.assertFalse(truthy(None))
+
+    def test_oracle_thick_mode_is_default_without_env_override(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertTrue(oracle_thick_mode_default_enabled())
+
+    def test_oracle_thick_mode_can_be_disabled_by_env_override(self):
+        with patch.dict(os.environ, {"OPSCORE_ORACLE_THICK_MODE": "false"}, clear=True):
+            self.assertFalse(oracle_thick_mode_default_enabled())
+
+        with patch.dict(os.environ, {"OPSCORE_ORACLE_FORCE_THIN": "true"}, clear=True):
+            self.assertFalse(oracle_thick_mode_default_enabled())
 
     def test_valid_oracle_client_dir_requires_native_client_library(self):
         client_dir = self.tmp_path / "instantclient_23_0"
@@ -60,6 +72,7 @@ class OracleClientDiscoveryTest(unittest.TestCase):
                 "lib_dir": str(client_dir.resolve()),
                 "source": "explicit",
                 "thick_mode_env_enabled": True,
+                "thick_mode_default_enabled": True,
             },
         )
 

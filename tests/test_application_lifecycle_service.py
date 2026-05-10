@@ -20,9 +20,14 @@ class TestApplicationLifecycleService(unittest.TestCase):
         logger = Mock()
         scheduled = []
         hydrated = []
+        retained = []
 
         async def hydration_runner():
             hydrated.append(True)
+
+        async def retention_runner():
+            retained.append(True)
+            return {"rows_scanned": 0}
 
         def task_scheduler(coro):
             scheduled.append(coro)
@@ -33,6 +38,7 @@ class TestApplicationLifecycleService(unittest.TestCase):
             heartbeat_starter=heartbeat_starter,
             cron_manager=cron_manager,
             hydration_runner=hydration_runner,
+            retention_runner=retention_runner,
             logger=logger,
         )
 
@@ -40,10 +46,12 @@ class TestApplicationLifecycleService(unittest.TestCase):
         heartbeat_starter.assert_called_once_with()
         self.assertTrue(cron_manager.started)
         logger.info.assert_called_once_with("Heartbeat worker started.")
-        self.assertEqual(len(scheduled), 1)
+        self.assertEqual(len(scheduled), 2)
 
         asyncio.run(scheduled[0])
+        asyncio.run(scheduled[1])
 
+        self.assertEqual(retained, [True])
         self.assertEqual(hydrated, [True])
 
     def test_stop_app_services_logs_shutdown(self):

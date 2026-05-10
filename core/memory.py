@@ -527,12 +527,27 @@ class MemoryDB:
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+                self._ensure_performance_indexes(conn)
             logger.info(f"SQLite 记忆库已就绪: {self.db_path}")
 
             self._init_file_memory_store()
 
         except Exception as e:
             logger.error(f"初始化数据库失败: {e}")
+
+    def _ensure_performance_indexes(self, conn):
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_memory_session_id_id ON memory(session_id, id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_assets_created_at ON assets(created_at)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_assets_host ON assets(host)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_asset_tags_tag_id ON asset_tags(tag_id)"
+        )
 
     def _init_file_memory_store(self):
         if os.environ.get("OPSCORE_DISABLE_LTM", "").lower() in {"1", "true", "yes"}:
@@ -684,8 +699,13 @@ class MemoryDB:
     def _is_protocol_retry_noise(self, msg: dict) -> bool:
         return is_protocol_retry_noise(msg)
 
-    def get_messages(self, session_id: str, for_ui: bool = False) -> list:
-        return self._session_message_store.get_messages(session_id, for_ui)
+    def get_messages(
+        self,
+        session_id: str,
+        for_ui: bool = False,
+        limit: int | None = None,
+    ) -> list:
+        return self._session_message_store.get_messages(session_id, for_ui, limit)
 
     def append_message(self, session_id: str, message_dict: dict):
         return self._session_message_store.append_message(session_id, message_dict)
@@ -745,6 +765,40 @@ class MemoryDB:
                     logger.warning(f"LanceDB 碎片整理失败: {e}")
         except Exception as e:
             logger.error(f"清空记忆失败: {e}")
+
+    def apply_session_retention(self, *, policy=None, dry_run: bool = False) -> dict:
+        """Apply chat/tool retention rules to the SQLite short-term store."""
+        from core.session_retention import apply_session_retention
+
+        try:
+            with self._db_lock, self._connect() as conn:
+                return apply_session_retention(conn, policy=policy, dry_run=dry_run)
+        except Exception as e:
+            logger.error(f"会话保留策略执行失败: {e}")
+            return {
+                "enabled": False,
+                "error": str(e),
+                "rows_scanned": 0,
+                "rows_compacted": 0,
+                "rows_deleted": 0,
+                "audit_rows_inserted": 0,
+            }
+
+    def get_session_retention_status(self, *, interval_seconds: int | None = None) -> dict:
+        """Return the latest retention maintenance run status."""
+        from core.session_retention import latest_session_retention_status
+
+        try:
+            with self._db_lock, self._connect() as conn:
+                return latest_session_retention_status(conn, interval_seconds=interval_seconds)
+        except Exception as e:
+            logger.error(f"读取会话保留策略状态失败: {e}")
+            return {
+                "last_run": None,
+                "next_run_at": None,
+                "interval_seconds": interval_seconds,
+                "error": str(e),
+            }
 
     # -------- 快捷命令 --------
     def list_slash_commands(self) -> list[dict]:

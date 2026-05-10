@@ -5,7 +5,7 @@ from core.agent_streaming import AgentStreamState, stream_assistant_response
 
 
 async def collect_stream_events(chunks, *, cancel_requested=lambda: False):
-    async def executor(model_name, messages, thinking_mode, tools=None):
+    async def executor(model_name, messages, thinking_mode, tools=None, tool_choice="auto"):
         for chunk in chunks:
             yield chunk
 

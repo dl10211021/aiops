@@ -17,6 +17,14 @@ def _resolve_memory_db(memory_db: Any | None = None) -> Any:
     return memory_db if memory_db is not None else memory_module.memory_db
 
 
+def _invalidate_asset_derived_caches(memory_db: Any | None = None) -> None:
+    if memory_db is not None:
+        return
+    from core.protocol_verification_service import invalidate_protocol_verification_overview_cache
+
+    invalidate_protocol_verification_overview_cache()
+
+
 def list_saved_asset_records(memory_db: Any | None = None) -> list[dict[str, Any]]:
     store = _resolve_memory_db(memory_db)
     assets = store.get_all_assets()
@@ -38,6 +46,7 @@ def save_asset_record(payload: dict[str, Any], memory_db: Any | None = None) -> 
         payload.get("tags") or [],
         payload.get("protocol"),
     )
+    _invalidate_asset_derived_caches(memory_db)
 
 
 def get_saved_asset_record(asset_id: int, memory_db: Any | None = None) -> dict[str, Any]:
@@ -57,12 +66,14 @@ def update_saved_asset_record(
     asset = store.update_asset(asset_id, payload)
     if not asset:
         raise AssetServiceError(404, "资产不存在")
+    _invalidate_asset_derived_caches(memory_db)
     return mask_asset_response(asset, store.sensitive_keys)
 
 
 def remove_saved_asset_record(asset_id: int, memory_db: Any | None = None) -> None:
     store = _resolve_memory_db(memory_db)
     store.delete_asset(asset_id)
+    _invalidate_asset_derived_caches(memory_db)
 
 
 def batch_import_asset_records(
@@ -76,4 +87,5 @@ def batch_import_asset_records(
         store.save_assets_batch(items)
     except Exception as exc:
         raise AssetServiceError(500, f"批量导入资产失败: {exc}") from exc
+    _invalidate_asset_derived_caches(memory_db)
     return {"imported": len(items), "total": len(items)}

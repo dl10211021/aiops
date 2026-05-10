@@ -36,6 +36,7 @@ const VIEW_IDS = new Set<ViewId>([
   'alerts',
   'approvals',
   'skills',
+  'tools',
   'knowledge',
   'config',
 ])
@@ -56,6 +57,7 @@ export const useStore = create<AppState>((set, get) => ({
   // View
   currentView: viewFromLocationHash(),
   setView: (v) => {
+    if (get().currentView === v) return
     syncViewHash(v)
     set({ currentView: v })
   },

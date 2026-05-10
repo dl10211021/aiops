@@ -32,6 +32,29 @@ def agent_runtime_config_saved_response_kwargs(config: dict[str, Any]) -> dict[s
     }
 
 
+def session_retention_config_response_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"config": config},
+    }
+
+
+def session_retention_config_saved_response_kwargs(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"config": config},
+        "message": "会话保留策略已保存",
+    }
+
+
+def session_retention_run_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"result": result},
+        "message": "会话保留策略已执行",
+    }
+
+
 def assistant_model_config_response_kwargs(config: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "success",

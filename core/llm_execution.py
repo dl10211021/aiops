@@ -121,7 +121,11 @@ def _convert_openai_messages_to_anthropic(messages):
 
 
 async def execute_chat_stream(
-    model_name: str, messages: list, thinking_mode: str = "off", tools: list = None
+    model_name: str,
+    messages: list,
+    thinking_mode: str = "off",
+    tools: list = None,
+    tool_choice: str = "auto",
 ):
     client, config = get_client_for_model(model_name)
     protocol = config.get("protocol")
@@ -166,7 +170,7 @@ async def execute_chat_stream(
 
         if tools:
             kwargs["tools"] = tools
-            kwargs["tool_choice"] = "auto"
+            kwargs["tool_choice"] = "required" if tool_choice == "required" else "auto"
 
         # Add reasoning_effort for o1/o3-mini
         if is_thinking_requested and (
@@ -174,7 +178,13 @@ async def execute_chat_stream(
         ):
             kwargs["reasoning_effort"] = thinking_mode
 
-        response = await client.chat.completions.create(**kwargs)
+        try:
+            response = await client.chat.completions.create(**kwargs)
+        except Exception:
+            if kwargs.get("tool_choice") != "required":
+                raise
+            kwargs["tool_choice"] = "auto"
+            response = await client.chat.completions.create(**kwargs)
         tool_calls_dict = {}
 
         async for chunk in response:
@@ -242,6 +252,8 @@ async def execute_chat_stream(
 
         if tools:
             kwargs["tools"] = _convert_openai_tools_to_anthropic(tools)
+            if tool_choice == "required":
+                kwargs["tool_choice"] = {"type": "any"}
 
         tool_calls_dict = {}
 

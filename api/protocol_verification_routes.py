@@ -14,6 +14,7 @@ from core.protocol_verification_service import (
     ProtocolVerificationServiceError,
     build_protocol_verification_matrix,
     build_protocol_verification_overview,
+    build_protocol_verification_status_overview,
     list_protocol_verification_run_records,
     run_protocol_verification_for_asset,
 )
@@ -22,10 +23,17 @@ from core.protocol_verification_service import (
 router = APIRouter()
 
 
-@router.get("/verification/protocols", response_model=ResponseModel)
+@router.get("/verification/protocols")
 async def get_protocol_verification_overview():
     """返回全量资产协议验证矩阵概览，不包含任何敏感凭据。"""
     data = await asyncio.to_thread(build_protocol_verification_overview)
+    return ResponseModel(**protocol_verification_overview_response_kwargs(data))
+
+
+@router.get("/verification/protocols/status")
+async def get_protocol_verification_status_overview():
+    """返回资产列表页使用的轻量协议验证状态，不包含完整矩阵详情。"""
+    data = await asyncio.to_thread(build_protocol_verification_status_overview)
     return ResponseModel(**protocol_verification_overview_response_kwargs(data))
 
 

@@ -73,6 +73,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         payloads = [decode_sse(event) for event in events]
         self.assertEqual(payloads[0]["type"], "tool_start")
         self.assertEqual(payloads[0]["cmd"], "uptime")
+        self.assertEqual(payloads[0]["args"], "uptime")
         self.assertEqual(payloads[1]["type"], "tool_end")
         self.assertEqual(payloads[1]["result_status"], "done")
         self.assertEqual(payloads[2]["type"], "status")

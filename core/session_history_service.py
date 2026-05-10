@@ -27,10 +27,15 @@ def _resolve_memory_db(memory_db: Any | None) -> Any:
 
 def list_session_history_messages(
     session_id: str,
+    limit: int | None = None,
     memory_db: Any | None = None,
 ) -> list[dict]:
     try:
-        return get_user_visible_session_history(_resolve_memory_db(memory_db), session_id)
+        return get_user_visible_session_history(
+            _resolve_memory_db(memory_db),
+            session_id,
+            limit=limit,
+        )
     except Exception as exc:
         raise SessionHistoryServiceError(500, str(exc)) from exc
 

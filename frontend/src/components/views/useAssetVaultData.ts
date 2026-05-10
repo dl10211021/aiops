@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  type AssetCategoryDefinition,
-  type AssetTypeDefinition,
-  getAssetTypes,
-  getDashboardOverview,
-  getProtocolVerificationOverview,
+  getAssetTypeSummary,
+  getProtocolVerificationStatusOverview,
   getSavedAssets,
-} from '@/api/client'
+} from '@/api/assets'
 import { useStore } from '@/store'
-import type { Asset, ProtocolVerificationOverview } from '@/types'
+import type { Asset, AssetCategoryDefinition, AssetTypeDefinition, ProtocolVerificationStatusOverview } from '@/types'
 
 export function useAssetVaultData() {
   const assets = useStore((s) => s.assets)
@@ -18,12 +15,11 @@ export function useAssetVaultData() {
   const [catalogCategories, setCatalogCategories] = useState<AssetCategoryDefinition[]>([])
   const [catalogConnectorGroups, setCatalogConnectorGroups] = useState<Array<AssetCategoryDefinition & { tools?: string[] }>>([])
   const [catalogTypes, setCatalogTypes] = useState<AssetTypeDefinition[]>([])
-  const [overview, setOverview] = useState<Record<string, number> | null>(null)
-  const [verificationOverview, setVerificationOverview] = useState<ProtocolVerificationOverview | null>(null)
+  const [verificationOverview, setVerificationOverview] = useState<ProtocolVerificationStatusOverview | null>(null)
 
   const refreshVerificationOverview = useCallback(async (clearOnError = false) => {
     try {
-      const res = await getProtocolVerificationOverview()
+      const res = await getProtocolVerificationStatusOverview()
       setVerificationOverview(res.data)
     } catch {
       if (clearOnError) setVerificationOverview(null)
@@ -34,7 +30,6 @@ export function useAssetVaultData() {
     try {
       const res = await getSavedAssets()
       setAssets((res.data.assets || []) as Asset[])
-      void getDashboardOverview().then((r) => setOverview(r.data.summary)).catch(() => setOverview(null))
       void refreshVerificationOverview(true)
     } catch {
       addToast('加载资产列表失败', 'error')
@@ -43,7 +38,7 @@ export function useAssetVaultData() {
 
   useEffect(() => { void loadAssets() }, [loadAssets])
   useEffect(() => {
-    getAssetTypes()
+    getAssetTypeSummary()
       .then((r) => {
         const categories = r.data.categories || []
         setCatalogCategories(categories)
@@ -69,7 +64,6 @@ export function useAssetVaultData() {
     catalogTypes,
     categoryLabels,
     loadAssets,
-    overview,
     refreshVerificationOverview,
     setAssets,
     verificationOverview,

@@ -1,5 +1,5 @@
 import type { AssetCategoryDefinition, AssetTypeDefinition } from '@/api/client'
-import type { Asset, ProtocolVerificationOverview } from '@/types'
+import type { Asset, ProtocolVerificationStatusOverview } from '@/types'
 import { protocolLabel } from '@/utils/assetDisplay'
 import type { AssetDisplayMeta, FilterOption } from './AssetVaultParts'
 import {
@@ -29,7 +29,7 @@ type AssetVaultViewModelInput = {
   categoryLabels: Record<string, string>
   connectorFilter: string
   search: string
-  verificationOverview: ProtocolVerificationOverview | null
+  verificationOverview: ProtocolVerificationStatusOverview | null
 }
 
 export function buildAssetVaultViewModel({
@@ -60,10 +60,39 @@ export function buildAssetVaultViewModel({
 
   const typeForAsset = (asset: Asset) =>
     catalogTypeById.get(normalizeFilterValue(asset.asset_type || asset.extra_args?.sub_type))
-  const categoryForAsset = (asset: Asset) =>
+  const rawCategoryForAsset = (asset: Asset) =>
     normalizeFilterValue(asset.extra_args?.category || typeForAsset(asset)?.category, 'other')
-  const connectorForAsset = (asset: Asset) =>
+  const rawConnectorForAsset = (asset: Asset) =>
     connectorForType(catalogTypeById, String(asset.asset_type || asset.extra_args?.sub_type || ''), asset.protocol || asset.asset_type)
+  const assetMetaById = new Map(assets.map((asset) => {
+    const category = rawCategoryForAsset(asset)
+    const connector = rawConnectorForAsset(asset)
+    const typeKey = assetTypeKey(asset)
+    const protocol = normalizeFilterValue(asset.protocol || asset.asset_type)
+    return [asset.id, {
+      category,
+      connector,
+      protocol,
+      searchText: [
+        asset.host,
+        asset.remark,
+        asset.username,
+        asset.asset_type,
+        protocol,
+        connectorLabels[connector] || connector,
+      ].filter(Boolean).join('\n').toLowerCase(),
+      typeKey,
+    }]
+  }))
+  const metaForAsset = (asset: Asset) => assetMetaById.get(asset.id) || {
+    category: rawCategoryForAsset(asset),
+    connector: rawConnectorForAsset(asset),
+    protocol: normalizeFilterValue(asset.protocol || asset.asset_type),
+    searchText: '',
+    typeKey: assetTypeKey(asset),
+  }
+  const categoryForAsset = (asset: Asset) => metaForAsset(asset).category
+  const connectorForAsset = (asset: Asset) => metaForAsset(asset).connector
   const protocolLabelForAsset = (asset: Asset, connector: string) => {
     const category = categoryForAsset(asset)
     if (category === 'db' && connector === 'database_http') return '数据库 API'
@@ -71,9 +100,7 @@ export function buildAssetVaultViewModel({
     return protocolLabel(asset.protocol || asset.asset_type)
   }
   const displayForAsset = (asset: Asset): AssetDisplayMeta => {
-    const category = categoryForAsset(asset)
-    const connector = connectorForAsset(asset)
-    const typeKey = assetTypeKey(asset)
+    const { category, connector, typeKey } = metaForAsset(asset)
     return {
       typeLabel: assetTypeLabels[typeKey] || asset.asset_type || '资产',
       categoryLabel: categoryLabels[category] || category.toUpperCase(),
@@ -82,27 +109,36 @@ export function buildAssetVaultViewModel({
     }
   }
 
+  const q = search.toLowerCase()
   const filtered = assets.filter((asset) => {
-    const q = search.toLowerCase()
-    const category = categoryForAsset(asset)
-    const protocol = normalizeFilterValue(asset.protocol || asset.asset_type)
-    const connector = connectorForAsset(asset)
-    const matchesSearch = !q
-      || asset.host.toLowerCase().includes(q)
-      || (asset.remark || '').toLowerCase().includes(q)
-      || (asset.username || '').toLowerCase().includes(q)
-      || (asset.asset_type || '').toLowerCase().includes(q)
-      || protocol.toLowerCase().includes(q)
-      || (connectorLabels[connector] || connector).toLowerCase().includes(q)
+    const { category, connector, searchText, typeKey } = metaForAsset(asset)
+    const matchesSearch = !q || searchText.includes(q)
     const matchesCategory = categoryFilter === 'all' || category === categoryFilter
-    const matchesAssetType = assetTypeFilter === 'all' || assetTypeKey(asset) === assetTypeFilter
+    const matchesAssetType = assetTypeFilter === 'all' || typeKey === assetTypeFilter
     const matchesConnector = connectorFilter === 'all' || connector === connectorFilter
     return matchesSearch && matchesCategory && matchesAssetType && matchesConnector
   })
 
+  const assetCategoryCounts = new Map<string, number>()
+  const assetTypeKeysByCategory = new Map<string, Set<string>>()
+  const assetConnectorsByCategoryAndType = new Map<string, Set<string>>()
+  assets.forEach((asset) => {
+    const { category, connector, typeKey } = metaForAsset(asset)
+    assetCategoryCounts.set(category, (assetCategoryCounts.get(category) || 0) + 1)
+    if (!assetTypeKeysByCategory.has(category)) assetTypeKeysByCategory.set(category, new Set())
+    assetTypeKeysByCategory.get(category)?.add(typeKey)
+    const connectorScope = `${category}\n${typeKey}`
+    if (!assetConnectorsByCategoryAndType.has(connectorScope)) assetConnectorsByCategoryAndType.set(connectorScope, new Set())
+    assetConnectorsByCategoryAndType.get(connectorScope)?.add(connector)
+  })
+  const catalogTypeCategoryCounts = new Map<string, number>()
+  catalogTypes.forEach((type) => {
+    catalogTypeCategoryCounts.set(type.category, (catalogTypeCategoryCounts.get(type.category) || 0) + 1)
+  })
+
   const availableCategoryOptions = Array.from(new Set([
     ...catalogCategories.map((c) => c.id),
-    ...assets.map((a) => categoryForAsset(a)),
+    ...assetCategoryCounts.keys(),
   ]))
     .filter(Boolean)
     .map((id): FilterOption => {
@@ -118,24 +154,30 @@ export function buildAssetVaultViewModel({
     .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.label.localeCompare(b.label))
 
   const typeCategoryMatches = (type: AssetTypeDefinition) => categoryFilter === 'all' || type.category === categoryFilter
-  const assetCategoryMatches = (asset: Asset) => categoryFilter === 'all' || categoryForAsset(asset) === categoryFilter
   const scopedCatalogTypes = catalogTypes.filter(typeCategoryMatches)
+  const assetTypeKeys = categoryFilter === 'all'
+    ? Array.from(new Set(Array.from(assetTypeKeysByCategory.values()).flatMap((items) => Array.from(items))))
+    : Array.from(assetTypeKeysByCategory.get(categoryFilter) || [])
 
   const availableAssetTypes = Array.from(new Set([
     ...scopedCatalogTypes.map((t) => normalizeFilterValue(t.id)),
-    ...assets.filter(assetCategoryMatches).map((a) => assetTypeKey(a)),
+    ...assetTypeKeys,
   ]))
     .filter(Boolean)
     .sort((a, b) => (catalogTypeOrder.get(a) ?? catalogTypes.length) - (catalogTypeOrder.get(b) ?? catalogTypes.length) || a.localeCompare(b))
 
   const connectorMatchesSelectedType = (type: AssetTypeDefinition) =>
     assetTypeFilter === 'all' || normalizeFilterValue(type.id) === assetTypeFilter
-  const assetTypeMatches = (asset: Asset) =>
-    assetTypeFilter === 'all' || assetTypeKey(asset) === assetTypeFilter
+  const assetConnectorKeys = Array.from(assetConnectorsByCategoryAndType.entries()).flatMap(([scope, connectors]) => {
+    const [category, typeKey] = scope.split('\n')
+    if (categoryFilter !== 'all' && category !== categoryFilter) return []
+    if (assetTypeFilter !== 'all' && typeKey !== assetTypeFilter) return []
+    return Array.from(connectors)
+  })
 
   const availableConnectors = Array.from(new Set([
     ...scopedCatalogTypes.filter(connectorMatchesSelectedType).map((t) => normalizeFilterValue(t.capability?.connector)),
-    ...assets.filter((a) => assetCategoryMatches(a) && assetTypeMatches(a)).map((a) => connectorForAsset(a)),
+    ...assetConnectorKeys,
   ]))
     .filter(Boolean)
     .sort((a, b) => (connectorOrder.get(a) ?? orderIndex(CONNECTOR_FALLBACK_ORDER, a)) - (connectorOrder.get(b) ?? orderIndex(CONNECTOR_FALLBACK_ORDER, b)) || a.localeCompare(b))
@@ -145,8 +187,8 @@ export function buildAssetVaultViewModel({
     .filter((option) => option.id !== 'all')
     .map((option) => ({
       ...option,
-      assetCount: assets.filter((asset) => categoryForAsset(asset) === option.id).length,
-      typeCount: catalogTypes.filter((type) => type.category === option.id).length,
+      assetCount: assetCategoryCounts.get(option.id) || 0,
+      typeCount: catalogTypeCategoryCounts.get(option.id) || 0,
     }))
     .filter((option) => option.typeCount > 0 || option.assetCount > 0)
     .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.label.localeCompare(b.label))

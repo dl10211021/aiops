@@ -17,6 +17,6 @@ class ChatRequest(BaseModel):
     @model_validator(mode="after")
     def validate_attachments(self):
         self.attachments = normalize_chat_attachments(self.attachments)
-        if self.orchestration_mode not in {"single", "split", "auto"}:
+        if self.orchestration_mode not in {"single", "split", "fast", "auto"}:
             self.orchestration_mode = "single"
         return self

@@ -13,6 +13,7 @@ from typing import Any
 ROOT_DIR = Path(__file__).resolve().parent.parent
 ALERT_STORE_PATH = ROOT_DIR / "alert_events.json"
 _LOCK = threading.RLock()
+_STORE_CACHE: tuple[str, float, int, list[dict[str, Any]]] | None = None
 
 ALLOWED_STATUS = {"open", "acknowledged", "closed", "suppressed"}
 
@@ -22,7 +23,16 @@ def _now() -> str:
 
 
 def _read_store() -> list[dict[str, Any]]:
+    global _STORE_CACHE
     if not ALERT_STORE_PATH.exists():
+        _STORE_CACHE = None
+        return []
+    try:
+        stat = ALERT_STORE_PATH.stat()
+        cache_path = str(ALERT_STORE_PATH)
+        if _STORE_CACHE and _STORE_CACHE[0] == cache_path and _STORE_CACHE[1] == stat.st_mtime and _STORE_CACHE[2] == stat.st_size:
+            return [dict(item) for item in _STORE_CACHE[3]]
+    except OSError:
         return []
     try:
         data = json.loads(ALERT_STORE_PATH.read_text(encoding="utf-8"))
@@ -30,15 +40,23 @@ def _read_store() -> list[dict[str, Any]]:
         return []
     if not isinstance(data, list):
         return []
-    return [item for item in data if isinstance(item, dict)]
+    items = [item for item in data if isinstance(item, dict)]
+    try:
+        stat = ALERT_STORE_PATH.stat()
+        _STORE_CACHE = (str(ALERT_STORE_PATH), stat.st_mtime, stat.st_size, [dict(item) for item in items])
+    except OSError:
+        _STORE_CACHE = None
+    return items
 
 
 def _write_store(items: list[dict[str, Any]]) -> None:
+    global _STORE_CACHE
     ALERT_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
     ALERT_STORE_PATH.write_text(
         json.dumps(items, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    _STORE_CACHE = None
 
 
 def normalize_alert_payload(payload: dict[str, Any]) -> dict[str, Any]:

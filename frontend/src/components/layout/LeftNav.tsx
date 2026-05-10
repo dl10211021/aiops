@@ -15,6 +15,7 @@ const NAV_ITEMS: Array<{ id: ViewId; icon: string; label: string }> = [
 
 const KNOWLEDGE_ITEMS: Array<{ id: ViewId; icon: string; label: string }> = [
   { id: 'skills', icon: '✦', label: 'Skills' },
+  { id: 'tools', icon: '⌘', label: '工具' },
   { id: 'knowledge', icon: '文', label: '知识库' },
 ]
 

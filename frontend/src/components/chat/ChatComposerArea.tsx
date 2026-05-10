@@ -43,7 +43,7 @@ interface ChatComposerAreaProps {
   onOpenRealtimeCanvas?: () => void
   onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => void
   onRemoveAttachment: (id: string) => void
-  onSend: () => void
+  onSend: (value?: string) => void
   onStop: () => void
   onTraceActionRule: (action: SafetyPolicyAction, decision: SafetyPolicyDecision) => void
 }

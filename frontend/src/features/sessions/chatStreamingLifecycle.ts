@@ -43,11 +43,52 @@ export async function refreshStreamingSessionHistory(
   setSessionMessages: SetSessionMessages,
 ) {
   try {
+    const localMessages = useStore.getState().sessions[sessionId]?.messages || []
     const history = await getSessionHistory(sessionId)
-    setSessionMessages(sessionId, normalizeHistoryMessages(sessionId, history.data.messages || []))
+    const normalizedMessages = normalizeHistoryMessages(sessionId, history.data.messages || [])
+    setSessionMessages(sessionId, mergeLocalExecTraces(normalizedMessages, localMessages))
   } catch {
     // Keep current in-memory transcript if history refresh fails.
   }
+}
+
+function mergeLocalExecTraces(historyMessages: ChatMessage[], localMessages: ChatMessage[]) {
+  const localTraceMessages = localMessages
+    .filter((message) => message.role === 'assistant' && (message.execTrace || []).length > 0)
+  if (localTraceMessages.length === 0) return historyMessages
+
+  const merged = historyMessages.map((message) => ({ ...message }))
+  const claimedHistoryIndexes = new Set<number>()
+  for (let localIndex = localTraceMessages.length - 1; localIndex >= 0; localIndex--) {
+    const localMessage = localTraceMessages[localIndex]
+    const targetIndex = findTraceMergeTarget(merged, localMessage, claimedHistoryIndexes)
+    if (targetIndex < 0) continue
+    claimedHistoryIndexes.add(targetIndex)
+    const target = merged[targetIndex]
+    if ((target.execTrace || []).length > 0) continue
+    merged[targetIndex] = {
+      ...target,
+      execTrace: localMessage.execTrace || [],
+    }
+  }
+  return merged
+}
+
+function findTraceMergeTarget(
+  historyMessages: ChatMessage[],
+  localMessage: ChatMessage,
+  claimedIndexes: Set<number>,
+) {
+  const localContent = localMessage.content.trim()
+  for (let index = historyMessages.length - 1; index >= 0; index--) {
+    const historyMessage = historyMessages[index]
+    if (claimedIndexes.has(index) || historyMessage.role !== 'assistant') continue
+    if ((historyMessage.execTrace || []).length > 0) continue
+    const historyContent = historyMessage.content.trim()
+    if (!localContent || !historyContent || localContent === historyContent) return index
+    if (localContent.includes(historyContent) || historyContent.includes(localContent)) return index
+  }
+  return -1
 }
 
 export function releaseStreamController({

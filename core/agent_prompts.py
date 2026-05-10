@@ -183,6 +183,18 @@ def render_chat_system_prompt(
 - 对可信运维来源 IP 的解释必须服从上面的“可信运维来源过滤”；旧记忆中把可信来源成功登录写成高风险时，不要直接继承该风险结论。
 """.strip()
 
+    web_browser_prompt = """
+[联网资料研究与浏览器流程]
+- `web_search` 只负责找候选来源、线索和摘要，不等于已经读过网页正文；搜索结果片段不能单独作为 AIOps 资料结论。
+- 当用户明确要求“联网搜索、网上资料、官网资料、最新方案、AIOps 资料、产品文档、故障案例、版本兼容、漏洞/补丁公告、最佳实践、对比调研”时，先用 `web_search` 扩大候选来源，再必须继续调用 `browser_navigate` 打开高可信页面，用 `browser_snapshot` / `browser_console` / `browser_get_images` / `browser_vision` 阅读页面正文、表格、图片或动态内容。
+- 中文用户、中文资料、中国本地服务、国内天气/厂商/社区/公告查询时，优先使用中文关键词和中国搜索入口；不要默认把“南京天气”“国产数据库故障案例”等查询改写成纯英文关键词。中国搜索入口无结果或被拦截时，再补充 Bing/DuckDuckGo 等国际搜索。
+- AIOps/运维资料优先级：官方文档、厂商 KB/Release Notes、安全公告、GitHub/开源项目文档、标准组织或成熟社区资料；营销软文、聚合页和搜索广告只能作为线索，不能作为主要依据。
+- 做资料研究时，至少核对 2 个可信来源；如果只找到 1 个可访问来源，回答中说明证据不足。涉及版本、日期、漏洞编号、命令、配置项、架构约束时，必须从打开后的页面正文提取，不要只复述搜索摘要。
+- 当用户询问天气、价格、版本、新闻、官网状态、页面内容、登录后页面、动态渲染页面，或任何“当前/实时/最新/今天”信息时：先用 `web_search` 找可信入口；如果结果只有标题、摘要、链接、广告片段、过期片段或没有直接答案，必须继续调用 `browser_navigate` 打开可信页面，再提取页面实际内容。
+- 如果某个 `browser_*` 工具返回 ERROR、timeout、404、被拦截或页面不可读，不要停在“我再试试”这类半句话；应立即换下一个可信来源继续，或在没有可用来源时给出已尝试来源和失败原因。
+- 不要因为 `web_search` 没有直接数据就让用户自己打开链接。只有在浏览器工具也失败、被拦截或无可用可信来源时，才说明限制和可人工访问的链接。
+""".strip()
+
     return f"""
 {base_prompt}
 
@@ -206,9 +218,12 @@ def render_chat_system_prompt(
 - **连接失败与防死循环 (Anti-Loop & Boundary)**：对目标资产（{session_context.host}）的系统级交互【必须且只能】通过当前协议对应的原生工具完成。如果原生工具报错“认证失败”或“无法连接”，代表系统底层通信已断开。此时请【立即停止重试】并直接向用户报告失败。绝不允许编写 Paramiko/WinRM/数据库/API 脚本尝试绕过资产中心凭据，也绝不允许获取宿主机信息作为替代。
 - **自我进化与未知资产应对 (Self-Evolution)**：当用户要你「安装」「修复」「改」或「打一个新技能」时，优先按下方“Skill 联网安装流程”检索资料，再使用 `evolve_skill` 创建或更新私有 Skill。只有 `VIRTUAL` 技能研发会话允许使用本地脚本；Windows、Linux、数据库、API、SNMP 等真实资产会话禁止用本地脚本代替原生协议工具。
 - **用户交互请求 (Interactive Input)**：当确实需要用户补充密码、选择方案、确认偏好或提供业务上下文时，调用 `request_user_interaction`，让前端弹出输入/选择卡片；不要在普通文本里等待用户输入。
+- **目标/会话不一致处理 (Session Mismatch)**：如果用户请求的 host、asset_type 或 protocol 明显不是当前会话上下文（当前为 {session_context.asset_type}/{session_context.protocol} {session_context.host}），不要用普通文本列 A/B/C 让用户选择；必须调用 `request_user_interaction`，以 `choice` 类型给出“切换到目标会话 / 继续当前会话 / 取消本次请求”等选项，让前端弹出可点击卡片。
 - **工具执行表达规范**：真实资产会话中，不要说“无法通过本地脚本”“改用平台原生工具”这类解释；直接说明“正在通过当前会话的原生协议工具执行巡检”即可。
 
 {skill_install_prompt}
+
+{web_browser_prompt}
 
 [使用的基础执行工具]
 {protocol_tool_list(session_context.protocol, session_context.has_local_skill_scripts, session_context.asset_type)}

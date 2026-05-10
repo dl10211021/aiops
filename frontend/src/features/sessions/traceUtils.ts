@@ -79,6 +79,12 @@ export function resultReason(result: Record<string, unknown> | null): string {
 }
 
 export function traceTargetLabel(trace: ExecTraceItem): string {
+  const execution = traceExecutionText(trace)
+  if (execution) return execution.slice(0, 240)
+  return trace.tool || ''
+}
+
+export function traceExecutionText(trace: ExecTraceItem): string {
   const parsedArgs = parseJsonRecord(trace.args || '')
   if (parsedArgs) {
     const command = parsedArgs.command
@@ -91,8 +97,8 @@ export function traceTargetLabel(trace: ExecTraceItem): string {
     if (typeof method === 'string' && typeof path === 'string') return `${method.toUpperCase()} ${path}`
     if (typeof action === 'string' && action.trim()) return action.trim()
   }
-  if (trace.args?.trim()) return trace.args.trim().slice(0, 240)
-  return trace.tool || ''
+  if (trace.args?.trim()) return trace.args.trim()
+  return ''
 }
 
 export function actionRuleDomain(actionId: string): string {

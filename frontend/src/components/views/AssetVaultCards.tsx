@@ -1,4 +1,4 @@
-import type { Asset, AssetVerificationMatrix } from '@/types'
+import type { Asset, ProtocolVerificationStatusOverview } from '@/types'
 import { VerificationStatusStrip } from './AssetVerificationPanel'
 import { AssetMetaLine } from './AssetVaultParts'
 import { normalizeFilterValue, protocolBadgeTone } from './assetVaultModel'
@@ -18,7 +18,7 @@ export function AssetCard({
   asset: Asset
   categoryLabel: string
   connectorLabel: string
-  matrix?: AssetVerificationMatrix
+  matrix?: ProtocolVerificationStatusOverview['matrix'][number]
   protocolLabel: string
   typeLabel: string
   onConnect: (asset: Asset) => void

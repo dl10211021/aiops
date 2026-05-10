@@ -37,7 +37,7 @@ const orchestrationModeStorageKey = 'opscore_chat_orchestration_mode'
 
 export default function ChatWindow() {
   const currentSessionId = useStore((s) => s.currentSessionId)
-  const sessions = useStore((s) => s.sessions)
+  const session = useStore((s) => currentSessionId ? s.sessions[currentSessionId] : null)
   const setView = useStore((s) => s.setView)
 
   const [readWriteConfirm, setReadWriteConfirm] = useState<{ sessionId: string; message: string; remember: boolean } | null>(null)
@@ -58,19 +58,20 @@ export default function ChatWindow() {
   const [isResizing, setIsResizing] = useState(false)
   const [profileFocusPulse, setProfileFocusPulse] = useState(false)
   const [selectedSlashCommandIndex, setSelectedSlashCommandIndex] = useState(0)
-  const [orchestrationMode, setOrchestrationModeState] = useState<'single' | 'split'>(() => {
+  const [orchestrationMode, setOrchestrationModeState] = useState<'single' | 'split' | 'fast'>(() => {
     if (typeof window === 'undefined') return 'single'
-    return localStorage.getItem(orchestrationModeStorageKey) === 'split' ? 'split' : 'single'
+    const storedMode = localStorage.getItem(orchestrationModeStorageKey)
+    return storedMode === 'split' || storedMode === 'fast' ? storedMode : 'single'
   })
   const dragStartRef = useRef<{ startX: number; startWidth: number } | null>(null)
   const rightPanelWidthRef = useRef(defaultRightPanelWidth)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const scrollFrameRef = useRef<number | null>(null)
   const profilePanelRef = useRef<HTMLDivElement>(null)
   const profileFocusTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const inputDrafts = useChatInputDrafts(currentSessionId, textareaRef)
 
-  const session = currentSessionId ? sessions[currentSessionId] : null
   const messages = session?.messages || []
   const isStreaming = session?.isStreaming || false
   const input = inputDrafts.input
@@ -95,7 +96,7 @@ export default function ChatWindow() {
     latestPolicyBlock,
     setDismissedPolicyBlockKey,
   )
-  const userInteractionResponse = useUserInteractionResponse(currentSessionId, sessions)
+  const userInteractionResponse = useUserInteractionResponse(currentSessionId)
   const slashCommands = commandManager.slashCommands
   const quickCommands = buildQuickCommands(slashCommands)
   const visibleSlashCommands = visibleSlashCommandsForInput(input, slashCommands)
@@ -139,7 +140,6 @@ export default function ChatWindow() {
 
   const { sendMessage, stopStreaming, hasActiveStream } = useChatStreaming({
     currentSessionId,
-    sessions,
     input,
     draftsBySession: inputDrafts.draftsBySession,
     attachments: chatAttachments.attachments,
@@ -158,10 +158,21 @@ export default function ChatWindow() {
   const messageHistoryActions = useMessageHistoryActions(currentSessionId)
   useSessionHistorySync(currentSessionId, session, hasActiveStream)
 
-  // Scroll to bottom on new messages
   useEffect(() => {
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    const container = messagesContainerRef.current
+    if (!container) return
+    if (scrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollFrameRef.current)
+    }
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight
+      scrollFrameRef.current = null
+    })
+    return () => {
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current)
+        scrollFrameRef.current = null
+      }
     }
   }, [messages])
 
@@ -231,7 +242,7 @@ export default function ChatWindow() {
 
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      sendMessage()
+      void sendMessage(e.currentTarget.value)
     }
   }
 
@@ -289,7 +300,7 @@ export default function ChatWindow() {
     localStorage.setItem(rightPanelStorageKey, String(next))
   }
 
-  const setOrchestrationMode = (mode: 'single' | 'split') => {
+  const setOrchestrationMode = (mode: 'single' | 'split' | 'fast') => {
     setOrchestrationModeState(mode)
     localStorage.setItem(orchestrationModeStorageKey, mode)
   }
@@ -328,6 +339,7 @@ export default function ChatWindow() {
             containerRef={messagesContainerRef}
             isStreaming={isStreaming}
             messages={messages}
+            sessionId={currentSessionId}
             onApproval={toolApprovalDecision.openDecision}
             onInteraction={userInteractionResponse.respond}
             onTraceActionRule={safetyPolicyActionRule.saveActionRule}
@@ -367,14 +379,14 @@ export default function ChatWindow() {
             onManageCommands={commandManager.openManager}
             onPaste={chatAttachments.handleInputPaste}
             onRemoveAttachment={chatAttachments.removeAttachment}
-            onSend={() => sendMessage()}
+            onSend={(value) => sendMessage(value)}
             onStop={stopStreaming}
             onTraceActionRule={safetyPolicyActionRule.saveActionRule}
           />
         </div>
       </div>
       <div
-        className={`z-10 flex w-3 items-stretch justify-center border-l border-ops-surface1/70 ${
+        className={`ops-chat-resize-handle z-10 flex w-3 items-stretch justify-center border-l border-ops-surface1/70 ${
           rightPanelCollapsed
             ? 'pointer-events-none opacity-0'
             : isResizing
@@ -441,7 +453,7 @@ export default function ChatWindow() {
               {[
                 ['asset', '资产画像', '画像'],
                 ['memory', '会话记忆', '记忆'],
-                ['trace', 'AI 思维链', '链路'],
+                ['trace', orchestrationMode === 'fast' ? '执行链路' : 'AI 思维链', '链路'],
               ].map(([tab, title, label]) => (
                 <button
                   key={tab}
@@ -486,8 +498,10 @@ export default function ChatWindow() {
               <AiThinkingChainPanel
                 key={rightPanelTab}
                 defaultTab={rightPanelTab === 'memory' ? 'memory' : 'trace'}
+                fixedTab={rightPanelTab === 'memory' ? 'memory' : 'trace'}
                 sessionId={currentSessionId}
                 messages={messages}
+                traceLabel={orchestrationMode === 'fast' ? '执行链路' : '思维链'}
               />
             )}
           </div>

@@ -8,7 +8,7 @@ export function useTopBarState() {
   const currentSessionId = useStore((s) => s.currentSessionId)
   const currentView = useStore((s) => s.currentView)
   const setView = useStore((s) => s.setView)
-  const sessions = useStore((s) => s.sessions)
+  const session = useStore((s) => currentSessionId ? s.sessions[currentSessionId] : null)
   const updateSession = useStore((s) => s.updateSession)
   const openModal = useStore((s) => s.openModal)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
@@ -16,7 +16,6 @@ export function useTopBarState() {
   const addToast = useStore((s) => s.addToast)
   const [theme, setTheme] = useState<OpsTheme>(readStoredTheme)
 
-  const session = currentSessionId ? sessions[currentSessionId] : null
   const isChatView = currentView === 'chat'
   const sessionAssetText = session ? `${assetTypeLabel(session.asset_type)} / ${protocolLabel(session.protocol)}` : ''
 

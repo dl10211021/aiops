@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from urllib.parse import urlparse
 
 from core.asset_catalog_builder import (
@@ -57,22 +58,29 @@ from core.asset_protocol_constants import (
 )
 
 
-def get_asset_catalog() -> list[dict]:
+@lru_cache(maxsize=1)
+def _cached_asset_catalog() -> tuple[dict, ...]:
     result = []
     for item in ASSET_CATALOG:
         enriched = enrich_asset_capability(item)
         enriched["access_protocols"] = build_access_protocols(enriched)
         result.append(enriched)
-    return result
+    return tuple(result)
+
+
+def get_asset_catalog() -> list[dict]:
+    return [dict(item) for item in _cached_asset_catalog()]
+
+
+def clear_asset_catalog_cache() -> None:
+    _cached_asset_catalog.cache_clear()
 
 
 def get_asset_definition(asset_type: str | None) -> dict | None:
     subtype = canonical_asset_type(asset_type)
-    for item in ASSET_CATALOG:
+    for item in _cached_asset_catalog():
         if item["id"] == subtype:
-            enriched = enrich_asset_capability(item)
-            enriched["access_protocols"] = build_access_protocols(enriched)
-            return enriched
+            return dict(item)
     return None
 
 

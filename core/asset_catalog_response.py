@@ -26,3 +26,25 @@ def build_asset_types_response(types: list[dict] | None = None) -> dict:
         "categories": categories,
         "connector_groups": connector_groups,
     }
+
+
+def build_asset_type_summary_response(types: list[dict] | None = None) -> dict:
+    data = build_asset_types_response(types)
+    summary_types = []
+    for item in data["types"]:
+        capability = item.get("capability") or {}
+        summary_types.append({
+            "id": item.get("id"),
+            "label": item.get("label"),
+            "category": item.get("category") or "other",
+            "protocol": item.get("protocol"),
+            "default_port": item.get("default_port"),
+            "capability": {
+                "connector": capability.get("connector") or "unknown",
+            },
+        })
+    return {
+        "types": summary_types,
+        "categories": data["categories"],
+        "connector_groups": data["connector_groups"],
+    }

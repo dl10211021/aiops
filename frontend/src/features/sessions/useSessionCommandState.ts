@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useStore } from '@/store'
 import type { Session, SessionToolCatalog, SlashCommand } from '@/types'
 import { fetchSessionCommandState } from './sessionCommandService'
 import { buildSlashCommands } from './slashCommands'
@@ -17,8 +18,9 @@ export function useSessionCommandState({
   const [backendCommands, setBackendCommands] = useState<SlashCommand[]>([])
   const [builtinCommands, setBuiltinCommands] = useState<SlashCommand[]>([])
   const [customCommands, setCustomCommands] = useState<SlashCommand[]>([])
+  const [commandSessionId, setCommandSessionId] = useState<string | null>(null)
 
-  const applyCommandState = useCallback((state: {
+  const applyCommandState = useCallback((sessionId: string, state: {
     backendCommands: SlashCommand[]
     builtinCommands: SlashCommand[]
     customCommands: SlashCommand[]
@@ -26,6 +28,7 @@ export function useSessionCommandState({
     setBackendCommands(state.backendCommands)
     setBuiltinCommands(state.builtinCommands)
     setCustomCommands(state.customCommands)
+    setCommandSessionId(sessionId)
   }, [])
 
   useEffect(() => {
@@ -33,35 +36,51 @@ export function useSessionCommandState({
       setBackendCommands([])
       setBuiltinCommands([])
       setCustomCommands([])
+      setCommandSessionId(null)
       return
     }
 
+    setBackendCommands([])
+    setBuiltinCommands([])
+    setCustomCommands([])
+    setCommandSessionId(null)
     let cancelled = false
-    fetchSessionCommandState(currentSessionId)
-      .then((state) => {
-        if (!cancelled) applyCommandState(state)
-      })
-      .catch(() => {
-        if (!cancelled) setBackendCommands([])
-      })
+    const timer = window.setTimeout(() => {
+      if (useStore.getState().currentView !== 'chat') return
+      fetchSessionCommandState(currentSessionId)
+        .then((state) => {
+          if (!cancelled) applyCommandState(currentSessionId, state)
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setBackendCommands([])
+            setBuiltinCommands([])
+            setCustomCommands([])
+            setCommandSessionId(null)
+          }
+        })
+    }, 800)
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
     }
   }, [applyCommandState, currentSessionId, session?.asset_type, session?.protocol])
 
   const refreshCommands = useCallback(async () => {
     if (!currentSessionId) return
     const state = await fetchSessionCommandState(currentSessionId)
-    applyCommandState(state)
+    applyCommandState(currentSessionId, state)
   }, [applyCommandState, currentSessionId])
 
+  const hasCurrentBackendCommands = commandSessionId === currentSessionId && backendCommands.length > 0
+  const hasCurrentBuiltinCommands = commandSessionId === currentSessionId && builtinCommands.length > 0
   const slashCommands = useMemo(
-    () => backendCommands.length > 0 ? backendCommands : (session ? buildSlashCommands(session, toolCatalog) : []),
-    [backendCommands, session, toolCatalog],
+    () => hasCurrentBackendCommands ? backendCommands : (session ? buildSlashCommands(session, toolCatalog) : []),
+    [backendCommands, hasCurrentBackendCommands, session, toolCatalog],
   )
 
   return {
-    availableCommands: builtinCommands.length > 0 ? builtinCommands : slashCommands,
+    availableCommands: hasCurrentBuiltinCommands ? builtinCommands : slashCommands,
     customCommands,
     refreshCommands,
     setCustomCommands,

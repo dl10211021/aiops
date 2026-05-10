@@ -3,7 +3,11 @@ import { statusLabel } from '@/utils/assetDisplay'
 import { AssetMetaLine, type AssetDisplayMeta } from './AssetVaultParts'
 import { InspectionRunsSection, VerificationHistorySection, VerificationMatrixSection } from './AssetVerificationSections'
 
-export function VerificationStatusStrip({ matrix }: { matrix: AssetVerificationMatrix }) {
+export function VerificationStatusStrip({
+  matrix,
+}: {
+  matrix: Pick<AssetVerificationMatrix, 'coverage' | 'status'>
+}) {
   const ready = matrix.status === 'ready'
   return (
     <div className="ops-data-panel mb-3 flex items-center justify-between px-2.5 py-2">

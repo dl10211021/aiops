@@ -100,6 +100,7 @@ class TestAssetCrudRoutes(unittest.TestCase):
         self.assertIn("/assets/saved", paths)
         self.assertIn("/assets", paths)
         self.assertIn("/assets/types", paths)
+        self.assertIn("/assets/types/summary", paths)
         self.assertIn("/assets/{asset_id}", paths)
         self.assertIn("/assets/delete/bulk", paths)
         self.assertIn("/assets/groups/bulk", paths)

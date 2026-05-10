@@ -10,8 +10,17 @@ USER_VISIBLE_ROLES = {"user", "assistant"}
 USER_VISIBLE_SYSTEM_MEMORY_TYPES = {"manual_stop"}
 
 
-def get_user_visible_session_history(memory_db, session_id: str) -> list[dict]:
-    messages = memory_db.get_messages(session_id, for_ui=True)
+def get_user_visible_session_history(
+    memory_db,
+    session_id: str,
+    limit: int | None = None,
+) -> list[dict]:
+    try:
+        messages = memory_db.get_messages(session_id, for_ui=True, limit=limit)
+    except TypeError:
+        messages = memory_db.get_messages(session_id, for_ui=True)
+        if limit and limit > 0:
+            messages = messages[-limit:]
     messages = attach_legacy_exec_traces(messages)
     return [msg for msg in messages if is_user_visible_history_message(msg)]
 

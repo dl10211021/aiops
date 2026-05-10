@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useDeferredValue } from 'react'
 import { useStore } from '@/store'
 import { getSkillRegistry, getSkillDetail, scanSkills, migrateSkill, createSkill } from '@/api/client'
 import PageHeader from '@/components/layout/PageHeader'
@@ -18,6 +18,7 @@ export default function SkillMarket() {
   const addToast = useStore((s) => s.addToast)
 
   const [search, setSearch] = useState('')
+  const deferredSearch = useDeferredValue(search)
   const [detailSkill, setDetailSkill] = useState<SkillInfo | null>(null)
   const [detailContent, setDetailContent] = useState('')
   const [showCreate, setShowCreate] = useState(false)
@@ -89,7 +90,7 @@ export default function SkillMarket() {
   }
 
   const filtered = skillRegistry.filter((s) => {
-    const q = search.toLowerCase()
+    const q = deferredSearch.toLowerCase()
     return !q || s.id.toLowerCase().includes(q) || (s.name || '').toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q)
   })
 

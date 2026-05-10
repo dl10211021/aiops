@@ -162,6 +162,19 @@ class TestApiMappers(unittest.TestCase):
 
         self.assertEqual(chat_stream_agent_kwargs(req)["thinking_mode"], "off")
 
+    def test_chat_stream_agent_kwargs_forces_fast_mode_thinking_off(self):
+        req = ChatRequest(
+            session_id="sid-1",
+            message="快速巡检",
+            thinking_mode="high",
+            orchestration_mode="fast",
+        )
+
+        kwargs = chat_stream_agent_kwargs(req)
+
+        self.assertEqual(kwargs["orchestration_mode"], "fast")
+        self.assertEqual(kwargs["thinking_mode"], "off")
+
     def test_session_webhook_delivery_kwargs_preserves_all_request_fields(self):
         req = SessionWebhookSendRequest(
             webhook_url="https://ops.example.com/hook",

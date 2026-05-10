@@ -1,9 +1,8 @@
-import InspectionReportModal from '@/components/inspection/InspectionReportModal'
 import PageHeader from '@/components/layout/PageHeader'
-import { BatchImportAssetsDialog, DeleteAssetDialog, NormalizeAssetsDialog } from './AssetVaultDialogs'
+import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { getAssetTypes } from '@/api/assets'
+import type { AssetTypeDefinition } from '@/types'
 import { AssetVaultFilterPanel, AssetVaultHeaderActions } from './AssetVaultFilterPanel'
-import { AssetVaultEditorDrawer } from './AssetVaultEditorDrawer'
-import { VerificationPanel } from './AssetVerificationPanel'
 import { AssetEnterpriseCommandPanel, AssetTablePanel } from './AssetVaultPageSections'
 import { buildAssetVaultViewModel } from './assetVaultViewModel'
 import { useAssetVaultActions } from './useAssetVaultActions'
@@ -11,8 +10,24 @@ import { useAssetVaultData } from './useAssetVaultData'
 import { useAssetVaultFilterValidation, useAssetVaultFilters } from './useAssetVaultFilters'
 import { useStore } from '@/store'
 
+const InspectionReportModal = lazy(() => import('@/components/inspection/InspectionReportModal'))
+const AssetVaultEditorDrawer = lazy(() => import('./AssetVaultEditorDrawer').then((module) => ({ default: module.AssetVaultEditorDrawer })))
+const VerificationPanel = lazy(() => import('./AssetVerificationPanel').then((module) => ({ default: module.VerificationPanel })))
+const BatchImportAssetsDialog = lazy(() => import('./AssetVaultDialogs').then((module) => ({ default: module.BatchImportAssetsDialog })))
+const DeleteAssetDialog = lazy(() => import('./AssetVaultDialogs').then((module) => ({ default: module.DeleteAssetDialog })))
+const NormalizeAssetsDialog = lazy(() => import('./AssetVaultDialogs').then((module) => ({ default: module.NormalizeAssetsDialog })))
+
+function AssetModalFallback() {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 text-sm text-ops-subtext">
+      加载中...
+    </div>
+  )
+}
+
 export default function AssetVault() {
   const sessionGroups = useStore((s) => s.sessionGroups)
+  const [fullCatalogTypes, setFullCatalogTypes] = useState<AssetTypeDefinition[] | null>(null)
   const {
     assets,
     catalogCategories,
@@ -38,6 +53,7 @@ export default function AssetVault() {
     setConnectorFilter,
     setSearch,
   } = useAssetVaultFilters()
+  const deferredSearch = useDeferredValue(search)
 
   const {
     assetTypeLabels,
@@ -50,7 +66,7 @@ export default function AssetVault() {
     filtered,
     hasActiveFilters,
     matrixByAssetId,
-  } = buildAssetVaultViewModel({
+  } = useMemo(() => buildAssetVaultViewModel({
     assets,
     assetTypeFilter,
     catalogCategories,
@@ -59,9 +75,20 @@ export default function AssetVault() {
     categoryFilter,
     categoryLabels,
     connectorFilter,
-    search,
+    search: deferredSearch,
     verificationOverview,
-  })
+  }), [
+    assets,
+    assetTypeFilter,
+    catalogCategories,
+    catalogConnectorGroups,
+    catalogTypes,
+    categoryFilter,
+    categoryLabels,
+    connectorFilter,
+    deferredSearch,
+    verificationOverview,
+  ])
 
   useAssetVaultFilterValidation({
     assetTypeFilter,
@@ -126,6 +153,19 @@ export default function AssetVault() {
   })
 
   const readyCount = verificationOverview?.summary.ready_assets || 0
+
+  useEffect(() => {
+    if (!editTarget || fullCatalogTypes) return
+    let cancelled = false
+    getAssetTypes()
+      .then((response) => {
+        if (!cancelled) setFullCatalogTypes(response.data.types || [])
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [editTarget, fullCatalogTypes])
 
   return (
     <div className="ops-page">
@@ -194,61 +234,63 @@ export default function AssetVault() {
           search={search}
         />
       </div>
-      {verificationPanel && (
-        <VerificationPanel
-          panel={verificationPanel}
-          onClose={() => setVerificationPanel(null)}
-          onRun={() => void runVerification()}
-          onOpenInspectionReport={(runId) => setReportRunId(runId)}
-        />
-      )}
-      {reportRunId && <InspectionReportModal runId={reportRunId} onClose={() => setReportRunId(null)} />}
-      {editTarget && (
-        <AssetVaultEditorDrawer
-          asset={editTarget}
-          catalogTypes={catalogTypes}
-          display={displayForAsset(editTarget)}
-          saving={savingAsset}
-          sessionGroups={sessionGroups}
-          onClose={() => setEditTarget(null)}
-          onConnect={(asset) => {
-            setEditTarget(null)
-            handleConnect(asset)
-          }}
-          onOpenVerification={(asset) => {
-            setEditTarget(null)
-            void openVerification(asset)
-          }}
-          onSave={(asset, patch) => void handleSaveAsset(asset, patch)}
-        />
-      )}
-      {batchImportOpen && (
-        <BatchImportAssetsDialog
-          draft={batchImportDraft}
-          importing={importingAssets}
-          onCancel={() => setBatchImportOpen(false)}
-          onChange={setBatchImportDraft}
-          onConfirm={() => void handleBatchImportConfirmed()}
-        />
-      )}
-      {deleteTarget && (
-        <DeleteAssetDialog
-          asset={deleteTarget}
-          deleting={deletingAsset}
-          display={displayForAsset(deleteTarget)}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={() => void handleDeleteConfirmed()}
-        />
-      )}
-      {normalizeDialog && (
-        <NormalizeAssetsDialog
-          duplicatesToRemove={normalizeDialog.duplicatesToRemove}
-          normalizing={normalizingAssets}
-          rowsToUpdate={normalizeDialog.rowsToUpdate}
-          onCancel={() => setNormalizeDialog(null)}
-          onConfirm={() => void handleNormalizeConfirmed()}
-        />
-      )}
+      <Suspense fallback={<AssetModalFallback />}>
+        {verificationPanel && (
+          <VerificationPanel
+            panel={verificationPanel}
+            onClose={() => setVerificationPanel(null)}
+            onRun={() => void runVerification()}
+            onOpenInspectionReport={(runId) => setReportRunId(runId)}
+          />
+        )}
+        {reportRunId && <InspectionReportModal runId={reportRunId} onClose={() => setReportRunId(null)} />}
+        {editTarget && (
+          <AssetVaultEditorDrawer
+            asset={editTarget}
+            catalogTypes={fullCatalogTypes || catalogTypes}
+            display={displayForAsset(editTarget)}
+            saving={savingAsset}
+            sessionGroups={sessionGroups}
+            onClose={() => setEditTarget(null)}
+            onConnect={(asset) => {
+              setEditTarget(null)
+              handleConnect(asset)
+            }}
+            onOpenVerification={(asset) => {
+              setEditTarget(null)
+              void openVerification(asset)
+            }}
+            onSave={(asset, patch) => void handleSaveAsset(asset, patch)}
+          />
+        )}
+        {batchImportOpen && (
+          <BatchImportAssetsDialog
+            draft={batchImportDraft}
+            importing={importingAssets}
+            onCancel={() => setBatchImportOpen(false)}
+            onChange={setBatchImportDraft}
+            onConfirm={() => void handleBatchImportConfirmed()}
+          />
+        )}
+        {deleteTarget && (
+          <DeleteAssetDialog
+            asset={deleteTarget}
+            deleting={deletingAsset}
+            display={displayForAsset(deleteTarget)}
+            onCancel={() => setDeleteTarget(null)}
+            onConfirm={() => void handleDeleteConfirmed()}
+          />
+        )}
+        {normalizeDialog && (
+          <NormalizeAssetsDialog
+            duplicatesToRemove={normalizeDialog.duplicatesToRemove}
+            normalizing={normalizingAssets}
+            rowsToUpdate={normalizeDialog.rowsToUpdate}
+            onCancel={() => setNormalizeDialog(null)}
+            onConfirm={() => void handleNormalizeConfirmed()}
+          />
+        )}
+      </Suspense>
     </div>
   )
 }

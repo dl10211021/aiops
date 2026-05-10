@@ -49,12 +49,12 @@ export function SessionRuntimeControls({
 }: {
   availableModels: ModelGroup[]
   modelName: string
-  orchestrationMode: 'single' | 'split'
+  orchestrationMode: 'single' | 'split' | 'fast'
   thinkingMode: string
   capabilityItems: string[]
   detailsOpen: boolean
   onModelChange: (value: string) => void
-  onOrchestrationModeChange: (mode: 'single' | 'split') => void
+  onOrchestrationModeChange: (mode: 'single' | 'split' | 'fast') => void
   onThinkingModeChange: (value: string) => void
   onToggleDetails: () => void
 }) {
@@ -65,10 +65,19 @@ export function SessionRuntimeControls({
         modelName={modelName}
         onModelChange={onModelChange}
       />
-      <ThinkingModeSelector
-        thinkingMode={thinkingMode}
-        onThinkingModeChange={onThinkingModeChange}
-      />
+      {orchestrationMode === 'fast' ? (
+        <span
+          className="inline-flex h-9 items-center rounded-lg border border-red-500/35 bg-red-500/10 px-3 text-[11px] font-black text-red-200"
+          title="快速模式强制关闭主模型思考与辅助审查任务"
+        >
+          快速 / 思考关闭
+        </span>
+      ) : (
+        <ThinkingModeSelector
+          thinkingMode={thinkingMode}
+          onThinkingModeChange={onThinkingModeChange}
+        />
+      )}
       <div className="inline-flex h-9 overflow-hidden rounded-lg border border-ops-surface1/70 bg-ops-panel/45 p-0.5" title="切换本次会话的模型协作策略">
         <button
           type="button"
@@ -93,6 +102,18 @@ export function SessionRuntimeControls({
           title="主副模型流程：主模型定目标和兜底，辅助模型选工具和整理回复"
         >
           主副
+        </button>
+        <button
+          type="button"
+          onClick={() => onOrchestrationModeChange('fast')}
+          className={`rounded-md px-2.5 text-[11px] font-semibold transition-colors ${
+            orchestrationMode === 'fast'
+              ? 'bg-red-500/18 text-red-300'
+              : 'text-red-300/80 hover:bg-red-500/10 hover:text-red-200'
+          }`}
+          title="快速原始流程：使用原始单模型链路，并关闭思维链审查、风险建议、最终回复审核"
+        >
+          快速
         </button>
       </div>
       <span className="inline-flex h-9 rounded-lg border border-ops-surface1/60 bg-ops-panel/35 px-2.5 text-right text-[11px] text-ops-subtext sm:hidden">

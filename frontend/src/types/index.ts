@@ -331,6 +331,30 @@ export interface SessionToolCatalog {
   }
 }
 
+export type ToolCenterStatus = 'available' | 'controlled' | 'not_wired' | string
+
+export interface ToolCenterTool extends ToolDefinition {
+  status: ToolCenterStatus
+  status_label: string
+  model_exposed: boolean
+  execution_enabled: boolean
+  source: 'opscore' | 'hermes' | string
+  control_reason?: string
+}
+
+export interface ToolCenterToolset {
+  id: string
+  label?: string
+  tools: ToolCenterTool[]
+  counts: Record<string, number>
+}
+
+export interface ToolCenterCatalog {
+  summary: Record<string, number>
+  status_labels: Record<string, string>
+  toolsets: ToolCenterToolset[]
+}
+
 export interface SkillInfo {
   id: string
   name: string
@@ -652,6 +676,15 @@ export interface ProtocolVerificationOverview {
     needs_attention: number
   }
   matrix: AssetVerificationMatrix[]
+}
+
+export interface ProtocolVerificationStatusOverview {
+  summary: ProtocolVerificationOverview['summary']
+  matrix: Array<{
+    asset: Pick<AssetVerificationMatrix['asset'], 'id'>
+    coverage: AssetVerificationMatrix['coverage']
+    status: AssetVerificationMatrix['status']
+  }>
 }
 
 export interface AssetVerificationRun {
@@ -1136,7 +1169,7 @@ export interface ObservabilityRootCause {
   updated_at: string
 }
 
-export type ViewId = 'dashboard' | 'bigscreen' | 'chat' | 'observability' | 'assets' | 'canvas' | 'cron' | 'alerts' | 'approvals' | 'skills' | 'knowledge' | 'config'
+export type ViewId = 'dashboard' | 'bigscreen' | 'chat' | 'observability' | 'assets' | 'canvas' | 'cron' | 'alerts' | 'approvals' | 'skills' | 'tools' | 'knowledge' | 'config'
 
 export interface ApprovalRequest {
   id: string

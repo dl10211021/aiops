@@ -2,7 +2,6 @@ import { useCallback, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { stopChat } from '@/api/client'
 import { useStore } from '@/store'
-import type { Session } from '@/types'
 import type { ChatAttachmentPreview } from './chatTypes'
 import {
   finishStreamingSession,
@@ -24,14 +23,13 @@ interface ReadWriteConfirmation {
 
 interface UseChatStreamingArgs {
   currentSessionId: string | null
-  sessions: Record<string, Session>
   input: string
   draftsBySession: Record<string, string>
   attachments: ChatAttachmentPreview[]
   attachmentsBySession: Record<string, ChatAttachmentPreview[]>
   readWriteWarningEnabled: boolean
   modelName: string
-  orchestrationMode: 'single' | 'split'
+  orchestrationMode: 'single' | 'split' | 'fast'
   thinkingMode: string
   setReadWriteConfirm: (confirmation: ReadWriteConfirmation | null) => void
   setInputHistory: Dispatch<SetStateAction<string[]>>
@@ -43,7 +41,6 @@ interface UseChatStreamingArgs {
 
 export function useChatStreaming({
   currentSessionId,
-  sessions,
   input,
   draftsBySession,
   attachments,
@@ -74,6 +71,7 @@ export function useChatStreaming({
   }, [])
 
   const sendMessage = useCallback(async (forcedMessage?: string, forcedSessionId?: string) => {
+    const sessions = useStore.getState().sessions
     const outgoing = resolveOutgoingChatContext({
       attachments,
       attachmentsBySession,
@@ -118,6 +116,7 @@ export function useChatStreaming({
     setChatController(controller)
 
     try {
+      const effectiveThinkingMode = orchestrationMode === 'fast' ? 'off' : thinkingMode
       await runChatStream({
         addToast,
         attachmentPayload,
@@ -127,7 +126,7 @@ export function useChatStreaming({
         modelMessageContent,
         modelName,
         orchestrationMode,
-        thinkingMode,
+        thinkingMode: effectiveThinkingMode,
         updateLastAssistantMessage,
       })
     } finally {
@@ -154,7 +153,6 @@ export function useChatStreaming({
     readWriteWarningEnabled,
     removeEmptyAssistantMessages,
     revokeAttachmentPreviews,
-    sessions,
     setAttachmentsBySession,
     setChatController,
     setDraftsBySession,

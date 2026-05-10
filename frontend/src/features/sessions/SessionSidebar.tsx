@@ -9,7 +9,7 @@ export default function SessionSidebar() {
   if (!model.sidebarOpen) return null
 
   return (
-    <aside className="ops-command-panel flex min-h-0 flex-col overflow-hidden rounded-[18px] border border-ops-surface1/75 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
+    <aside className="ops-command-panel ops-session-sidebar flex min-h-0 flex-col overflow-hidden rounded-[18px] border border-ops-surface1/75 bg-ops-panel shadow-[var(--ops-panel-shadow)]">
       <div className="border-b border-ops-surface1/70 bg-ops-dark/45 p-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">

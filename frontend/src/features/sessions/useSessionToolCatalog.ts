@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getSessionTools } from '@/api/client'
+import { useStore } from '@/store'
 import type { SessionToolCatalog } from '@/types'
 
 export function useSessionToolCatalog(
@@ -15,15 +16,19 @@ export function useSessionToolCatalog(
       return
     }
     let cancelled = false
-    getSessionTools(currentSessionId)
-      .then((response) => {
-        if (!cancelled) setToolCatalog(response.data)
-      })
-      .catch(() => {
-        if (!cancelled) setToolCatalog(null)
-      })
+    const timer = window.setTimeout(() => {
+      if (useStore.getState().currentView !== 'chat') return
+      getSessionTools(currentSessionId)
+        .then((response) => {
+          if (!cancelled) setToolCatalog(response.data)
+        })
+        .catch(() => {
+          if (!cancelled) setToolCatalog(null)
+        })
+    }, 800)
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
     }
   }, [currentSessionId, assetType, protocol])
 

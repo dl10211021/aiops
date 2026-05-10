@@ -16,9 +16,9 @@ import {
 import type { ConnectionFormState } from './connectionModalState'
 
 const oracleThickDefaultsFromConfig = (config: OracleClientConfig | null) =>
-  config?.detected || config?.thick_mode_env_enabled
-    ? { use_thick_mode: true }
-    : {}
+  config?.thick_mode_default_enabled === false
+    ? {}
+    : { use_thick_mode: true }
 
 export function useConnectionCatalog({
   form,
@@ -127,7 +127,7 @@ export function useConnectionCatalog({
             target_scope: 'asset',
             extra_args: {
               ...extraArgs,
-              ...(subType === 'oracle' && extraArgs.use_thick_mode ? oracleThickDefaultsFromConfig(detectedOracleClient) : {}),
+              ...(subType === 'oracle' && extraArgs.use_thick_mode !== false ? oracleThickDefaultsFromConfig(detectedOracleClient) : {}),
             },
             category,
             sub_type: subType,

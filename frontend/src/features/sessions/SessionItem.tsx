@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { MouseEvent } from 'react'
 import type { Session } from '@/types'
 import { protocolLabel } from '@/utils/assetDisplay'
@@ -18,15 +19,17 @@ function protocolBadgeClass(session: Session) {
 interface SessionItemProps {
   session: Session
   active: boolean
-  onSelect: () => void
+  group: string
+  onSelectSession: (sessionId: string, group: string) => void
   onDisconnect: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
   onEdit: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
 }
 
-export default function SessionItem({
+function SessionItem({
   session,
   active,
-  onSelect,
+  group,
+  onSelectSession,
   onDisconnect,
   onEdit,
 }: SessionItemProps) {
@@ -37,7 +40,7 @@ export default function SessionItem({
   const statusTitle = running ? '会话执行中' : needsAttention ? attention.label : '会话已连接'
   return (
     <div
-      onClick={onSelect}
+      onClick={() => onSelectSession(session.id, group)}
       className={`group relative grid min-h-[58px] cursor-pointer grid-cols-[46px_minmax(0,1fr)_54px] items-center gap-3 overflow-hidden rounded-lg border px-2.5 py-2 text-sm transition-colors duration-150
         ${active
           ? 'border-ops-accent/60 bg-[linear-gradient(135deg,rgba(40,208,168,0.16),rgba(15,36,56,0.76))] text-ops-accent shadow-[inset_0_0_0_1px_rgba(40,208,168,0.08)]'
@@ -105,4 +108,15 @@ export default function SessionItem({
       </div>
     </div>
   )
+}
+
+export default memo(SessionItem, areSessionItemsEqual)
+
+function areSessionItemsEqual(prev: SessionItemProps, next: SessionItemProps) {
+  return prev.active === next.active
+    && prev.group === next.group
+    && prev.session === next.session
+    && prev.onDisconnect === next.onDisconnect
+    && prev.onEdit === next.onEdit
+    && prev.onSelectSession === next.onSelectSession
 }

@@ -36,6 +36,7 @@ async def stream_assistant_response(
     tools: list[dict] | None,
     state: AgentStreamState,
     cancel_requested: Callable[[], bool],
+    tool_choice: str = "auto",
     stream_executor: StreamExecutor | None = None,
 ) -> AsyncIterator[str]:
     if stream_executor is None:
@@ -44,7 +45,13 @@ async def stream_assistant_response(
         stream_executor = execute_chat_stream
 
     is_thinking_stream = False
-    async for chunk in stream_executor(model_name, messages, thinking_mode, tools=tools):
+    async for chunk in stream_executor(
+        model_name,
+        messages,
+        thinking_mode,
+        tools=tools,
+        tool_choice=tool_choice,
+    ):
         if cancel_requested():
             break
         if chunk["type"] == "thinking":

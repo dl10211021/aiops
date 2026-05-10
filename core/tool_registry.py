@@ -864,3 +864,42 @@ def _register_builtin_tools() -> None:
 
 
 _register_builtin_tools()
+
+
+def _register_hermes_tools() -> None:
+    try:
+        from core.hermes_tool_adapter import iter_hermes_tool_metadata
+    except Exception:
+        return
+
+    for item in iter_hermes_tool_metadata():
+        name = item["name"]
+        if tool_registry.get(name):
+            continue
+        schema = item["schema"]
+        parameters = schema.get("parameters") or _obj()
+        tool_registry.register(
+            ToolDefinition(
+                name=name,
+                toolset=f"hermes-{item['toolset']}",
+                scope="base",
+                safety_category=_hermes_safety_category(name),
+                description=str(schema.get("description") or ""),
+                parameters=parameters,
+            )
+        )
+
+
+def _hermes_safety_category(name: str) -> str:
+    if name in {"write_file", "patch", "skill_manage"}:
+        return "local_write"
+    if name in {"execute_code", "process", "cronjob", "send_message", "text_to_speech"}:
+        return "local_execute"
+    if name.startswith("browser_") or name in {"web_search", "vision_analyze"}:
+        return "external_read"
+    if name in {"memory", "todo", "session_search", "read_file", "search_files", "skills_list", "skill_view"}:
+        return "local_read"
+    return "general"
+
+
+_register_hermes_tools()

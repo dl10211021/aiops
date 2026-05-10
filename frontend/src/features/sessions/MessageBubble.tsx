@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import type { ChatMessage, SafetyPolicyAction, SafetyPolicyDecision, ToolApproval } from '@/types'
 import { approvalArgumentRows } from './approvalRows'
 import {
@@ -24,7 +24,7 @@ interface MessageBubbleProps {
   showInlineTrace?: boolean
 }
 
-export default function MessageBubble({
+function MessageBubble({
   message,
   isPending = false,
   onApproval,
@@ -96,6 +96,7 @@ export default function MessageBubble({
 
         {hasContent ? (
           <AssistantReportBubble
+            isPending={isPending}
             message={message}
             onEdit={onEdit}
             onDelete={onDelete}
@@ -108,3 +109,10 @@ export default function MessageBubble({
     </div>
   )
 }
+
+export default memo(MessageBubble, (prev, next) => (
+  prev.message === next.message
+  && prev.isPending === next.isPending
+  && prev.policyRuleBusy === next.policyRuleBusy
+  && prev.showInlineTrace === next.showInlineTrace
+))

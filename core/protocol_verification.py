@@ -137,13 +137,7 @@ def _context(asset: dict[str, Any]) -> dict[str, Any]:
 
 
 def _active_tools(asset: dict[str, Any]) -> list[str]:
-    catalog = tool_registry.catalog(_context(asset))
-    return [
-        tool["name"]
-        for toolset in catalog["toolsets"]
-        for tool in toolset["tools"]
-        if tool.get("enabled")
-    ]
+    return [tool.name for tool in tool_registry.available(_context(asset))]
 
 
 def _active_tool_details(active_tools: list[str]) -> list[dict[str, Any]]:
@@ -315,6 +309,43 @@ def build_overview(assets: list[dict[str, Any]]) -> dict[str, Any]:
         categories[asset["category"]] = categories.get(asset["category"], 0) + 1
         steps_total += int(item["coverage"]["total"])
         gaps_total += int(item["coverage"]["gaps"])
+    return {
+        "summary": {
+            "asset_total": len(matrix),
+            "protocols": protocols,
+            "categories": categories,
+            "steps_total": steps_total,
+            "gaps_total": gaps_total,
+            "ready_assets": sum(1 for item in matrix if item["status"] == "ready"),
+            "needs_attention": sum(1 for item in matrix if item["status"] != "ready"),
+        },
+        "matrix": matrix,
+    }
+
+
+def build_status_overview(assets: list[dict[str, Any]]) -> dict[str, Any]:
+    matrix = []
+    protocols: dict[str, int] = {}
+    categories: dict[str, int] = {}
+    steps_total = 0
+    gaps_total = 0
+    for asset in assets:
+        safe_asset = sanitize_asset(asset)
+        has_native_tool = bool(_active_tools(asset))
+        gaps = 0 if has_native_tool else 1
+        protocols[safe_asset["protocol"]] = protocols.get(safe_asset["protocol"], 0) + 1
+        categories[safe_asset["category"]] = categories.get(safe_asset["category"], 0) + 1
+        steps_total += 5
+        gaps_total += gaps
+        matrix.append({
+            "asset": {"id": safe_asset["id"]},
+            "coverage": {
+                "total": 5,
+                "supported": 5 - gaps,
+                "gaps": gaps,
+            },
+            "status": "ready" if not gaps else "needs_attention",
+        })
     return {
         "summary": {
             "asset_total": len(matrix),

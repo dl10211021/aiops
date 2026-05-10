@@ -30,6 +30,45 @@ export interface AgentRuntimeConfig {
   }
 }
 
+export interface SessionRetentionPreview {
+  rows_scanned: number
+  rows_compacted: number
+  rows_deleted: number
+  audit_rows_inserted?: number
+  audit_rows_deleted?: number
+  started_at?: string
+  completed_at?: string
+  duration_ms?: number
+  status?: string
+  dry_run?: boolean
+  enabled?: boolean
+  error?: string
+}
+
+export interface SessionRetentionStatus {
+  last_run?: SessionRetentionPreview | null
+  next_run_at?: string | null
+  interval_seconds?: number | null
+  error?: string
+}
+
+export interface SessionRetentionPolicyFields {
+  enabled: boolean
+  raw_result_days: number
+  compressed_history_days: number
+  audit_metadata_days: number
+  max_result_chars: number
+  preview_chars: number
+}
+
+export interface SessionRetentionConfig extends SessionRetentionPolicyFields {
+  interval_seconds?: number
+  defaults?: SessionRetentionPolicyFields
+  env_keys?: Record<string, string>
+  preview?: SessionRetentionPreview
+  status?: SessionRetentionStatus
+}
+
 export interface AssistantModelConfig {
   main_model_id: string
   enabled: boolean
@@ -74,6 +113,32 @@ export async function updateAgentRuntimeConfig(config: {
   return request<{ config: AgentRuntimeConfig }>('/config/agent-runtime', {
     method: 'POST',
     body: JSON.stringify(config),
+  })
+}
+
+export async function getSessionRetentionConfig(preview = true) {
+  return request<{ config: SessionRetentionConfig }>(
+    `/config/session-retention?preview=${preview ? 'true' : 'false'}`
+  )
+}
+
+export async function updateSessionRetentionConfig(config: SessionRetentionConfig) {
+  return request<{ config: SessionRetentionConfig }>('/config/session-retention', {
+    method: 'POST',
+    body: JSON.stringify({
+      enabled: config.enabled,
+      raw_result_days: config.raw_result_days,
+      compressed_history_days: config.compressed_history_days,
+      audit_metadata_days: config.audit_metadata_days,
+      max_result_chars: config.max_result_chars,
+      preview_chars: config.preview_chars,
+    }),
+  })
+}
+
+export async function runSessionRetentionNow() {
+  return request<{ result: SessionRetentionPreview }>('/config/session-retention/run', {
+    method: 'POST',
   })
 }
 

@@ -11,6 +11,7 @@ export const VIEW_LABELS: Record<ViewId, string> = {
   alerts: '告警',
   approvals: '审批',
   skills: 'Skills',
+  tools: '工具中心',
   knowledge: '知识库',
   config: '系统配置',
 }

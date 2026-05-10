@@ -29,6 +29,15 @@ const CONFIG_CARDS = [
     modal: 'notifications',
     stats: ['告警通知', '巡检结果', '审批提醒'],
   },
+  {
+    id: 'retention',
+    eyebrow: '数据生命周期',
+    title: '会话保留策略',
+    description: '管理聊天历史、工具结果、执行链路和审计元数据的保留周期。命令和 SQL 会独立保留。',
+    action: '打开保留策略',
+    modal: 'session-retention',
+    stats: ['结果摘要化', '压缩历史清理', '审计元数据'],
+  },
 ]
 
 const BOUNDARY_CARDS = [
@@ -57,7 +66,7 @@ export default function SystemConfigCenter() {
         description="把模型、安全和通知集中到一个入口。左侧只保留“配置”，这里负责进入具体配置项。"
       />
 
-      <section className="grid gap-4 xl:grid-cols-3">
+      <section className="grid gap-4 xl:grid-cols-4">
         {CONFIG_CARDS.map((card) => (
           <button
             key={card.id}

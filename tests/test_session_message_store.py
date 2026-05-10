@@ -109,6 +109,15 @@ class SessionMessageStoreTest(unittest.TestCase):
             [noise["content"], normal["content"]],
         )
 
+    def test_ui_history_limit_returns_recent_rows_in_chronological_order(self):
+        for index in range(5):
+            self.store.append_message("sid-1", {"role": "user", "content": f"m{index}"})
+
+        messages = self.store.get_messages("sid-1", for_ui=True, limit=3)
+
+        self.assertEqual([msg["content"] for msg in messages], ["m2", "m3", "m4"])
+        self.assertTrue(all("_memory_id" in msg for msg in messages))
+
     def test_sanitize_sequence_removes_orphan_and_incomplete_tool_calls(self):
         messages = sanitize_message_sequence(
             [

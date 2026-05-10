@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import type { RefObject } from 'react'
 import type { ChatMessage, SafetyPolicyAction, SafetyPolicyDecision, ToolApproval } from '@/types'
 import MessageBubble from '@/features/sessions/MessageBubble'
+
+const defaultVisibleMessageCount = 80
 
 interface ChatMessageListProps {
   containerRef: RefObject<HTMLDivElement | null>
   isStreaming: boolean
   messages: ChatMessage[]
+  sessionId: string | null
   onApproval: (approval: ToolApproval, approved: boolean, autoAll?: boolean) => void
   onDelete: (message: ChatMessage) => void
   onEdit: (message: ChatMessage) => void
@@ -17,10 +20,11 @@ interface ChatMessageListProps {
   showInlineTrace?: boolean
 }
 
-export default function ChatMessageList({
+function ChatMessageList({
   containerRef,
   isStreaming,
   messages,
+  sessionId,
   onApproval,
   onDelete,
   onEdit,
@@ -30,6 +34,17 @@ export default function ChatMessageList({
   policyRuleBusy,
 }: ChatMessageListProps) {
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
+  const [showAllMessages, setShowAllMessages] = useState(false)
+  const hiddenMessageCount = showAllMessages
+    ? 0
+    : Math.max(0, messages.length - defaultVisibleMessageCount)
+  const visibleMessages = hiddenMessageCount > 0
+    ? messages.slice(hiddenMessageCount)
+    : messages
+
+  useEffect(() => {
+    setShowAllMessages(false)
+  }, [sessionId])
 
   useEffect(() => {
     const container = containerRef.current
@@ -58,7 +73,16 @@ export default function ChatMessageList({
           <span>会话输出区 · AI 报告优先保证阅读宽度，引用、画像、记忆默认折叠但不隐藏。</span>
           <span className="rounded-full border border-ops-surface1/55 px-2 py-0.5">消息 {messages.length}</span>
         </div>
-        {messages.map((msg, index) => (
+        {hiddenMessageCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAllMessages(true)}
+            className="w-full rounded-xl border border-ops-surface0/70 bg-ops-panel/34 px-3 py-2 text-xs font-semibold text-ops-subtext transition-colors hover:border-ops-accent/45 hover:text-ops-text"
+          >
+            已折叠 {hiddenMessageCount} 条较早消息，点击展开完整历史
+          </button>
+        )}
+        {visibleMessages.map((msg, index) => (
           <div
             key={msg.id}
             data-message-id={msg.id}
@@ -72,7 +96,7 @@ export default function ChatMessageList({
           >
             <MessageBubble
               message={msg}
-              isPending={isStreaming && index === messages.length - 1 && msg.role === 'assistant'}
+              isPending={isStreaming && index === visibleMessages.length - 1 && msg === messages[messages.length - 1] && msg.role === 'assistant'}
               onApproval={onApproval}
               onInteraction={onInteraction}
               onTraceActionRule={onTraceActionRule}
@@ -88,3 +112,12 @@ export default function ChatMessageList({
     </div>
   )
 }
+
+export default memo(ChatMessageList, (prev, next) => (
+  prev.messages === next.messages
+  && prev.sessionId === next.sessionId
+  && prev.isStreaming === next.isStreaming
+  && prev.policyRuleBusy === next.policyRuleBusy
+  && prev.containerRef === next.containerRef
+  && prev.showInlineTrace === next.showInlineTrace
+))

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+import logging
+import time
 from collections.abc import Awaitable, Callable
 
 from fastapi import Request
@@ -17,6 +19,8 @@ SECURITY_HEADERS = {
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "X-Permitted-Cross-Domain-Policies": "none",
 }
+SLOW_REQUEST_THRESHOLD_MS = 500
+logger = logging.getLogger(__name__)
 
 CallNext = Callable[[Request], Awaitable[Response]]
 
@@ -61,4 +65,24 @@ async def dispatch_security_headers(request: Request, call_next: CallNext) -> Re
     for header, value in SECURITY_HEADERS.items():
         if header not in response.headers:
             response.headers[header] = value
+    path = getattr(getattr(request, "url", None), "path", "")
+    if path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif path == "/":
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+async def dispatch_timing_headers(request: Request, call_next: CallNext) -> Response:
+    started = time.perf_counter()
+    response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    response.headers["X-Process-Time-Ms"] = f"{elapsed_ms:.1f}"
+    if request.url.path.startswith("/api/v1/") and elapsed_ms >= SLOW_REQUEST_THRESHOLD_MS:
+        logger.warning(
+            "Slow request %.1fms %s %s",
+            elapsed_ms,
+            request.method,
+            request.url.path,
+        )
     return response

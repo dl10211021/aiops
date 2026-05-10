@@ -26,6 +26,7 @@ from api.schema_models.config import (
     ProviderConfig,
     SafetyPolicyTestRequest,
     SafetyPolicyUpdateRequest,
+    SessionRetentionConfigRequest,
     TestNotificationRequest,
 )
 from api.schema_models.connections import (

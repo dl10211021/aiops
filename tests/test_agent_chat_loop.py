@@ -3,8 +3,11 @@ from unittest.mock import patch
 
 from core.agent_chat_loop import (
     _assistant_orchestration_labels,
+    _assistant_review_thinking_mode,
     _build_trace_review_prompt,
+    _review_messages,
     _resolve_model_orchestration,
+    append_assistant_trace_review,
     build_successful_execution_memory,
     run_chat_agent_loop,
 )
@@ -29,11 +32,27 @@ class FakeMemoryStore:
         return None
 
 
+class TraceMemoryStore(FakeMemoryStore):
+    def __init__(self):
+        super().__init__()
+        self.updated_exec_traces = []
+
+    def append_message(self, session_id, message):
+        super().append_message(session_id, message)
+        return len(self.appended)
+
+    def update_message_exec_trace(self, session_id, message_id, exec_trace):
+        self.updated_exec_traces.append((session_id, message_id, exec_trace))
+
+
 class FakeLogger:
     def __init__(self):
         self.messages = []
 
     def info(self, message):
+        self.messages.append(message)
+
+    def warning(self, *message):
         self.messages.append(message)
 
 
@@ -111,6 +130,28 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("主模型正在接管工具选择", labels["tool"])
         self.assertIn("主模型正在整理最终回复", labels["final"])
 
+    def test_fast_orchestration_uses_single_flow_and_disables_auxiliary_review_tasks(self):
+        def task_enabled(task: str):
+            return task in {"completion_check", "trace_review", "risk_advice"}
+
+        with (
+            patch(
+                "core.agent_chat_loop.get_assistant_model_config",
+                return_value={"enabled": True, "model_id": "provider|assistant", "tasks": {}},
+            ),
+            patch("core.agent_chat_loop.resolve_assistant_model_id", return_value="provider|assistant"),
+            patch("core.agent_chat_loop.assistant_thinking_mode", return_value="high"),
+            patch("core.agent_chat_loop.assistant_task_enabled", side_effect=task_enabled),
+        ):
+            orchestration = _resolve_model_orchestration("provider|main", "fast")
+
+        self.assertFalse(orchestration["enabled"])
+        self.assertEqual(orchestration["mode"], "fast")
+        self.assertEqual(orchestration["assistant_thinking_mode"], "high")
+        self.assertFalse(orchestration["completion_check"])
+        self.assertFalse(orchestration["trace_review"])
+        self.assertFalse(orchestration["risk_advice"])
+
     def test_successful_execution_memory_marks_assistant_self_confirmation_policy(self):
         memory = build_successful_execution_memory(
             session_id="sid-1",
@@ -168,6 +209,60 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("工具：db_execute_query\n", prompt)
         self.assertIn("【思维链审查】", prompt)
         self.assertIn("【风险建议】", prompt)
+
+    def test_review_messages_keep_system_prompt_first(self):
+        messages = _review_messages(
+            [
+                {"role": "system", "content": "old system"},
+                {"role": "user", "content": "question"},
+                {"role": "assistant", "content": "draft"},
+            ],
+            "review prompt",
+        )
+
+        self.assertEqual(messages[0], {"role": "system", "content": "review prompt"})
+        self.assertEqual([message["role"] for message in messages], ["system", "user", "assistant"])
+
+    def test_review_thinking_mode_defaults_to_configured_mode(self):
+        self.assertEqual(_assistant_review_thinking_mode("high"), "high")
+
+    async def test_trace_review_uses_system_first_review_messages(self):
+        captured = {}
+
+        async def fake_collect(**kwargs):
+            captured["messages"] = kwargs["messages"]
+            return "【思维链审查】完整\n【风险建议】暂无明确风险证据"
+
+        exec_trace = [
+            {
+                "tool": "linux_execute_command",
+                "args": "uptime",
+                "result": "load average: 0.01",
+                "status": "done",
+            }
+        ]
+        with (
+            patch("core.agent_chat_loop.assistant_task_enabled", return_value=True),
+            patch("core.agent_chat_loop._collect_review_model_text", side_effect=fake_collect),
+        ):
+            await append_assistant_trace_review(
+                model_name="model-a",
+                thinking_mode="off",
+                messages=[
+                    {"role": "system", "content": "chat system"},
+                    {"role": "user", "content": "巡检"},
+                    {"role": "assistant", "content": "调用工具"},
+                ],
+                context={"asset_type": "linux", "protocol": "ssh", "host": "h", "port": 22},
+                exec_trace=exec_trace,
+                assistant_content="完成",
+                event_logger=FakeLogger(),
+            )
+
+        self.assertEqual(captured["messages"][0]["role"], "system")
+        self.assertIn("【思维链审查】", captured["messages"][0]["content"])
+        self.assertEqual([message["role"] for message in captured["messages"]], ["system", "user", "assistant"])
+        self.assertEqual(exec_trace[-2]["tool"], "思维链审查")
 
     def test_successful_execution_memory_skips_interrupted_turn(self):
         memory = build_successful_execution_memory(
@@ -317,6 +412,240 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
             sse_event({"type": "memory_refs", "refs": [{"source_type": "rag", "title": "账号规范"}]}),
             events,
         )
+
+    async def test_attaches_tool_exec_trace_to_final_answer_after_tool_calls(self):
+        turn = {"count": 0}
+        memory_store = TraceMemoryStore()
+
+        async def streamer(**kwargs):
+            turn["count"] += 1
+            if turn["count"] == 1:
+                kwargs["state"].assistant_content = "先执行只读命令"
+                kwargs["state"].tool_calls = [{"id": "call-1"}]
+                return
+            kwargs["state"].assistant_content = "巡检完成"
+            if False:
+                yield "unused"
+
+        async def tool_processor(**kwargs):
+            kwargs["trace_collector"](
+                {
+                    "type": "tool_start",
+                    "tool": "network_cli_execute",
+                    "args": "display current-configuration",
+                }
+            )
+            kwargs["trace_collector"](
+                {
+                    "type": "tool_end",
+                    "tool": "network_cli_execute",
+                    "result": "sysname CoreSwitch",
+                    "status": "done",
+                }
+            )
+            yield "tool-event"
+
+        with patch("core.agent_chat_loop.assistant_task_enabled", return_value=False):
+            events, kwargs, _memory_store, _cancel_flags, _scheduler_calls = (
+                await collect_chat_loop_events(
+                    memory_store=memory_store,
+                    assistant_streamer=streamer,
+                    tool_call_processor=tool_processor,
+                    max_steps_resolver=lambda _mode: 2,
+                )
+            )
+
+        self.assertIn("tool-event", events)
+        self.assertEqual(memory_store.updated_exec_traces[0][0], "sid-1")
+        self.assertEqual(memory_store.updated_exec_traces[0][1], 1)
+        final_message = kwargs["messages"][-1]
+        self.assertEqual(final_message["content"], "巡检完成")
+        self.assertEqual(final_message["exec_trace"][0]["tool"], "network_cli_execute")
+        self.assertEqual(final_message["exec_trace"][0]["args"], "display current-configuration")
+        self.assertIn("sysname CoreSwitch", final_message["exec_trace"][0]["result"])
+        self.assertEqual(memory_store.appended[-1][1]["exec_trace"], final_message["exec_trace"])
+
+    async def test_current_asset_execution_request_forces_native_tool_first(self):
+        turn = {"count": 0}
+        seen = []
+        memory_store = TraceMemoryStore()
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "db_execute_query",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "web_search",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+        ]
+
+        async def streamer(**kwargs):
+            turn["count"] += 1
+            seen.append(
+                {
+                    "tool_choice": kwargs.get("tool_choice"),
+                    "tools": [tool["function"]["name"] for tool in kwargs.get("tools") or []],
+                    "last_message": kwargs["messages"][-1]["content"],
+                }
+            )
+            if turn["count"] == 1:
+                kwargs["state"].assistant_content = ""
+                kwargs["state"].tool_calls = [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "db_execute_query", "arguments": '{"sql":"select 1 from dual"}'},
+                    }
+                ]
+                return
+            kwargs["state"].assistant_content = "Oracle 在线"
+            if False:
+                yield "unused"
+
+        async def tool_processor(**kwargs):
+            kwargs["trace_collector"](
+                {
+                    "type": "tool_start",
+                    "tool": "db_execute_query",
+                    "args": "select 1 from dual",
+                }
+            )
+            kwargs["trace_collector"](
+                {
+                    "type": "tool_end",
+                    "tool": "db_execute_query",
+                    "result": "1",
+                    "status": "done",
+                }
+            )
+            yield "tool-event"
+
+        with patch("core.agent_chat_loop.assistant_task_enabled", return_value=False):
+            events, kwargs, _memory_store, _cancel_flags, _scheduler_calls = (
+                await collect_chat_loop_events(
+                    memory_store=memory_store,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": "请快速检查当前资产 oracle/oracle 172.17.1.207 的运行状态。",
+                        }
+                    ],
+                    context={
+                        "session_id": "sid-1",
+                        "asset_type": "oracle",
+                        "protocol": "oracle",
+                        "host": "172.17.1.207",
+                        "port": 1521,
+                        "memory_scope_ids": ["sid-1"],
+                    },
+                    tools=tools,
+                    assistant_streamer=streamer,
+                    tool_call_processor=tool_processor,
+                    max_steps_resolver=lambda _mode: 2,
+                )
+            )
+
+        self.assertIn(
+            sse_event({"type": "status", "content": "🧰 正在强制调用当前会话原生工具采集证据..."}),
+            events,
+        )
+        self.assertEqual(seen[0]["tool_choice"], "required")
+        self.assertEqual(seen[0]["tools"], ["db_execute_query"])
+        self.assertIn("必须先调用当前会话原生协议工具", seen[0]["last_message"])
+        self.assertEqual(seen[1]["tool_choice"], "auto")
+        self.assertEqual(kwargs["messages"][-1]["exec_trace"][0]["tool"], "db_execute_query")
+
+    async def test_forced_native_tool_request_discards_direct_answer_and_retries(self):
+        turn = {"count": 0}
+        memory_store = TraceMemoryStore()
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "db_execute_query",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+
+        async def streamer(**kwargs):
+            turn["count"] += 1
+            if turn["count"] == 1:
+                kwargs["state"].assistant_content = "没有查数据库也直接生成的报告"
+                return
+            if turn["count"] == 2:
+                kwargs["state"].tool_calls = [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "db_execute_query", "arguments": '{"sql":"select 1 from dual"}'},
+                    }
+                ]
+                return
+            kwargs["state"].assistant_content = "基于工具结果完成"
+            if False:
+                yield "unused"
+
+        async def tool_processor(**kwargs):
+            kwargs["trace_collector"](
+                {
+                    "type": "tool_start",
+                    "tool": "db_execute_query",
+                    "args": "select 1 from dual",
+                }
+            )
+            kwargs["trace_collector"](
+                {
+                    "type": "tool_end",
+                    "tool": "db_execute_query",
+                    "result": "1",
+                    "status": "done",
+                }
+            )
+            yield "tool-event"
+
+        with patch("core.agent_chat_loop.assistant_task_enabled", return_value=False):
+            events, kwargs, _memory_store, _cancel_flags, _scheduler_calls = (
+                await collect_chat_loop_events(
+                    memory_store=memory_store,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": "请只读检查 oracle/oracle 172.17.1.207 的表空间使用率。",
+                        }
+                    ],
+                    context={
+                        "session_id": "sid-1",
+                        "asset_type": "oracle",
+                        "protocol": "oracle",
+                        "host": "172.17.1.207",
+                        "port": 1521,
+                        "memory_scope_ids": ["sid-1"],
+                    },
+                    tools=tools,
+                    assistant_streamer=streamer,
+                    tool_call_processor=tool_processor,
+                    max_steps_resolver=lambda _mode: 3,
+                )
+            )
+
+        self.assertIn(
+            sse_event({"type": "status", "content": "⚠️ 模型未发起工具调用，已丢弃直接回答并重新约束工具调用..."}),
+            events,
+        )
+        self.assertNotIn(
+            "没有查数据库也直接生成的报告",
+            [message.get("content") for message in kwargs["messages"]],
+        )
+        self.assertEqual(kwargs["messages"][-1]["content"], "基于工具结果完成")
+        self.assertEqual(kwargs["messages"][-1]["exec_trace"][0]["tool"], "db_execute_query")
 
     async def test_processes_tools_then_emits_step_limit_summary(self):
         async def streamer(**kwargs):

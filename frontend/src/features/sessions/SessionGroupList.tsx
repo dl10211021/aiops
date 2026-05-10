@@ -5,6 +5,9 @@ import SessionItem from './SessionItem'
 import { DEFAULT_SESSION_GROUP } from './sessionGroups'
 import { summarizeSessions } from './sessionMetrics'
 
+const DEFAULT_GROUP_SESSION_LIMIT = 80
+const GROUP_SESSION_LIMIT_STEP = 80
+
 interface SessionGroupListProps {
   collapsedGroups: Set<string>
   currentSessionId: string | null
@@ -40,6 +43,7 @@ export default function SessionGroupList({
 }: SessionGroupListProps) {
   const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
+  const [expandedLimits, setExpandedLimits] = useState<Record<string, number>>({})
 
   useEffect(() => {
     if (renamingGroup && !groupNames.includes(renamingGroup)) {
@@ -47,6 +51,14 @@ export default function SessionGroupList({
       setRenameDraft('')
     }
   }, [groupNames, renamingGroup])
+
+  useEffect(() => {
+    setExpandedLimits((current) => {
+      const visible = new Set(groupNames)
+      const next = Object.fromEntries(Object.entries(current).filter(([group]) => visible.has(group)))
+      return Object.keys(next).length === Object.keys(current).length ? current : next
+    })
+  }, [groupNames])
 
   const startRename = (group: string) => {
     setRenamingGroup(group)
@@ -82,6 +94,11 @@ export default function SessionGroupList({
 
       {groupNames.map((group) => {
         const items = grouped[group] || []
+        const limit = searching
+          ? Math.max(items.length, DEFAULT_GROUP_SESSION_LIMIT)
+          : expandedLimits[group] || DEFAULT_GROUP_SESSION_LIMIT
+        const visibleItems = items.slice(0, limit)
+        const hiddenCount = Math.max(0, items.length - visibleItems.length)
         const selected = group === selectedGroup
         const isDefaultGroup = group === DEFAULT_SESSION_GROUP
         const renaming = renamingGroup === group
@@ -165,16 +182,35 @@ export default function SessionGroupList({
                   <div className="rounded-md border border-dashed border-ops-surface1/70 px-3 py-2 text-[11px] text-ops-overlay">
                     暂无会话
                   </div>
-                ) : items.map((session) => (
-                  <SessionItem
-                    key={session.id}
-                    session={session}
-                    active={session.id === currentSessionId}
-                    onSelect={() => onSelectSession(session.id, group)}
-                    onDisconnect={onDisconnect}
-                    onEdit={onEdit}
-                  />
-                ))}
+                ) : (
+                  <>
+                    {visibleItems.map((session) => (
+                      <SessionItem
+                        key={session.id}
+                        session={session}
+                        active={session.id === currentSessionId}
+                        group={group}
+                        onSelectSession={onSelectSession}
+                        onDisconnect={onDisconnect}
+                        onEdit={onEdit}
+                      />
+                    ))}
+                    {hiddenCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExpandedLimits((current) => ({
+                            ...current,
+                            [group]: (current[group] || DEFAULT_GROUP_SESSION_LIMIT) + GROUP_SESSION_LIMIT_STEP,
+                          }))
+                        }}
+                        className="rounded-lg border border-ops-surface1/70 bg-ops-surface0/55 px-3 py-2 text-xs font-semibold text-ops-subtext transition-colors hover:border-ops-accent/45 hover:text-ops-text"
+                      >
+                        还有 {hiddenCount} 个会话，继续显示
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </section>

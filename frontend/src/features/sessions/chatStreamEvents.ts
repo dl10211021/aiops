@@ -39,14 +39,6 @@ export function applyChatStreamEvent({
 
   switch (type) {
     case 'status':
-      updateLastAssistantMessage(sessionId, (message) => ({
-        ...message,
-        execTrace: [...(message.execTrace || []), {
-          type: 'tool_start',
-          tool: streamString(data.content, '状态更新'),
-          args: '',
-        } as ExecTraceItem],
-      }))
       return { done: false, accumulatedMarkdown }
 
     case 'tool_start':
@@ -55,7 +47,7 @@ export function applyChatStreamEvent({
         execTrace: [...(message.execTrace || []), {
           type: 'tool_start',
           tool: streamString(data.tool, 'unknown'),
-          args: streamArgs(data.args),
+          args: streamArgs(data.args ?? data.cmd),
           status: 'running',
           startedAt: Date.now(),
         } as ExecTraceItem],

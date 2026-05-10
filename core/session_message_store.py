@@ -25,10 +25,15 @@ class SessionMessageStore:
         self._connect = connect
         self._lock = lock
 
-    def get_messages(self, session_id: str, for_ui: bool = False) -> list[dict]:
+    def get_messages(
+        self,
+        session_id: str,
+        for_ui: bool = False,
+        limit: int | None = None,
+    ) -> list[dict]:
         """获取 SQLite 中的短期记忆"""
         try:
-            rows = self._fetch_message_rows(session_id, for_ui)
+            rows = self._fetch_message_rows(session_id, for_ui, limit)
             messages = message_rows_to_dicts(rows, for_ui=for_ui)
             valid_messages = sanitize_message_sequence(messages)
             return truncate_message_context(valid_messages)
@@ -197,14 +202,35 @@ class SessionMessageStore:
             conn.execute("DELETE FROM memory WHERE session_id = ?", (session_id,))
             conn.commit()
 
-    def _fetch_message_rows(self, session_id: str, for_ui: bool) -> list[tuple]:
+    def _fetch_message_rows(
+        self,
+        session_id: str,
+        for_ui: bool,
+        limit: int | None = None,
+    ) -> list[tuple]:
         with self._lock, self._connect() as conn:
             cursor = conn.cursor()
             if for_ui:
-                cursor.execute(
-                    "SELECT id, message_json, timestamp FROM memory WHERE session_id = ? ORDER BY id ASC",
-                    (session_id,),
-                )
+                if limit and limit > 0:
+                    cursor.execute(
+                        """
+                        SELECT id, message_json, timestamp
+                        FROM (
+                            SELECT id, message_json, timestamp
+                            FROM memory
+                            WHERE session_id = ?
+                            ORDER BY id DESC
+                            LIMIT ?
+                        )
+                        ORDER BY id ASC
+                        """,
+                        (session_id, limit),
+                    )
+                else:
+                    cursor.execute(
+                        "SELECT id, message_json, timestamp FROM memory WHERE session_id = ? ORDER BY id ASC",
+                        (session_id,),
+                    )
             else:
                 cursor.execute(
                     "SELECT id, message_json FROM memory WHERE session_id = ? AND is_compressed = 0 ORDER BY id ASC",

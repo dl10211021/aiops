@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { ChatMessage, ExecTraceItem, SessionMemoryActivity } from '@/types'
 import { getSessionMemoryActivity } from '@/api/sessionHistory'
 import { toolLabel } from '@/utils/assetDisplay'
 import { parseJsonRecord } from './jsonRecords'
-import { resultReason, traceTargetLabel } from './traceUtils'
+import { resultReason, traceExecutionText, traceTargetLabel } from './traceUtils'
 
 interface AiThinkingChainPanelProps {
   sessionId: string | null
   messages: ChatMessage[]
   defaultTab?: 'trace' | 'memory'
+  fixedTab?: 'trace' | 'memory'
+  traceLabel?: string
 }
 
 const collapsedGroupId = '__collapsed__'
@@ -83,12 +85,37 @@ function buildThinkingGroups(messages: ChatMessage[]): ThinkingChainGroup[] {
     }
   })
 
-  return groups
-    .filter((group) => group.traces.length > 0)
-    .map((group) => ({
+  return groups.map((group) => {
+    const traces = dedupeTraces(group.traces)
+    return {
       ...group,
-      assistantSummary: group.assistantSummary || 'AI 已调用工具，结果汇总在左侧会话输出中。',
-    }))
+      traces,
+    assistantSummary: group.assistantSummary || (
+      traces.length > 0
+        ? 'AI 已调用工具，结果汇总在左侧会话输出中。'
+        : '本轮暂无 AI 输出摘要。'
+    ),
+    }
+  })
+}
+
+function dedupeTraces(traces: ExecTraceItem[]) {
+  const seen = new Set<string>()
+  const deduped: ExecTraceItem[] = []
+  for (const trace of traces) {
+    const key = [
+      trace.tool,
+      trace.args || '',
+      trace.result || '',
+      trace.status || '',
+      trace.startedAt || '',
+      trace.completedAt || '',
+    ].join('\u0001')
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(trace)
+  }
+  return deduped
 }
 
 function traceResultLabel(trace: ExecTraceItem) {
@@ -116,6 +143,10 @@ function traceResultDetail(trace: ExecTraceItem) {
     if (typeof error === 'string' && error.trim()) return error.trim()
   }
   return trace.result?.trim() || ''
+}
+
+function traceExecutionDetail(trace: ExecTraceItem) {
+  return traceExecutionText(trace).trim()
 }
 
 function recordResultLabel(record: Record<string, unknown>) {
@@ -180,8 +211,10 @@ function scrollChatMessage(messageId: string) {
 
 export default function AiThinkingChainPanel({
   defaultTab = 'trace',
+  fixedTab,
   sessionId,
   messages,
+  traceLabel = '思维链',
 }: AiThinkingChainPanelProps) {
   const [query, setQuery] = useState('')
   const [selectedGroupId, setSelectedGroupId] = useState('all')
@@ -189,7 +222,9 @@ export default function AiThinkingChainPanel({
   const [activeTab, setActiveTab] = useState<'trace' | 'memory'>(defaultTab)
   const [memoryActivity, setMemoryActivity] = useState<SessionMemoryActivity | null>(null)
   const [memoryLoading, setMemoryLoading] = useState(false)
-  const traceGroups = useMemo(() => buildThinkingGroups(messages), [messages])
+  const deferredMessages = useDeferredValue(messages)
+  const displayTab = fixedTab || activeTab
+  const traceGroups = useMemo(() => buildThinkingGroups(deferredMessages), [deferredMessages])
   const latestGroupId = traceGroups[traceGroups.length - 1]?.id || null
   const activeExpandedGroupId = expandedGroupId === collapsedGroupId
     ? null
@@ -214,8 +249,13 @@ export default function AiThinkingChainPanel({
   }, [traceGroups])
 
   useEffect(() => {
+    if (displayTab !== 'memory') {
+      setMemoryLoading(false)
+      return
+    }
     if (!sessionId) {
       setMemoryActivity(null)
+      setMemoryLoading(false)
       return
     }
     let cancelled = false
@@ -233,7 +273,7 @@ export default function AiThinkingChainPanel({
     return () => {
       cancelled = true
     }
-  }, [sessionId, messages.length])
+  }, [sessionId, deferredMessages.length, displayTab])
 
   const selectGroup = (groupId: string) => {
     setSelectedGroupId(groupId)
@@ -257,29 +297,33 @@ export default function AiThinkingChainPanel({
     <section className="min-h-0 flex min-w-0 flex-1 flex-col overflow-hidden border-t border-ops-surface0/80">
       <header className="space-y-2 border-b border-ops-surface0/80 bg-ops-dark/55 px-3 py-2.5">
         <div className="flex items-center justify-between gap-3 text-xs font-semibold tracking-wide text-ops-text">
-          <div className="flex items-center gap-1 rounded-md border border-ops-surface0 bg-ops-panel/70 p-0.5">
-            <button
-              type="button"
-              onClick={() => setActiveTab('trace')}
-              className={`rounded px-2 py-1 ${activeTab === 'trace' ? 'bg-ops-accent text-ops-ink' : 'text-ops-subtext hover:text-ops-text'}`}
-            >
-              思维链
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('memory')}
-              className={`rounded px-2 py-1 ${activeTab === 'memory' ? 'bg-ops-accent text-ops-ink' : 'text-ops-subtext hover:text-ops-text'}`}
-            >
-              记忆
-            </button>
-          </div>
+          {fixedTab ? (
+            <div className="text-xs font-black text-ops-text">{displayTab === 'trace' ? traceLabel : '会话记忆'}</div>
+          ) : (
+            <div className="flex items-center gap-1 rounded-md border border-ops-surface0 bg-ops-panel/70 p-0.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab('trace')}
+                className={`rounded px-2 py-1 ${activeTab === 'trace' ? 'bg-ops-accent text-ops-ink' : 'text-ops-subtext hover:text-ops-text'}`}
+              >
+                {traceLabel}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('memory')}
+                className={`rounded px-2 py-1 ${activeTab === 'memory' ? 'bg-ops-accent text-ops-ink' : 'text-ops-subtext hover:text-ops-text'}`}
+              >
+                记忆
+              </button>
+            </div>
+          )}
           <span className="font-mono text-[10px] font-normal text-ops-overlay">
-            {activeTab === 'trace'
-              ? (sessionId ? `${traceGroups.length} 次` : '未绑定')
+            {displayTab === 'trace'
+              ? (sessionId ? `${traceGroups.length} 轮` : '未绑定')
               : (sessionId ? `${memoryActivity?.summary.referenced_count || 0} 引用` : '未绑定')}
           </span>
         </div>
-        {activeTab === 'trace' && (
+        {displayTab === 'trace' && (
           <>
             <input
               value={query}
@@ -308,11 +352,11 @@ export default function AiThinkingChainPanel({
         )}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto bg-transparent px-3 py-3">
-        {activeTab === 'memory' ? (
+        {displayTab === 'memory' ? (
           <MemoryActivityPanel activity={memoryActivity} loading={memoryLoading} />
         ) : traceGroups.length === 0 ? (
           <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
-            暂无可展示的执行轨迹。AI 调用工具后会写入后端会话历史，并按轮次沉淀在这里。
+            暂无会话轮次。发送消息后会按轮次展示当前会话的执行链路。
           </div>
         ) : filteredGroups.length === 0 ? (
           <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
@@ -340,7 +384,7 @@ export default function AiThinkingChainPanel({
                         输出 {formatTimelineTime(group.outputAt || group.startedAt)}
                       </span>
                       <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[11px] text-ops-subtext">
-                        {group.traces.length} 步
+                        {group.traces.length > 0 ? `${group.traces.length} 步` : '无工具链路'}
                       </span>
                     </div>
                   </div>
@@ -361,7 +405,11 @@ export default function AiThinkingChainPanel({
                     </div>
                     </div>
                     <div className="space-y-2 px-3 py-3">
-                      {group.traces.map((trace, index) => (
+                      {group.traces.length === 0 ? (
+                        <div className="rounded-xl border border-ops-surface0 bg-ops-panel/45 px-3 py-2 text-[11px] leading-5 text-ops-subtext">
+                          本轮没有可展示的工具执行链路。通常表示模型直接生成了回复，或后端没有为本轮持久化工具轨迹。
+                        </div>
+                      ) : group.traces.map((trace, index) => (
                         <div
                           key={`${trace.tool}-${index}-${trace.startedAt || trace.completedAt || ''}`}
                           className="rounded-xl border border-ops-surface0 bg-ops-panel/45 px-3 py-2"
@@ -381,6 +429,16 @@ export default function AiThinkingChainPanel({
                             <span className="font-semibold text-ops-overlay">执行：</span>
                             {compactText(traceTargetLabel(trace), trace.tool, 160)}
                           </div>
+                          {traceExecutionDetail(trace) && (
+                            <div className="mt-2 rounded-md border border-ops-surface0 bg-ops-dark/35">
+                              <div className="border-b border-ops-surface0 px-2.5 py-1.5 text-[11px] font-semibold text-ops-overlay">
+                                完整命令 / SQL / 参数
+                              </div>
+                              <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words px-2.5 py-2 text-[11px] leading-5 text-ops-text">
+                                {traceExecutionDetail(trace)}
+                              </pre>
+                            </div>
+                          )}
                           <div className="mt-1 text-[11px] leading-5 text-ops-subtext">
                             <span className="font-semibold text-ops-overlay">结果：</span>
                             {traceResultLabel(trace)}

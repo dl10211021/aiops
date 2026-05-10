@@ -4,6 +4,8 @@ import { useStore } from '@/store'
 import type { Session } from '@/types'
 import { normalizeHistoryMessages } from './sessionHistory'
 
+const sessionHistoryRestoreLimit = 160
+
 export function useSessionHistorySync(
   currentSessionId: string | null,
   session: Session | null,
@@ -24,20 +26,30 @@ export function useSessionHistorySync(
     ) return
 
     historyLoadingRef.current.add(sessionId)
-    getSessionHistory(sessionId)
-      .then((history) => {
-        const messages = history.data.messages || []
-        const current = useStore.getState().sessions[sessionId]
-        if (!current) return
-        setSessionMessages(sessionId, normalizeHistoryMessages(sessionId, messages))
-        updateSession(sessionId, { historyLoaded: true })
-      })
-      .catch(() => {
-        updateSession(sessionId, { historyLoaded: true })
-      })
-      .finally(() => {
-        historyLoadingRef.current.delete(sessionId)
-      })
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      if (useStore.getState().currentView !== 'chat') return
+      getSessionHistory(sessionId, sessionHistoryRestoreLimit)
+        .then((history) => {
+          if (cancelled) return
+          const messages = history.data.messages || []
+          const current = useStore.getState().sessions[sessionId]
+          if (!current) return
+          setSessionMessages(sessionId, normalizeHistoryMessages(sessionId, messages))
+          updateSession(sessionId, { historyLoaded: true })
+        })
+        .catch(() => {
+          if (!cancelled) updateSession(sessionId, { historyLoaded: true })
+        })
+        .finally(() => {
+          historyLoadingRef.current.delete(sessionId)
+        })
+    }, 800)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+      historyLoadingRef.current.delete(sessionId)
+    }
   }, [currentSessionId, hasActiveStream, session, session?.historyLoaded, setSessionMessages, updateSession])
 
   useEffect(() => {
@@ -48,7 +60,7 @@ export function useSessionHistorySync(
     let cancelled = false
     const refreshHistory = async () => {
       try {
-        const history = await getSessionHistory(sessionId)
+        const history = await getSessionHistory(sessionId, sessionHistoryRestoreLimit)
         if (!cancelled) {
           setSessionMessages(sessionId, normalizeHistoryMessages(sessionId, history.data.messages || []))
         }

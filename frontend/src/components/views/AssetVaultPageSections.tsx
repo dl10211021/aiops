@@ -1,4 +1,4 @@
-import type { Asset, AssetVerificationMatrix, ProtocolVerificationOverview } from '@/types'
+import type { Asset, ProtocolVerificationStatusOverview } from '@/types'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   DEFAULT_SESSION_GROUP,
@@ -25,13 +25,14 @@ type AssetGroupSummary = {
   ready: number
   assets: Asset[]
 }
+type AssetVerificationStatusMatrix = ProtocolVerificationStatusOverview['matrix'][number]
 
 export function AssetOverviewGrid({
   overview,
   verificationOverview,
 }: {
   overview: Record<string, number> | null
-  verificationOverview: ProtocolVerificationOverview | null
+  verificationOverview: ProtocolVerificationStatusOverview | null
 }) {
   if (!overview) return null
   return (
@@ -115,7 +116,7 @@ export function AssetGroupSections({
   categoryLabels: Record<string, string>
   connectorForAsset: (asset: Asset) => string
   connectorLabels: Record<string, string>
-  matrixByAssetId: Map<number, AssetVerificationMatrix>
+  matrixByAssetId: Map<number, AssetVerificationStatusMatrix>
   protocolLabelForAsset: (asset: Asset, connector: string) => string
   onConnect: (asset: Asset) => void
   onEdit: (asset: Asset) => void
@@ -192,7 +193,7 @@ export function AssetTablePanel({
   connectingSelected: boolean
   displayForAsset: (asset: Asset) => AssetDisplayMeta
   hasActiveFilters: boolean
-  matrixByAssetId: Map<number, AssetVerificationMatrix>
+  matrixByAssetId: Map<number, AssetVerificationStatusMatrix>
   mutatingGroup: string | null
   sessionGroups: string[]
   onAssignGroup: (assets: Asset[], groupName: string) => void
@@ -242,6 +243,12 @@ export function AssetTablePanel({
     () => panelAssets.slice(pageStart, pageStart + ASSET_TABLE_PAGE_SIZE),
     [panelAssets, pageStart]
   )
+  const displayMetaByAssetId = useMemo(() => {
+    const rows = new Map<number, AssetDisplayMeta>()
+    panelAssets.forEach((asset) => rows.set(asset.id, displayForAsset(asset)))
+    return rows
+  }, [displayForAsset, panelAssets])
+  const displayMetaForAsset = (asset: Asset) => displayMetaByAssetId.get(asset.id) || displayForAsset(asset)
   const assetGroupOptions = useMemo(() => uniqueSessionGroups([
     ...sessionGroups,
     ...assets.flatMap((asset) => asset.tags || []),
@@ -250,27 +257,32 @@ export function AssetTablePanel({
     const counts = new Map<string, number>()
     if (groupBy === 'none') return counts
     panelAssets.forEach((asset) => {
-      const label = assetTableGroupLabel(asset, displayForAsset(asset), groupBy)
+      const label = assetTableGroupLabel(asset, displayMetaForAsset(asset), groupBy)
       counts.set(label, (counts.get(label) || 0) + 1)
     })
     return counts
-  }, [displayForAsset, groupBy, panelAssets])
+  }, [displayMetaByAssetId, groupBy, panelAssets])
   const groupAssetsByLabel = useMemo(() => {
     const grouped = new Map<string, Asset[]>()
     if (groupBy === 'none') return grouped
     panelAssets.forEach((asset) => {
-      const label = assetTableGroupLabel(asset, displayForAsset(asset), groupBy)
-      grouped.set(label, [...(grouped.get(label) || []), asset])
+      const label = assetTableGroupLabel(asset, displayMetaForAsset(asset), groupBy)
+      const current = grouped.get(label)
+      if (current) {
+        current.push(asset)
+      } else {
+        grouped.set(label, [asset])
+      }
     })
     return grouped
-  }, [displayForAsset, groupBy, panelAssets])
+  }, [displayMetaByAssetId, groupBy, panelAssets])
   const groupedVisibleAssets = useMemo(() => {
     if (groupBy === 'none') {
       return [{ id: 'all', label: '全部资产', count: visibleAssets.length, allItems: visibleAssets, items: visibleAssets }]
     }
     const groups = new Map<string, { id: string; label: string; count: number; allItems: Asset[]; items: Asset[] }>()
     visibleAssets.forEach((asset) => {
-      const label = assetTableGroupLabel(asset, displayForAsset(asset), groupBy)
+      const label = assetTableGroupLabel(asset, displayMetaForAsset(asset), groupBy)
       const id = `${groupBy}:${label}`
       const current = groups.get(id)
       if (current) {
@@ -286,7 +298,7 @@ export function AssetTablePanel({
       }
     })
     return Array.from(groups.values())
-  }, [displayForAsset, groupAssetsByLabel, groupBy, groupCounts, visibleAssets])
+  }, [displayMetaByAssetId, groupAssetsByLabel, groupBy, groupCounts, visibleAssets])
   const allGroupsCollapsed = groupBy !== 'none'
     && groupedVisibleAssets.length > 0
     && groupedVisibleAssets.every((group) => collapsedGroups.has(group.id))
@@ -849,7 +861,7 @@ export function AssetTablePanel({
   )
 }
 
-function verificationBadge(matrix?: AssetVerificationMatrix) {
+function verificationBadge(matrix?: AssetVerificationStatusMatrix) {
   if (!matrix) {
     return { label: '需复验', className: 'border-amber-400/40 bg-amber-400/10 text-amber-200' }
   }

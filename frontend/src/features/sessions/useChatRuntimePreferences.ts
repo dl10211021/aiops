@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getAvailableModels, getSafetyPolicy } from '@/api/client'
 import type { ModelGroup } from '@/api/client'
+import { useStore } from '@/store'
 
 export function useChatRuntimePreferences() {
   const [modelName, setModelName] = useState(() => {
@@ -20,19 +21,30 @@ export function useChatRuntimePreferences() {
   const [readWriteWarningEnabled, setReadWriteWarningEnabled] = useState(true)
 
   useEffect(() => {
-    getAvailableModels().then((response) => {
-      const groups = response.data.models || []
-      setAvailableModels(groups)
-      const validIds = groups.flatMap((group) => group.models.map((model) => model.id))
-      const firstValid = validIds.find((id) => !id.endsWith('|none')) || validIds[0] || ''
-      setModelName((current) => {
-        if (current && validIds.includes(current)) return current
-        return firstValid || current
-      })
-    }).catch(() => {})
-    getSafetyPolicy()
-      .then((response) => setReadWriteWarningEnabled(response.data.policy.readwrite_chat_warning_enabled))
-      .catch(() => {})
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      if (useStore.getState().currentView !== 'chat') return
+      getAvailableModels().then((response) => {
+        if (cancelled) return
+        const groups = response.data.models || []
+        setAvailableModels(groups)
+        const validIds = groups.flatMap((group) => group.models.map((model) => model.id))
+        const firstValid = validIds.find((id) => !id.endsWith('|none')) || validIds[0] || ''
+        setModelName((current) => {
+          if (current && validIds.includes(current)) return current
+          return firstValid || current
+        })
+      }).catch(() => {})
+      getSafetyPolicy()
+        .then((response) => {
+          if (!cancelled) setReadWriteWarningEnabled(response.data.policy.readwrite_chat_warning_enabled)
+        })
+        .catch(() => {})
+    }, 1000)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
   }, [])
 
   useEffect(() => {

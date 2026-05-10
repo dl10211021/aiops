@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useEffect, useRef, type ComponentType, type ErrorInfo, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useEffect, useRef, useState, type ComponentType, type ErrorInfo, type ReactNode } from 'react'
 import { useStore, viewFromLocationHash } from '@/store'
 import LeftNav from '@/components/layout/LeftNav'
 import Sidebar from '@/components/layout/Sidebar'
@@ -7,7 +7,8 @@ import ToastContainer from '@/components/layout/ToastContainer'
 import { getActiveSessions, pollAllSessions } from '@/api/client'
 import type { ChatMessage } from '@/types'
 
-const CHUNK_RELOAD_KEY = 'opscore:chunk-reload-once'
+const CHUNK_RELOAD_KEY = 'opscore:chunk-reload-at'
+const CHUNK_RELOAD_COOLDOWN_MS = 15000
 
 function isChunkLoadError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || '')
@@ -15,9 +16,14 @@ function isChunkLoadError(error: unknown) {
 }
 
 function lazyWithChunkRecovery<T extends { default: ComponentType<unknown> }>(factory: () => Promise<T>) {
-  return lazy(() => factory().catch((error) => {
-    if (isChunkLoadError(error) && !window.sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
-      window.sessionStorage.setItem(CHUNK_RELOAD_KEY, '1')
+  return lazy(() => factory().then((module) => {
+    window.sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+    return module
+  }).catch((error) => {
+    const lastReload = Number(window.sessionStorage.getItem(CHUNK_RELOAD_KEY) || '0')
+    const canReload = !Number.isFinite(lastReload) || Date.now() - lastReload > CHUNK_RELOAD_COOLDOWN_MS
+    if (isChunkLoadError(error) && canReload) {
+      window.sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()))
       window.location.reload()
       return new Promise<T>(() => undefined)
     }
@@ -69,28 +75,63 @@ class ChunkErrorBoundary extends Component<
   }
 }
 
-const ChatWindow = lazyWithChunkRecovery(() => import('@/components/chat/ChatWindow'))
-const Dashboard = lazyWithChunkRecovery(() => import('@/components/views/Dashboard'))
-const AssetVault = lazyWithChunkRecovery(() => import('@/components/views/AssetVault'))
-const ApprovalCenter = lazyWithChunkRecovery(() => import('@/components/views/ApprovalCenter'))
-const SkillMarket = lazyWithChunkRecovery(() => import('@/components/views/SkillMarket'))
-const KnowledgeBase = lazyWithChunkRecovery(() => import('@/components/views/KnowledgeBase'))
-const CronManager = lazyWithChunkRecovery(() => import('@/components/views/CronManager'))
-const AlertCenter = lazyWithChunkRecovery(() => import('@/components/views/AlertCenter'))
-const RealtimeCanvas = lazyWithChunkRecovery(() => import('@/components/views/RealtimeCanvas'))
-const ObservabilityCenter = lazyWithChunkRecovery(() => import('@/components/views/ObservabilityCenter'))
-const SystemConfigCenter = lazyWithChunkRecovery(() => import('@/components/views/SystemConfigCenter'))
-const ConnectionModal = lazyWithChunkRecovery(() => import('@/components/modals/ConnectionModal'))
-const LLMConfigModal = lazyWithChunkRecovery(() => import('@/components/modals/LLMConfigModal'))
-const NotificationsModal = lazyWithChunkRecovery(() => import('@/components/modals/NotificationsModal'))
-const DynamicSkillsModal = lazyWithChunkRecovery(() => import('@/components/modals/DynamicSkillsModal'))
-const SessionActionsModal = lazyWithChunkRecovery(() => import('@/components/modals/SessionActionsModal'))
-const SafetyPolicyModal = lazyWithChunkRecovery(() => import('@/components/modals/SafetyPolicyModal'))
+const loadChatWindow = () => import('@/components/chat/ChatWindow')
+const loadDashboard = () => import('@/components/views/Dashboard')
+const loadAssetVault = () => import('@/components/views/AssetVault')
+const loadApprovalCenter = () => import('@/components/views/ApprovalCenter')
+const loadSkillMarket = () => import('@/components/views/SkillMarket')
+const loadToolCenter = () => import('@/components/views/ToolCenter')
+const loadKnowledgeBase = () => import('@/components/views/KnowledgeBase')
+const loadCronManager = () => import('@/components/views/CronManager')
+const loadAlertCenter = () => import('@/components/views/AlertCenter')
+const loadRealtimeCanvas = () => import('@/components/views/RealtimeCanvas')
+const loadObservabilityCenter = () => import('@/components/views/ObservabilityCenter')
+const loadSystemConfigCenter = () => import('@/components/views/SystemConfigCenter')
+const loadConnectionModal = () => import('@/components/modals/ConnectionModal')
+const loadLLMConfigModal = () => import('@/components/modals/LLMConfigModal')
+const loadNotificationsModal = () => import('@/components/modals/NotificationsModal')
+const loadSessionRetentionConfigModal = () => import('@/components/modals/SessionRetentionConfigModal')
+const loadDynamicSkillsModal = () => import('@/components/modals/DynamicSkillsModal')
+const loadSessionActionsModal = () => import('@/components/modals/SessionActionsModal')
+const loadSafetyPolicyModal = () => import('@/components/modals/SafetyPolicyModal')
+
+const ChatWindow = lazyWithChunkRecovery(loadChatWindow)
+const Dashboard = lazyWithChunkRecovery(loadDashboard)
+const AssetVault = lazyWithChunkRecovery(loadAssetVault)
+const ApprovalCenter = lazyWithChunkRecovery(loadApprovalCenter)
+const SkillMarket = lazyWithChunkRecovery(loadSkillMarket)
+const ToolCenter = lazyWithChunkRecovery(loadToolCenter)
+const KnowledgeBase = lazyWithChunkRecovery(loadKnowledgeBase)
+const CronManager = lazyWithChunkRecovery(loadCronManager)
+const AlertCenter = lazyWithChunkRecovery(loadAlertCenter)
+const RealtimeCanvas = lazyWithChunkRecovery(loadRealtimeCanvas)
+const ObservabilityCenter = lazyWithChunkRecovery(loadObservabilityCenter)
+const SystemConfigCenter = lazyWithChunkRecovery(loadSystemConfigCenter)
+const ConnectionModal = lazyWithChunkRecovery(loadConnectionModal)
+const LLMConfigModal = lazyWithChunkRecovery(loadLLMConfigModal)
+const NotificationsModal = lazyWithChunkRecovery(loadNotificationsModal)
+const SessionRetentionConfigModal = lazyWithChunkRecovery(loadSessionRetentionConfigModal)
+const DynamicSkillsModal = lazyWithChunkRecovery(loadDynamicSkillsModal)
+const SessionActionsModal = lazyWithChunkRecovery(loadSessionActionsModal)
+const SafetyPolicyModal = lazyWithChunkRecovery(loadSafetyPolicyModal)
+
+const BACKGROUND_ROUTE_PRELOADERS = [
+  loadAssetVault,
+  loadSystemConfigCenter,
+  loadDashboard,
+]
+const BACKGROUND_PRELOAD_START_DELAY_MS = 5000
+const BACKGROUND_PRELOAD_STEP_DELAY_MS = 1400
+const CHAT_INITIAL_RENDER_DELAY_MS = 180
+const NON_CHAT_SESSION_RESTORE_DELAY_MS = 1200
 
 function ViewFallback() {
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center bg-ops-dark text-sm text-ops-subtext">
-      加载视图...
+    <div className="flex min-h-0 flex-1 items-center justify-center bg-ops-dark/82 p-6 text-sm text-ops-subtext">
+      <div className="ops-data-panel flex min-w-[240px] items-center gap-3 rounded-2xl px-4 py-3">
+        <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-ops-accent shadow-[0_0_16px_rgba(40,208,168,0.45)]" />
+        <span>加载视图...</span>
+      </div>
     </div>
   )
 }
@@ -103,6 +144,15 @@ function ModalFallback() {
   )
 }
 
+function DeferredChatWindow() {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setReady(true), CHAT_INITIAL_RENDER_DELAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [])
+  return ready ? <ChatWindow /> : <ViewFallback />
+}
+
 function ViewRouter() {
   const currentView = useStore((s) => s.currentView)
   return (
@@ -110,17 +160,18 @@ function ViewRouter() {
       <Suspense fallback={<ViewFallback />}>
         {currentView === 'dashboard' && <Dashboard />}
         {currentView === 'bigscreen' && <Dashboard />}
-        {currentView === 'chat' && <ChatWindow />}
+        {currentView === 'chat' && <DeferredChatWindow />}
         {currentView === 'observability' && <ObservabilityCenter />}
         {currentView === 'assets' && <AssetVault />}
         {currentView === 'canvas' && <RealtimeCanvas />}
         {currentView === 'skills' && <SkillMarket />}
+        {currentView === 'tools' && <ToolCenter />}
         {currentView === 'knowledge' && <KnowledgeBase />}
         {currentView === 'cron' && <CronManager />}
         {currentView === 'alerts' && <AlertCenter />}
         {currentView === 'approvals' && <ApprovalCenter />}
         {currentView === 'config' && <SystemConfigCenter />}
-        {!['dashboard', 'bigscreen', 'chat', 'observability', 'assets', 'canvas', 'skills', 'knowledge', 'cron', 'alerts', 'approvals', 'config'].includes(currentView) && <ChatWindow />}
+        {!['dashboard', 'bigscreen', 'chat', 'observability', 'assets', 'canvas', 'skills', 'tools', 'knowledge', 'cron', 'alerts', 'approvals', 'config'].includes(currentView) && <DeferredChatWindow />}
       </Suspense>
     </ChunkErrorBoundary>
   )
@@ -135,6 +186,7 @@ function ModalRouter() {
         {activeModal === 'connect' && <ConnectionModal />}
         {activeModal === 'llm-config' && <LLMConfigModal />}
         {activeModal === 'notifications' && <NotificationsModal />}
+        {activeModal === 'session-retention' && <SessionRetentionConfigModal />}
         {activeModal === 'safety-policy' && <SafetyPolicyModal />}
         {activeModal === 'dynamic-skills' && <DynamicSkillsModal />}
         {activeModal === 'session-actions' && <SessionActionsModal />}
@@ -148,7 +200,6 @@ export default function App() {
   const setCurrentSession = useStore((s) => s.setCurrentSession)
   const setView = useStore((s) => s.setView)
   const appendMessage = useStore((s) => s.appendMessage)
-  const sessions = useStore((s) => s.sessions)
   const currentView = useStore((s) => s.currentView)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -163,9 +214,10 @@ export default function App() {
   // Restore sessions from backend on mount
   useEffect(() => {
     if (restoreStartedRef.current) return
-    restoreStartedRef.current = true
 
     const restore = async () => {
+      if (restoreStartedRef.current) return
+      restoreStartedRef.current = true
       try {
         const res = await getActiveSessions()
         const serverSessions = res.data.sessions || {}
@@ -198,8 +250,54 @@ export default function App() {
         if (firstId) setCurrentSession(firstId)
       } catch { /* backend not ready */ }
     }
-    restore()
+
+    const delay = currentView === 'chat' ? 0 : NON_CHAT_SESSION_RESTORE_DELAY_MS
+    const timer = window.setTimeout(() => void restore(), delay)
+    return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView])
+
+  useEffect(() => {
+    let cancelled = false
+    const timeoutIds = new Set<ReturnType<typeof window.setTimeout>>()
+    const idleIds = new Set<number>()
+    const requestIdle = window.requestIdleCallback || ((callback) => window.setTimeout(callback, 1200))
+    const cancelIdle = window.cancelIdleCallback || window.clearTimeout
+
+    const schedulePreload = (index: number) => {
+      if (cancelled || index >= BACKGROUND_ROUTE_PRELOADERS.length) return
+      const delay = index === 0 ? BACKGROUND_PRELOAD_START_DELAY_MS : BACKGROUND_PRELOAD_STEP_DELAY_MS
+      const timeoutId = window.setTimeout(() => {
+        timeoutIds.delete(timeoutId)
+        if (cancelled) return
+        const idleId = requestIdle(() => {
+          idleIds.delete(Number(idleId))
+          if (cancelled) return
+          void BACKGROUND_ROUTE_PRELOADERS[index]().catch(() => undefined).finally(() => schedulePreload(index + 1))
+        })
+        idleIds.add(Number(idleId))
+      }, delay)
+      timeoutIds.add(timeoutId)
+    }
+
+    const pausePreloadingForInteraction = () => {
+      if (cancelled) return
+      timeoutIds.forEach((id) => window.clearTimeout(id))
+      timeoutIds.clear()
+      idleIds.forEach((id) => cancelIdle(id))
+      idleIds.clear()
+    }
+
+    schedulePreload(0)
+    window.addEventListener('pointerdown', pausePreloadingForInteraction, { once: true, capture: true })
+    window.addEventListener('keydown', pausePreloadingForInteraction, { once: true, capture: true })
+    return () => {
+      cancelled = true
+      window.removeEventListener('pointerdown', pausePreloadingForInteraction, { capture: true })
+      window.removeEventListener('keydown', pausePreloadingForInteraction, { capture: true })
+      timeoutIds.forEach((id) => window.clearTimeout(id))
+      idleIds.forEach((id) => cancelIdle(id))
+    }
   }, [])
 
   // Heartbeat polling
@@ -208,6 +306,7 @@ export default function App() {
       try {
         const res = await pollAllSessions()
         const updates = res.data.updates || {}
+        const sessions = useStore.getState().sessions
         for (const [sid, msgs] of Object.entries(updates)) {
           if (!sessions[sid]) continue
           msgs.forEach((m) => {
@@ -227,7 +326,7 @@ export default function App() {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
     }
-  }, [sessions, appendMessage])
+  }, [appendMessage])
 
   const isChatView = currentView === 'chat'
 
@@ -243,7 +342,7 @@ export default function App() {
       <main className="min-h-0 min-w-0 overflow-hidden p-2 lg:p-3">
         {isChatView ? (
           <div
-            className={`grid h-full min-h-0 gap-3 ${
+            className={`ops-chat-workspace grid h-full min-h-0 gap-3 ${
               sidebarOpen
                 ? 'grid-cols-[minmax(300px,320px)_minmax(0,1fr)]'
                 : 'grid-cols-[minmax(0,1fr)]'

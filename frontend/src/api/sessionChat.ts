@@ -12,7 +12,7 @@ export function streamChat(
   message: string,
   modelName: string,
   thinkingMode: string = 'off',
-  orchestrationMode: 'single' | 'split' = 'single',
+  orchestrationMode: 'single' | 'split' | 'fast' = 'single',
   displayMessage?: string,
   attachments: Array<{
     filename: string

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { MouseEvent } from 'react'
 import { useStore } from '@/store'
 import type { Session } from '@/types'
@@ -100,15 +100,15 @@ export function useSessionSidebarModel() {
   }, [editingSessionId, sessions])
 
   const sessionMetrics = useMemo(() => summarizeSessions(sessionList), [sessionList])
-  const handleDisconnect = async (sid: string, event: MouseEvent<HTMLButtonElement>) => {
+  const handleDisconnect = useCallback(async (sid: string, event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     await disconnectSidebarSession(sid, removeSession)
-  }
+  }, [removeSession])
 
-  const handleEditSession = (sid: string, event: MouseEvent<HTMLButtonElement>) => {
+  const handleEditSession = useCallback((sid: string, event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     setEditingSessionId(sid)
-  }
+  }, [])
 
   const handleCreateGroup = () => {
     const name = normalizeSessionGroupName(groupDraft)
@@ -167,11 +167,11 @@ export function useSessionSidebarModel() {
     addToast(`已删除会话组：${currentName}`, 'success')
   }
 
-  const handleSelectSession = (sessionId: string, group: string) => {
+  const handleSelectSession = useCallback((sessionId: string, group: string) => {
     setCurrentSession(sessionId)
     setView('chat')
     setSelectedGroup(group)
-  }
+  }, [setCurrentSession, setView])
 
   const handleSaveSessionEdit = async (values: SessionEditValues) => {
     if (!editingSessionId) return

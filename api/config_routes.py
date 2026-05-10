@@ -16,6 +16,9 @@ from api.response_mappers.config import (
     safety_policy_response_kwargs,
     safety_policy_saved_response_kwargs,
     safety_policy_test_response_kwargs,
+    session_retention_config_response_kwargs,
+    session_retention_config_saved_response_kwargs,
+    session_retention_run_response_kwargs,
 )
 from api.schema_models.common import ResponseModel
 from api.schema_models.config import (
@@ -25,6 +28,7 @@ from api.schema_models.config import (
     ProviderConfig,
     SafetyPolicyTestRequest,
     SafetyPolicyUpdateRequest,
+    SessionRetentionConfigRequest,
 )
 from core.assistant_model_config import (
     get_assistant_model_config,
@@ -35,8 +39,11 @@ from core.app_config_service import (
     build_llm_config_payload,
     get_agent_runtime_config_record,
     get_embedding_config_record,
+    get_session_retention_config_record,
     save_agent_runtime_config_record,
     save_embedding_config_record,
+    save_session_retention_config_record,
+    run_session_retention_policy_record,
 )
 from core.model_catalog_service import fetch_model_catalog
 from core.provider_config_service import (
@@ -83,6 +90,33 @@ async def update_agent_runtime_config_endpoint(req: AgentRuntimeConfigRequest):
     except AppConfigServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**agent_runtime_config_saved_response_kwargs(config))
+
+
+@router.get("/config/session-retention", response_model=ResponseModel)
+async def get_session_retention_config_endpoint(preview: bool = True):
+    return ResponseModel(
+        **session_retention_config_response_kwargs(
+            get_session_retention_config_record(include_preview=preview)
+        )
+    )
+
+
+@router.post("/config/session-retention", response_model=ResponseModel)
+async def update_session_retention_config_endpoint(req: SessionRetentionConfigRequest):
+    try:
+        config = save_session_retention_config_record(**req.model_dump())
+    except AppConfigServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**session_retention_config_saved_response_kwargs(config))
+
+
+@router.post("/config/session-retention/run", response_model=ResponseModel)
+async def run_session_retention_config_endpoint():
+    try:
+        result = await asyncio.to_thread(run_session_retention_policy_record)
+    except AppConfigServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**session_retention_run_response_kwargs(result))
 
 
 @router.get("/config/assistant-model", response_model=ResponseModel)

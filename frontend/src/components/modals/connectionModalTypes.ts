@@ -34,7 +34,13 @@ export type AssetSubType = {
   }
 }
 
-export type OracleClientConfig = { detected: boolean; lib_dir: string; source: string; thick_mode_env_enabled: boolean }
+export type OracleClientConfig = {
+  detected: boolean
+  lib_dir: string
+  source: string
+  thick_mode_env_enabled: boolean
+  thick_mode_default_enabled?: boolean
+}
 
 export type ConnectionFeedback = {
   ok: boolean

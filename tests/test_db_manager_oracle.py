@@ -101,7 +101,67 @@ def test_oracle_error_explains_legacy_password_verifier():
     )
 
     assert "旧版 10G password verifier" in message
-    assert "OPSCORE_ORACLE_THICK_MODE=true" in message
+    assert "默认 Thick Mode 初始化" in message
+
+
+def test_oracle_error_explains_thick_mode_after_thin_mode():
+    message = DatabaseExecutor._oracle_error_message(
+        Exception(
+            "DPY-2019: python-oracledb thick mode cannot be used because thin mode "
+            "has already been enabled or a thin mode connection has already been created"
+        )
+    )
+
+    assert "已经创建过 thin mode 连接" in message
+    assert "同一进程内不能再切换到 thick mode" in message
+    assert "重新启动后端" in message
+
+
+def test_oracle_error_explains_missing_instant_client():
+    message = DatabaseExecutor._oracle_error_message(
+        Exception("DPI-1047: Cannot locate a 64-bit Oracle Client library")
+    )
+
+    assert "默认使用 python-oracledb Thick Mode" in message
+    assert "OPSCORE_ORACLE_CLIENT_LIB_DIR" in message
+    assert "use_thick_mode=false" in message
+
+
+def test_oracle_thick_mode_init_failure_returns_operator_message(monkeypatch):
+    class FakeOracleDbWithInitFailure:
+        @classmethod
+        def init_oracle_client(cls, **kwargs):
+            raise RuntimeError(
+                "DPY-2019: python-oracledb thick mode cannot be used because thin mode "
+                "has already been enabled or a thin mode connection has already been created"
+            )
+
+        @staticmethod
+        def makedsn(host, port, sid=None, service_name=None):
+            raise AssertionError("DSN must not be built when thick mode initialization fails")
+
+        @staticmethod
+        def connect(**kwargs):
+            raise AssertionError("Connection must not be attempted when thick mode initialization fails")
+
+    monkeypatch.setitem(sys.modules, "oracledb", FakeOracleDbWithInitFailure)
+    monkeypatch.setattr(db_manager, "_ORACLE_CLIENT_INIT_ATTEMPTED", False)
+
+    result_text = DatabaseExecutor().execute_query(
+        "oracle",
+        "db.local",
+        1521,
+        "system",
+        "manager",
+        "TEST",
+        "SELECT 1 FROM DUAL",
+        {"use_thick_mode": True, "oracle_client_lib_dir": r"C:\oracle\instantclient"},
+    )
+
+    result = json.loads(result_text)
+    assert result["success"] is False
+    assert "DPY-2019" in result["error"]
+    assert "重新启动后端" in result["error"]
 
 
 def test_oracle_non_query_statement_returns_affected_rows_without_fetch(monkeypatch):
@@ -143,9 +203,11 @@ def test_oracle_non_query_statement_returns_affected_rows_without_fetch(monkeypa
     fake_conn = FakeConnection()
     fake_oracledb = types.SimpleNamespace(
         connect=lambda **kwargs: fake_conn,
+        init_oracle_client=lambda **kwargs: None,
         makedsn=FakeOracleDb.makedsn,
     )
     monkeypatch.setitem(sys.modules, "oracledb", fake_oracledb)
+    monkeypatch.setattr(db_manager, "_ORACLE_CLIENT_INIT_ATTEMPTED", False)
 
     result_text = DatabaseExecutor().execute_query(
         "oracle",
@@ -186,6 +248,15 @@ def test_oracle_thick_mode_can_be_requested_from_extra_args(monkeypatch):
             cls.calls.append(kwargs)
 
     monkeypatch.setattr(db_manager, "_ORACLE_CLIENT_INIT_ATTEMPTED", False)
+    monkeypatch.setattr(
+        db_manager,
+        "discover_oracle_client_lib_dir",
+        lambda extra_args=None: {
+            "detected": True,
+            "lib_dir": r"C:\oracle\instantclient",
+            "source": "explicit",
+        },
+    )
 
     DatabaseExecutor._init_oracle_client_if_requested(
         FakeOracleDbWithInit,
@@ -206,6 +277,15 @@ def test_oracle_thick_mode_expands_env_var_from_extra_args(monkeypatch):
 
     monkeypatch.setattr(db_manager, "_ORACLE_CLIENT_INIT_ATTEMPTED", False)
     monkeypatch.setenv("OPSCORE_ORACLE_CLIENT_LIB_DIR", r"C:\oracle\instantclient")
+    monkeypatch.setattr(
+        db_manager,
+        "discover_oracle_client_lib_dir",
+        lambda extra_args=None: {
+            "detected": True,
+            "lib_dir": r"C:\oracle\instantclient",
+            "source": "explicit",
+        },
+    )
 
     DatabaseExecutor._init_oracle_client_if_requested(
         FakeOracleDbWithInit,
@@ -219,7 +299,7 @@ def test_oracle_thick_mode_expands_env_var_from_extra_args(monkeypatch):
     assert db_manager._ORACLE_CLIENT_INIT_ATTEMPTED is True
 
 
-def test_oracle_client_dir_does_not_imply_thick_mode(monkeypatch):
+def test_oracle_thick_mode_is_default_with_client_dir(monkeypatch):
     class FakeOracleDbWithInit:
         calls = []
 
@@ -229,10 +309,39 @@ def test_oracle_client_dir_does_not_imply_thick_mode(monkeypatch):
 
     monkeypatch.setattr(db_manager, "_ORACLE_CLIENT_INIT_ATTEMPTED", False)
     monkeypatch.delenv("OPSCORE_ORACLE_THICK_MODE", raising=False)
+    monkeypatch.setattr(
+        db_manager,
+        "discover_oracle_client_lib_dir",
+        lambda extra_args=None: {
+            "detected": True,
+            "lib_dir": r"C:\oracle\instantclient",
+            "source": "explicit",
+        },
+    )
 
     DatabaseExecutor._init_oracle_client_if_requested(
         FakeOracleDbWithInit,
         {"oracle_client_lib_dir": r"C:\oracle\instantclient"},
+    )
+
+    assert FakeOracleDbWithInit.calls == [{"lib_dir": r"C:\oracle\instantclient"}]
+    assert db_manager._ORACLE_CLIENT_INIT_ATTEMPTED is True
+
+
+def test_oracle_thick_mode_can_be_explicitly_disabled(monkeypatch):
+    class FakeOracleDbWithInit:
+        calls = []
+
+        @classmethod
+        def init_oracle_client(cls, **kwargs):
+            cls.calls.append(kwargs)
+
+    monkeypatch.setattr(db_manager, "_ORACLE_CLIENT_INIT_ATTEMPTED", False)
+    monkeypatch.setenv("OPSCORE_ORACLE_THICK_MODE", "true")
+
+    DatabaseExecutor._init_oracle_client_if_requested(
+        FakeOracleDbWithInit,
+        {"use_thick_mode": False, "oracle_client_lib_dir": r"C:\oracle\instantclient"},
     )
 
     assert FakeOracleDbWithInit.calls == []
@@ -265,9 +374,10 @@ def test_database_driver_capabilities_group_core_database_connectors():
     assert {"oracle", "mysql", "postgresql", "mssql", "redis", "mongodb", "dameng"}.issubset(drivers)
     assert drivers["oracle"]["connector"] == "native_sql"
     assert drivers["oracle"]["python_import"] == "oracledb"
-    assert drivers["oracle"]["default_mode"] == "thin"
-    assert drivers["oracle"]["external_client_name"] == "Oracle Instant Client（可选兼容模式）"
-    assert "不需要下载 Oracle Instant Client" in drivers["oracle"]["install_hint"]
+    assert drivers["oracle"]["default_mode"] == "thick"
+    assert drivers["oracle"]["external_client_required"] is True
+    assert drivers["oracle"]["external_client_name"] == "Oracle Instant Client"
+    assert "默认使用 python-oracledb Thick Mode" in drivers["oracle"]["install_hint"]
     assert drivers["dameng"]["connector"] == "native_sql"
     assert drivers["dameng"]["python_package"] == "dmpython"
     assert drivers["dameng"]["python_import"] == "dmPython"

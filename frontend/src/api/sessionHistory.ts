@@ -30,9 +30,10 @@ interface SessionHistoryApiMessage {
   }>
 }
 
-export async function getSessionHistory(sessionId: string) {
+export async function getSessionHistory(sessionId: string, limit?: number) {
+  const query = limit && limit > 0 ? `?limit=${encodeURIComponent(String(limit))}` : ''
   return request<{ messages: SessionHistoryApiMessage[] }>(
-    `/session/${sessionId}/history`
+    `/session/${sessionId}/history${query}`
   )
 }
 

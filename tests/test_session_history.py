@@ -28,10 +28,11 @@ class FakeMemoryDB:
             {"role": "tool", "content": "hidden"},
         ]
 
-    def get_messages(self, session_id, for_ui=False):
+    def get_messages(self, session_id, for_ui=False, limit=None):
         self.session_id = session_id
         self.for_ui = for_ui
-        return self.messages
+        self.limit = limit
+        return self.messages[-limit:] if limit else self.messages
 
     def clear_history(self, session_id):
         self.cleared.append(session_id)
@@ -66,6 +67,18 @@ class TestSessionHistory(unittest.TestCase):
                 {"role": "assistant", "content": "hello"},
             ],
         )
+
+    def test_get_user_visible_session_history_passes_limit_to_memory_store(self):
+        memory_db = FakeMemoryDB()
+        memory_db.messages = [
+            {"role": "user", "content": "old"},
+            {"role": "assistant", "content": "new"},
+        ]
+
+        messages = get_user_visible_session_history(memory_db, "sid-1", limit=1)
+
+        self.assertEqual(memory_db.limit, 1)
+        self.assertEqual(messages, [{"role": "assistant", "content": "new"}])
 
     def test_manual_stop_system_message_is_user_visible_for_audit(self):
         memory_db = FakeMemoryDB()

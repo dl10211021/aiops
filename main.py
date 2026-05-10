@@ -9,6 +9,7 @@ from core.http_middleware_service import (
     dispatch_api_token_auth,
     dispatch_request_id,
     dispatch_security_headers,
+    dispatch_timing_headers,
 )
 from core.hydration_status_service import (
     HYDRATE_STATUS as hydrate_status,
@@ -92,6 +93,11 @@ async def api_token_auth(request: Request, call_next):
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     return await dispatch_security_headers(request, call_next)
+
+
+@app.middleware("http")
+async def add_timing_headers(request: Request, call_next):
+    return await dispatch_timing_headers(request, call_next)
 
 import sys
 

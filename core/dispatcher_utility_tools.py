@@ -156,12 +156,104 @@ def _run_bing_html_search(query: str, logger: logging.Logger) -> list[dict[str, 
     return results
 
 
+def _search_request(url: str) -> urllib.request.Request:
+    return urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0 Safari/537.36 OpsCore"
+            ),
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.6",
+        },
+    )
+
+
+def _normalize_result_url(href: str) -> str:
+    return html.unescape(href).strip()
+
+
+def _extract_html_results(page: str, block_pattern: str) -> list[dict[str, str]]:
+    results: list[dict[str, str]] = []
+    for match in re.finditer(block_pattern, page, flags=re.I | re.S):
+        block = match.group(0)
+        link_match = re.search(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', block, flags=re.I | re.S)
+        if not link_match:
+            continue
+        body_match = re.search(r'<p[^>]*>(.*?)</p>', block, flags=re.I | re.S)
+        if not body_match:
+            body_match = re.search(r'<div[^>]+class="[^"]*(?:c-abstract|res-desc|mh-summary)[^"]*"[^>]*>(.*?)</div>', block, flags=re.I | re.S)
+        title = _strip_search_html(link_match.group(2))
+        href = _normalize_result_url(link_match.group(1))
+        body = _strip_search_html(body_match.group(1)) if body_match else ""
+        if title and href:
+            results.append({"title": title, "href": href, "body": body})
+        if len(results) >= 5:
+            break
+    return results
+
+
+def _run_baidu_html_search(query: str, logger: logging.Logger) -> list[dict[str, str]]:
+    logger.info(f"AI 使用百度 HTML 优先检索: {query}")
+    url = "https://www.baidu.com/s?wd=" + urllib.parse.quote(query)
+    with urllib.request.urlopen(_search_request(url), timeout=15) as response:
+        page = response.read(400000).decode("utf-8", errors="ignore")
+    return _extract_html_results(page, r'<div[^>]+class="[^"]*(?:result|c-container)[^"]*"[^>]*>.*?</div>\s*</div>')
+
+
+def _run_so360_html_search(query: str, logger: logging.Logger) -> list[dict[str, str]]:
+    logger.info(f"AI 使用 360 搜索 HTML 优先检索: {query}")
+    url = "https://www.so.com/s?q=" + urllib.parse.quote(query)
+    with urllib.request.urlopen(_search_request(url), timeout=15) as response:
+        page = response.read(400000).decode("utf-8", errors="ignore")
+    return _extract_html_results(page, r'<li[^>]+class="[^"]*(?:res-list|result)[^"]*"[^>]*>.*?</li>')
+
+
+def _run_china_html_search(query: str, logger: logging.Logger) -> list[dict[str, str]]:
+    for provider in (_run_baidu_html_search, _run_so360_html_search):
+        try:
+            results = provider(query, logger)
+        except Exception as exc:
+            logger.warning("China search provider failed: %s", exc)
+            continue
+        if results:
+            return results
+    return []
+
+
+def _query_prefers_china_search(query: str, args: dict[str, Any]) -> bool:
+    region = str(args.get("region") or args.get("locale") or args.get("search_region") or "").lower()
+    if region in {"cn", "zh", "zh-cn", "china", "中国", "国内"}:
+        return True
+    if re.search(r"[\u4e00-\u9fff]", query):
+        return True
+    china_terms = ("china", "chinese", "cn", "baidu", "360", "nanjing", "beijing", "shanghai", "guangzhou", "shenzhen")
+    lowered = query.lower()
+    return any(term in lowered for term in china_terms)
+
+
 async def _web_search(args: dict[str, Any], logger: logging.Logger) -> str:
     query = str(args.get("query") or "").strip()
     if not query:
         return json.dumps({"error": "联网搜索关键词不能为空。"}, ensure_ascii=False)
     try:
-        results = await asyncio.wait_for(asyncio.to_thread(_run_duckduckgo_search, query, logger), timeout=20.0)
+        from core.hermes_tool_adapter import execute_hermes_tool, hermes_tool_available
+
+        hermes_ok, _ = hermes_tool_available("web_search")
+        if hermes_ok:
+            return await asyncio.wait_for(
+                asyncio.to_thread(execute_hermes_tool, "web_search", args, {}),
+                timeout=30.0,
+            )
+    except Exception as exc:
+        logger.warning("Hermes web_search unavailable, falling back to OpsCore search: %s", exc)
+    try:
+        results = []
+        if _query_prefers_china_search(query, args):
+            results = await asyncio.wait_for(asyncio.to_thread(_run_china_html_search, query, logger), timeout=20.0)
+        if not results:
+            results = await asyncio.wait_for(asyncio.to_thread(_run_duckduckgo_search, query, logger), timeout=20.0)
         if not results:
             results = await asyncio.wait_for(asyncio.to_thread(_run_bing_html_search, query, logger), timeout=20.0)
         return json.dumps({"status": "SUCCESS", "results": results}, ensure_ascii=False)

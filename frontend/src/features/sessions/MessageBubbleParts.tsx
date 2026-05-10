@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useStore } from '@/store'
 import type { ChatMessage, ChatMessageAttachment, MemoryReference } from '@/types'
 import { formatBytes } from './format'
@@ -6,6 +6,8 @@ import { renderMarkdown } from './markdown'
 
 type FeedbackRating = 'up' | 'down'
 type FeedbackDialogState = { rating: FeedbackRating; note: string } | null
+const LONG_ASSISTANT_CONTENT_CHARS = 28_000
+const ASSISTANT_PREVIEW_CHARS = 14_000
 
 function formatMessageTime(timestamp: number) {
   return new Date(timestamp).toLocaleString('zh-CN', {
@@ -57,11 +59,13 @@ export function SystemMessageBubble({ content }: { content: string }) {
 }
 
 export function AssistantReportBubble({
+  isPending = false,
   message,
   onEdit,
   onDelete,
   onFeedback,
 }: {
+  isPending?: boolean
   message: ChatMessage
   onEdit?: (message: ChatMessage) => void
   onDelete?: (message: ChatMessage) => void
@@ -75,6 +79,12 @@ export function AssistantReportBubble({
   const ownMessageId = String(message.memoryId || message._memory_id || message.id || '')
   const feedbackNote = message.feedback?.note?.trim()
   const [feedbackDialog, setFeedbackDialog] = useState<FeedbackDialogState>(null)
+  const [showFullContent, setShowFullContent] = useState(false)
+  const shouldFoldContent = !isPending && message.content.length > LONG_ASSISTANT_CONTENT_CHARS
+  const displayedContent = shouldFoldContent && !showFullContent
+    ? `${message.content.slice(0, ASSISTANT_PREVIEW_CHARS)}\n\n...已折叠 ${message.content.length - ASSISTANT_PREVIEW_CHARS} 个字符，点击下方按钮展开完整输出。`
+    : message.content
+  const renderedContent = useMemo(() => renderMarkdown(displayedContent), [displayedContent])
   const openFeedbackDialog = (rating: FeedbackRating) => {
     setFeedbackDialog({ rating, note: feedbackNote || '' })
   }
@@ -206,8 +216,21 @@ export function AssistantReportBubble({
       <div
         className="markdown-body ai-report-body w-full px-6 py-5 text-[15px] leading-7 text-ops-text"
         onClick={handleCodeCopy}
-        dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
-      />
+      >
+        <div dangerouslySetInnerHTML={{ __html: renderedContent }} />
+        {shouldFoldContent && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              setShowFullContent((current) => !current)
+            }}
+            className="mt-4 rounded-lg border border-ops-accent/35 bg-ops-accent/10 px-3 py-1.5 text-xs font-semibold text-ops-accent transition-colors hover:bg-ops-accent/16"
+          >
+            {showFullContent ? '收起超长输出' : '展开完整输出'}
+          </button>
+        )}
+      </div>
     </article>
     <FeedbackNoteDialog
       state={feedbackDialog}

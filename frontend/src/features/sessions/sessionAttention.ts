@@ -1,12 +1,15 @@
 import type { Session } from '@/types'
 
+const SESSION_ATTENTION_SCAN_LIMIT = 120
+
 export type SessionAttention = {
   type: 'approval' | 'input' | 'none'
   label: string
 }
 
 export function sessionAttention(session: Session): SessionAttention {
-  for (let index = session.messages.length - 1; index >= 0; index -= 1) {
+  const minIndex = Math.max(0, session.messages.length - SESSION_ATTENTION_SCAN_LIMIT)
+  for (let index = session.messages.length - 1; index >= minIndex; index -= 1) {
     const message = session.messages[index]
     if (message.toolApproval && !message.toolApproval.resolved) {
       return { type: 'approval', label: '待审批' }

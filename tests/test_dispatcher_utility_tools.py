@@ -1,9 +1,17 @@
 import asyncio
 import json
+import logging
 import unittest
 from unittest.mock import patch
 
-from core.dispatcher_utility_tools import execute_utility_tool, filter_assets_by_tags, _run_bing_html_search
+from core.dispatcher_utility_tools import (
+    _query_prefers_china_search,
+    _run_baidu_html_search,
+    _run_bing_html_search,
+    _run_so360_html_search,
+    execute_utility_tool,
+    filter_assets_by_tags,
+)
 
 
 class DispatcherUtilityToolsTest(unittest.TestCase):
@@ -84,6 +92,22 @@ class DispatcherUtilityToolsTest(unittest.TestCase):
         self.assertEqual(payload["status"], "SUCCESS")
         self.assertEqual(payload["results"][0]["title"], "Python")
 
+    def test_web_search_prefers_china_providers_for_chinese_queries(self):
+        with (
+            patch(
+                "core.dispatcher_utility_tools._run_china_html_search",
+                return_value=[{"title": "南京天气", "href": "https://weather.cma.cn", "body": "中央气象台"}],
+            ) as china_search,
+            patch("core.dispatcher_utility_tools._run_duckduckgo_search") as duckduckgo_search,
+        ):
+            result = asyncio.run(execute_utility_tool("web_search", {"query": "南京天气"}))
+
+        payload = json.loads(result)
+        self.assertEqual(payload["status"], "SUCCESS")
+        self.assertEqual(payload["results"][0]["href"], "https://weather.cma.cn")
+        china_search.assert_called_once()
+        duckduckgo_search.assert_not_called()
+
     def test_web_search_falls_back_to_bing_html_when_duckduckgo_is_empty(self):
         with (
             patch("core.dispatcher_utility_tools._run_duckduckgo_search", return_value=[]),
@@ -117,6 +141,53 @@ class DispatcherUtilityToolsTest(unittest.TestCase):
 
         self.assertEqual(results[0]["title"], "Welcome to Python.org")
         self.assertEqual(results[0]["href"], "https://www.python.org/")
+
+    def test_baidu_html_search_parser_extracts_results(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, _limit):
+                return (
+                    '<div class="result c-container"><h3><a href="https://weather.cma.cn/">'
+                    "中国天气</a></h3><div class=\"c-abstract\">中央气象台数据。</div></div></div>"
+                ).encode("utf-8")
+
+        with patch("urllib.request.urlopen", return_value=FakeResponse()):
+            results = _run_baidu_html_search("南京天气", logger=logging.getLogger("test"))
+
+        self.assertEqual(results[0]["title"], "中国天气")
+        self.assertEqual(results[0]["href"], "https://weather.cma.cn/")
+        self.assertIn("中央气象台", results[0]["body"])
+
+    def test_so360_html_search_parser_extracts_results(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, _limit):
+                return (
+                    '<li class="res-list"><h3><a href="https://www.qweather.com/">'
+                    "和风天气</a></h3><p>天气预报与气象服务。</p></li>"
+                ).encode("utf-8")
+
+        with patch("urllib.request.urlopen", return_value=FakeResponse()):
+            results = _run_so360_html_search("南京天气", logger=logging.getLogger("test"))
+
+        self.assertEqual(results[0]["title"], "和风天气")
+        self.assertEqual(results[0]["href"], "https://www.qweather.com/")
+
+    def test_query_prefers_china_search_for_cn_context(self):
+        self.assertTrue(_query_prefers_china_search("南京天气", {}))
+        self.assertTrue(_query_prefers_china_search("nanjing weather", {}))
+        self.assertTrue(_query_prefers_china_search("Oracle RAC 故障", {"region": "cn"}))
+        self.assertFalse(_query_prefers_china_search("python documentation", {}))
 
 
 if __name__ == "__main__":

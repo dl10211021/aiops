@@ -59,6 +59,9 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
     def tearDown(self):
         for path in (Path.cwd() / "tests").glob("tmp_protocol_verification_*"):
             shutil.rmtree(path, ignore_errors=True)
+        from core.protocol_verification_service import invalidate_protocol_verification_overview_cache
+
+        invalidate_protocol_verification_overview_cache()
 
     def _run_store_path(self, name: str) -> Path:
         root = Path.cwd() / "tests" / f"tmp_protocol_verification_{name}"
@@ -69,6 +72,7 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
         paths = {route.path for route in routes.router.routes}
 
         self.assertIn("/verification/protocols", paths)
+        self.assertIn("/verification/protocols/status", paths)
         self.assertIn("/assets/{asset_id}/verification", paths)
         self.assertIn("/assets/{asset_id}/verify", paths)
         self.assertIn("/assets/{asset_id}/verification/runs", paths)
@@ -113,6 +117,47 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
         dumped = json.dumps(response.data, ensure_ascii=False)
         self.assertNotIn("managed-secret", dumped)
         self.assertNotIn("secret-key", dumped)
+
+    def test_protocol_verification_overview_reuses_short_lived_cache(self):
+        from core import memory
+        from core import protocol_verification_service
+
+        class CountingMemoryDB(FakeMemoryDB):
+            def __init__(self):
+                self.calls = 0
+
+            def get_all_assets(self):
+                self.calls += 1
+                return super().get_all_assets()
+
+        db = CountingMemoryDB()
+        protocol_verification_service.invalidate_protocol_verification_overview_cache()
+        with patch.object(memory, "memory_db", db):
+            first = protocol_verification_service.build_protocol_verification_overview()
+            second = protocol_verification_service.build_protocol_verification_overview()
+            protocol_verification_service.invalidate_protocol_verification_overview_cache()
+            third = protocol_verification_service.build_protocol_verification_overview()
+
+        self.assertEqual(first["summary"]["asset_total"], 2)
+        self.assertIs(first, second)
+        self.assertEqual(third["summary"]["asset_total"], 2)
+        self.assertEqual(db.calls, 2)
+
+    def test_protocol_verification_status_overview_is_lightweight(self):
+        from core import memory
+
+        with patch.object(memory, "memory_db", FakeMemoryDB()):
+            response = asyncio.run(protocol_verification_routes.get_protocol_verification_status_overview())
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data["summary"]["asset_total"], 2)
+        row = response.data["matrix"][0]
+        self.assertEqual(set(row), {"asset", "coverage", "status"})
+        self.assertEqual(set(row["asset"]), {"id"})
+        dumped = json.dumps(response.data, ensure_ascii=False)
+        self.assertNotIn("active_tool_details", dumped)
+        self.assertNotIn("supported_protocols", dumped)
+        self.assertNotIn("managed-secret", dumped)
 
     def test_asset_verify_executes_readonly_steps_and_persists_history(self):
         from core import memory

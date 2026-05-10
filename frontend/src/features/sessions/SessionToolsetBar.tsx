@@ -13,10 +13,10 @@ interface SessionToolsetBarProps {
   session: Session
   availableModels: ModelGroup[]
   modelName: string
-  orchestrationMode: 'single' | 'split'
+  orchestrationMode: 'single' | 'split' | 'fast'
   thinkingMode: string
   onModelChange: (value: string) => void
-  onOrchestrationModeChange: (mode: 'single' | 'split') => void
+  onOrchestrationModeChange: (mode: 'single' | 'split' | 'fast') => void
   onThinkingModeChange: (value: string) => void
 }
 

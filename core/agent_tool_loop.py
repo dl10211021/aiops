@@ -58,8 +58,17 @@ async def process_chat_tool_calls(
             memory_store.append_message(session_id, tool_msg)
             continue
 
-        if func_name == "request_user_interaction":
-            payload = _build_interaction_payload(tc_id, func_args)
+        if func_name in {"request_user_interaction", "clarify"}:
+            interaction_args = func_args
+            if func_name == "clarify":
+                choices = func_args.get("choices")
+                interaction_args = {
+                    "prompt": func_args.get("question") or "请补充信息",
+                    "input_type": "choice" if isinstance(choices, list) and choices else "text",
+                    "options": choices or [],
+                    "timeout_seconds": func_args.get("timeout_seconds") or 300,
+                }
+            payload = _build_interaction_payload(tc_id, interaction_args)
             future = asyncio.Future()
             dispatcher.pending_interactions[tc_id] = {
                 "future": future,
@@ -205,6 +214,7 @@ async def process_chat_tool_calls(
                 "type": "tool_start",
                 "id": tc_id,
                 "tool": func_name,
+                "args": display_cmd,
                 "cmd": display_cmd,
             }
         )

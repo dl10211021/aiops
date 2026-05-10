@@ -12,6 +12,24 @@ def truthy(value) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def oracle_thick_mode_default_enabled() -> bool:
+    env_value = os.getenv("OPSCORE_ORACLE_THICK_MODE")
+    if env_value is not None and str(env_value).strip():
+        return truthy(env_value)
+    if truthy(os.getenv("OPSCORE_ORACLE_THIN_MODE")) or truthy(
+        os.getenv("OPSCORE_ORACLE_FORCE_THIN")
+    ):
+        return False
+    return True
+
+
+def oracle_client_mode_flags() -> dict:
+    return {
+        "thick_mode_env_enabled": truthy(os.getenv("OPSCORE_ORACLE_THICK_MODE")),
+        "thick_mode_default_enabled": oracle_thick_mode_default_enabled(),
+    }
+
+
 def valid_oracle_client_dir(path: str | os.PathLike | None) -> Path | None:
     if not path:
         return None
@@ -62,7 +80,7 @@ def discover_oracle_client_lib_dir(extra_args: dict | None = None) -> dict:
             "detected": True,
             "lib_dir": str(explicit_path),
             "source": "explicit",
-            "thick_mode_env_enabled": truthy(os.getenv("OPSCORE_ORACLE_THICK_MODE")),
+            **oracle_client_mode_flags(),
         }
 
     for root in oracle_client_search_roots():
@@ -88,12 +106,12 @@ def discover_oracle_client_lib_dir(extra_args: dict | None = None) -> dict:
                 "detected": True,
                 "lib_dir": str(valid[0]),
                 "source": "auto",
-                "thick_mode_env_enabled": truthy(os.getenv("OPSCORE_ORACLE_THICK_MODE")),
+                **oracle_client_mode_flags(),
             }
 
     return {
         "detected": False,
         "lib_dir": "",
         "source": "none",
-        "thick_mode_env_enabled": truthy(os.getenv("OPSCORE_ORACLE_THICK_MODE")),
+        **oracle_client_mode_flags(),
     }
