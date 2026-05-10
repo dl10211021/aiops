@@ -145,7 +145,7 @@ def prepare_tool_call(tool_call: dict) -> PreparedToolCall:
         tool_args = {}
         parse_error = str(e)
 
-    display_cmd = redact_text(str(tool_args.get("command", str(tool_args))))
+    display_cmd = redact_text(_display_tool_arguments(tool_args))
     if parse_error:
         display_cmd = "JSON解析失败: " + parse_error
 
@@ -156,6 +156,28 @@ def prepare_tool_call(tool_call: dict) -> PreparedToolCall:
         parse_error=parse_error,
         display_cmd=display_cmd,
     )
+
+
+def _display_tool_arguments(tool_args: dict) -> str:
+    """Return the operation the user cares about for trace display."""
+    command = tool_args.get("command")
+    if isinstance(command, str) and command.strip():
+        return command.strip()
+
+    sql = tool_args.get("sql")
+    if isinstance(sql, str) and sql.strip():
+        return sql.strip()
+
+    method = tool_args.get("method")
+    path = tool_args.get("path") or tool_args.get("url") or tool_args.get("endpoint")
+    if isinstance(method, str) and isinstance(path, str) and method.strip() and path.strip():
+        return f"{method.strip().upper()} {path.strip()}"
+
+    action = tool_args.get("action") or tool_args.get("operation")
+    if isinstance(action, str) and action.strip():
+        return action.strip()
+
+    return json.dumps(tool_args, ensure_ascii=False, default=str)
 
 
 def invalid_tool_arguments_result(parse_error: str) -> str:

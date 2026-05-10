@@ -11,6 +11,7 @@ import {
   extractPrimaryAction,
   isPolicyBlockedResult,
   isToolErrorResult,
+  traceExecutionText,
 } from './traceUtils'
 
 interface ToolTraceListProps {
@@ -44,6 +45,7 @@ function ToolTraceCard({
   const primaryAction = extractPrimaryAction(parsedResult)
   const isPolicyBlocked = isPolicyBlockedResult(parsedResult)
   const isToolError = !isPolicyBlocked && isToolErrorResult(parsedResult)
+  const executionText = traceExecutionText(item)
   const elapsed = item.startedAt && item.completedAt
     ? `${Math.max(0, ((item.completedAt - item.startedAt) / 1000)).toFixed(1)}s`
     : item.startedAt
@@ -62,11 +64,11 @@ function ToolTraceCard({
         <span title={item.tool} className="font-semibold text-ops-text">{toolLabel(item.tool)}</span>
         {elapsed && <span className="ml-auto font-mono text-[10px] text-ops-overlay">{elapsed}</span>}
       </div>
-      {item.args && (
+      {executionText && (
         <div className="border-t border-ops-surface0/80 px-3 py-2">
-          <div className="mb-1 text-[11px] text-ops-overlay">参数</div>
+          <div className="mb-1 text-[11px] text-ops-overlay">执行内容</div>
           <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-ops-subtext">
-            {item.args.substring(0, 600)}
+            {executionText.substring(0, 600)}
           </pre>
         </div>
       )}

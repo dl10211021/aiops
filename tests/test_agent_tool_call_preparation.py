@@ -50,6 +50,39 @@ class AgentToolCallPreparationTests(unittest.TestCase):
         self.assertEqual(prepared.parse_error, "bad json")
         self.assertEqual(prepared.display_cmd, "JSON解析失败: bad json")
 
+    def test_prepare_tool_call_displays_sql_for_database_trace(self):
+        prepared = prepare_tool_call(
+            {
+                "id": "call-db",
+                "function": {
+                    "name": "db_execute_query",
+                    "arguments": json.dumps(
+                        {"sql": "select tablespace_name from dba_tablespaces"}
+                    ),
+                },
+            }
+        )
+
+        self.assertEqual(
+            prepared.display_cmd,
+            "select tablespace_name from dba_tablespaces",
+        )
+
+    def test_prepare_tool_call_displays_http_method_and_path_for_api_trace(self):
+        prepared = prepare_tool_call(
+            {
+                "id": "call-api",
+                "function": {
+                    "name": "network_api_request",
+                    "arguments": json.dumps(
+                        {"method": "get", "path": "/api/v1/system/status"}
+                    ),
+                },
+            }
+        )
+
+        self.assertEqual(prepared.display_cmd, "GET /api/v1/system/status")
+
     def test_invalid_tool_arguments_result_preserves_existing_error_contract(self):
         result = json.loads(invalid_tool_arguments_result("bad json"))
 

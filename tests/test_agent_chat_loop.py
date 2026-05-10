@@ -562,6 +562,107 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(seen[1]["tool_choice"], "auto")
         self.assertEqual(kwargs["messages"][-1]["exec_trace"][0]["tool"], "db_execute_query")
 
+    async def test_current_network_api_asset_request_forces_native_tool_first(self):
+        turn = {"count": 0}
+        seen = []
+        memory_store = TraceMemoryStore()
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "network_api_request",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "web_search",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+        ]
+
+        async def streamer(**kwargs):
+            turn["count"] += 1
+            seen.append(
+                {
+                    "tool_choice": kwargs.get("tool_choice"),
+                    "tools": [tool["function"]["name"] for tool in kwargs.get("tools") or []],
+                    "last_message": kwargs["messages"][-1]["content"],
+                }
+            )
+            if turn["count"] == 1:
+                kwargs["state"].assistant_content = ""
+                kwargs["state"].tool_calls = [
+                    {
+                        "id": "call-fw-api",
+                        "type": "function",
+                        "function": {
+                            "name": "network_api_request",
+                            "arguments": '{"method":"get","endpoint":"/api/v1/system/status"}',
+                        },
+                    }
+                ]
+                return
+            kwargs["state"].assistant_content = "防火墙 API 状态正常"
+            if False:
+                yield "unused"
+
+        async def tool_processor(**kwargs):
+            kwargs["trace_collector"](
+                {
+                    "type": "tool_start",
+                    "tool": "network_api_request",
+                    "args": "GET /api/v1/system/status",
+                }
+            )
+            kwargs["trace_collector"](
+                {
+                    "type": "tool_end",
+                    "tool": "network_api_request",
+                    "result": '{"success": true, "status": "OK"}',
+                    "status": "done",
+                }
+            )
+            yield "tool-event"
+
+        with patch("core.agent_chat_loop.assistant_task_enabled", return_value=False):
+            events, kwargs, _memory_store, _cancel_flags, _scheduler_calls = (
+                await collect_chat_loop_events(
+                    memory_store=memory_store,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": "请通过当前资产防火墙 API 检查运行状态。",
+                        }
+                    ],
+                    context={
+                        "session_id": "sid-fw-api",
+                        "asset_type": "firewall",
+                        "protocol": "http_api",
+                        "host": "fw.local",
+                        "port": 443,
+                        "memory_scope_ids": ["sid-fw-api"],
+                    },
+                    tools=tools,
+                    assistant_streamer=streamer,
+                    tool_call_processor=tool_processor,
+                    max_steps_resolver=lambda _mode: 2,
+                )
+            )
+
+        self.assertIn(
+            sse_event({"type": "status", "content": "🧰 正在强制调用当前会话原生工具采集证据..."}),
+            events,
+        )
+        self.assertEqual(seen[0]["tool_choice"], "required")
+        self.assertEqual(seen[0]["tools"], ["network_api_request"])
+        self.assertIn("必须先调用当前会话原生协议工具", seen[0]["last_message"])
+        final_trace = kwargs["messages"][-1]["exec_trace"][0]
+        self.assertEqual(final_trace["tool"], "network_api_request")
+        self.assertEqual(final_trace["args"], "GET /api/v1/system/status")
+
     async def test_forced_native_tool_request_discards_direct_answer_and_retries(self):
         turn = {"count": 0}
         memory_store = TraceMemoryStore()
