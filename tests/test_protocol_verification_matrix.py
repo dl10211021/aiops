@@ -380,6 +380,14 @@ class TestProtocolVerificationMatrix(unittest.TestCase):
 
         self.assertGreaterEqual(len(catalog), 170)
         self.assertTrue(all(item.get("access_protocols") for item in catalog))
+        duplicate_protocols = []
+        for item in catalog:
+            protocols = [entry.get("protocol") for entry in item.get("access_protocols") or []]
+            repeated = sorted({protocol for protocol in protocols if protocols.count(protocol) > 1})
+            if repeated:
+                duplicate_protocols.append((item["id"], repeated))
+
+        self.assertEqual(duplicate_protocols, [])
 
     def test_oracle_catalog_uses_native_operation_protocol(self):
         from core.asset_protocols import get_asset_definition

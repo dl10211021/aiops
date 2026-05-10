@@ -424,7 +424,7 @@ def build_access_protocols(item: dict[str, Any]) -> list[dict[str, Any]]:
             description="平台类资产默认通过产品 API 或专用协议执行查询和运维动作。",
         ))
 
-    if category in {"service", "discovery"} and default_protocol:
+    if category == "service" and default_protocol:
         _add(entries, _entry(
             default_protocol,
             purpose=PROBE_PURPOSE,
