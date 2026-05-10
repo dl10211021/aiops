@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,6 +15,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 INSPECTION_RUN_STORE_PATH = ROOT_DIR / "inspection_runs.json"
 _LOCK = threading.Lock()
 _RUN_STORE_CACHE: tuple[str, float, int, list[dict[str, Any]]] | None = None
+_SAVE_REPLACE_ATTEMPTS = 5
+_SAVE_REPLACE_RETRY_DELAY_SECONDS = 0.05
 SECRET_PATTERNS = [
     re.compile(r"managed-secret", re.IGNORECASE),
     re.compile(r"secret-key", re.IGNORECASE),
@@ -68,11 +71,31 @@ def _load() -> list[dict[str, Any]]:
 def _save(items: list[dict[str, Any]]) -> None:
     global _RUN_STORE_CACHE
     INSPECTION_RUN_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = INSPECTION_RUN_STORE_PATH.with_suffix(".tmp")
-    with tmp_path.open("w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
-    tmp_path.replace(INSPECTION_RUN_STORE_PATH)
+    tmp_path = INSPECTION_RUN_STORE_PATH.with_name(
+        f"{INSPECTION_RUN_STORE_PATH.name}.{uuid.uuid4().hex}.tmp"
+    )
+    try:
+        with tmp_path.open("w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+        _replace_store_file(tmp_path)
+    finally:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except OSError:
+            pass
     _RUN_STORE_CACHE = None
+
+
+def _replace_store_file(tmp_path: Path) -> None:
+    for attempt in range(_SAVE_REPLACE_ATTEMPTS):
+        try:
+            tmp_path.replace(INSPECTION_RUN_STORE_PATH)
+            return
+        except PermissionError:
+            if attempt == _SAVE_REPLACE_ATTEMPTS - 1:
+                raise
+            time.sleep(_SAVE_REPLACE_RETRY_DELAY_SECONDS * (attempt + 1))
 
 
 def _redact(value: Any) -> Any:

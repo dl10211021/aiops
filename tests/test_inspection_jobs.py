@@ -397,6 +397,37 @@ class TestInspectionJobs(unittest.TestCase):
         self.assertEqual(summary["success_rate"], 50.0)
         self.assertEqual(summary["recent_failures"][0]["job_id"], "job-fail")
 
+    def test_inspection_run_store_retries_windows_replace_permission_error(self):
+        from core import inspection_results
+
+        store_path = self._run_store_path("replace_retry")
+        original_replace = Path.replace
+        replace_failures = []
+
+        def flaky_replace(path: Path, target: Path):
+            if target == store_path and not replace_failures:
+                replace_failures.append(str(path))
+                raise PermissionError("locked")
+            return original_replace(path, target)
+
+        with (
+            patch.object(inspection_results, "INSPECTION_RUN_STORE_PATH", store_path),
+            patch.object(inspection_results, "_SAVE_REPLACE_RETRY_DELAY_SECONDS", 0),
+            patch.object(Path, "replace", flaky_replace),
+        ):
+            run = inspection_results.record_run(
+                job_id="job-retry",
+                status="completed",
+                target_scope="asset",
+                scope_value=None,
+                message="ok",
+                targets=[{"host": "10.0.0.10", "status": "success"}],
+            )
+
+        self.assertEqual(run["job_id"], "job-retry")
+        self.assertEqual(len(replace_failures), 1)
+        self.assertTrue(store_path.exists())
+
     def test_inspection_report_detail_export_and_asset_filter_are_secret_free(self):
         from core import inspection_results
 
