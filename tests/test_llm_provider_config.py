@@ -123,6 +123,40 @@ class TestLLMProviderConfig(unittest.TestCase):
         names = [model["name"] for model in result[0]["models"]]
         self.assertEqual(names, ["qwen3.6-35b-a3b-awq"])
 
+    def test_models_without_refresh_do_not_fetch_remote_when_manual_models_missing(self):
+        from core import model_catalog
+
+        class UnexpectedOpenAI:
+            def __init__(self, **kwargs):
+                raise AssertionError("model catalog should not call remote discovery")
+
+        providers = [
+            {
+                "id": "gpu",
+                "name": "GPUStack",
+                "protocol": "openai",
+                "base_url": "http://192.168.127.8/v1",
+                "api_key": "secret",
+                "models": "",
+            }
+        ]
+
+        with (
+            patch("core.llm_factory.get_all_providers", return_value=providers),
+            patch("openai.AsyncOpenAI", UnexpectedOpenAI),
+        ):
+            result = asyncio.run(
+                model_catalog.get_available_models_for_provider(
+                    provider_id="gpu",
+                    refresh=False,
+                )
+            )
+
+        self.assertEqual(
+            result[0]["models"],
+            [{"id": "gpu|none", "name": "未获取到模型或配置错误"}],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

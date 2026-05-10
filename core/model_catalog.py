@@ -6,6 +6,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+MODEL_FETCH_TIMEOUT_SECONDS = 12.0
+
 
 async def get_available_models() -> list:
     return await get_available_models_for_provider()
@@ -36,14 +38,14 @@ async def get_available_models_for_provider(
                 if not refresh
             ]
 
-            if (refresh or not models_list) and provider.get("protocol") == "openai":
+            if refresh and provider.get("protocol") == "openai":
                 try:
                     api_key = provider.get("api_key") or "dummy"
                     base_url = provider.get("base_url") or "https://api.openai.com/v1"
                     temp_client = AsyncOpenAI(
                         api_key=api_key,
                         base_url=base_url,
-                        timeout=30.0,
+                        timeout=MODEL_FETCH_TIMEOUT_SECONDS,
                     )
                     response = await temp_client.models.list()
                     models_list = [
