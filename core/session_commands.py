@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import time
 from typing import Any
 
 from core import memory as memory_module
@@ -15,8 +17,38 @@ class SessionCommandError(Exception):
         self.detail = detail
 
 
+CUSTOM_COMMAND_CACHE_TTL_SECONDS = 5 * 60
+_custom_commands_cache: tuple[float, list[dict[str, Any]]] | None = None
+
+
 def _resolve_memory_db(memory_db: Any | None) -> Any:
     return memory_db if memory_db is not None else memory_module.memory_db
+
+
+def clear_custom_slash_command_cache() -> None:
+    global _custom_commands_cache
+    _custom_commands_cache = None
+
+
+def _clone_commands(commands: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return copy.deepcopy(commands)
+
+
+def _list_custom_slash_commands_cached(memory_db: Any | None = None) -> list[dict[str, Any]]:
+    global _custom_commands_cache
+    if memory_db is not None:
+        return list_custom_slash_commands(memory_db)
+
+    now = time.monotonic()
+    if (
+        _custom_commands_cache is not None
+        and now - _custom_commands_cache[0] < CUSTOM_COMMAND_CACHE_TTL_SECONDS
+    ):
+        return _clone_commands(_custom_commands_cache[1])
+
+    commands = list_custom_slash_commands(None)
+    _custom_commands_cache = (now, _clone_commands(commands))
+    return _clone_commands(commands)
 
 
 def build_session_commands_response(
@@ -53,7 +85,7 @@ async def build_session_commands_payload_for_session(
 async def list_custom_slash_command_records(
     memory_db: Any | None = None,
 ) -> list[dict[str, Any]]:
-    return await asyncio.to_thread(list_custom_slash_commands, memory_db)
+    return await asyncio.to_thread(_list_custom_slash_commands_cached, memory_db)
 
 
 async def save_custom_slash_command_record(
@@ -83,10 +115,15 @@ def save_custom_slash_command(
     command = dict(payload)
     if command_id is not None:
         command["id"] = command_id
-    return _resolve_memory_db(memory_db).save_slash_command(command)
+    saved = _resolve_memory_db(memory_db).save_slash_command(command)
+    if memory_db is None:
+        clear_custom_slash_command_cache()
+    return saved
 
 
 def remove_custom_slash_command(memory_db: Any | None, command_id: str) -> None:
     deleted = _resolve_memory_db(memory_db).delete_slash_command(command_id)
     if not deleted:
         raise SessionCommandError(404, "快捷命令不存在")
+    if memory_db is None:
+        clear_custom_slash_command_cache()

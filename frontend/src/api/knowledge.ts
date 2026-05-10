@@ -8,7 +8,7 @@ export async function listKnowledgeDocuments(params?: {
   page?: number
   perPage?: number
   sort?: string
-}) {
+}, options?: RequestInit) {
   const search = new URLSearchParams()
   if (params?.query) search.set('q', params.query)
   if (params?.vectorStatus) search.set('vector_status', params.vectorStatus)
@@ -22,7 +22,7 @@ export async function listKnowledgeDocuments(params?: {
     summary?: KnowledgeListSummary
     pagination?: KnowledgeListPagination
     vector_store?: KnowledgeVectorStoreStatus
-  }>(`/knowledge/list${suffix}`)
+  }>(`/knowledge/list${suffix}`, options)
 }
 
 export async function readKnowledgeDocument(filename: string) {
@@ -36,16 +36,16 @@ export async function reindexKnowledgeDocument(filename: string) {
   })
 }
 
-export async function listKnowledgeVaultQueue() {
-  return request<{ items: KnowledgeCompileQueueItem[] }>('/knowledge/vault/queue')
+export async function listKnowledgeVaultQueue(options?: RequestInit) {
+  return request<{ items: KnowledgeCompileQueueItem[] }>('/knowledge/vault/queue', options)
 }
 
-export async function listKnowledgeVaultCandidates() {
-  return request<{ items: KnowledgeCompileQueueItem[] }>('/knowledge/vault/candidates')
+export async function listKnowledgeVaultCandidates(options?: RequestInit) {
+  return request<{ items: KnowledgeCompileQueueItem[] }>('/knowledge/vault/candidates', options)
 }
 
-export async function listKnowledgeVaultArticles() {
-  return request<{ items: KnowledgeCompileQueueItem[] }>('/knowledge/vault/articles')
+export async function listKnowledgeVaultArticles(options?: RequestInit) {
+  return request<{ items: KnowledgeCompileQueueItem[] }>('/knowledge/vault/articles', options)
 }
 
 export async function compileKnowledgeVaultSource(sourceSessionId: string, useAi = true) {
@@ -135,12 +135,12 @@ export async function deleteKnowledgeDocument(filename: string) {
   return request(`/knowledge/${encodeURIComponent(filename)}`, { method: 'DELETE' })
 }
 
-export async function listMemoryItems() {
-  return request<{ items: MemoryItem[] }>('/knowledge/memory/list')
+export async function listMemoryItems(options?: RequestInit) {
+  return request<{ items: MemoryItem[] }>('/knowledge/memory/list', options)
 }
 
-export async function listMemoryStores() {
-  return request<{ stores: MemoryStoreInfo[] }>('/knowledge/memory/stores')
+export async function listMemoryStores(options?: RequestInit) {
+  return request<{ stores: MemoryStoreInfo[] }>('/knowledge/memory/stores', options)
 }
 
 export async function readMemoryItem(path: string) {
@@ -194,16 +194,16 @@ export async function redactMemoryVersion(versionId: string) {
   })
 }
 
-export async function listMemoryPendingConflicts(limit = 50) {
-  return request<{ items: MemoryPendingConflict[] }>(`/knowledge/memory/pending?limit=${limit}`)
+export async function listMemoryPendingConflicts(limit = 50, options?: RequestInit) {
+  return request<{ items: MemoryPendingConflict[] }>(`/knowledge/memory/pending?limit=${limit}`, options)
 }
 
-export async function listMemoryReviewItems(staleDays = 180, limit = 50) {
-  return request<{ items: MemoryReviewItem[] }>(`/knowledge/memory/review?stale_days=${staleDays}&limit=${limit}`)
+export async function listMemoryReviewItems(staleDays = 180, limit = 50, options?: RequestInit) {
+  return request<{ items: MemoryReviewItem[] }>(`/knowledge/memory/review?stale_days=${staleDays}&limit=${limit}`, options)
 }
 
-export async function getMemoryQuality(staleDays = 180, limit = 8) {
-  return request<{ quality: MemoryQualityReport }>(`/knowledge/memory/quality?stale_days=${staleDays}&limit=${limit}`)
+export async function getMemoryQuality(staleDays = 180, limit = 8, options?: RequestInit) {
+  return request<{ quality: MemoryQualityReport }>(`/knowledge/memory/quality?stale_days=${staleDays}&limit=${limit}`, options)
 }
 
 export async function resolveMemoryPendingConflict(versionId: string, action: 'accept_new' | 'keep_old' | 'merged') {
@@ -224,6 +224,6 @@ export async function exportMemoryStore() {
   return request<{ export: Record<string, unknown> }>('/knowledge/memory/export')
 }
 
-export async function listMemoryVersions(limit = 50) {
-  return request<{ versions: MemoryVersion[] }>(`/knowledge/memory/versions?limit=${limit}`)
+export async function listMemoryVersions(limit = 50, options?: RequestInit) {
+  return request<{ versions: MemoryVersion[] }>(`/knowledge/memory/versions?limit=${limit}`, options)
 }

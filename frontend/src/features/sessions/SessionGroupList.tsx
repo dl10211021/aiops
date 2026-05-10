@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import type { Session } from '@/types'
 import SessionItem from './SessionItem'
 import { DEFAULT_SESSION_GROUP } from './sessionGroups'
 import { summarizeSessions } from './sessionMetrics'
 
-const DEFAULT_GROUP_SESSION_LIMIT = 80
-const GROUP_SESSION_LIMIT_STEP = 80
+const DEFAULT_GROUP_SESSION_LIMIT = 50
+const GROUP_SESSION_LIMIT_STEP = 50
 
 interface SessionGroupListProps {
   collapsedGroups: Set<string>
@@ -25,7 +25,7 @@ interface SessionGroupListProps {
   searching?: boolean
 }
 
-export default function SessionGroupList({
+function SessionGroupList({
   collapsedGroups,
   currentSessionId,
   grouped,
@@ -94,10 +94,8 @@ export default function SessionGroupList({
 
       {groupNames.map((group) => {
         const items = grouped[group] || []
-        const limit = searching
-          ? Math.max(items.length, DEFAULT_GROUP_SESSION_LIMIT)
-          : expandedLimits[group] || DEFAULT_GROUP_SESSION_LIMIT
-        const visibleItems = items.slice(0, limit)
+        const limit = expandedLimits[group] || DEFAULT_GROUP_SESSION_LIMIT
+        const visibleItems = visibleGroupSessions(items, limit, currentSessionId)
         const hiddenCount = Math.max(0, items.length - visibleItems.length)
         const selected = group === selectedGroup
         const isDefaultGroup = group === DEFAULT_SESSION_GROUP
@@ -206,7 +204,7 @@ export default function SessionGroupList({
                         }}
                         className="rounded-lg border border-ops-surface1/70 bg-ops-surface0/55 px-3 py-2 text-xs font-semibold text-ops-subtext transition-colors hover:border-ops-accent/45 hover:text-ops-text"
                       >
-                        还有 {hiddenCount} 个会话，继续显示
+                        还有 {hiddenCount} 个{searching ? '匹配' : ''}会话，继续显示
                       </button>
                     )}
                   </>
@@ -218,6 +216,35 @@ export default function SessionGroupList({
       })}
     </div>
   )
+}
+
+export default memo(SessionGroupList, areSessionGroupListPropsEqual)
+
+function visibleGroupSessions(items: Session[], limit: number, currentSessionId: string | null) {
+  const visibleItems = items.slice(0, limit)
+  if (!currentSessionId || visibleItems.some((session) => session.id === currentSessionId)) {
+    return visibleItems
+  }
+  const activeSession = items.find((session) => session.id === currentSessionId)
+  if (!activeSession) return visibleItems
+  return [activeSession, ...visibleItems.slice(0, Math.max(0, limit - 1))]
+}
+
+function areSessionGroupListPropsEqual(prev: SessionGroupListProps, next: SessionGroupListProps) {
+  return prev.collapsedGroups === next.collapsedGroups
+    && prev.currentSessionId === next.currentSessionId
+    && prev.grouped === next.grouped
+    && prev.groupNames === next.groupNames
+    && prev.selectedGroup === next.selectedGroup
+    && prev.sessionList === next.sessionList
+    && prev.onDisconnect === next.onDisconnect
+    && prev.onEdit === next.onEdit
+    && prev.onDeleteGroup === next.onDeleteGroup
+    && prev.onRenameGroup === next.onRenameGroup
+    && prev.onSelectGroup === next.onSelectGroup
+    && prev.onSelectSession === next.onSelectSession
+    && prev.onToggleGroup === next.onToggleGroup
+    && prev.searching === next.searching
 }
 
 function GroupMetrics({ sessions }: { sessions: Session[] }) {

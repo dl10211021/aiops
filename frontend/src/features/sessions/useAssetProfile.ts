@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
 import { generateSessionProfile, getSessionProfile } from '@/api/client'
+import { isAbortError } from '@/api/http'
 import { useStore } from '@/store'
 import type { AssetProfile } from '@/types'
+
+const SESSION_PROFILE_CACHE_TTL_MS = 5 * 60 * 1000
+const SESSION_PROFILE_FETCH_DELAY_MS = 120
+const sessionProfileCache = new Map<string, { profile: AssetProfile | null; cachedAt: number }>()
 
 export function useAssetProfile(currentSessionId: string | null, modelName: string) {
   const addToast = useStore((state) => state.addToast)
@@ -15,19 +20,30 @@ export function useAssetProfile(currentSessionId: string | null, modelName: stri
     setProfile(null)
     setOpen(false)
     if (!currentSessionId) return
+
+    const cached = sessionProfileCache.get(currentSessionId)
+    if (cached && Date.now() - cached.cachedAt < SESSION_PROFILE_CACHE_TTL_MS) {
+      setProfile(cached.profile)
+      return
+    }
+
+    const controller = new AbortController()
     const timer = window.setTimeout(() => {
       if (useStore.getState().currentView !== 'chat') return
-      getSessionProfile(currentSessionId)
+      getSessionProfile(currentSessionId, { signal: controller.signal })
         .then((res) => {
+          sessionProfileCache.set(currentSessionId, { profile: res.data.profile, cachedAt: Date.now() })
           if (!cancelled) setProfile(res.data.profile)
         })
-        .catch(() => {
+        .catch((error) => {
+          if (isAbortError(error) || controller.signal.aborted) return
           if (!cancelled) setProfile(null)
         })
-    }, 800)
+    }, SESSION_PROFILE_FETCH_DELAY_MS)
     return () => {
       cancelled = true
       window.clearTimeout(timer)
+      controller.abort()
     }
   }, [currentSessionId])
 
@@ -41,6 +57,7 @@ export function useAssetProfile(currentSessionId: string | null, modelName: stri
     setBusySessionId(sessionId)
     try {
       const res = await generateSessionProfile(sessionId, modelName || undefined, true)
+      sessionProfileCache.set(sessionId, { profile: res.data.profile, cachedAt: Date.now() })
       if (useStore.getState().currentSessionId === sessionId) {
         setProfile(res.data.profile)
         setOpen(true)

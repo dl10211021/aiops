@@ -1,8 +1,7 @@
-import { useRef, useEffect, useState } from 'react'
+import { lazy, Suspense, useRef, useEffect, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { useStore } from '@/store'
 import AssetProfilePanel from '@/features/sessions/AssetProfilePanel'
-import AiThinkingChainPanel from '@/features/sessions/AiThinkingChainPanel'
 import SessionToolsetBar from '@/features/sessions/SessionToolsetBar'
 import ChatComposerArea from './ChatComposerArea'
 import ChatEmptyState from './ChatEmptyState'
@@ -34,6 +33,16 @@ const wideRightPanelWidth = 640
 const minRightPanelWidth = 340
 const maxRightPanelWidth = 760
 const orchestrationModeStorageKey = 'opscore_chat_orchestration_mode'
+
+const AiThinkingChainPanel = lazy(() => import('@/features/sessions/AiThinkingChainPanel'))
+
+function IntelPanelFallback() {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center border-t border-ops-surface0/80 px-3 text-xs text-ops-subtext">
+      正在加载情报面板...
+    </div>
+  )
+}
 
 export default function ChatWindow() {
   const currentSessionId = useStore((s) => s.currentSessionId)
@@ -352,6 +361,7 @@ export default function ChatWindow() {
 
           <ChatComposerArea
             attachments={chatAttachments.attachments}
+            draftKey={currentSessionId || 'no-session'}
             fileInputRef={chatAttachments.fileInputRef}
             input={input}
             isDragging={chatAttachments.isDragging}
@@ -495,14 +505,16 @@ export default function ChatWindow() {
                 </div>
               </div>
             ) : (
-              <AiThinkingChainPanel
-                key={rightPanelTab}
-                defaultTab={rightPanelTab === 'memory' ? 'memory' : 'trace'}
-                fixedTab={rightPanelTab === 'memory' ? 'memory' : 'trace'}
-                sessionId={currentSessionId}
-                messages={messages}
-                traceLabel={orchestrationMode === 'fast' ? '执行链路' : '思维链'}
-              />
+              <Suspense fallback={<IntelPanelFallback />}>
+                <AiThinkingChainPanel
+                  key={rightPanelTab}
+                  defaultTab={rightPanelTab === 'memory' ? 'memory' : 'trace'}
+                  fixedTab={rightPanelTab === 'memory' ? 'memory' : 'trace'}
+                  sessionId={currentSessionId}
+                  messages={messages}
+                  traceLabel={orchestrationMode === 'fast' ? '执行链路' : '思维链'}
+                />
+              </Suspense>
             )}
           </div>
         )}

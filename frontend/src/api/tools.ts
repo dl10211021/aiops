@@ -9,9 +9,10 @@ export async function getToolCenterCatalog() {
   return request<ToolCenterCatalog>('/tools/center')
 }
 
-export async function getSessionCommands(sessionId: string) {
+export async function getSessionCommands(sessionId: string, options?: RequestInit) {
   return request<{ commands: SlashCommand[]; builtin_commands: SlashCommand[]; custom_commands: SlashCommand[]; context: Record<string, unknown> }>(
-    `/session/${sessionId}/commands`
+    `/session/${sessionId}/commands`,
+    options,
   )
 }
 

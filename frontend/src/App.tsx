@@ -5,7 +5,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import TopBar from '@/components/layout/TopBar'
 import ToastContainer from '@/components/layout/ToastContainer'
 import { getActiveSessions, pollAllSessions } from '@/api/client'
-import type { ChatMessage } from '@/types'
+import type { ChatMessage, ViewId } from '@/types'
 
 const CHUNK_RELOAD_KEY = 'opscore:chunk-reload-at'
 const CHUNK_RELOAD_COOLDOWN_MS = 15000
@@ -115,7 +115,29 @@ const DynamicSkillsModal = lazyWithChunkRecovery(loadDynamicSkillsModal)
 const SessionActionsModal = lazyWithChunkRecovery(loadSessionActionsModal)
 const SafetyPolicyModal = lazyWithChunkRecovery(loadSafetyPolicyModal)
 
+const ROUTE_PRELOADERS: Partial<Record<ViewId, () => Promise<unknown>>> = {
+  dashboard: loadDashboard,
+  chat: loadChatWindow,
+  observability: loadObservabilityCenter,
+  assets: loadAssetVault,
+  canvas: loadRealtimeCanvas,
+  skills: loadSkillMarket,
+  tools: loadToolCenter,
+  knowledge: loadKnowledgeBase,
+  cron: loadCronManager,
+  alerts: loadAlertCenter,
+  approvals: loadApprovalCenter,
+  config: loadSystemConfigCenter,
+}
+
+function preloadViewChunk(view: ViewId) {
+  void ROUTE_PRELOADERS[view]?.().catch(() => undefined)
+}
+
 const BACKGROUND_ROUTE_PRELOADERS = [
+  loadKnowledgeBase,
+  loadSkillMarket,
+  loadToolCenter,
   loadAssetVault,
   loadSystemConfigCenter,
   loadDashboard,
@@ -202,7 +224,7 @@ export default function App() {
   const appendMessage = useStore((s) => s.appendMessage)
   const currentView = useStore((s) => s.currentView)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const restoreStartedRef = useRef(false)
 
   useEffect(() => {
@@ -258,6 +280,8 @@ export default function App() {
   }, [currentView])
 
   useEffect(() => {
+    if (currentView === 'chat') return
+
     let cancelled = false
     const timeoutIds = new Set<ReturnType<typeof window.setTimeout>>()
     const idleIds = new Set<number>()
@@ -298,11 +322,13 @@ export default function App() {
       timeoutIds.forEach((id) => window.clearTimeout(id))
       idleIds.forEach((id) => cancelIdle(id))
     }
-  }, [])
+  }, [currentView])
 
   // Heartbeat polling
   useEffect(() => {
-    pollIntervalRef.current = setInterval(async () => {
+    let cancelled = false
+
+    const poll = async () => {
       try {
         const res = await pollAllSessions()
         const updates = res.data.updates || {}
@@ -321,10 +347,17 @@ export default function App() {
           })
         }
       } catch { /* ignore */ }
-    }, 5000)
+
+      if (!cancelled) {
+        pollTimerRef.current = window.setTimeout(() => void poll(), 5000)
+      }
+    }
+
+    pollTimerRef.current = window.setTimeout(() => void poll(), 5000)
 
     return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+      cancelled = true
+      if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current)
     }
   }, [appendMessage])
 
@@ -336,7 +369,7 @@ export default function App() {
       <TopBar />
 
       {/* Left product nav */}
-      <LeftNav />
+      <LeftNav onPreloadView={preloadViewChunk} />
 
       {/* Main product workspace */}
       <main className="min-h-0 min-w-0 overflow-hidden p-2 lg:p-3">

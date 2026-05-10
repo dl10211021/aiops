@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { ChatMessage, ExecTraceItem, SessionMemoryActivity } from '@/types'
+import { isAbortError } from '@/api/http'
 import { getSessionMemoryActivity } from '@/api/sessionHistory'
 import { toolLabel } from '@/utils/assetDisplay'
 import { parseJsonRecord } from './jsonRecords'
@@ -259,12 +260,14 @@ export default function AiThinkingChainPanel({
       return
     }
     let cancelled = false
+    const controller = new AbortController()
     setMemoryLoading(true)
-    getSessionMemoryActivity(sessionId)
+    getSessionMemoryActivity(sessionId, { signal: controller.signal })
       .then((response) => {
         if (!cancelled) setMemoryActivity(response.data.activity)
       })
-      .catch(() => {
+      .catch((error) => {
+        if (isAbortError(error)) return
         if (!cancelled) setMemoryActivity(null)
       })
       .finally(() => {
@@ -272,6 +275,7 @@ export default function AiThinkingChainPanel({
       })
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [sessionId, deferredMessages.length, displayTab])
 

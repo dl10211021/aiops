@@ -72,6 +72,14 @@ export function responseErrorMessage(payload: unknown, fallback: string) {
   )
 }
 
+export function isAbortError(error: unknown) {
+  return (
+    error instanceof DOMException && error.name === 'AbortError'
+  ) || (
+    isRecord(error) && error.name === 'AbortError'
+  )
+}
+
 function classifyErrorMessage(message: string): Pick<ApiErrorInfo, 'code' | 'category'> {
   const text = message.toLowerCase()
   if (
@@ -144,6 +152,7 @@ export async function request<T = Record<string, unknown>>(
       ...options,
     })
   } catch (error) {
+    if (isAbortError(error)) throw error
     throw new OpsApiError({
       message: '连接失败：无法连接 OpsCore 后端服务，请确认服务已启动或网络正常。',
       code: 'backend_unreachable',

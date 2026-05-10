@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ClipboardEvent, KeyboardEvent, RefObject } from 'react'
 
 interface ChatComposerInputProps {
+  draftKey: string
   fileInputRef: RefObject<HTMLInputElement | null>
   textareaRef: RefObject<HTMLTextAreaElement | null>
   input: string
@@ -18,6 +19,7 @@ interface ChatComposerInputProps {
 }
 
 export default function ChatComposerInput({
+  draftKey,
   fileInputRef,
   textareaRef,
   input,
@@ -32,22 +34,76 @@ export default function ChatComposerInput({
   onSend,
   onStop,
 }: ChatComposerInputProps) {
-  const [localInput, setLocalInput] = useState(input)
+  const [hasLocalText, setHasLocalText] = useState(() => Boolean(input.trim()))
   const syncTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
+  const resizeFrameRef = useRef<number | null>(null)
+  const localInputRef = useRef(input)
+  const hasLocalTextRef = useRef(Boolean(input.trim()))
   const lastSyncedInputRef = useRef(input)
+  const lastDraftKeyRef = useRef(draftKey)
 
-  useEffect(() => {
-    if (input === lastSyncedInputRef.current) return
-    lastSyncedInputRef.current = input
-    setLocalInput(input)
-  }, [input])
+  const updateHasLocalText = (value: string) => {
+    const next = Boolean(value.trim())
+    if (hasLocalTextRef.current === next) return
+    hasLocalTextRef.current = next
+    setHasLocalText(next)
+  }
+
+  const resizeTextarea = () => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    const nextHeight = `${Math.min(Math.max(el.scrollHeight, 48), 160)}px`
+    if (el.style.height !== nextHeight) {
+      el.style.height = nextHeight
+    }
+  }
+
+  const scheduleResize = () => {
+    if (resizeFrameRef.current !== null) return
+    resizeFrameRef.current = window.requestAnimationFrame(() => {
+      resizeFrameRef.current = null
+      resizeTextarea()
+    })
+  }
 
   useEffect(() => () => {
     if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
+    if (resizeFrameRef.current !== null) window.cancelAnimationFrame(resizeFrameRef.current)
+  }, [])
+
+  useEffect(() => {
+    const draftKeyChanged = draftKey !== lastDraftKeyRef.current
+    const el = textareaRef.current
+    if (
+      !draftKeyChanged &&
+      input === lastSyncedInputRef.current &&
+      localInputRef.current === input &&
+      (!el || el.value === input)
+    ) {
+      return
+    }
+    if (draftKeyChanged && syncTimerRef.current) {
+      window.clearTimeout(syncTimerRef.current)
+      syncTimerRef.current = null
+    }
+    lastDraftKeyRef.current = draftKey
+    lastSyncedInputRef.current = input
+    localInputRef.current = input
+    if (el && el.value !== input) {
+      el.value = input
+    }
+    updateHasLocalText(input)
+    scheduleResize()
+  }, [draftKey, input, textareaRef])
+
+  useEffect(() => {
+    scheduleResize()
   }, [])
 
   const syncInput = (value: string) => {
     if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
+    localInputRef.current = value
     lastSyncedInputRef.current = value
     onInputChange(value)
   }
@@ -57,14 +113,8 @@ export default function ChatComposerInput({
     syncTimerRef.current = window.setTimeout(() => syncInput(value), 120)
   }
 
-  const canSend = Boolean(localInput.trim()) || hasSendableContent
-
-  useLayoutEffect(() => {
-    const el = textareaRef.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(Math.max(el.scrollHeight, 48), 160)}px`
-  }, [localInput, textareaRef])
+  const currentInput = () => textareaRef.current?.value ?? localInputRef.current
+  const canSend = hasLocalText || hasSendableContent
 
   return (
     <div className="ops-chat-composer-input flex items-end gap-2 rounded-xl border border-ops-surface1/70 bg-ops-dark/35 p-1.5">
@@ -83,10 +133,12 @@ export default function ChatComposerInput({
 
       <textarea
         ref={textareaRef}
-        value={localInput}
+        defaultValue={input}
         onChange={(event) => {
           const nextInput = event.target.value
-          setLocalInput(nextInput)
+          localInputRef.current = nextInput
+          updateHasLocalText(nextInput)
+          scheduleResize()
           scheduleInputSync(nextInput)
           onHistoryReset()
         }}
@@ -113,8 +165,9 @@ export default function ChatComposerInput({
       ) : (
         <button
           onClick={() => {
-            syncInput(localInput)
-            onSend(localInput)
+            const value = currentInput()
+            syncInput(value)
+            onSend(value)
           }}
           disabled={!canSend}
           className="ops-chat-send-button h-12 shrink-0 rounded-lg bg-ops-accent px-5 text-sm font-black text-ops-dark shadow-[0_12px_34px_rgba(40,208,168,0.18)] transition-colors hover:bg-ops-accent/80 disabled:cursor-not-allowed disabled:opacity-40"

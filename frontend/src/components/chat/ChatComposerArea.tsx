@@ -15,6 +15,7 @@ import type { ChatAttachmentPreview } from '@/features/sessions/chatTypes'
 
 interface ChatComposerAreaProps {
   attachments: ChatAttachmentPreview[]
+  draftKey: string
   fileInputRef: RefObject<HTMLInputElement | null>
   input: string
   isDragging: boolean
@@ -50,6 +51,7 @@ interface ChatComposerAreaProps {
 
 export default function ChatComposerArea({
   attachments,
+  draftKey,
   fileInputRef,
   input,
   isDragging,
@@ -166,6 +168,7 @@ export default function ChatComposerArea({
         onChange={(event) => void onFiles(event.target.files)}
       />
       <ChatComposerInput
+        draftKey={draftKey}
         fileInputRef={fileInputRef}
         textareaRef={textareaRef}
         input={input}

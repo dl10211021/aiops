@@ -11,6 +11,7 @@ import { assetTypeKey } from './assetVaultModel'
 import type { AssetVaultGroup } from './assetVaultViewModel'
 
 const ASSET_TABLE_PAGE_SIZE = 50
+const ASSET_GROUP_OVERVIEW_LIMIT = 24
 type AssetTableGroupBy = 'assetGroup' | 'category' | 'type' | 'protocol' | 'none'
 const ASSET_TABLE_GROUP_OPTIONS: Array<{ id: AssetTableGroupBy; label: string }> = [
   { id: 'assetGroup', label: '按资产组' },
@@ -220,6 +221,7 @@ export function AssetTablePanel({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set())
   const [activeAssetGroup, setActiveAssetGroup] = useState<string | null>(null)
+  const [showAllAssetGroups, setShowAllAssetGroups] = useState(false)
   const assetGroupSummaries = useMemo(() => {
     const groups = new Map<string, AssetGroupSummary>()
     assets.forEach((asset) => {
@@ -232,6 +234,18 @@ export function AssetTablePanel({
     })
     return Array.from(groups.values()).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
   }, [assets, matrixByAssetId])
+  const visibleAssetGroupSummaries = useMemo(() => {
+    if (showAllAssetGroups || assetGroupSummaries.length <= ASSET_GROUP_OVERVIEW_LIMIT) {
+      return assetGroupSummaries
+    }
+    const visible = assetGroupSummaries.slice(0, ASSET_GROUP_OVERVIEW_LIMIT)
+    if (activeAssetGroup && !visible.some((group) => group.name === activeAssetGroup)) {
+      const activeGroup = assetGroupSummaries.find((group) => group.name === activeAssetGroup)
+      if (activeGroup) return [...visible, activeGroup]
+    }
+    return visible
+  }, [activeAssetGroup, assetGroupSummaries, showAllAssetGroups])
+  const hiddenAssetGroupCount = Math.max(0, assetGroupSummaries.length - visibleAssetGroupSummaries.length)
   const panelAssets = useMemo(() => {
     if (!activeAssetGroup) return assets
     return assets.filter((asset) => (normalizeSessionGroupName(asset.tags?.[0]) || DEFAULT_SESSION_GROUP) === activeAssetGroup)
@@ -314,6 +328,12 @@ export function AssetTablePanel({
     if (assetGroupSummaries.some((group) => group.name === activeAssetGroup)) return
     setActiveAssetGroup(null)
   }, [activeAssetGroup, assetGroupSummaries])
+
+  useEffect(() => {
+    if (assetGroupSummaries.length <= ASSET_GROUP_OVERVIEW_LIMIT) {
+      setShowAllAssetGroups(false)
+    }
+  }, [assetGroupSummaries.length])
 
   useEffect(() => {
     if (groupBy === 'none') {
@@ -573,7 +593,7 @@ export function AssetTablePanel({
             </button>
           </div>
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-            {assetGroupSummaries.map((group) => (
+            {visibleAssetGroupSummaries.map((group) => (
               <div
                 key={group.name}
                 className={`rounded-xl border p-3 transition-colors ${
@@ -613,6 +633,17 @@ export function AssetTablePanel({
               </div>
             ))}
           </div>
+          {assetGroupSummaries.length > ASSET_GROUP_OVERVIEW_LIMIT && (
+            <div className="mt-3 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowAllAssetGroups((current) => !current)}
+                className="ops-muted-action px-3 py-1.5 text-xs"
+              >
+                {showAllAssetGroups ? '收起资产组' : `还有 ${hiddenAssetGroupCount} 个资产组，点击显示`}
+              </button>
+            </div>
+          )}
         </div>
       )}
       {selectedIds.size > 0 && (
@@ -747,7 +778,7 @@ export function AssetTablePanel({
                   </tr>
                 )}
                 {!collapsedGroups.has(group.id) && group.items.map((asset) => {
-                  const display = displayForAsset(asset)
+                  const display = displayMetaForAsset(asset)
                   const matrix = matrixByAssetId.get(asset.id)
                   const verification = verificationBadge(matrix)
                   const tags = asset.tags?.length ? asset.tags : [display.categoryLabel]

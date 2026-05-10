@@ -1,8 +1,8 @@
 import type { AssetProfile } from '@/types'
 import { request } from './http'
 
-export async function getSessionProfile(sessionId: string) {
-  return request<{ profile: AssetProfile | null }>(`/session/${sessionId}/profile`)
+export async function getSessionProfile(sessionId: string, options?: RequestInit) {
+  return request<{ profile: AssetProfile | null }>(`/session/${sessionId}/profile`, options)
 }
 
 export async function generateSessionProfile(sessionId: string, modelName?: string, includeInspection = true) {

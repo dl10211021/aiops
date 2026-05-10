@@ -23,9 +23,10 @@ const SETTINGS_ITEMS: Array<{ id: ViewId; icon: string; label: string }> = [
   { id: 'config', icon: '⚙', label: '配置' },
 ]
 
-export default function LeftNav() {
+export default function LeftNav({ onPreloadView }: { onPreloadView?: (view: ViewId) => void }) {
   const currentView = useStore((s) => s.currentView)
   const setView = useStore((s) => s.setView)
+  const preload = (view: ViewId) => onPreloadView?.(view)
 
   return (
     <nav className="ops-nav-rail min-h-0 w-[104px] overflow-y-auto border-r border-ops-surface0/80 px-2 py-3 backdrop-blur-xl">
@@ -36,6 +37,7 @@ export default function LeftNav() {
             active={currentView === item.id}
             icon={item.icon}
             label={item.label}
+            onPreload={() => preload(item.id)}
             onClick={() => setView(item.id)}
           />
         ))}
@@ -48,6 +50,7 @@ export default function LeftNav() {
             active={currentView === item.id}
             icon={item.icon}
             label={item.label}
+            onPreload={() => preload(item.id)}
             onClick={() => setView(item.id)}
           />
         ))}
@@ -62,6 +65,7 @@ export default function LeftNav() {
             active={currentView === item.id}
             icon={item.icon}
             label={item.label}
+            onPreload={() => preload(item.id)}
             onClick={() => setView(item.id)}
           />
         ))}
@@ -84,15 +88,23 @@ function NavButton({
   icon,
   label,
   onClick,
+  onPreload,
 }: {
   active: boolean
   icon: string
   label: string
   onClick: () => void
+  onPreload?: () => void
 }) {
   return (
     <button
-      onClick={onClick}
+      onClick={() => {
+        onPreload?.()
+        onClick()
+      }}
+      onFocus={onPreload}
+      onMouseDown={onPreload}
+      onPointerEnter={onPreload}
       className={`ops-nav-button mb-1 flex min-h-[40px] w-full items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition-all
         ${active
           ? 'is-active border border-ops-accent/35 bg-ops-accent/15 text-ops-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'

@@ -1,14 +1,23 @@
 import asyncio
 import unittest
+from unittest.mock import patch
 
+from core import session_profile_service
 from core.session_profile_service import (
     SessionProfileServiceError,
+    clear_session_profile_cache,
     generate_session_profile_record,
     get_session_profile_record,
 )
 
 
 class TestSessionProfileService(unittest.TestCase):
+    def setUp(self):
+        clear_session_profile_cache()
+
+    def tearDown(self):
+        clear_session_profile_cache()
+
     def test_get_session_profile_record_runs_loader(self):
         profile = {"session_id": "sid-1", "risk_level": "watch"}
 
@@ -17,6 +26,31 @@ class TestSessionProfileService(unittest.TestCase):
         )
 
         self.assertEqual(response, profile)
+
+    def test_get_session_profile_record_caches_default_loader_clone(self):
+        calls = []
+
+        def loader(session_id):
+            calls.append(session_id)
+            return {"session_id": session_id, "details": {"risk": "normal"}}
+
+        with patch.object(session_profile_service, "get_session_profile", loader):
+            first = asyncio.run(
+                session_profile_service.get_session_profile_record(
+                    "sid-1",
+                    loader=session_profile_service.get_session_profile,
+                )
+            )
+            first["details"]["risk"] = "mutated"
+            second = asyncio.run(
+                session_profile_service.get_session_profile_record(
+                    "sid-1",
+                    loader=session_profile_service.get_session_profile,
+                )
+            )
+
+        self.assertEqual(calls, ["sid-1"])
+        self.assertEqual(second, {"session_id": "sid-1", "details": {"risk": "normal"}})
 
     def test_generate_session_profile_record_forwards_options(self):
         calls = []

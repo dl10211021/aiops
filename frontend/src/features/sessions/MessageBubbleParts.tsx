@@ -8,6 +8,7 @@ type FeedbackRating = 'up' | 'down'
 type FeedbackDialogState = { rating: FeedbackRating; note: string } | null
 const LONG_ASSISTANT_CONTENT_CHARS = 28_000
 const ASSISTANT_PREVIEW_CHARS = 14_000
+const STREAM_MARKDOWN_THROTTLE_START_CHARS = 3_000
 
 function formatMessageTime(timestamp: number) {
   return new Date(timestamp).toLocaleString('zh-CN', {
@@ -84,7 +85,8 @@ export function AssistantReportBubble({
   const displayedContent = shouldFoldContent && !showFullContent
     ? `${message.content.slice(0, ASSISTANT_PREVIEW_CHARS)}\n\n...已折叠 ${message.content.length - ASSISTANT_PREVIEW_CHARS} 个字符，点击下方按钮展开完整输出。`
     : message.content
-  const renderedContent = useMemo(() => renderMarkdown(displayedContent), [displayedContent])
+  const markdownContent = useStreamingMarkdownContent(displayedContent, isPending)
+  const renderedContent = useMemo(() => renderMarkdown(markdownContent), [markdownContent])
   const openFeedbackDialog = (rating: FeedbackRating) => {
     setFeedbackDialog({ rating, note: feedbackNote || '' })
   }
@@ -240,6 +242,40 @@ export function AssistantReportBubble({
     />
     </>
   )
+}
+
+function useStreamingMarkdownContent(content: string, isPending: boolean) {
+  const [renderContent, setRenderContent] = useState(content)
+  const latestContentRef = useRef(content)
+  const lastRenderAtRef = useRef(0)
+
+  useEffect(() => {
+    latestContentRef.current = content
+    if (!isPending || content.length < STREAM_MARKDOWN_THROTTLE_START_CHARS) {
+      lastRenderAtRef.current = performance.now()
+      setRenderContent(content)
+      return
+    }
+
+    const now = performance.now()
+    const interval = streamingMarkdownInterval(content.length)
+    const wait = Math.max(0, interval - (now - lastRenderAtRef.current))
+    const timer = window.setTimeout(() => {
+      lastRenderAtRef.current = performance.now()
+      setRenderContent(latestContentRef.current)
+    }, wait)
+    return () => window.clearTimeout(timer)
+  }, [content, isPending])
+
+  return isPending && content.length >= STREAM_MARKDOWN_THROTTLE_START_CHARS
+    ? renderContent
+    : content
+}
+
+function streamingMarkdownInterval(contentLength: number) {
+  if (contentLength > 48_000) return 300
+  if (contentLength > 18_000) return 220
+  return 140
 }
 
 function FeedbackNoteDialog({

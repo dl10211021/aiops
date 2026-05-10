@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
 import { useStore } from '@/store'
 import type { Session } from '@/types'
@@ -40,9 +40,16 @@ export function useSessionSidebarModel() {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [editingBusy, setEditingBusy] = useState(false)
 
-  const sessionList = useMemo(() => Object.values(sessions), [sessions])
-  const currentSession = currentSessionId ? sessions[currentSessionId] : null
-  const editingSession = editingSessionId ? sessions[editingSessionId] || null : null
+  const sessionList = useStableSidebarSessionList(sessions)
+  const sessionsById = useMemo(() => {
+    const rows: Record<string, Session> = {}
+    sessionList.forEach((session) => {
+      rows[session.id] = session
+    })
+    return rows
+  }, [sessionList])
+  const currentSession = currentSessionId ? sessionsById[currentSessionId] || null : null
+  const editingSession = editingSessionId ? sessionsById[editingSessionId] || null : null
   const currentSessionGroup = currentSession ? sessionPrimaryGroup(currentSession) : DEFAULT_SESSION_GROUP
 
   const groupNames = useMemo(() => {
@@ -96,8 +103,8 @@ export function useSessionSidebarModel() {
   }, [groupNames, selectedGroup])
 
   useEffect(() => {
-    if (editingSessionId && !sessions[editingSessionId]) setEditingSessionId(null)
-  }, [editingSessionId, sessions])
+    if (editingSessionId && !sessionsById[editingSessionId]) setEditingSessionId(null)
+  }, [editingSessionId, sessionsById])
 
   const sessionMetrics = useMemo(() => summarizeSessions(sessionList), [sessionList])
   const handleDisconnect = useCallback(async (sid: string, event: MouseEvent<HTMLButtonElement>) => {
@@ -175,7 +182,7 @@ export function useSessionSidebarModel() {
 
   const handleSaveSessionEdit = async (values: SessionEditValues) => {
     if (!editingSessionId) return
-    const editingSession = sessions[editingSessionId]
+    const editingSession = sessionsById[editingSessionId]
     if (!editingSession) return
     const groupName = normalizeSessionGroupName(values.groupName)
     if (!groupName) {
@@ -246,6 +253,42 @@ export function useSessionSidebarModel() {
     totalSessionCount: sessionList.length,
     toggleGroup,
   }
+}
+
+function useStableSidebarSessionList(sessions: Record<string, Session>) {
+  const cacheRef = useRef<{ signature: string; list: Session[] } | null>(null)
+  return useMemo(() => {
+    const list = Object.values(sessions)
+    const signature = list.map(sidebarSessionSignature).join('\u001e')
+    if (cacheRef.current?.signature === signature) return cacheRef.current.list
+    cacheRef.current = { signature, list }
+    return list
+  }, [sessions])
+}
+
+function sidebarSessionSignature(session: Session): string {
+  return [
+    session.id,
+    session.host,
+    session.remark,
+    session.isReadWriteMode ? 'rw' : 'ro',
+    session.user,
+    session.asset_type,
+    session.protocol,
+    session.agentProfile,
+    session.heartbeatEnabled ? 'hb1' : 'hb0',
+    session.target_scope || '',
+    session.scope_value || '',
+    session.backendStreaming ? 'bs1' : 'bs0',
+    session.isStreaming ? 's1' : 's0',
+    session.historyLoaded ? 'h1' : 'h0',
+    stableStringList(session.tags),
+    stableStringList(session.skills),
+  ].join('\u001f')
+}
+
+function stableStringList(items: string[] | undefined): string {
+  return (items || []).join('\u001d')
 }
 
 function normalizeSearchValue(value: unknown): string {

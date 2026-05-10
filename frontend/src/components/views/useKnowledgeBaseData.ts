@@ -35,6 +35,7 @@ import {
   updateKnowledgeVaultCandidate,
   uploadKnowledgeDocument,
 } from '@/api/knowledge'
+import { isAbortError } from '@/api/http'
 import { getSessionMemoryActivity } from '@/api/sessionHistory'
 import { useStore } from '@/store'
 import type { KnowledgeCompileQueueItem, KnowledgeDocumentContent, KnowledgeFile, KnowledgeListPagination, KnowledgeListSummary, KnowledgeVaultGraph, KnowledgeVaultSearchResult, KnowledgeVectorStoreStatus, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
@@ -109,7 +110,7 @@ export function useKnowledgeBaseData() {
   const [error, setError] = useState('')
   const [memoryError, setMemoryError] = useState('')
 
-  const loadFiles = useCallback(async () => {
+  const loadFiles = useCallback(async (signal?: AbortSignal) => {
     setLoading(true)
     setError('')
     try {
@@ -120,12 +121,13 @@ export function useKnowledgeBaseData() {
         page: documentPage,
         perPage: documentPageSize,
         sort: documentSort,
-      })
+      }, { signal })
       const [queueRes, candidatesRes, articlesRes] = await Promise.all([
-        listKnowledgeVaultQueue(),
-        listKnowledgeVaultCandidates(),
-        listKnowledgeVaultArticles(),
+        listKnowledgeVaultQueue({ signal }),
+        listKnowledgeVaultCandidates({ signal }),
+        listKnowledgeVaultArticles({ signal }),
       ])
+      if (signal?.aborted) return
       setFiles(res.data.files || [])
       setDocumentSummary(res.data.summary || null)
       setDocumentPagination(res.data.pagination || null)
@@ -134,6 +136,7 @@ export function useKnowledgeBaseData() {
       setCandidateItems(candidatesRes.data.items || [])
       setArticleItems(articlesRes.data.items || [])
     } catch (e: unknown) {
+      if (isAbortError(e) || signal?.aborted) return
       const message = e instanceof Error ? e.message : '加载知识库失败'
       if (message === 'Not Found') {
         setFiles([])
@@ -148,21 +151,22 @@ export function useKnowledgeBaseData() {
         setError(message)
       }
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }, [documentExtension, documentPage, documentPageSize, documentQuery, documentSort, documentVectorStatus])
 
-  const loadMemories = useCallback(async () => {
+  const loadMemories = useCallback(async (signal?: AbortSignal) => {
     setMemoryLoading(true)
     setMemoryError('')
     try {
       const [itemsRes, versionsRes, pendingRes, qualityRes] = await Promise.all([
-        listMemoryItems(),
-        listMemoryVersions(30),
-        listMemoryPendingConflicts(50),
-        getMemoryQuality(180, 8),
+        listMemoryItems({ signal }),
+        listMemoryVersions(30, { signal }),
+        listMemoryPendingConflicts(50, { signal }),
+        getMemoryQuality(180, 8, { signal }),
       ])
-      const reviewRes = await listMemoryReviewItems(180, 50)
+      const reviewRes = await listMemoryReviewItems(180, 50, { signal })
+      if (signal?.aborted) return
       setMemoryItems(itemsRes.data.items || [])
       setMemoryVersions(versionsRes.data.versions || [])
       setMemoryPendingConflicts(pendingRes.data.items || [])
@@ -173,40 +177,44 @@ export function useKnowledgeBaseData() {
         const stillExists = (itemsRes.data.items || []).some((item) => item.path === current.path)
         return stillExists ? current : null
       })
-      void listMemoryStores().then((storesRes) => setMemoryStores(storesRes.data.stores || []))
+      void listMemoryStores({ signal }).then((storesRes) => {
+        if (!signal?.aborted) setMemoryStores(storesRes.data.stores || [])
+      }).catch((error) => {
+        if (!isAbortError(error) && !signal?.aborted) setMemoryStores([])
+      })
     } catch (e: unknown) {
+      if (isAbortError(e) || signal?.aborted) return
       const message = e instanceof Error ? e.message : '加载 AI 记忆失败'
       setMemoryError(message === 'Not Found' ? 'AI 记忆服务暂未开启或当前服务需要重启。' : message)
       setMemoryQuality(null)
     } finally {
-      setMemoryLoading(false)
+      if (!signal?.aborted) setMemoryLoading(false)
     }
   }, [addToast])
 
-  const loadSessionMemoryActivity = useCallback(async () => {
+  const loadSessionMemoryActivity = useCallback(async (signal?: AbortSignal) => {
     if (!currentSessionId) {
       setSessionMemoryActivity(null)
       return
     }
     setSessionMemoryActivityLoading(true)
     try {
-      const res = await getSessionMemoryActivity(currentSessionId)
+      const res = await getSessionMemoryActivity(currentSessionId, { signal })
+      if (signal?.aborted) return
       setSessionMemoryActivity(res.data.activity)
-    } catch {
+    } catch (e: unknown) {
+      if (isAbortError(e) || signal?.aborted) return
       setSessionMemoryActivity(null)
     } finally {
-      setSessionMemoryActivityLoading(false)
+      if (!signal?.aborted) setSessionMemoryActivityLoading(false)
     }
   }, [currentSessionId])
 
   useEffect(() => {
-    void loadFiles()
-    void loadMemories()
-  }, [loadFiles, loadMemories])
-
-  useEffect(() => {
-    void loadSessionMemoryActivity()
-  }, [loadSessionMemoryActivity])
+    const controller = new AbortController()
+    void loadFiles(controller.signal)
+    return () => controller.abort()
+  }, [loadFiles])
 
   useEffect(() => {
     if (!currentSessionId) return

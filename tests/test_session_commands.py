@@ -1,10 +1,12 @@
 import asyncio
 import unittest
+from unittest.mock import patch
 
 from core.session_commands import (
     SessionCommandError,
     build_session_commands_payload_for_session,
     build_session_commands_response,
+    clear_custom_slash_command_cache,
     list_custom_slash_command_records,
     list_custom_slash_commands,
     remove_custom_slash_command_record,
@@ -34,6 +36,12 @@ class FakeCommandStore:
 
 
 class TestSessionCommands(unittest.TestCase):
+    def setUp(self):
+        clear_custom_slash_command_cache()
+
+    def tearDown(self):
+        clear_custom_slash_command_cache()
+
     def test_build_session_commands_response_uses_tool_payload_context(self):
         payload = build_session_commands_response(
             {
@@ -148,6 +156,22 @@ class TestSessionCommands(unittest.TestCase):
         self.assertEqual(created, {"label": "/new"})
         self.assertEqual(updated, {"label": "/newer", "id": "cmd-1"})
         self.assertEqual(store.deleted, ["cmd-1"])
+
+    def test_custom_slash_command_cache_uses_global_store_clone(self):
+        store = FakeCommandStore()
+
+        async def exercise():
+            first = await list_custom_slash_command_records()
+            first[0]["label"] = "/mutated"
+            store.commands.append({"id": "cmd-2", "label": "/new"})
+            second = await list_custom_slash_command_records()
+            return first, second
+
+        with patch("core.memory.memory_db", store):
+            first, second = asyncio.run(exercise())
+
+        self.assertEqual(first[0]["label"], "/mutated")
+        self.assertEqual(second, [{"id": "cmd-1", "label": "/cmd"}])
 
     def test_remove_custom_slash_command_raises_typed_404_when_missing(self):
         store = FakeCommandStore()

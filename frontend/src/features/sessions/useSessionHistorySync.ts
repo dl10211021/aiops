@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { getActiveSessions, getSessionHistory } from '@/api/client'
+import { isAbortError } from '@/api/http'
 import { useStore } from '@/store'
 import type { Session } from '@/types'
 import { normalizeHistoryMessages } from './sessionHistory'
 
 const sessionHistoryRestoreLimit = 160
+const SESSION_HISTORY_FETCH_DELAY_MS = 120
 
 export function useSessionHistorySync(
   currentSessionId: string | null,
@@ -27,9 +29,13 @@ export function useSessionHistorySync(
 
     historyLoadingRef.current.add(sessionId)
     let cancelled = false
+    const controller = new AbortController()
     const timer = window.setTimeout(() => {
-      if (useStore.getState().currentView !== 'chat') return
-      getSessionHistory(sessionId, sessionHistoryRestoreLimit)
+      if (useStore.getState().currentView !== 'chat') {
+        historyLoadingRef.current.delete(sessionId)
+        return
+      }
+      getSessionHistory(sessionId, sessionHistoryRestoreLimit, { signal: controller.signal })
         .then((history) => {
           if (cancelled) return
           const messages = history.data.messages || []
@@ -38,16 +44,18 @@ export function useSessionHistorySync(
           setSessionMessages(sessionId, normalizeHistoryMessages(sessionId, messages))
           updateSession(sessionId, { historyLoaded: true })
         })
-        .catch(() => {
+        .catch((error) => {
+          if (isAbortError(error) || controller.signal.aborted) return
           if (!cancelled) updateSession(sessionId, { historyLoaded: true })
         })
         .finally(() => {
           historyLoadingRef.current.delete(sessionId)
         })
-    }, 800)
+    }, SESSION_HISTORY_FETCH_DELAY_MS)
     return () => {
       cancelled = true
       window.clearTimeout(timer)
+      controller.abort()
       historyLoadingRef.current.delete(sessionId)
     }
   }, [currentSessionId, hasActiveStream, session, session?.historyLoaded, setSessionMessages, updateSession])
@@ -58,13 +66,15 @@ export function useSessionHistorySync(
     if (hasActiveStream(sessionId)) return
 
     let cancelled = false
+    const controller = new AbortController()
     const refreshHistory = async () => {
       try {
-        const history = await getSessionHistory(sessionId, sessionHistoryRestoreLimit)
+        const history = await getSessionHistory(sessionId, sessionHistoryRestoreLimit, { signal: controller.signal })
         if (!cancelled) {
           setSessionMessages(sessionId, normalizeHistoryMessages(sessionId, history.data.messages || []))
         }
-      } catch {
+      } catch (error) {
+        if (isAbortError(error) || controller.signal.aborted) return
         // This is only reconnect recovery; keep current transcript on transient failures.
       }
       try {
@@ -81,6 +91,7 @@ export function useSessionHistorySync(
     return () => {
       cancelled = true
       window.clearInterval(timer)
+      controller.abort()
     }
   }, [currentSessionId, hasActiveStream, session?.backendStreaming, setSessionMessages, updateSession])
 }

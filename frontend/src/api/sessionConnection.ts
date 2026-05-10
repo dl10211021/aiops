@@ -81,6 +81,6 @@ export async function updateSessionMetadata(
   )
 }
 
-export async function getSessionTools(sessionId: string) {
-  return request<SessionToolCatalog>(`/session/${sessionId}/tools`)
+export async function getSessionTools(sessionId: string, options?: RequestInit) {
+  return request<SessionToolCatalog>(`/session/${sessionId}/tools`, options)
 }

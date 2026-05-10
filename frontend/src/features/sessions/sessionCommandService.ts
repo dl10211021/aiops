@@ -12,8 +12,11 @@ export interface SessionCommandState {
   customCommands: SlashCommand[]
 }
 
-export async function fetchSessionCommandState(sessionId: string): Promise<SessionCommandState> {
-  const res = await getSessionCommands(sessionId)
+export async function fetchSessionCommandState(
+  sessionId: string,
+  options?: RequestInit,
+): Promise<SessionCommandState> {
+  const res = await getSessionCommands(sessionId, options)
   return {
     backendCommands: res.data.commands || [],
     builtinCommands: res.data.builtin_commands || [],

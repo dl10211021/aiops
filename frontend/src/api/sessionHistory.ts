@@ -30,10 +30,11 @@ interface SessionHistoryApiMessage {
   }>
 }
 
-export async function getSessionHistory(sessionId: string, limit?: number) {
+export async function getSessionHistory(sessionId: string, limit?: number, options?: RequestInit) {
   const query = limit && limit > 0 ? `?limit=${encodeURIComponent(String(limit))}` : ''
   return request<{ messages: SessionHistoryApiMessage[] }>(
-    `/session/${sessionId}/history${query}`
+    `/session/${sessionId}/history${query}`,
+    options,
   )
 }
 
@@ -74,8 +75,9 @@ export async function exportSessionHistory(sessionId: string) {
   return request<{ markdown: string }>(`/session/${sessionId}/export`)
 }
 
-export async function getSessionMemoryActivity(sessionId: string) {
+export async function getSessionMemoryActivity(sessionId: string, options?: RequestInit) {
   return request<{ activity: SessionMemoryActivity }>(
-    `/session/${sessionId}/memory/activity`
+    `/session/${sessionId}/memory/activity`,
+    options,
   )
 }

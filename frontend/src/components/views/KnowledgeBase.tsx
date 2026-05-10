@@ -241,8 +241,11 @@ export default function KnowledgeBase() {
             setActiveTab(tab)
             if (tab === 'documents') {
               setDocumentStep('source')
+              void loadFiles()
             } else {
               setMemoryStep('browse')
+              void loadMemories()
+              void loadSessionMemoryActivity()
             }
           }}
         />
