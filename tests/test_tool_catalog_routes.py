@@ -34,7 +34,7 @@ class TestToolCatalogRoutes(unittest.TestCase):
         self.assertNotIn("managed-secret", dumped)
         self.assertNotIn("secret-key", dumped)
 
-    def test_tool_center_includes_controlled_hermes_tools_without_model_exposure(self):
+    def test_tool_center_keeps_built_in_tools_without_hermes_branding(self):
         response = asyncio.run(session_runtime_routes.get_tool_center())
 
         self.assertEqual(response.status, "success")
@@ -46,6 +46,7 @@ class TestToolCatalogRoutes(unittest.TestCase):
             for toolset in payload["toolsets"]
             for tool in toolset["tools"]
         }
+        toolset_ids = {toolset["id"] for toolset in payload["toolsets"]}
         self.assertIn("linux_execute_command", tools)
         self.assertEqual(tools["linux_execute_command"]["status"], "available")
         self.assertTrue(tools["linux_execute_command"]["model_exposed"])
@@ -55,6 +56,9 @@ class TestToolCatalogRoutes(unittest.TestCase):
         self.assertFalse(tools["write_file"]["execution_enabled"])
         self.assertIn("session_search", tools)
         self.assertEqual(tools["session_search"]["status"], "not_wired")
+        self.assertTrue(all(not item.lower().startswith("hermes") for item in toolset_ids))
+        dumped = json.dumps(payload, ensure_ascii=False).lower()
+        self.assertNotIn("hermes", dumped)
 
     def test_session_tool_catalog_is_protocol_aware_and_credential_free(self):
         fake_sessions = {
