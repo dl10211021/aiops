@@ -25,6 +25,7 @@ from api.schema_models.skills import (
 )
 from core.custom_skill_catalog_service import (
     CustomSkillCatalogServiceError,
+    clear_custom_skill_catalog_cache,
     get_custom_skill_detail as get_custom_skill_detail_record,
     list_custom_skill_catalog,
     scan_custom_skill_catalog,
@@ -87,6 +88,7 @@ async def create_skill(req: CreateSkillRequest):
         )
     except CustomSkillCreateServiceError as exc:
         raise_http_error(exc)
+    clear_custom_skill_catalog_cache()
     return ResponseModel(**skill_created_response_kwargs(result))
 
 
@@ -122,6 +124,7 @@ async def rollback_skill_version(skill_id: str, req: SkillRollbackRequest):
         )
     except CustomSkillRollbackServiceError as exc:
         raise_http_error(exc)
+    clear_custom_skill_catalog_cache()
     return ResponseModel(**skill_rollback_response_kwargs(result))
 
 
@@ -135,4 +138,5 @@ async def migrate_skill(req: MigrateRequest):
         )
     except CustomSkillMigrationServiceError as exc:
         raise_http_error(exc)
+    clear_custom_skill_catalog_cache()
     return ResponseModel(**skill_migration_response_kwargs(result))

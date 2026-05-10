@@ -146,6 +146,9 @@ const BACKGROUND_PRELOAD_START_DELAY_MS = 5000
 const BACKGROUND_PRELOAD_STEP_DELAY_MS = 1400
 const CHAT_INITIAL_RENDER_DELAY_MS = 180
 const NON_CHAT_SESSION_RESTORE_DELAY_MS = 1200
+const SESSION_POLL_INTERVAL_MS = 5000
+const IDLE_SESSION_POLL_INTERVAL_MS = 15000
+const HIDDEN_SESSION_POLL_INTERVAL_MS = 30000
 
 function ViewFallback() {
   return (
@@ -327,14 +330,35 @@ export default function App() {
   // Heartbeat polling
   useEffect(() => {
     let cancelled = false
+    let inFlight = false
+
+    const schedulePoll = (delay: number) => {
+      if (cancelled) return
+      if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current)
+      pollTimerRef.current = window.setTimeout(() => void poll(), delay)
+    }
 
     const poll = async () => {
+      if (document.visibilityState === 'hidden') {
+        schedulePoll(HIDDEN_SESSION_POLL_INTERVAL_MS)
+        return
+      }
+      if (inFlight) {
+        schedulePoll(SESSION_POLL_INTERVAL_MS)
+        return
+      }
+      const sessions = useStore.getState().sessions
+      if (Object.keys(sessions).length === 0) {
+        schedulePoll(IDLE_SESSION_POLL_INTERVAL_MS)
+        return
+      }
+      inFlight = true
       try {
         const res = await pollAllSessions()
         const updates = res.data.updates || {}
-        const sessions = useStore.getState().sessions
+        const latestSessions = useStore.getState().sessions
         for (const [sid, msgs] of Object.entries(updates)) {
-          if (!sessions[sid]) continue
+          if (!latestSessions[sid]) continue
           msgs.forEach((m) => {
             if (!m.content || !m.content.trim()) return
             const msg: ChatMessage = {
@@ -347,16 +371,24 @@ export default function App() {
           })
         }
       } catch { /* ignore */ }
-
-      if (!cancelled) {
-        pollTimerRef.current = window.setTimeout(() => void poll(), 5000)
+      finally {
+        inFlight = false
+        schedulePoll(SESSION_POLL_INTERVAL_MS)
       }
     }
 
-    pollTimerRef.current = window.setTimeout(() => void poll(), 5000)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current)
+      void poll()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    schedulePoll(SESSION_POLL_INTERVAL_MS)
 
     return () => {
       cancelled = true
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       if (pollTimerRef.current) window.clearTimeout(pollTimerRef.current)
     }
   }, [appendMessage])

@@ -48,6 +48,25 @@ class TestSystemInfoRoutes(unittest.TestCase):
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, capabilities)
 
+    def test_refresh_query_clears_database_capabilities_cache_before_read(self):
+        capabilities = {"drivers": {"oracle": {"id": "oracle", "ready": True}}}
+
+        with (
+            patch("api.system_info_routes.clear_database_capabilities_cache") as clear_cache,
+            patch(
+                "api.system_info_routes.get_database_driver_capabilities_record",
+                return_value=capabilities,
+            ) as get_capabilities,
+        ):
+            response = asyncio.run(
+                system_info_routes.get_database_driver_capabilities_api(refresh=True)
+            )
+
+        clear_cache.assert_called_once()
+        get_capabilities.assert_called_once()
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data, capabilities)
+
     def test_hydrate_status_preserves_response_shape_without_importing_main_app(self):
         status = {"total": 3, "done": 2, "success": 1, "running": True}
 

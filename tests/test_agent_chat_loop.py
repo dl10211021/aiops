@@ -5,8 +5,10 @@ from core.agent_chat_loop import (
     _assistant_orchestration_labels,
     _assistant_review_thinking_mode,
     _build_trace_review_prompt,
+    _native_execution_intent,
     _review_messages,
     _resolve_model_orchestration,
+    _should_force_native_tool_first,
     append_assistant_trace_review,
     build_successful_execution_memory,
     run_chat_agent_loop,
@@ -92,6 +94,57 @@ async def collect_chat_loop_events(**overrides):
 
 
 class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
+    def test_structured_context_intent_can_force_native_tool_without_keywords(self):
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "db_execute_query",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+
+        intent = _native_execution_intent(
+            messages=[{"role": "user", "content": "帮我处理一下这个问题"}],
+            context={
+                "target_scope": "asset",
+                "asset_type": "oracle",
+                "protocol": "oracle",
+                "execution_intent": {
+                    "requires_live_evidence": True,
+                    "allowed_tool_family": "native_asset_protocol",
+                    "reason": "快捷指令声明需要现场证据",
+                    "source": "slash_command",
+                },
+            },
+            tools=tools,
+        )
+
+        self.assertTrue(intent.requires_live_evidence)
+        self.assertEqual(intent.allowed_tool_family, "native_asset_protocol")
+        self.assertEqual(intent.source, "slash_command")
+        self.assertEqual(intent.first_step_tool_names, ("db_execute_query",))
+
+    def test_tool_boundary_question_does_not_force_native_execution(self):
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "linux_execute_command",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+
+        self.assertFalse(
+            _should_force_native_tool_first(
+                messages=[{"role": "user", "content": "说明当前资产可用工具和正确使用边界"}],
+                context={"target_scope": "asset", "asset_type": "linux", "protocol": "ssh"},
+                tools=tools,
+            )
+        )
+
     def test_split_orchestration_labels_assistant_when_delegated(self):
         with (
             patch(

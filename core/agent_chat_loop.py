@@ -19,6 +19,7 @@ from core.assistant_model_config import (
     get_assistant_model_config,
     resolve_assistant_model_id,
 )
+from core.chat_execution_intent import ExecutionIntent, classify_execution_intent
 from core.tool_display import tool_label
 
 
@@ -51,37 +52,6 @@ NATIVE_ASSET_TOOL_NAMES = {
     "virtualization_api_request",
     "winrm_execute_command",
 }
-
-EXECUTION_REQUEST_KEYWORDS = (
-    "当前资产",
-    "当前会话",
-    "原生协议工具",
-    "执行",
-    "巡检",
-    "检查",
-    "查看",
-    "查询",
-    "排查",
-    "诊断",
-    "健康",
-    "状态",
-    "风险",
-    "配置",
-    "表空间",
-    "锁",
-    "慢 sql",
-    "慢sql",
-    "高耗",
-    "sql",
-)
-
-NON_EXECUTION_TOOL_INFO_KEYWORDS = (
-    "可用工具",
-    "工具和正确使用边界",
-    "说明当前资产",
-    "解释当前",
-)
-
 
 def _display_tool_name(tool_name: Any) -> str:
     name = str(tool_name or "unknown")
@@ -125,33 +95,48 @@ def _latest_user_message_text(messages: list[dict]) -> str:
     return ""
 
 
+def _native_execution_intent(
+    *,
+    messages: list[dict],
+    context: dict,
+    tools: list[dict] | None,
+) -> ExecutionIntent:
+    native_tool_names = tuple(
+        name
+        for name in (_tool_name(tool) for tool in _native_asset_tools(tools))
+        if name
+    )
+    return classify_execution_intent(
+        latest_user_text=_latest_user_message_text(messages),
+        context=context,
+        native_tool_names=native_tool_names,
+    )
+
+
 def _should_force_native_tool_first(
     *,
     messages: list[dict],
     context: dict,
     tools: list[dict] | None,
 ) -> bool:
-    if str(context.get("target_scope") or "asset") != "asset":
-        return False
-    if str(context.get("protocol") or "").lower() == "virtual":
-        return False
-    if not _native_asset_tools(tools):
-        return False
-    text = _latest_user_message_text(messages).lower()
-    if not text:
-        return False
-    if any(keyword in text for keyword in NON_EXECUTION_TOOL_INFO_KEYWORDS):
-        return False
-    return any(keyword in text for keyword in EXECUTION_REQUEST_KEYWORDS)
+    return _native_execution_intent(messages=messages, context=context, tools=tools).requires_live_evidence
 
 
-def _native_tool_required_prompt(context: dict, native_tools: list[dict]) -> dict:
+def _native_tool_required_prompt(
+    context: dict,
+    native_tools: list[dict],
+    intent: ExecutionIntent | None = None,
+) -> dict:
     tool_names = "、".join(_tool_name(tool) for tool in native_tools if _tool_name(tool))
+    intent_reason = intent.reason if intent else "本轮用户要求现场执行/检查/巡检"
+    allowed_family = intent.allowed_tool_family if intent else "native_asset_protocol"
     return {
         "role": "user",
         "content": (
             "【平台强制工具调用指令】本轮用户要求对当前资产做现场执行/检查/巡检，"
             "必须先调用当前会话原生协议工具取得实时证据。"
+            f"执行意图来源：{intent.source if intent else 'message'}；原因：{intent_reason}。"
+            f"证据契约：requires_live_evidence=true；allowed_tool_family={allowed_family}。"
             f"当前资产是 {context.get('asset_type')}/{context.get('protocol')} {context.get('host')}:{context.get('port')}。"
             f"本轮第一步只允许从这些原生工具中选择：{tool_names}。"
             "不要直接输出巡检报告、状态结论或历史总结；没有工具结果前只能发起工具调用。"
@@ -240,11 +225,12 @@ async def run_chat_agent_loop(
     max_steps = max_steps_resolver("chat")
     pending_memory_references = list(memory_references or [])
     turn_exec_trace: list[dict] = []
-    force_native_tool_pending = _should_force_native_tool_first(
+    native_execution_intent = _native_execution_intent(
         messages=messages,
         context=context,
         tools=tools,
     )
+    force_native_tool_pending = native_execution_intent.requires_live_evidence
     force_native_attempts = 0
     native_tools = _native_asset_tools(tools)
     for iteration in range(max_steps):
@@ -262,7 +248,7 @@ async def run_chat_agent_loop(
         use_forced_native_tool = force_native_tool_pending and force_native_attempts < 2
         turn_tools = native_tools if use_forced_native_tool else tools
         turn_messages = (
-            [*messages, _native_tool_required_prompt(context, native_tools)]
+            [*messages, _native_tool_required_prompt(context, native_tools, native_execution_intent)]
             if use_forced_native_tool
             else messages
         )
@@ -758,11 +744,12 @@ async def _run_split_model_chat_agent_loop(
     pending_memory_references = list(memory_references or [])
     labels = _assistant_orchestration_labels(orchestration)
     turn_exec_trace: list[dict] = []
-    force_native_tool_pending = _should_force_native_tool_first(
+    native_execution_intent = _native_execution_intent(
         messages=messages,
         context=context,
         tools=tools,
     )
+    force_native_tool_pending = native_execution_intent.requires_live_evidence
     force_native_attempts = 0
     native_tools = _native_asset_tools(tools)
 
@@ -811,7 +798,7 @@ async def _run_split_model_chat_agent_loop(
         use_forced_native_tool = force_native_tool_pending and force_native_attempts < 2
         turn_tools = native_tools if use_forced_native_tool else tools
         turn_messages = (
-            [*messages, _native_tool_required_prompt(context, native_tools)]
+            [*messages, _native_tool_required_prompt(context, native_tools, native_execution_intent)]
             if use_forced_native_tool
             else messages
         )

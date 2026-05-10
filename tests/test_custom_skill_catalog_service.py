@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from core.custom_skill_catalog_service import (
     CustomSkillCatalogServiceError,
+    clear_custom_skill_catalog_cache,
     get_custom_skill_detail,
     list_custom_skill_catalog,
     scan_custom_skill_catalog,
@@ -33,7 +34,11 @@ class FakeDispatcher:
 
 
 class TestCustomSkillCatalogService(unittest.TestCase):
+    def setUp(self):
+        clear_custom_skill_catalog_cache()
+
     def tearDown(self):
+        clear_custom_skill_catalog_cache()
         for path in (Path.cwd() / "tests").glob("tmp_custom_skill_catalog_service_*"):
             shutil.rmtree(path, ignore_errors=True)
 
@@ -71,6 +76,20 @@ class TestCustomSkillCatalogService(unittest.TestCase):
                 {"id": "market-skill", "is_market": True},
             ],
         )
+
+    def test_default_list_uses_short_lived_cache_until_scan(self):
+        dispatcher = FakeDispatcher(market_skills=[{"id": "market-skill", "is_market": True}])
+
+        with patch("core.dispatcher.dispatcher", dispatcher):
+            first = list_custom_skill_catalog()
+            dispatcher.market_skills.append({"id": "new-market-skill", "is_market": True})
+            second = list_custom_skill_catalog()
+            scan_custom_skill_catalog()
+            third = list_custom_skill_catalog()
+
+        self.assertEqual(first, second)
+        self.assertNotIn({"id": "new-market-skill", "is_market": True}, second["registry"])
+        self.assertIn({"id": "new-market-skill", "is_market": True}, third["registry"])
 
     def test_detail_prefers_local_registry_body(self):
         dispatcher = FakeDispatcher()

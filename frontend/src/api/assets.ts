@@ -3,11 +3,110 @@ import type {
   AssetCategoryDefinition,
   AssetCleanupPlan,
   AssetTypeDefinition,
+  ApiResponse,
   AssetVerificationRun,
   ProtocolVerificationOverview,
   ProtocolVerificationStatusOverview,
 } from '@/types'
 import { request } from './http'
+
+type AssetTypesResponse = {
+  types: AssetTypeDefinition[]
+  categories: AssetCategoryDefinition[]
+  connector_groups: Array<AssetCategoryDefinition & { tools?: string[] }>
+}
+
+type DatabaseDriverCapabilitiesResponse = {
+  drivers: Record<string, {
+    id: string
+    label: string
+    connector: string
+    python_package: string
+    python_package_installed: boolean
+    external_client_required: boolean
+    external_client_detected: boolean
+    external_client_name: string
+    status: string
+    install_hint: string
+    recommended_path_windows?: string
+    recommended_path_linux?: string
+    env_vars?: Record<string, string>
+    detected_drivers?: string[]
+    test_sql?: string
+    test_command?: string
+    operation_profile?: {
+      id: string
+      label: string
+      identity_label: string
+      default_port: number
+      test_statement: string
+      readonly_examples: string[]
+      write_requires_approval: boolean
+      hard_block_examples: string[]
+      operator_note: string
+    }
+    oracle_client?: {
+      detected: boolean
+      lib_dir: string
+      source: string
+      thick_mode_env_enabled: boolean
+      thick_mode_default_enabled?: boolean
+    }
+  }>
+  oracle_client: {
+    detected: boolean
+    lib_dir: string
+    source: string
+    thick_mode_env_enabled: boolean
+    thick_mode_default_enabled?: boolean
+  }
+}
+
+type CacheOptions = {
+  forceRefresh?: boolean
+}
+
+type CachedRequest<T> = {
+  expiresAt: number
+  request: Promise<ApiResponse<T>>
+}
+
+const ASSET_CATALOG_CACHE_TTL_MS = 60_000
+
+let assetTypesRequest: CachedRequest<AssetTypesResponse> | null = null
+let assetTypeSummaryRequest: CachedRequest<AssetTypesResponse> | null = null
+let databaseDriverCapabilitiesRequest: CachedRequest<DatabaseDriverCapabilitiesResponse> | null = null
+
+function readCachedRequest<T>(
+  cached: CachedRequest<T> | null,
+  options: CacheOptions | undefined,
+) {
+  if (options?.forceRefresh || !cached || cached.expiresAt <= Date.now()) return null
+  return cached.request
+}
+
+function cacheRequest<T>(
+  request: Promise<ApiResponse<T>>,
+  onError: () => void,
+): CachedRequest<T> {
+  return {
+    expiresAt: Date.now() + ASSET_CATALOG_CACHE_TTL_MS,
+    request: request.catch((error) => {
+      onError()
+      throw error
+    }),
+  }
+}
+
+function refreshQuery(options: CacheOptions | undefined) {
+  return options?.forceRefresh ? '?refresh=true' : ''
+}
+
+export function clearAssetCatalogCache() {
+  assetTypesRequest = null
+  assetTypeSummaryRequest = null
+  databaseDriverCapabilitiesRequest = null
+}
 
 export async function getSavedAssets() {
   return request<{ assets: Asset[] }>('/assets/saved')
@@ -54,62 +153,41 @@ export async function getProtocolVerificationStatusOverview() {
   return request<ProtocolVerificationStatusOverview>('/verification/protocols/status')
 }
 
-export async function getOracleClientConfig() {
+export async function getOracleClientConfig(options?: CacheOptions) {
   return request<{
     detected: boolean
     lib_dir: string
     source: string
     thick_mode_env_enabled: boolean
     thick_mode_default_enabled?: boolean
-  }>('/oracle/client-config')
+  }>(`/oracle/client-config${refreshQuery(options)}`)
 }
 
-export async function getDatabaseDriverCapabilities() {
-  return request<{
-    drivers: Record<string, {
-      id: string
-      label: string
-      connector: string
-      python_package: string
-      python_package_installed: boolean
-      external_client_required: boolean
-      external_client_detected: boolean
-      external_client_name: string
-      status: string
-      install_hint: string
-      recommended_path_windows?: string
-      recommended_path_linux?: string
-      env_vars?: Record<string, string>
-      detected_drivers?: string[]
-      test_sql?: string
-      test_command?: string
-      operation_profile?: {
-        id: string
-        label: string
-        identity_label: string
-        default_port: number
-        test_statement: string
-        readonly_examples: string[]
-        write_requires_approval: boolean
-        hard_block_examples: string[]
-        operator_note: string
-      }
-      oracle_client?: {
-        detected: boolean
-        lib_dir: string
-        source: string
-        thick_mode_env_enabled: boolean
-        thick_mode_default_enabled?: boolean
-      }
-    }>
-    oracle_client: {
-      detected: boolean
-      lib_dir: string
-      source: string
-      thick_mode_env_enabled: boolean
-      thick_mode_default_enabled?: boolean
-    }
-  }>('/database/driver-capabilities')
+export async function getDatabaseDriverCapabilities(options?: CacheOptions) {
+  const cached = readCachedRequest(databaseDriverCapabilitiesRequest, options)
+  if (cached) return cached
+  databaseDriverCapabilitiesRequest = cacheRequest(
+    request<DatabaseDriverCapabilitiesResponse>(`/database/driver-capabilities${refreshQuery(options)}`),
+    () => {
+      databaseDriverCapabilitiesRequest = null
+    },
+  )
+  return databaseDriverCapabilitiesRequest.request
+}
+
+export async function refreshDatabaseDriverCapabilities() {
+  databaseDriverCapabilitiesRequest = null
+  return getDatabaseDriverCapabilities({ forceRefresh: true })
+}
+
+export async function refreshAssetCatalog() {
+  assetTypesRequest = null
+  assetTypeSummaryRequest = null
+  const [types, summary] = await Promise.all([
+    getAssetTypes({ forceRefresh: true }),
+    getAssetTypeSummary({ forceRefresh: true }),
+  ])
+  return { types, summary }
 }
 
 export async function updateAsset(assetId: number, asset: Partial<Asset>) {
@@ -158,18 +236,26 @@ export async function applyAssetNormalization() {
   }>('/assets/normalize/apply', { method: 'POST' })
 }
 
-export async function getAssetTypes() {
-  return request<{
-    types: AssetTypeDefinition[]
-    categories: AssetCategoryDefinition[]
-    connector_groups: Array<AssetCategoryDefinition & { tools?: string[] }>
-  }>('/assets/types')
+export async function getAssetTypes(options?: CacheOptions) {
+  const cached = readCachedRequest(assetTypesRequest, options)
+  if (cached) return cached
+  assetTypesRequest = cacheRequest(
+    request<AssetTypesResponse>('/assets/types'),
+    () => {
+      assetTypesRequest = null
+    },
+  )
+  return assetTypesRequest.request
 }
 
-export async function getAssetTypeSummary() {
-  return request<{
-    types: AssetTypeDefinition[]
-    categories: AssetCategoryDefinition[]
-    connector_groups: Array<AssetCategoryDefinition & { tools?: string[] }>
-  }>('/assets/types/summary')
+export async function getAssetTypeSummary(options?: CacheOptions) {
+  const cached = readCachedRequest(assetTypeSummaryRequest, options)
+  if (cached) return cached
+  assetTypeSummaryRequest = cacheRequest(
+    request<AssetTypesResponse>('/assets/types/summary'),
+    () => {
+      assetTypeSummaryRequest = null
+    },
+  )
+  return assetTypeSummaryRequest.request
 }
