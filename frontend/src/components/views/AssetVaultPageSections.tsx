@@ -1,5 +1,5 @@
 import type { Asset, ProtocolVerificationStatusOverview } from '@/types'
-import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import {
   DEFAULT_SESSION_GROUP,
   normalizeSessionGroupName,
@@ -257,12 +257,21 @@ export function AssetTablePanel({
     () => panelAssets.slice(pageStart, pageStart + ASSET_TABLE_PAGE_SIZE),
     [panelAssets, pageStart]
   )
+  const needsPanelDisplayMeta = groupBy !== 'assetGroup' && groupBy !== 'none'
+  const displayMetaSourceAssets = needsPanelDisplayMeta ? panelAssets : visibleAssets
   const displayMetaByAssetId = useMemo(() => {
     const rows = new Map<number, AssetDisplayMeta>()
-    panelAssets.forEach((asset) => rows.set(asset.id, displayForAsset(asset)))
+    displayMetaSourceAssets.forEach((asset) => rows.set(asset.id, displayForAsset(asset)))
     return rows
-  }, [displayForAsset, panelAssets])
-  const displayMetaForAsset = (asset: Asset) => displayMetaByAssetId.get(asset.id) || displayForAsset(asset)
+  }, [displayForAsset, displayMetaSourceAssets])
+  const displayMetaForAsset = useCallback(
+    (asset: Asset) => displayMetaByAssetId.get(asset.id) || displayForAsset(asset),
+    [displayForAsset, displayMetaByAssetId]
+  )
+  const groupLabelForAsset = useCallback(
+    (asset: Asset) => assetTableGroupLabel(asset, needsPanelDisplayMeta ? displayMetaForAsset(asset) : undefined, groupBy),
+    [displayMetaForAsset, groupBy, needsPanelDisplayMeta]
+  )
   const assetGroupOptions = useMemo(() => uniqueSessionGroups([
     ...sessionGroups,
     ...assets.flatMap((asset) => asset.tags || []),
@@ -271,16 +280,16 @@ export function AssetTablePanel({
     const counts = new Map<string, number>()
     if (groupBy === 'none') return counts
     panelAssets.forEach((asset) => {
-      const label = assetTableGroupLabel(asset, displayMetaForAsset(asset), groupBy)
+      const label = groupLabelForAsset(asset)
       counts.set(label, (counts.get(label) || 0) + 1)
     })
     return counts
-  }, [displayMetaByAssetId, groupBy, panelAssets])
+  }, [groupBy, groupLabelForAsset, panelAssets])
   const groupAssetsByLabel = useMemo(() => {
     const grouped = new Map<string, Asset[]>()
     if (groupBy === 'none') return grouped
     panelAssets.forEach((asset) => {
-      const label = assetTableGroupLabel(asset, displayMetaForAsset(asset), groupBy)
+      const label = groupLabelForAsset(asset)
       const current = grouped.get(label)
       if (current) {
         current.push(asset)
@@ -289,14 +298,14 @@ export function AssetTablePanel({
       }
     })
     return grouped
-  }, [displayMetaByAssetId, groupBy, panelAssets])
+  }, [groupBy, groupLabelForAsset, panelAssets])
   const groupedVisibleAssets = useMemo(() => {
     if (groupBy === 'none') {
       return [{ id: 'all', label: '全部资产', count: visibleAssets.length, allItems: visibleAssets, items: visibleAssets }]
     }
     const groups = new Map<string, { id: string; label: string; count: number; allItems: Asset[]; items: Asset[] }>()
     visibleAssets.forEach((asset) => {
-      const label = assetTableGroupLabel(asset, displayMetaForAsset(asset), groupBy)
+      const label = groupLabelForAsset(asset)
       const id = `${groupBy}:${label}`
       const current = groups.get(id)
       if (current) {
@@ -312,7 +321,7 @@ export function AssetTablePanel({
       }
     })
     return Array.from(groups.values())
-  }, [displayMetaByAssetId, groupAssetsByLabel, groupBy, groupCounts, visibleAssets])
+  }, [groupAssetsByLabel, groupBy, groupCounts, groupLabelForAsset, visibleAssets])
   const allGroupsCollapsed = groupBy !== 'none'
     && groupedVisibleAssets.length > 0
     && groupedVisibleAssets.every((group) => collapsedGroups.has(group.id))
@@ -937,11 +946,11 @@ function verificationBadge(matrix?: AssetVerificationStatusMatrix) {
   return { label: '需复验', className: 'border-amber-400/40 bg-amber-400/10 text-amber-200' }
 }
 
-function assetTableGroupLabel(asset: Asset, display: AssetDisplayMeta, groupBy: AssetTableGroupBy) {
+function assetTableGroupLabel(asset: Asset, display: AssetDisplayMeta | undefined, groupBy: AssetTableGroupBy) {
   if (groupBy === 'assetGroup') return normalizeSessionGroupName(asset.tags?.[0]) || DEFAULT_SESSION_GROUP
-  if (groupBy === 'type') return display.typeLabel || asset.asset_type || '未标记类型'
-  if (groupBy === 'protocol') return display.protocolLabel || asset.protocol || '未标记主接入'
-  if (groupBy === 'category') return display.categoryLabel || '未分类'
+  if (groupBy === 'type') return display?.typeLabel || asset.asset_type || '未标记类型'
+  if (groupBy === 'protocol') return display?.protocolLabel || asset.protocol || '未标记主接入'
+  if (groupBy === 'category') return display?.categoryLabel || '未分类'
   return '全部资产'
 }
 
