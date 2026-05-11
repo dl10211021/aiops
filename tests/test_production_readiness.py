@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from starlette.middleware.gzip import GZipMiddleware
 
 from main import (
     DEFAULT_OPSCORE_HOST,
@@ -37,6 +38,13 @@ class TestProductionReadiness(unittest.TestCase):
 
         for header, value in SECURITY_HEADERS.items():
             self.assertEqual(response.headers[header], value)
+
+    def test_large_api_responses_use_low_cpu_gzip_compression(self):
+        gzip_layers = [layer for layer in app.user_middleware if layer.cls is GZipMiddleware]
+
+        self.assertEqual(len(gzip_layers), 1)
+        self.assertEqual(gzip_layers[0].kwargs["minimum_size"], 1024)
+        self.assertEqual(gzip_layers[0].kwargs["compresslevel"], 5)
 
     def test_env_example_documents_required_production_settings(self):
         env_example = Path(".env.example")

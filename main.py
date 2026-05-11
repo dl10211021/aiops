@@ -2,6 +2,7 @@ import uvicorn
 import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 
 from core.http_middleware_service import (
@@ -68,6 +69,9 @@ app = FastAPI(
 from fastapi.staticfiles import StaticFiles
 
 allowed_origins = get_allowed_origins()
+
+# ------------- 大响应压缩 -------------
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 
 # ------------- 跨域配置 -------------
 app.add_middleware(
