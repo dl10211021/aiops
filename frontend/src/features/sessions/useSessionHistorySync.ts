@@ -9,6 +9,19 @@ const sessionHistoryRestoreLimit = 160
 const SESSION_HISTORY_FETCH_DELAY_MS = 120
 const STREAM_RECOVERY_POLL_MS = 8000
 const STREAM_RECOVERY_HIDDEN_POLL_MS = 30000
+const STREAM_STATUS_CACHE_TTL_MS = STREAM_RECOVERY_POLL_MS
+
+const streamStatusCache = new Map<string, { checkedAt: number; isStreaming: boolean }>()
+
+function readFreshStreamStatus(sessionId: string) {
+  const cached = streamStatusCache.get(sessionId)
+  if (!cached || Date.now() - cached.checkedAt > STREAM_STATUS_CACHE_TTL_MS) return null
+  return cached.isStreaming
+}
+
+function rememberStreamStatus(sessionId: string, isStreaming: boolean) {
+  streamStatusCache.set(sessionId, { checkedAt: Date.now(), isStreaming })
+}
 
 export function useSessionHistorySync(
   currentSessionId: string | null,
@@ -97,15 +110,24 @@ export function useSessionHistorySync(
       try {
         let running = true
         let statusKnown = false
-        try {
-          const active = await getSessionStatus(recoverySessionId, { signal: controller.signal })
-          if (cancelled) return
-          running = Boolean(active.data.isStreaming)
+        const cachedRunning = readFreshStreamStatus(recoverySessionId)
+        if (cachedRunning !== null) {
+          running = cachedRunning
           statusKnown = true
           shouldContinue = running
           updateSession(recoverySessionId, { isStreaming: running, backendStreaming: running })
-        } catch {
-          // Keep the current running indicator if the status check is transiently unavailable.
+        } else {
+          try {
+            const active = await getSessionStatus(recoverySessionId, { signal: controller.signal })
+            if (cancelled) return
+            running = Boolean(active.data.isStreaming)
+            statusKnown = true
+            shouldContinue = running
+            rememberStreamStatus(recoverySessionId, running)
+            updateSession(recoverySessionId, { isStreaming: running, backendStreaming: running })
+          } catch {
+            // Keep the current running indicator if the status check is transiently unavailable.
+          }
         }
 
         const current = useStore.getState().sessions[recoverySessionId]
