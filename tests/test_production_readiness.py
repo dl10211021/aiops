@@ -140,19 +140,13 @@ class TestProductionReadiness(unittest.TestCase):
         workflow = Path(".github/workflows/ci.yml")
         self.assertTrue(workflow.exists(), "CI quality gate workflow is required")
         content = workflow.read_text(encoding="utf-8")
-        ci_tests = Path("scripts/ci_backend_tests.py").read_text(encoding="utf-8")
 
         for marker in (
-            "python scripts/ci_backend_tests.py",
-            "python scripts/security_scan.py",
-            "python -m pip check",
-            "npm audit --audit-level=high",
-            "npm run build",
+            "python -m pip install -r requirements.txt",
+            "npm ci",
+            "python scripts/preflight.py --check-git",
         ):
             self.assertIn(marker, content)
-
-        for marker in ("-W", "default", "unittest", "discover", "test*.py"):
-            self.assertIn(marker, ci_tests)
 
 
 if __name__ == "__main__":

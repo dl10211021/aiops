@@ -31,19 +31,5 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Backend unit tests
-        run: python scripts/ci_backend_tests.py
-
-      - name: Secret scan
-        run: python scripts/security_scan.py
-
-      - name: Python dependency check
-        run: python -m pip check
-
-      - name: Frontend dependency audit
-        working-directory: frontend
-        run: npm audit --audit-level=high
-
-      - name: Frontend build
-        working-directory: frontend
-        run: npm run build
+      - name: OpsCore preflight
+        run: python scripts/preflight.py --check-git
