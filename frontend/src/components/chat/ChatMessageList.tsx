@@ -3,8 +3,8 @@ import type { CSSProperties, RefObject } from 'react'
 import type { ChatMessage, SafetyPolicyAction, SafetyPolicyDecision, ToolApproval } from '@/types'
 import MessageBubble from '@/features/sessions/MessageBubble'
 
-const DEFAULT_VISIBLE_MESSAGE_COUNT = 24
-const MESSAGE_PAGE_SIZE = 32
+const DEFAULT_VISIBLE_MESSAGE_COUNT = 12
+const MESSAGE_PAGE_SIZE = 24
 const messageVisibilityStyle: CSSProperties = {
   contentVisibility: 'auto',
   containIntrinsicSize: '160px',

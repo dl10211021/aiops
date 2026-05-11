@@ -23,6 +23,23 @@ export function addSessionState(st: SessionStateSnapshot, session: Session, acti
   }
 }
 
+export function restoreSessionsState(st: SessionStateSnapshot, sessions: Session[], currentSessionId: string | null) {
+  if (sessions.length === 0) return st
+  const nextSessions = { ...st.sessions }
+  const groupCandidates = [...st.sessionGroups]
+  sessions.forEach((session) => {
+    nextSessions[session.id] = session
+    groupCandidates.push(sessionPrimaryGroup(session))
+  })
+  const nextGroups = uniqueSessionGroups(groupCandidates)
+  writeStoredSessionGroups(nextGroups)
+  return {
+    sessions: nextSessions,
+    sessionGroups: nextGroups,
+    currentSessionId: currentSessionId || st.currentSessionId,
+  }
+}
+
 export function removeSessionState(st: SessionStateSnapshot, id: string) {
   const sessions = { ...st.sessions }
   delete sessions[id]

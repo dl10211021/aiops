@@ -1,9 +1,14 @@
 import { memo } from 'react'
-import type { MouseEvent } from 'react'
+import type { CSSProperties, MouseEvent } from 'react'
 import type { Session } from '@/types'
 import { protocolLabel } from '@/utils/assetDisplay'
 import { sessionAttention } from './sessionAttention'
 import { isSessionRunning } from './sessionMetrics'
+
+const sessionItemVisibilityStyle: CSSProperties = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: '58px',
+}
 
 function protocolBadgeClass(session: Session) {
   const raw = `${session.protocol || ''} ${session.asset_type || ''}`.toLowerCase()
@@ -41,6 +46,7 @@ function SessionItem({
   return (
     <div
       onClick={() => onSelectSession(session.id, group)}
+      style={sessionItemVisibilityStyle}
       className={`group relative grid min-h-[58px] cursor-pointer grid-cols-[46px_minmax(0,1fr)_54px] items-center gap-3 overflow-hidden rounded-lg border px-2.5 py-2 text-sm transition-colors duration-150
         ${active
           ? 'border-ops-accent/60 bg-[linear-gradient(135deg,rgba(40,208,168,0.16),rgba(15,36,56,0.76))] text-ops-accent shadow-[inset_0_0_0_1px_rgba(40,208,168,0.08)]'

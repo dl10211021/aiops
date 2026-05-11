@@ -5,7 +5,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import TopBar from '@/components/layout/TopBar'
 import ToastContainer from '@/components/layout/ToastContainer'
 import { getActiveSessions, pollAllSessions } from '@/api/client'
-import type { ChatMessage, ViewId } from '@/types'
+import type { ChatMessage, Session, ViewId } from '@/types'
 
 const CHUNK_RELOAD_KEY = 'opscore:chunk-reload-at'
 const CHUNK_RELOAD_COOLDOWN_MS = 15000
@@ -221,8 +221,7 @@ function ModalRouter() {
 }
 
 export default function App() {
-  const addSession = useStore((s) => s.addSession)
-  const setCurrentSession = useStore((s) => s.setCurrentSession)
+  const restoreSessions = useStore((s) => s.restoreSessions)
   const setView = useStore((s) => s.setView)
   const appendMessage = useStore((s) => s.appendMessage)
   const currentView = useStore((s) => s.currentView)
@@ -247,10 +246,11 @@ export default function App() {
         const res = await getActiveSessions()
         const serverSessions = res.data.sessions || {}
         let firstId: string | null = null
+        const restoredSessions: Session[] = []
 
         for (const [sid, sinfo] of Object.entries(serverSessions)) {
           if (!firstId) firstId = sid
-          addSession({
+          restoredSessions.push({
             id: sid,
             host: sinfo.host,
             remark: sinfo.remark || '',
@@ -269,10 +269,10 @@ export default function App() {
             isStreaming: Boolean(sinfo.isStreaming),
             backendStreaming: Boolean(sinfo.isStreaming),
             historyLoaded: false,
-          }, false)
+          })
         }
 
-        if (firstId) setCurrentSession(firstId)
+        restoreSessions(restoredSessions, firstId)
       } catch { /* backend not ready */ }
     }
 
@@ -280,7 +280,7 @@ export default function App() {
     const timer = window.setTimeout(() => void restore(), delay)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentView])
+  }, [currentView, restoreSessions])
 
   useEffect(() => {
     if (currentView === 'chat') return

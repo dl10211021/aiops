@@ -10,6 +10,7 @@ export interface AppState {
   currentSessionId: string | null
   setCurrentSession: (id: string | null) => void
   addSession: (s: Session, activate?: boolean) => void
+  restoreSessions: (sessions: Session[], currentSessionId: string | null) => void
   removeSession: (id: string) => void
   updateSession: (id: string, patch: Partial<Session>) => void
   moveSessionToGroup: (id: string, groupName: string) => void

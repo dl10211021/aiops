@@ -21,6 +21,7 @@ DEFAULT_HISTORY_MESSAGES = 160
 class PerfStep:
     name: str
     ms: float
+    long_tasks: dict[str, Any]
 
 
 def response(data: dict[str, Any], *, message: str = "") -> dict[str, Any]:
@@ -478,10 +479,28 @@ def install_long_task_probe(page: Page) -> None:
     )
 
 
-def measure(name: str, action) -> PerfStep:
+def summarize_long_task_items(tasks: list[dict[str, Any]]) -> dict[str, Any]:
+    durations = [float(item.get("duration", 0)) for item in tasks]
+    if not durations:
+        return {"count": 0, "max_ms": 0, "p95_ms": 0, "total_ms": 0}
+    return {
+        "count": len(durations),
+        "max_ms": round(max(durations), 1),
+        "p95_ms": round(statistics.quantiles(durations, n=20)[18] if len(durations) >= 20 else max(durations), 1),
+        "total_ms": round(sum(durations), 1),
+    }
+
+
+def measure(page: Page, name: str, action) -> PerfStep:
+    long_task_offset = int(page.evaluate("(window.__opscorePerfLongTasks || []).length"))
     started = time.perf_counter()
     action()
-    return PerfStep(name=name, ms=(time.perf_counter() - started) * 1000)
+    ms = (time.perf_counter() - started) * 1000
+    tasks = page.evaluate(
+        "(offset) => (window.__opscorePerfLongTasks || []).slice(offset)",
+        long_task_offset,
+    )
+    return PerfStep(name=name, ms=ms, long_tasks=summarize_long_task_items(tasks))
 
 
 def click_nav_button(page: Page, text: str) -> None:
@@ -498,15 +517,7 @@ def wait_for_chat_composer(page: Page, timeout: int = 20_000) -> None:
 
 def summarize_long_tasks(page: Page) -> dict[str, Any]:
     tasks = page.evaluate("window.__opscorePerfLongTasks || []")
-    durations = [float(item.get("duration", 0)) for item in tasks]
-    if not durations:
-        return {"count": 0, "max_ms": 0, "p95_ms": 0, "total_ms": 0}
-    return {
-        "count": len(durations),
-        "max_ms": round(max(durations), 1),
-        "p95_ms": round(statistics.quantiles(durations, n=20)[18] if len(durations) >= 20 else max(durations), 1),
-        "total_ms": round(sum(durations), 1),
-    }
+    return summarize_long_task_items(tasks)
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
@@ -529,6 +540,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
         steps.append(
             measure(
+                page,
                 "initial_load",
                 lambda: page.goto(args.url, wait_until="networkidle", timeout=60_000),
             )
@@ -538,17 +550,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
         steps.append(
             measure(
+                page,
                 "open_chat_view",
-                lambda: (click_nav_button(page, "会话"), wait_for_chat_composer(page)),
+                lambda: (click_nav_button(page, "会话"), wait_for_chat_composer(page), wait_for_text(page, "AI 输出报告")),
             )
         )
-        page.wait_for_timeout(400)
-        wait_for_text(page, "AI 输出报告")
         chat_body = page.locator("body").inner_text(timeout=10_000)
 
         session_search = page.get_by_label("搜索会话")
         steps.append(
             measure(
+                page,
                 "session_search_fill",
                 lambda: (session_search.fill("oracle"), page.wait_for_timeout(250)),
             )
@@ -556,6 +568,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
         steps.append(
             measure(
+                page,
                 "open_assets_view",
                 lambda: (click_nav_button(page, "资产"), wait_for_text(page, "资产列表")),
             )
@@ -563,6 +576,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         asset_search = page.get_by_placeholder("搜索资产、地址、账号、类型、主接入")
         steps.append(
             measure(
+                page,
                 "asset_search_fill",
                 lambda: (asset_search.fill("oracle"), page.wait_for_timeout(250)),
             )
@@ -570,6 +584,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         group_select = page.locator("select").filter(has_text="按资产组").first
         steps.append(
             measure(
+                page,
                 "asset_group_select_type",
                 lambda: (group_select.select_option("type"), page.wait_for_timeout(250)),
             )
@@ -579,7 +594,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         long_tasks = summarize_long_tasks(page)
         browser.close()
 
-    step_payload = [{"name": step.name, "ms": round(step.ms, 1)} for step in steps]
+    step_payload = [
+        {"name": step.name, "ms": round(step.ms, 1), "long_tasks": step.long_tasks}
+        for step in steps
+    ]
     return {
         "url": args.url,
         "scenario": {

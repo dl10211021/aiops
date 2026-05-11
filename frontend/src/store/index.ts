@@ -20,6 +20,7 @@ import {
   addSessionState,
   moveSessionToGroupState,
   removeSessionState,
+  restoreSessionsState,
   updateSessionState,
 } from './sessionMutations'
 import type { AppState } from './types'
@@ -67,6 +68,7 @@ export const useStore = create<AppState>((set, get) => ({
   currentSessionId: null,
   setCurrentSession: (id) => set({ currentSessionId: id }),
   addSession: (session, activate = true) => set((state) => addSessionState(state, session, activate)),
+  restoreSessions: (sessions, currentSessionId) => set((state) => restoreSessionsState(state, sessions, currentSessionId)),
   removeSession: (id) => set((state) => removeSessionState(state, id)),
   updateSession: (id, patch) => set((state) => updateSessionState(state, id, patch)),
   moveSessionToGroup: (id, groupName) => set((state) => moveSessionToGroupState(state, id, groupName)),

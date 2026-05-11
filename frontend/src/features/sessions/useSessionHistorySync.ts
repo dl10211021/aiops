@@ -40,7 +40,7 @@ export function useSessionHistorySync(
       getSessionHistory(sessionId, sessionHistoryRestoreLimit, { signal: controller.signal })
         .then((history) => {
           if (cancelled) return
-          const messages = history.data.messages || []
+          const messages = (history.data.messages || []).slice(-sessionHistoryRestoreLimit)
           const current = useStore.getState().sessions[sessionId]
           if (!current) return
           setSessionMessages(sessionId, normalizeHistoryMessages(sessionId, messages))
@@ -96,7 +96,8 @@ export function useSessionHistorySync(
       try {
         const history = await getSessionHistory(recoverySessionId, sessionHistoryRestoreLimit, { signal: controller.signal })
         if (!cancelled) {
-          setSessionMessages(recoverySessionId, normalizeHistoryMessages(recoverySessionId, history.data.messages || []))
+          const messages = (history.data.messages || []).slice(-sessionHistoryRestoreLimit)
+          setSessionMessages(recoverySessionId, normalizeHistoryMessages(recoverySessionId, messages))
         }
       } catch (error) {
         if (isAbortError(error) || controller.signal.aborted) return
