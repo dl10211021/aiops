@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useRef, useEffect, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { useStore } from '@/store'
 import AssetProfilePanel from '@/features/sessions/AssetProfilePanel'
@@ -107,8 +107,8 @@ export default function ChatWindow() {
   )
   const userInteractionResponse = useUserInteractionResponse(currentSessionId)
   const slashCommands = commandManager.slashCommands
-  const quickCommands = buildQuickCommands(slashCommands)
-  const visibleSlashCommands = visibleSlashCommandsForInput(input, slashCommands)
+  const quickCommands = useMemo(() => buildQuickCommands(slashCommands), [slashCommands])
+  const visibleSlashCommands = useMemo(() => visibleSlashCommandsForInput(input, slashCommands), [input, slashCommands])
 
   useEffect(() => {
     setSelectedSlashCommandIndex(0)
@@ -309,10 +309,10 @@ export default function ChatWindow() {
     localStorage.setItem(rightPanelStorageKey, String(next))
   }
 
-  const setOrchestrationMode = (mode: 'single' | 'split' | 'fast') => {
+  const setOrchestrationMode = useCallback((mode: 'single' | 'split' | 'fast') => {
     setOrchestrationModeState(mode)
     localStorage.setItem(orchestrationModeStorageKey, mode)
-  }
+  }, [])
 
   if (!session) {
     return <ChatEmptyState />

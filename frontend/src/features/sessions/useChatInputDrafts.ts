@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { RefObject } from 'react'
 
 export function useChatInputDrafts(
@@ -22,29 +22,29 @@ export function useChatInputDrafts(
     localStorage.setItem('ops_chat_input_history', JSON.stringify(inputHistory.slice(0, 20)))
   }, [inputHistory])
 
-  const setInput = (value: string) => {
+  const setInput = useCallback((value: string) => {
     if (!currentSessionId) return
     setDraftsBySession((prev) => ({ ...prev, [currentSessionId]: value }))
-  }
+  }, [currentSessionId])
 
-  const focusComposer = () => {
+  const focusComposer = useCallback(() => {
     requestAnimationFrame(() => textareaRef.current?.focus())
-  }
+  }, [textareaRef])
 
-  const moveCursorToEnd = () => {
+  const moveCursorToEnd = useCallback(() => {
     requestAnimationFrame(() => {
       const element = textareaRef.current
       if (element) element.selectionStart = element.selectionEnd = element.value.length
     })
-  }
+  }, [textareaRef])
 
-  const applySlashCommand = (prompt: string) => {
+  const applySlashCommand = useCallback((prompt: string) => {
     setInput(prompt)
     setHistoryIndex(null)
     focusComposer()
-  }
+  }, [focusComposer, setInput])
 
-  const handleHistoryKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleHistoryKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'ArrowUp' && inputHistory.length > 0 && !event.shiftKey) {
       const atStart = event.currentTarget.selectionStart === 0
       if (!input.trim() || atStart) {
@@ -75,7 +75,7 @@ export function useChatInputDrafts(
     }
 
     return false
-  }
+  }, [historyIndex, input, inputHistory, moveCursorToEnd, setInput])
 
   return {
     applySlashCommand,

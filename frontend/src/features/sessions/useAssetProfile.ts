@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { generateSessionProfile, getSessionProfile } from '@/api/client'
 import { isAbortError } from '@/api/http'
 import { useStore } from '@/store'
@@ -47,11 +47,11 @@ export function useAssetProfile(currentSessionId: string | null, modelName: stri
     }
   }, [currentSessionId])
 
-  const toggle = () => {
+  const toggle = useCallback(() => {
     setOpen((value) => !value)
-  }
+  }, [])
 
-  const generate = async () => {
+  const generate = useCallback(async () => {
     const sessionId = currentSessionId
     if (!sessionId) return
     setBusySessionId(sessionId)
@@ -69,7 +69,7 @@ export function useAssetProfile(currentSessionId: string | null, modelName: stri
     } finally {
       setBusySessionId((current) => current === sessionId ? null : current)
     }
-  }
+  }, [addToast, currentSessionId, modelName])
 
   return {
     busy,

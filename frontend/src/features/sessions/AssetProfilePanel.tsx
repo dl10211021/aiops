@@ -1,4 +1,5 @@
 import type { AssetProfile, Session } from '@/types'
+import { memo } from 'react'
 import {
   assetProfileSubtitle,
   assetProfileTitle,
@@ -17,7 +18,7 @@ interface AssetProfilePanelProps {
   onGenerate: () => void
 }
 
-export default function AssetProfilePanel({
+function AssetProfilePanel({
   session,
   profile,
   open,
@@ -45,3 +46,5 @@ export default function AssetProfilePanel({
     </div>
   )
 }
+
+export default memo(AssetProfilePanel)

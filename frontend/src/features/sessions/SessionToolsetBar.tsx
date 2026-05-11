@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import type { ModelGroup } from '@/api/client'
 import type { Session, SessionToolCatalog } from '@/types'
 import {
@@ -20,7 +20,7 @@ interface SessionToolsetBarProps {
   onThinkingModeChange: (value: string) => void
 }
 
-export default function SessionToolsetBar({
+function SessionToolsetBar({
   catalog,
   session,
   availableModels,
@@ -32,7 +32,7 @@ export default function SessionToolsetBar({
   onThinkingModeChange,
 }: SessionToolsetBarProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
-  const toolsetModel = buildSessionToolsetModel(session, catalog)
+  const toolsetModel = useMemo(() => buildSessionToolsetModel(session, catalog), [catalog, session])
 
   return (
     <div className="border-b border-ops-surface0/75 bg-[linear-gradient(90deg,rgba(40,208,168,0.07),rgba(15,31,50,0.76),rgba(10,20,35,0.88))] px-3 py-1.5">
@@ -70,3 +70,5 @@ export default function SessionToolsetBar({
     </div>
   )
 }
+
+export default memo(SessionToolsetBar)

@@ -556,6 +556,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             )
         )
         chat_body = page.locator("body").inner_text(timeout=10_000)
+        chat_input = page.get_by_placeholder("输入消息", exact=False).first
+        steps.append(
+            measure(
+                page,
+                "chat_input_type",
+                lambda: (
+                    chat_input.fill(""),
+                    chat_input.type("请对当前会话执行一次只读巡检，并按风险等级输出关键结论。"),
+                    page.wait_for_timeout(120),
+                ),
+            )
+        )
+        chat_input.fill("")
 
         session_search = page.get_by_label("搜索会话")
         steps.append(
