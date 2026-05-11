@@ -25,6 +25,7 @@ export function useSessionHistorySync(
       !sessionId
       || !session
       || session.historyLoaded
+      || session.backendStreaming
       || historyLoadingRef.current.has(sessionId)
       || hasActiveStream(sessionId)
     ) return
@@ -98,6 +99,7 @@ export function useSessionHistorySync(
         if (!cancelled) {
           const messages = (history.data.messages || []).slice(-sessionHistoryRestoreLimit)
           setSessionMessages(recoverySessionId, normalizeHistoryMessages(recoverySessionId, messages))
+          updateSession(recoverySessionId, { historyLoaded: true })
         }
       } catch (error) {
         if (isAbortError(error) || controller.signal.aborted) return
