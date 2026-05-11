@@ -149,6 +149,24 @@ const NON_CHAT_SESSION_RESTORE_DELAY_MS = 1200
 const SESSION_POLL_INTERVAL_MS = 5000
 const IDLE_SESSION_POLL_INTERVAL_MS = 15000
 const HIDDEN_SESSION_POLL_INTERVAL_MS = 30000
+const LAST_ACTIVE_SESSION_KEY = 'opscore:last-active-session-id'
+
+function readLastActiveSessionId() {
+  try {
+    return window.localStorage.getItem(LAST_ACTIVE_SESSION_KEY)
+  } catch {
+    return null
+  }
+}
+
+function writeLastActiveSessionId(sessionId: string | null) {
+  try {
+    if (sessionId) window.localStorage.setItem(LAST_ACTIVE_SESSION_KEY, sessionId)
+    else window.localStorage.removeItem(LAST_ACTIVE_SESSION_KEY)
+  } catch {
+    // Ignore storage failures; session restore still falls back to backend order.
+  }
+}
 
 function ViewFallback() {
   return (
@@ -225,6 +243,7 @@ export default function App() {
   const setView = useStore((s) => s.setView)
   const appendMessage = useStore((s) => s.appendMessage)
   const currentView = useStore((s) => s.currentView)
+  const currentSessionId = useStore((s) => s.currentSessionId)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const restoreStartedRef = useRef(false)
@@ -234,6 +253,10 @@ export default function App() {
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [setView])
+
+  useEffect(() => {
+    writeLastActiveSessionId(currentSessionId)
+  }, [currentSessionId])
 
   // Restore sessions from backend on mount
   useEffect(() => {
@@ -272,7 +295,11 @@ export default function App() {
           })
         }
 
-        restoreSessions(restoredSessions, firstId)
+        const lastActiveSessionId = readLastActiveSessionId()
+        const restoreId = lastActiveSessionId && serverSessions[lastActiveSessionId]
+          ? lastActiveSessionId
+          : firstId
+        restoreSessions(restoredSessions, restoreId)
       } catch { /* backend not ready */ }
     }
 
