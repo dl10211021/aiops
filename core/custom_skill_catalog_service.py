@@ -19,7 +19,7 @@ def _resolve_dispatcher(dispatcher: Any | None = None) -> Any:
     return dispatcher if dispatcher is not None else dispatcher_module.dispatcher
 
 
-CUSTOM_SKILL_CATALOG_CACHE_TTL_SECONDS = 60
+CUSTOM_SKILL_CATALOG_CACHE_TTL_SECONDS = 300
 _custom_skill_catalog_cache: tuple[float, dict[str, list[dict[str, Any]]]] | None = None
 
 

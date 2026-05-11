@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
 import { useStore } from '@/store'
 import type { Session } from '@/types'
@@ -39,6 +39,7 @@ export function useSessionSidebarModel() {
   const [selectedGroup, setSelectedGroup] = useState(DEFAULT_SESSION_GROUP)
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [editingBusy, setEditingBusy] = useState(false)
+  const deferredSessionSearch = useDeferredValue(sessionSearch)
 
   const sessionList = useStableSidebarSessionList(sessions)
   const sessionsById = useMemo(() => {
@@ -60,7 +61,7 @@ export function useSessionSidebarModel() {
     return groupSessionsByPrimaryGroup(sessionList, groupNames)
   }, [groupNames, sessionList])
 
-  const normalizedSessionSearch = sessionSearch.trim().toLowerCase()
+  const normalizedSessionSearch = deferredSessionSearch.trim().toLowerCase()
   const visibleSessions = useMemo(() => {
     if (!normalizedSessionSearch) {
       return { grouped, groupNames, sessionList }

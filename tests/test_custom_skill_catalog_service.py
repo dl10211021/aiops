@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core.custom_skill_catalog_service import (
+    CUSTOM_SKILL_CATALOG_CACHE_TTL_SECONDS,
     CustomSkillCatalogServiceError,
     clear_custom_skill_catalog_cache,
     get_custom_skill_detail,
@@ -90,6 +91,9 @@ class TestCustomSkillCatalogService(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertNotIn({"id": "new-market-skill", "is_market": True}, second["registry"])
         self.assertIn({"id": "new-market-skill", "is_market": True}, third["registry"])
+
+    def test_default_registry_cache_is_long_enough_for_repeated_ui_opens(self):
+        self.assertGreaterEqual(CUSTOM_SKILL_CATALOG_CACHE_TTL_SECONDS, 300)
 
     def test_detail_prefers_local_registry_body(self):
         dispatcher = FakeDispatcher()
