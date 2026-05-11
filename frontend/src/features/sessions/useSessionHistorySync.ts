@@ -95,24 +95,34 @@ export function useSessionHistorySync(
       inFlight = true
       let shouldContinue = true
       try {
-        const history = await getSessionHistory(recoverySessionId, sessionHistoryRestoreLimit, { signal: controller.signal })
-        if (!cancelled) {
-          const messages = (history.data.messages || []).slice(-sessionHistoryRestoreLimit)
-          setSessionMessages(recoverySessionId, normalizeHistoryMessages(recoverySessionId, messages))
-          updateSession(recoverySessionId, { historyLoaded: true })
+        let running = true
+        let statusKnown = false
+        try {
+          const active = await getSessionStatus(recoverySessionId, { signal: controller.signal })
+          if (cancelled) return
+          running = Boolean(active.data.isStreaming)
+          statusKnown = true
+          shouldContinue = running
+          updateSession(recoverySessionId, { isStreaming: running, backendStreaming: running })
+        } catch {
+          // Keep the current running indicator if the status check is transiently unavailable.
         }
-      } catch (error) {
-        if (isAbortError(error) || controller.signal.aborted) return
-        // This is only reconnect recovery; keep current transcript on transient failures.
-      }
-      try {
-        const active = await getSessionStatus(recoverySessionId, { signal: controller.signal })
-        if (cancelled) return
-        const running = Boolean(active.data.isStreaming)
-        shouldContinue = running
-        updateSession(recoverySessionId, { isStreaming: running, backendStreaming: running })
-      } catch {
-        // Keep the current running indicator if the status check is transiently unavailable.
+
+        const current = useStore.getState().sessions[recoverySessionId]
+        const shouldSyncHistory = !current?.historyLoaded || (statusKnown && !running)
+        if (shouldSyncHistory) {
+          try {
+            const history = await getSessionHistory(recoverySessionId, sessionHistoryRestoreLimit, { signal: controller.signal })
+            if (!cancelled) {
+              const messages = (history.data.messages || []).slice(-sessionHistoryRestoreLimit)
+              setSessionMessages(recoverySessionId, normalizeHistoryMessages(recoverySessionId, messages))
+              updateSession(recoverySessionId, { historyLoaded: true })
+            }
+          } catch (error) {
+            if (isAbortError(error) || controller.signal.aborted) return
+            // This is only reconnect recovery; keep current transcript on transient failures.
+          }
+        }
       } finally {
         inFlight = false
         if (!cancelled && shouldContinue) {
