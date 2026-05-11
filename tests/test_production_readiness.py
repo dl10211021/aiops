@@ -145,6 +145,12 @@ class TestProductionReadiness(unittest.TestCase):
         content = workflow.read_text(encoding="utf-8")
 
         for marker in (
+            '"codex/**"',
+            "permissions:",
+            "contents: read",
+            "concurrency:",
+            "cancel-in-progress: true",
+            "timeout-minutes:",
             "python -m pip install -r requirements.txt",
             "npm ci",
             "python scripts/preflight.py --check-git",

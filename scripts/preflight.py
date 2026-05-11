@@ -33,8 +33,9 @@ def github_escape(value: str) -> str:
 def emit_github_error(label: str, output: str) -> None:
     if not os.environ.get("GITHUB_ACTIONS"):
         return
+    title = github_escape(f"{label} failed")
     details = github_escape("\n".join(output.splitlines()[-80:]))
-    print(f"::error title={label} failed::{details}", flush=True)
+    print(f"::error title={title}::{details}", flush=True)
 
 
 def run(label: str, command: list[str], cwd: Path | None = None) -> int:

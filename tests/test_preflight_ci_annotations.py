@@ -29,6 +29,19 @@ class TestPreflightCiAnnotations(unittest.TestCase):
         self.assertIn("::error title=sample check failed::line 1", output.getvalue())
         self.assertIn("FAILED: sample check exited with 7", output.getvalue())
 
+    def test_run_escapes_github_error_annotation_title(self):
+        command = [sys.executable, "-c", "print('boom'); raise SystemExit(2)"]
+        output = io.StringIO()
+
+        with (
+            patch.dict("os.environ", {"GITHUB_ACTIONS": "true"}),
+            redirect_stdout(output),
+        ):
+            code = preflight.run("bad%\r\nlabel", command, Path.cwd())
+
+        self.assertEqual(code, 2)
+        self.assertIn("::error title=bad%25%0D%0Alabel failed::boom", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
