@@ -37,6 +37,7 @@ cron_jobs.sqlite
 /memory/
 /data/
 /models/embeddings/
+/undefined/
 
 # Logs
 server_out.log

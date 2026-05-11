@@ -26,6 +26,17 @@ def npm_command(*args: str) -> list[str]:
     return [executable, *args]
 
 
+def github_escape(value: str) -> str:
+    return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def emit_github_error(label: str, output: str) -> None:
+    if not os.environ.get("GITHUB_ACTIONS"):
+        return
+    details = github_escape("\n".join(output.splitlines()[-80:]))
+    print(f"::error title={label} failed::{details}", flush=True)
+
+
 def run(label: str, command: list[str], cwd: Path | None = None) -> int:
     workdir = cwd or ROOT
     print(f"\n==> {label}", flush=True)
@@ -64,6 +75,7 @@ def run(label: str, command: list[str], cwd: Path | None = None) -> int:
             )
             return 0
     if result.returncode:
+        emit_github_error(label, result.stdout or "")
         print(f"FAILED: {label} exited with {result.returncode}")
     return result.returncode
 

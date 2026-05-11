@@ -90,6 +90,7 @@ class TestProductionReadiness(unittest.TestCase):
         dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
 
         self.assertIn("/static_react/", gitignore)
+        self.assertIn("/undefined/", gitignore)
         self.assertIn("static_react/", dockerignore)
         self.assertIn("AS frontend-build", dockerfile)
         self.assertIn("npm ci", dockerfile)
@@ -107,6 +108,8 @@ class TestProductionReadiness(unittest.TestCase):
             "frontend npm audit",
             "--audit-level=high",
             "frontend build",
+            "GITHUB_ACTIONS",
+            "::error",
         ):
             self.assertIn(marker, preflight)
 
