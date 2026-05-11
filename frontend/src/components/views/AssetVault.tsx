@@ -1,6 +1,6 @@
 import PageHeader from '@/components/layout/PageHeader'
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { getAssetTypes } from '@/api/assets'
+import { getAssetTypeFormCatalog } from '@/api/assets'
 import type { AssetTypeDefinition } from '@/types'
 import { AssetVaultFilterPanel, AssetVaultHeaderActions } from './AssetVaultFilterPanel'
 import { AssetEnterpriseCommandPanel, AssetTablePanel } from './AssetVaultPageSections'
@@ -157,7 +157,7 @@ export default function AssetVault() {
   useEffect(() => {
     if (!editTarget || fullCatalogTypes) return
     let cancelled = false
-    getAssetTypes()
+    getAssetTypeFormCatalog()
       .then((response) => {
         if (!cancelled) setFullCatalogTypes(response.data.types || [])
       })

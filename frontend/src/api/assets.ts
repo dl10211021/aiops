@@ -75,6 +75,7 @@ const ASSET_CATALOG_CACHE_TTL_MS = 60_000
 
 let assetTypesRequest: CachedRequest<AssetTypesResponse> | null = null
 let assetTypeSummaryRequest: CachedRequest<AssetTypesResponse> | null = null
+let assetTypeFormCatalogRequest: CachedRequest<AssetTypesResponse> | null = null
 let databaseDriverCapabilitiesRequest: CachedRequest<DatabaseDriverCapabilitiesResponse> | null = null
 
 function readCachedRequest<T>(
@@ -105,6 +106,7 @@ function refreshQuery(options: CacheOptions | undefined) {
 export function clearAssetCatalogCache() {
   assetTypesRequest = null
   assetTypeSummaryRequest = null
+  assetTypeFormCatalogRequest = null
   databaseDriverCapabilitiesRequest = null
 }
 
@@ -183,6 +185,7 @@ export async function refreshDatabaseDriverCapabilities() {
 export async function refreshAssetCatalog() {
   assetTypesRequest = null
   assetTypeSummaryRequest = null
+  assetTypeFormCatalogRequest = null
   const [types, summary] = await Promise.all([
     getAssetTypes({ forceRefresh: true }),
     getAssetTypeSummary({ forceRefresh: true }),
@@ -258,4 +261,16 @@ export async function getAssetTypeSummary(options?: CacheOptions) {
     },
   )
   return assetTypeSummaryRequest.request
+}
+
+export async function getAssetTypeFormCatalog(options?: CacheOptions) {
+  const cached = readCachedRequest(assetTypeFormCatalogRequest, options)
+  if (cached) return cached
+  assetTypeFormCatalogRequest = cacheRequest(
+    request<AssetTypesResponse>('/assets/types/form-catalog'),
+    () => {
+      assetTypeFormCatalogRequest = null
+    },
+  )
+  return assetTypeFormCatalogRequest.request
 }

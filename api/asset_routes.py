@@ -25,7 +25,11 @@ from api.schema_models.assets import (
     BatchAssetImportItem,
 )
 from api.schema_models.common import ResponseModel
-from core.asset_catalog_response import build_asset_type_summary_response, build_asset_types_response
+from core.asset_catalog_response import (
+    build_asset_type_form_catalog_response,
+    build_asset_type_summary_response,
+    build_asset_types_response,
+)
 from core.asset_cleanup_service import (
     apply_asset_cleanup_record,
     build_asset_cleanup_plan_record,
@@ -130,6 +134,13 @@ async def get_asset_types():
 async def get_asset_type_summary():
     """返回资产台账首屏筛选所需的轻量资产类型目录。"""
     data = build_asset_type_summary_response(get_asset_catalog())
+    return ResponseModel(**asset_types_response_kwargs(data))
+
+
+@router.get("/assets/types/form-catalog", response_model=ResponseModel)
+async def get_asset_type_form_catalog():
+    """返回资产新建/编辑表单所需的中量资产类型目录。"""
+    data = build_asset_type_form_catalog_response(get_asset_catalog())
     return ResponseModel(**asset_types_response_kwargs(data))
 
 

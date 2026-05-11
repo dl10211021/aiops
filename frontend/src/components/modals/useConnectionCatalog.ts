@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import { getAssetTypes, getDatabaseDriverCapabilities, getSkillRegistry } from '@/api/client'
+import { getAssetTypeFormCatalog, getDatabaseDriverCapabilities, getSkillRegistry } from '@/api/client'
 import type { SkillInfo } from '@/types'
 import { ASSET_CATEGORIES, ASSET_SUB_TYPES, CATEGORY_LABELS } from './connectionAssetCatalog'
 import type {
@@ -46,7 +46,7 @@ export function useConnectionCatalog({
 
   useEffect(() => {
     Promise.all([
-      getAssetTypes().catch(() => null),
+      getAssetTypeFormCatalog().catch(() => null),
       getSkillRegistry().catch(() => null),
       getDatabaseDriverCapabilities().catch(() => null),
     ]).then(([assetResponse, skillResponse, driverResponse]) => {

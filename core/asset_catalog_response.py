@@ -4,6 +4,18 @@ from core.asset_capabilities import category_metadata, connector_metadata
 from core.asset_protocols import get_asset_catalog
 
 
+FORM_CAPABILITY_FIELDS = {
+    "family",
+    "connector",
+    "operation_model",
+    "tools",
+    "credential_fields",
+    "driver_key",
+    "maturity",
+    "connector_group",
+}
+
+
 def build_asset_types_response(types: list[dict] | None = None) -> dict:
     asset_types = types if types is not None else get_asset_catalog()
     categories = []
@@ -45,6 +57,37 @@ def build_asset_type_summary_response(types: list[dict] | None = None) -> dict:
         })
     return {
         "types": summary_types,
+        "categories": data["categories"],
+        "connector_groups": data["connector_groups"],
+    }
+
+
+def build_asset_type_form_catalog_response(types: list[dict] | None = None) -> dict:
+    data = build_asset_types_response(types)
+    form_types = []
+    for item in data["types"]:
+        capability = item.get("capability") or {}
+        compact_capability = {
+            key: capability.get(key)
+            for key in FORM_CAPABILITY_FIELDS
+            if capability.get(key) is not None
+        }
+        compact_capability.setdefault("connector", capability.get("connector") or "unknown")
+        form_types.append({
+            "id": item.get("id"),
+            "label": item.get("label"),
+            "category": item.get("category") or "other",
+            "protocol": item.get("protocol"),
+            "default_port": item.get("default_port"),
+            "source": item.get("source"),
+            "hertzbeat_protocols": item.get("hertzbeat_protocols") or [],
+            "hertzbeat_supported": bool(item.get("hertzbeat_supported")),
+            "access_protocols": item.get("access_protocols") or [],
+            "params": item.get("params") or [],
+            "capability": compact_capability,
+        })
+    return {
+        "types": form_types,
         "categories": data["categories"],
         "connector_groups": data["connector_groups"],
     }
