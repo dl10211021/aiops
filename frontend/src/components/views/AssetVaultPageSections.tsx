@@ -1,5 +1,5 @@
 import type { Asset, ProtocolVerificationStatusOverview } from '@/types'
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import {
   DEFAULT_SESSION_GROUP,
   normalizeSessionGroupName,
@@ -538,13 +538,7 @@ export function AssetTablePanel({
               {allGroupsCollapsed ? '全部展开' : '全部收起'}
             </button>
           )}
-          <input
-            type="text"
-            placeholder="搜索资产、地址、账号、类型、主接入"
-            value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
-            className="h-8 min-w-64 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-xs text-ops-text outline-none focus:border-ops-accent"
-          />
+          <AssetSearchBox value={search} onChange={onSearchChange} />
           <button
             onClick={onRefresh}
             className="ops-muted-action h-8 px-3 text-xs"
@@ -889,6 +883,47 @@ export function AssetTablePanel({
         </div>
       )}
     </section>
+  )
+}
+
+function AssetSearchBox({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (value: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  const [, startTransition] = useTransition()
+  const onChangeRef = useRef(onChange)
+
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
+
+  useEffect(() => {
+    setDraft(value)
+  }, [value])
+
+  useEffect(() => {
+    if (draft === value) return
+    const timer = window.setTimeout(() => {
+      startTransition(() => onChangeRef.current(draft))
+    }, 180)
+    return () => window.clearTimeout(timer)
+  }, [draft, startTransition, value])
+
+  return (
+    <input
+      type="text"
+      placeholder="搜索资产、地址、账号、类型、主接入"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        if (draft !== value) startTransition(() => onChangeRef.current(draft))
+      }}
+      className="h-8 min-w-64 rounded-lg border border-ops-surface1 bg-ops-panel px-3 text-xs text-ops-text outline-none focus:border-ops-accent"
+    />
   )
 }
 
