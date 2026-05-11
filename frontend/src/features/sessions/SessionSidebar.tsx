@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, useTransition } from 'react'
 import SessionGroupList from './SessionGroupList'
 import SessionGroupManager from './SessionGroupManager'
 import SessionEditModal from './SessionEditModal'
@@ -39,12 +40,9 @@ export default function SessionSidebar() {
         />
 
         <div className="mt-2">
-          <input
+          <SessionSearchBox
             value={model.sessionSearch}
-            onChange={(event) => model.setSessionSearch(event.target.value)}
-            placeholder="搜索会话组 / 主机 / 协议 / 标签"
-            className="h-9 w-full rounded-xl border border-ops-surface1/80 bg-ops-dark/45 px-3 text-xs text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent focus:shadow-[0_0_0_3px_rgba(40,208,168,0.08)]"
-            aria-label="搜索会话"
+            onChange={model.setSessionSearch}
           />
         </div>
       </div>
@@ -76,5 +74,46 @@ export default function SessionSidebar() {
         />
       )}
     </aside>
+  )
+}
+
+function SessionSearchBox({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (value: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  const [, startTransition] = useTransition()
+  const onChangeRef = useRef(onChange)
+
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
+
+  useEffect(() => {
+    setDraft(value)
+  }, [value])
+
+  useEffect(() => {
+    if (draft === value) return
+    const timer = window.setTimeout(() => {
+      startTransition(() => onChangeRef.current(draft))
+    }, 180)
+    return () => window.clearTimeout(timer)
+  }, [draft, startTransition, value])
+
+  return (
+    <input
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        if (draft !== value) startTransition(() => onChangeRef.current(draft))
+      }}
+      placeholder="搜索会话组 / 主机 / 协议 / 标签"
+      className="h-9 w-full rounded-xl border border-ops-surface1/80 bg-ops-dark/45 px-3 text-xs text-ops-text outline-none transition-colors placeholder:text-ops-overlay focus:border-ops-accent focus:shadow-[0_0_0_3px_rgba(40,208,168,0.08)]"
+      aria-label="搜索会话"
+    />
   )
 }
