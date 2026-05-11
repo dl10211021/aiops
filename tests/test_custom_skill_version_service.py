@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -21,6 +22,8 @@ class TestCustomSkillVersionService(unittest.TestCase):
             older.write_text("older", encoding="utf-8")
             newer.write_text("newer", encoding="utf-8")
             ignored.write_text("ignored", encoding="utf-8")
+            os.utime(older, (100, 100))
+            os.utime(newer, (100, 100))
 
             versions = list_custom_skill_version_records(base_dir, "safe-skill")
 

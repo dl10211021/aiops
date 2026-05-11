@@ -16,6 +16,18 @@ class CustomSkillVersionServiceError(Exception):
         self.detail = detail
 
 
+def _version_record_sort_key(record: dict[str, Any]) -> tuple[str, int, float, str]:
+    prefix = f"{record['file_name']}."
+    suffix = ".bak"
+    version_part = record["id"][len(prefix) : -len(suffix)]
+    timestamp, _, sequence = version_part.partition(".")
+    try:
+        sequence_number = int(sequence)
+    except ValueError:
+        sequence_number = -1
+    return timestamp, sequence_number, record["created_at_ts"], record["id"]
+
+
 def list_custom_skill_version_records(
     base_dir: Path,
     skill_id: str,
@@ -46,5 +58,5 @@ def list_custom_skill_version_records(
                     "created_at_ts": stat.st_mtime,
                 }
             )
-    versions.sort(key=lambda item: item["created_at_ts"], reverse=True)
+    versions.sort(key=_version_record_sort_key, reverse=True)
     return versions
