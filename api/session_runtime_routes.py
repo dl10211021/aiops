@@ -16,6 +16,7 @@ from api.response_mappers.session import (
     session_poll_response_kwargs,
     session_permission_update_kwargs,
     session_permission_updated_response_kwargs,
+    session_status_response_kwargs,
     session_skills_updated_response_kwargs,
     tool_catalog_response_kwargs,
 )
@@ -29,6 +30,7 @@ from api.schema_models.sessions import (
     SkillsUpdateRequest,
 )
 from connections.ssh_manager import ssh_manager
+from core import chat_runs as chat_runs_module
 from core.active_sessions_service import build_active_sessions_payload
 from core.chat_session_service import request_session_stop
 from core.memory import memory_db
@@ -37,6 +39,7 @@ from core.session_runtime import (
     SessionRuntimeError,
     drain_all_pending_messages,
     drain_session_pending_messages,
+    require_session_info,
     set_session_group,
     set_session_heartbeat,
     set_session_metadata,
@@ -185,6 +188,19 @@ async def get_active_sessions():
     """【新功能】前端刷新页面时同步当前后端的活跃会话"""
     sessions_data = build_active_sessions_payload(ssh_manager.active_sessions)
     return ResponseModel(**active_sessions_response_kwargs(sessions_data))
+
+
+@router.get("/session/{session_id}/status", response_model=ResponseModel)
+async def get_session_status(session_id: str):
+    """返回单个会话的轻量运行状态，避免前端恢复流时拉取完整会话清单。"""
+    try:
+        with ssh_manager._sessions_lock:
+            require_session_info(ssh_manager.active_sessions, session_id)
+            is_streaming = chat_runs_module.is_chat_running(session_id)
+    except SessionRuntimeError as exc:
+        raise_http_error(exc)
+
+    return ResponseModel(**session_status_response_kwargs(session_id, is_streaming))
 
 
 @router.get("/tools/catalog", response_model=ResponseModel)

@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from unittest.mock import patch
 
 from fastapi import HTTPException
 
@@ -32,6 +33,7 @@ class TestSessionRuntimeRoutes(unittest.TestCase):
         self.assertIn("/session/{session_id}/group", paths)
         self.assertIn("/session/{session_id}/metadata", paths)
         self.assertIn("/sessions/active", paths)
+        self.assertIn("/session/{session_id}/status", paths)
         self.assertIn("/tools/catalog", paths)
         self.assertIn("/session/{session_id}/tools", paths)
         self.assertIn("/session/{session_id}/commands", paths)
@@ -122,6 +124,21 @@ class TestSessionRuntimeRoutes(unittest.TestCase):
             session_runtime_routes.ssh_manager.active_sessions["sid-1"]["info"]["pending_messages"],
             [],
         )
+
+    def test_get_session_status_returns_lightweight_stream_state(self):
+        session_runtime_routes.ssh_manager.active_sessions["sid-1"] = {"info": {}}
+
+        with patch.object(session_runtime_routes.chat_runs_module, "is_chat_running", return_value=True):
+            response = asyncio.run(session_runtime_routes.get_session_status("sid-1"))
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data, {"session_id": "sid-1", "isStreaming": True})
+
+    def test_get_session_status_rejects_missing_session(self):
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(session_runtime_routes.get_session_status("missing"))
+
+        self.assertEqual(ctx.exception.status_code, 404)
 
     def test_update_session_skills_preserves_response_shape(self):
         session_runtime_routes.ssh_manager.active_sessions["sid-1"] = {"info": {"active_skills": []}}

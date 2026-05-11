@@ -455,6 +455,19 @@ def install_stress_routes(page: Page, *, asset_count: int, session_count: int, h
         lambda route: fulfill_json(route, response(build_session_commands_payload())),
     )
 
+    def session_status(route: Route) -> None:
+        match = re.search(r"/session/([^/]+)/status", route.request.url)
+        session_id = match.group(1) if match else "stress-sid-001"
+        fulfill_json(
+            route,
+            response({
+                "session_id": session_id,
+                "isStreaming": bool(sessions.get(session_id, {}).get("isStreaming")),
+            }),
+        )
+
+    page.route("**/api/v1/session/*/status", session_status)
+
 
 def install_long_task_probe(page: Page) -> None:
     page.add_init_script(

@@ -40,6 +40,10 @@ export async function getActiveSessions() {
   }> }>('/sessions/active')
 }
 
+export async function getSessionStatus(sessionId: string, options?: RequestInit) {
+  return request<{ session_id: string; isStreaming: boolean }>(`/session/${sessionId}/status`, options)
+}
+
 export async function updatePermission(sessionId: string, allowModifications: boolean) {
   return request(`/session/${sessionId}/permission`, {
     method: 'PUT', body: JSON.stringify({ allow_modifications: allowModifications }),

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { getActiveSessions, getSessionHistory } from '@/api/client'
+import { getSessionHistory, getSessionStatus } from '@/api/client'
 import { isAbortError } from '@/api/http'
 import { useStore } from '@/store'
 import type { Session } from '@/types'
@@ -106,9 +106,9 @@ export function useSessionHistorySync(
         // This is only reconnect recovery; keep current transcript on transient failures.
       }
       try {
-        const active = await getActiveSessions()
+        const active = await getSessionStatus(recoverySessionId, { signal: controller.signal })
         if (cancelled) return
-        const running = Boolean(active.data.sessions?.[recoverySessionId]?.isStreaming)
+        const running = Boolean(active.data.isStreaming)
         shouldContinue = running
         updateSession(recoverySessionId, { isStreaming: running, backendStreaming: running })
       } catch {

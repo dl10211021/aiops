@@ -147,6 +147,13 @@ def active_sessions_response_kwargs(sessions: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def session_status_response_kwargs(session_id: str, is_streaming: bool) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"session_id": session_id, "isStreaming": is_streaming},
+    }
+
+
 def tool_catalog_response_kwargs(catalog: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "success",
