@@ -6,8 +6,10 @@ import type { Session } from '@/types'
 import { normalizeHistoryMessages } from './sessionHistory'
 
 const sessionHistoryRestoreLimit = 160
-const SESSION_HISTORY_FETCH_DELAY_MS = 120
+const streamingHistoryRecoveryLimit = 48
+const SESSION_HISTORY_FETCH_DELAY_MS = 450
 const STREAM_RECOVERY_POLL_MS = 8000
+const STREAM_RECOVERY_INITIAL_DELAY_MS = 450
 const STREAM_RECOVERY_HIDDEN_POLL_MS = 30000
 const STREAM_STATUS_CACHE_TTL_MS = STREAM_RECOVERY_POLL_MS
 
@@ -134,9 +136,10 @@ export function useSessionHistorySync(
         const shouldSyncHistory = !current?.historyLoaded || (statusKnown && !running)
         if (shouldSyncHistory) {
           try {
-            const history = await getSessionHistory(recoverySessionId, sessionHistoryRestoreLimit, { signal: controller.signal })
+            const historyLimit = statusKnown && !running ? sessionHistoryRestoreLimit : streamingHistoryRecoveryLimit
+            const history = await getSessionHistory(recoverySessionId, historyLimit, { signal: controller.signal })
             if (!cancelled) {
-              const messages = (history.data.messages || []).slice(-sessionHistoryRestoreLimit)
+              const messages = (history.data.messages || []).slice(-historyLimit)
               setSessionMessages(recoverySessionId, normalizeHistoryMessages(recoverySessionId, messages))
               updateSession(recoverySessionId, { historyLoaded: true })
             }
@@ -158,7 +161,7 @@ export function useSessionHistorySync(
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    void refreshHistory()
+    scheduleNext(STREAM_RECOVERY_INITIAL_DELAY_MS)
     return () => {
       cancelled = true
       if (timer) window.clearTimeout(timer)

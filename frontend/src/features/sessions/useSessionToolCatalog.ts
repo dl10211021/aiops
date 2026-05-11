@@ -5,7 +5,7 @@ import { useStore } from '@/store'
 import type { SessionToolCatalog } from '@/types'
 
 const SESSION_TOOL_CACHE_TTL_MS = 5 * 60 * 1000
-const SESSION_TOOL_FETCH_DELAY_MS = 120
+const SESSION_TOOL_FETCH_DELAY_MS = 450
 const sessionToolCatalogCache = new Map<string, { catalog: SessionToolCatalog; cachedAt: number }>()
 
 export function useSessionToolCatalog(

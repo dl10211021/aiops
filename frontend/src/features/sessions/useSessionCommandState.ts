@@ -6,7 +6,7 @@ import { fetchSessionCommandState } from './sessionCommandService'
 import { buildSlashCommands } from './slashCommands'
 
 const SESSION_COMMAND_CACHE_TTL_MS = 5 * 60 * 1000
-const SESSION_COMMAND_FETCH_DELAY_MS = 120
+const SESSION_COMMAND_FETCH_DELAY_MS = 450
 
 interface UseSessionCommandStateArgs {
   currentSessionId: string | null

@@ -7,6 +7,7 @@ import statistics
 import time
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import Page, Route, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
@@ -443,7 +444,13 @@ def install_stress_routes(page: Page, *, asset_count: int, session_count: int, h
     def history(route: Route) -> None:
         match = re.search(r"/session/([^/]+)/history", route.request.url)
         session_id = match.group(1) if match else "stress-sid-001"
-        fulfill_json(route, response({"messages": build_history(session_id, history_messages)}))
+        query = parse_qs(urlparse(route.request.url).query)
+        try:
+            requested_limit = int(query.get("limit", [history_messages])[0])
+        except (TypeError, ValueError):
+            requested_limit = history_messages
+        message_count = max(0, min(history_messages, requested_limit))
+        fulfill_json(route, response({"messages": build_history(session_id, message_count)}))
 
     page.route("**/api/v1/session/*/history**", history)
     page.route(

@@ -5,7 +5,7 @@ import { useStore } from '@/store'
 import type { AssetProfile } from '@/types'
 
 const SESSION_PROFILE_CACHE_TTL_MS = 5 * 60 * 1000
-const SESSION_PROFILE_FETCH_DELAY_MS = 120
+const SESSION_PROFILE_FETCH_DELAY_MS = 450
 const sessionProfileCache = new Map<string, { profile: AssetProfile | null; cachedAt: number }>()
 
 export function useAssetProfile(currentSessionId: string | null, modelName: string) {
