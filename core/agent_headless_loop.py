@@ -8,9 +8,23 @@ from typing import Any
 from core.agent_approval import record_headless_approval_block
 from core.agent_runtime_config import agent_max_steps
 from core.agent_tool_events import parse_tool_arguments
+from core.safety_policy import explain_policy_decision
 
 
 StreamExecutor = Callable[[str, list[dict], str, Any], AsyncIterator[dict]]
+
+
+def _headless_high_risk_action_reason(tool_name: str, args: dict, context: dict) -> str:
+    policy = explain_policy_decision(tool_name, args, context)
+    if policy.get("decision") != "allow":
+        return ""
+
+    primary_action = policy.get("primary_action") or {}
+    if primary_action.get("severity") not in {"high", "critical"}:
+        return ""
+
+    label = primary_action.get("label") or primary_action.get("id") or "高风险动作"
+    return f"后台无人值守任务不自动执行高风险动作：{label}"
 
 
 async def run_headless_agent_loop(
@@ -71,6 +85,10 @@ async def run_headless_agent_loop(
                 func_args,
                 context,
             )
+            if not needs_approval:
+                reason = _headless_high_risk_action_reason(func_name, func_args, context)
+                needs_approval = bool(reason)
+
             if needs_approval:
                 blocked = record_headless_approval_block(
                     tool_call_id=tc.get("id", ""),

@@ -413,7 +413,7 @@ def build_access_protocols(item: dict[str, Any]) -> list[dict[str, Any]]:
                 description="平台默认接入方式。",
             ))
 
-    if category in {"monitor", "virtualization", "security", "ai", "cicd"} and default_protocol:
+    if category in {"monitor", "log", "virtualization", "security", "ai", "cicd"} and default_protocol:
         _add(entries, _entry(
             default_protocol,
             purpose=OPERATION_PURPOSE,

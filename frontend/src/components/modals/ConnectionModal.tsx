@@ -13,6 +13,7 @@ import { useConnectionModalController } from './useConnectionModalController'
 export default function ConnectionModal() {
   const {
     assetCategories,
+    assetCatalogMode,
     assetTypeSearch,
     accessProtocolOptions,
     oracleClientConfig,
@@ -49,6 +50,7 @@ export default function ConnectionModal() {
     selectedSubInfo,
     selectedToolDetails,
     selectedTools,
+    setAssetCatalogMode,
     setAssetTypeSearch,
     setExtraArg,
     setExtraArgs,
@@ -85,6 +87,7 @@ export default function ConnectionModal() {
           {form.target_scope !== 'global' && (
             <ConnectionAssetTypeSelector
               assetCategories={assetCategories}
+              assetCatalogMode={assetCatalogMode}
               assetTypeSearch={assetTypeSearch}
               catalogStatus={catalogStatus}
               category={form.category}
@@ -106,6 +109,7 @@ export default function ConnectionModal() {
               subTypeGroups={subTypeGroups}
               subTypeOptions={subTypeOptions}
               onCategoryChange={handleCategoryChange}
+              onCatalogModeChange={setAssetCatalogMode}
               onProtocolChange={handleProtocolChange}
               onSearchChange={setAssetTypeSearch}
               onSubTypeChange={handleSubTypeChange}

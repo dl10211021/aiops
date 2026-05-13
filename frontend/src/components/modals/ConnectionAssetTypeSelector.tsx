@@ -10,6 +10,7 @@ interface OptionGroup<T> {
 
 interface ConnectionAssetTypeSelectorProps {
   assetCategories: AssetCategoryOption[]
+  assetCatalogMode: 'common' | 'all'
   assetTypeSearch: string
   catalogStatus: AssetCatalogStatus
   category: string
@@ -31,6 +32,7 @@ interface ConnectionAssetTypeSelectorProps {
   subTypeGroups: Array<OptionGroup<AssetSubType>>
   subTypeOptions: AssetSubType[]
   onCategoryChange: (category: string) => void
+  onCatalogModeChange: (mode: 'common' | 'all') => void
   onProtocolChange: (protocol: string) => void
   onSearchChange: (value: string) => void
   onSubTypeChange: (subType: string) => void
@@ -38,6 +40,7 @@ interface ConnectionAssetTypeSelectorProps {
 
 export default function ConnectionAssetTypeSelector({
   assetCategories,
+  assetCatalogMode,
   assetTypeSearch,
   catalogStatus,
   category,
@@ -59,6 +62,7 @@ export default function ConnectionAssetTypeSelector({
   subTypeGroups,
   subTypeOptions,
   onCategoryChange,
+  onCatalogModeChange,
   onProtocolChange,
   onSearchChange,
   onSubTypeChange,
@@ -78,7 +82,7 @@ export default function ConnectionAssetTypeSelector({
         <div>
           <div className="text-xs font-semibold text-ops-text">资产类型与主接入方式</div>
           <div className="mt-0.5 text-[11px] text-ops-overlay">
-            当前分类 {subTypeOptions.length} 类资产，只展示 AI 运维最常用的登录、查询或 API 接入。
+            默认显示常用资产；搜索会覆盖完整目录，HertzBeat 扩展类保留在完整目录中。
           </div>
         </div>
         <div className="flex flex-wrap justify-end gap-1.5">
@@ -92,6 +96,36 @@ export default function ConnectionAssetTypeSelector({
           <span className="ops-control px-2 py-0.5 text-[10px] text-ops-subtext">
             {currentProtocol.toUpperCase()}
           </span>
+        </div>
+      </div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-ops-surface0 bg-ops-dark/24 px-3 py-2">
+        <div className="text-[11px] leading-5 text-ops-subtext">
+          当前分类显示 {filteredSubTypeOptions.length}/{subTypeOptions.length} 类
+          {normalizedAssetTypeSearch ? ' · 搜索完整目录' : assetCatalogMode === 'common' ? ' · 常用优先' : ' · 完整目录'}
+        </div>
+        <div className="flex rounded-md border border-ops-surface0 bg-ops-panel/65 p-0.5">
+          <button
+            type="button"
+            onClick={() => onCatalogModeChange('common')}
+            className={`rounded px-2.5 py-1 text-[11px] font-semibold transition ${
+              assetCatalogMode === 'common'
+                ? 'bg-ops-accent/18 text-ops-accent'
+                : 'text-ops-subtext hover:text-ops-text'
+            }`}
+          >
+            常用
+          </button>
+          <button
+            type="button"
+            onClick={() => onCatalogModeChange('all')}
+            className={`rounded px-2.5 py-1 text-[11px] font-semibold transition ${
+              assetCatalogMode === 'all'
+                ? 'bg-ops-accent/18 text-ops-accent'
+                : 'text-ops-subtext hover:text-ops-text'
+            }`}
+          >
+            完整目录
+          </button>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">

@@ -21,6 +21,38 @@ import {
 } from './connectionModalHelpers'
 import type { ConnectionFormState } from './connectionModalState'
 
+const COMMON_ASSET_TYPE_IDS = new Set([
+  'linux',
+  'windows',
+  'mysql',
+  'oracle',
+  'postgresql',
+  'redis',
+  'mongodb',
+  'elasticsearch',
+  'docker',
+  'k8s',
+  'nginx',
+  'tomcat',
+  'kafka',
+  'vmware',
+  'zstack',
+  'switch',
+  'firewall',
+  'ceph',
+  'nas',
+  's3',
+  'prometheus',
+  'grafana',
+  'zabbix',
+  'elastic_stack',
+  'graylog',
+  'loki',
+  'website',
+  'port',
+  'ping',
+])
+
 export function getProtocolForSubType(
   assetSubTypes: Record<string, AssetSubType[]>,
   category: string,
@@ -70,12 +102,14 @@ export function buildConnectionExtraArgs(
 }
 
 export function buildConnectionModalModel({
+  assetCatalogMode,
   assetCategories,
   assetSubTypes,
   assetTypeSearch,
   databaseDrivers,
   form,
 }: {
+  assetCatalogMode: 'common' | 'all'
   assetCategories: AssetCategoryOption[]
   assetSubTypes: Record<string, AssetSubType[]>
   assetTypeSearch: string
@@ -113,13 +147,19 @@ export function buildConnectionModalModel({
   const categoryGroups = groupOptions(assetCategories, (item) => item.group || '其它')
   const subTypeOptions = assetSubTypes[form.category] || []
   const normalizedAssetTypeSearch = assetTypeSearch.trim().toLowerCase()
+  const commonSubTypeOptions = subTypeOptions.filter((item) => COMMON_ASSET_TYPE_IDS.has(item.id))
+  const catalogModeSubTypeOptions =
+    assetCatalogMode === 'common' && commonSubTypeOptions.length > 0
+      ? commonSubTypeOptions
+      : subTypeOptions
+  const searchSourceOptions = normalizedAssetTypeSearch ? subTypeOptions : catalogModeSubTypeOptions
   const searchedSubTypeOptions = normalizedAssetTypeSearch
-    ? subTypeOptions.filter((item) => {
+    ? searchSourceOptions.filter((item) => {
         const accessText = (item.access_protocols || []).map((protocol) => `${protocol.protocol} ${protocol.label}`).join(' ')
         const haystack = `${item.id} ${item.label} ${item.asset_type} ${accessText} ${item.capability?.connector_group?.label || ''}`.toLowerCase()
         return haystack.includes(normalizedAssetTypeSearch)
       })
-    : subTypeOptions
+    : searchSourceOptions
   const filteredSubTypeOptions = selectedSubInfo && !searchedSubTypeOptions.some((item) => item.id === selectedSubInfo.id)
     ? [selectedSubInfo, ...searchedSubTypeOptions]
     : searchedSubTypeOptions
@@ -163,6 +203,7 @@ export function buildConnectionModalModel({
     shouldShowGenericHttpParams,
     subTypeGroups,
     subTypeOptions,
+    catalogModeSubTypeOptions,
   }
 }
 
@@ -179,6 +220,7 @@ function toolsForCurrentProtocol(category: string, currentProtocol: string, subI
   if (currentProtocol === 'http_api') {
     if (category === 'network') return ['network_api_request']
     if (category === 'monitor') return ['monitoring_api_query']
+    if (category === 'log') return ['monitoring_api_query']
     if (category === 'container') return ['container_api_request']
     if (category === 'middleware') return ['middleware_api_request']
     if (category === 'bigdata') return ['bigdata_api_request']

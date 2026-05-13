@@ -20,5 +20,8 @@ export const connectionHintFor = (subInfo?: AssetSubType, protocol = '') => {
   if (connector === 'database_http') {
     return '数据库接口类资产通过自身 HTTP/API 管理面接入，适合只读查询、健康检查和节点状态分析。'
   }
+  if (connector === 'log_api') {
+    return '日志平台建议配置只读 API Token；AI 会优先用于日志检索、错误聚合和时间窗口排查。'
+  }
   return ''
 }

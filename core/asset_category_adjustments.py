@@ -36,6 +36,16 @@ def _category_adjustment(asset_id: str, category: str, protocol: str) -> dict[st
         return {"family": "ai", "connector": "ai_compute_shell", "tools": ["linux_execute_command"]}
     if protocol == "http_api" and category == "monitor":
         return {"family": "monitoring", "connector": "monitoring_api", "tools": ["monitoring_api_query"]}
+    if category == "log" and protocol in {"http_api", "elasticsearch"}:
+        return {
+            "family": "logging",
+            "connector": "log_api",
+            "operation_model": "log_query_client",
+            "tools": ["monitoring_api_query"],
+            "credential_fields": ["host", "port", "username", "password", "api_token"],
+            "safety_category": "http_api",
+            "maturity": "generic",
+        }
     if category == "db" and (protocol == "http_api" or protocol in DATABASE_HTTP_PROTOCOLS):
         if asset_id in DATABASE_HTTP_IDS or protocol in DATABASE_HTTP_PROTOCOLS:
             return {

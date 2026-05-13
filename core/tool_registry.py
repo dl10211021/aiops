@@ -23,6 +23,7 @@ from core.asset_protocols import (
     DATABASE_HTTP_PROTOCOLS,
     DISCOVERY_API_ASSET_TYPES,
     DOMAIN_HTTP_API_ASSET_TYPES,
+    LOG_PLATFORM_ASSET_TYPES,
     MIDDLEWARE_API_ASSET_TYPES,
     MIDDLEWARE_ASSET_TYPES,
     MONITORING_ASSET_TYPES,
@@ -607,6 +608,7 @@ def _register_builtin_tools() -> None:
             excluded_asset_types=(
                 set(SERVICE_ASSET_TYPES)
                 | set(MONITORING_ASSET_TYPES)
+                | set(LOG_PLATFORM_ASSET_TYPES)
                 | set(VIRTUALIZATION_ASSET_TYPES)
                 | set(STORAGE_ASSET_TYPES)
                 | set(DOMAIN_HTTP_API_ASSET_TYPES)
@@ -723,9 +725,9 @@ def _register_builtin_tools() -> None:
             toolset="monitoring",
             scope="asset",
             protocols={"http_api"},
-            asset_types=set(MONITORING_ASSET_TYPES),
+            asset_types=set(MONITORING_ASSET_TYPES) | set(LOG_PLATFORM_ASSET_TYPES),
             safety_category="http_api",
-            description="当前已连接监控平台；查询 Prometheus/Alertmanager/Grafana/Loki/Zabbix/ManageEngine 等只读 API。",
+            description="当前已连接监控或日志平台；查询 Prometheus/Alertmanager/Grafana/Loki/ELK/Graylog/Zabbix/ManageEngine 等只读 API。",
             parameters=_obj(
                 {
                     "path": {"type": "string", "description": "监控 API 路径，例如 /api/v1/query?query=up"},

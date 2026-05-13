@@ -367,6 +367,21 @@ class TestToolRegistry(unittest.TestCase):
         self.assertIn("monitoring_api_query", names)
         self.assertNotIn("http_api_request", names)
 
+    def test_logging_platform_session_enables_log_query_tool_not_generic_http(self):
+        for asset_type in ("elastic_stack", "graylog", "loki", "opensearch"):
+            with self.subTest(asset_type=asset_type):
+                names = enabled_tool_names(
+                    {
+                        "target_scope": "asset",
+                        "asset_type": asset_type,
+                        "protocol": "http_api",
+                        "extra_args": {"category": "log", "sub_type": asset_type},
+                    }
+                )
+
+                self.assertIn("monitoring_api_query", names)
+                self.assertNotIn("http_api_request", names)
+
     def test_hertzbeat_session_enables_monitoring_tool_not_generic_http(self):
         names = enabled_tool_names(
             {

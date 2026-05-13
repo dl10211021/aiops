@@ -171,6 +171,10 @@ class TestAssetProtocolLayer(unittest.TestCase):
             "prometheus": "http_api",
             "alertmanager": "http_api",
             "grafana": "http_api",
+            "elastic_stack": "http_api",
+            "graylog": "http_api",
+            "loki": "http_api",
+            "opensearch": "http_api",
             "zabbix": "http_api",
             "vmware": "vmware",
             "esxi": "ssh",
@@ -374,7 +378,16 @@ class TestAssetProtocolLayer(unittest.TestCase):
         self.assertEqual(params("alertmanager")["alerts_path"]["defaultValue"], "/api/v2/alerts")
         self.assertEqual(params("grafana")["org_id"]["defaultValue"], 1)
         self.assertEqual(params("grafana")["dashboard_search_path"]["defaultValue"], "/api/search")
+        self.assertEqual(by_id["elastic_stack"]["category"], "log")
+        self.assertEqual(by_id["elastic_stack"]["capability"]["connector"], "log_api")
+        self.assertEqual(by_id["elastic_stack"]["capability"]["tools"], ["monitoring_api_query"])
+        self.assertEqual(params("elastic_stack")["kibana_base_path"]["defaultValue"], "/api")
+        self.assertEqual(by_id["graylog"]["category"], "log")
+        self.assertEqual(params("graylog")["search_path"]["defaultValue"], "/api/search/universal/relative")
+        self.assertEqual(params("logstash")["node_stats_path"]["defaultValue"], "/_node/stats")
+        self.assertEqual(by_id["loki"]["category"], "log")
         self.assertEqual(params("loki")["query_range_path"]["defaultValue"], "/loki/api/v1/query_range")
+        self.assertEqual(params("opensearch")["cluster_health_path"]["defaultValue"], "/_cluster/health")
         self.assertEqual(params("victoriametrics")["query_path"]["defaultValue"], "/api/v1/query")
         self.assertEqual(params("zabbix")["api_path"]["defaultValue"], "/api_jsonrpc.php")
         self.assertEqual(by_id["kubernetes"]["protocol"], "k8s")

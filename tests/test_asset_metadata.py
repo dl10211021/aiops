@@ -14,6 +14,7 @@ class AssetMetadataTests(unittest.TestCase):
         db_metadata = category_metadata("db")
         self.assertEqual(db_metadata["id"], "db")
         self.assertEqual(db_metadata["label"], ASSET_CATEGORY_DEFINITIONS["db"]["label"])
+        self.assertEqual(category_metadata("log")["label"], "日志平台")
 
         db_metadata["label"] = "mutated"
         self.assertEqual(category_metadata("db")["label"], ASSET_CATEGORY_DEFINITIONS["db"]["label"])
@@ -24,6 +25,7 @@ class AssetMetadataTests(unittest.TestCase):
         sql_metadata = connector_metadata("native_sql")
         self.assertEqual(sql_metadata["id"], "native_sql")
         self.assertEqual(sql_metadata["tools"], CONNECTOR_GROUP_DEFINITIONS["native_sql"]["tools"])
+        self.assertEqual(connector_metadata("log_api")["tools"], ["monitoring_api_query"])
 
         sql_metadata["tools"].append("mutated")
         self.assertEqual(connector_metadata("native_sql")["tools"], CONNECTOR_GROUP_DEFINITIONS["native_sql"]["tools"])

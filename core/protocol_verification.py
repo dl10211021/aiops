@@ -554,6 +554,12 @@ async def run_protocol_probe(asset: dict[str, Any]) -> dict[str, Any]:
             "prometheus": "/api/v1/status/buildinfo",
             "alertmanager": "/api/v2/status",
             "grafana": "/api/health",
+            "elastic_stack": "/api/status",
+            "kibana": "/api/status",
+            "logstash": "/_node/stats",
+            "graylog": "/api/system",
+            "loki": "/ready",
+            "opensearch": "/_cluster/health",
             "redfish": "/redfish/v1/",
         }.get(asset_type, "/")
         path = str(extra_args.get("health_path") or default_path)

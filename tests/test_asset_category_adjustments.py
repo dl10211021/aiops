@@ -29,6 +29,18 @@ class AssetCategoryAdjustmentTests(unittest.TestCase):
             _category_adjustment("zabbix", "monitor", "http_api"),
             {"family": "monitoring", "connector": "monitoring_api", "tools": ["monitoring_api_query"]},
         )
+        self.assertEqual(
+            _category_adjustment("graylog", "log", "http_api"),
+            {
+                "family": "logging",
+                "connector": "log_api",
+                "operation_model": "log_query_client",
+                "tools": ["monitoring_api_query"],
+                "credential_fields": ["host", "port", "username", "password", "api_token"],
+                "safety_category": "http_api",
+                "maturity": "generic",
+            },
+        )
 
     def test_storage_and_service_probe_adjustments_preserve_credentials(self):
         self.assertEqual(_category_adjustment("s3", "storage", "s3")["connector"], "storage_api")

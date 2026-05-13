@@ -22,6 +22,7 @@ export function useConnectionModalController() {
   const [form, setForm] = useState<ConnectionFormState>(DEFAULT_CONNECTION_FORM)
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set())
   const [assetTypeSearch, setAssetTypeSearch] = useState('')
+  const [assetCatalogMode, setAssetCatalogMode] = useState<'common' | 'all'>('common')
   const [skillSearch, setSkillSearch] = useState('')
 
   const {
@@ -39,6 +40,7 @@ export function useConnectionModalController() {
   })
 
   const model = buildConnectionModalModel({
+    assetCatalogMode,
     assetCategories,
     assetSubTypes,
     assetTypeSearch,
@@ -106,6 +108,7 @@ export function useConnectionModalController() {
     ...model,
     ...connectionActions,
     assetCategories,
+    assetCatalogMode,
     assetTypeSearch,
     catalogStatus,
     canSubmitAsset,
@@ -114,6 +117,7 @@ export function useConnectionModalController() {
     oracleClientConfig,
     oracleThickDefaults,
     selectedSkills,
+    setAssetCatalogMode,
     setAssetTypeSearch,
     setExtraArg,
     setExtraArgs,

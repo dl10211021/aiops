@@ -1,5 +1,6 @@
 import json
 import unittest
+from unittest.mock import patch
 
 from core.agent_headless_loop import run_headless_agent_loop
 
@@ -137,6 +138,56 @@ class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
             report,
             "任务达到 1 步执行保护上限，系统已停止继续调用工具。以下是最后一轮阶段性结果：还在执行",
         )
+
+    async def test_headless_blocks_high_risk_action_even_when_policy_allows(self):
+        messages = [{"role": "system", "content": "sys"}]
+        dispatcher = FakeDispatcher()
+
+        with patch("core.agent_headless_loop.record_headless_approval_block") as record:
+            record.return_value = {"id": "call-1"}
+            report = await run_headless_agent_loop(
+                model_name="model",
+                messages=messages,
+                tools=[],
+                context={
+                    "session_id": "sid",
+                    "execution_mode": "headless",
+                    "allow_modifications": True,
+                    "asset_type": "linux",
+                    "protocol": "ssh",
+                },
+                session_id="sid",
+                agent_profile="default",
+                host="host.local",
+                dispatcher=dispatcher,
+                event_logger=FakeLogger(),
+                stream_executor=stream_executor_factory(
+                    [
+                        [
+                            {"type": "content", "content": "准备变更"},
+                            {
+                                "type": "tool_calls",
+                                "tool_calls": [
+                                    {
+                                        "id": "call-1",
+                                        "function": {
+                                            "name": "linux_execute_command",
+                                            "arguments": json.dumps({"command": "systemctl restart nginx"}),
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                        [{"type": "content", "content": "已阻断"}],
+                    ]
+                ),
+                max_steps=3,
+            )
+
+        self.assertEqual(report, "来自 default Agent (host.local) 的协同任务报告：\n已阻断")
+        self.assertEqual(dispatcher.executed, [])
+        record.assert_called_once()
+        self.assertIn("高风险动作", record.call_args.kwargs["reason"])
 
 
 if __name__ == "__main__":

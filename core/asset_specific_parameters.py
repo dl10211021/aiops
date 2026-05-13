@@ -692,6 +692,32 @@ def apply_asset_parameter_template(capability: dict[str, Any], asset_id: str) ->
                 "group": "loki",
             },
         ]
+    elif asset_id in {"elastic_stack", "kibana"}:
+        capability["parameter_template"] = deepcopy(GENERIC_HTTP_API_PARAMETERS) + [
+            _text_parameter("kibana_base_path", "Kibana API 基础路径", group="elastic_stack", default="/api"),
+            _text_parameter("data_view", "默认 Data View / Index Pattern", group="elastic_stack"),
+            _text_parameter("discover_path", "Discover / 查询路径", group="elastic_stack", default="/api/saved_objects/_find"),
+            _text_parameter("space_id", "Space ID", group="elastic_stack", default="default"),
+        ]
+    elif asset_id in {"graylog"}:
+        capability["parameter_template"] = deepcopy(GENERIC_HTTP_API_PARAMETERS) + [
+            _text_parameter("api_base_path", "Graylog API 基础路径", group="graylog", default="/api"),
+            _text_parameter("search_path", "搜索路径", group="graylog", default="/api/search/universal/relative"),
+            _text_parameter("stream_id", "默认 Stream ID", group="graylog"),
+            _text_parameter("query", "默认查询语句", group="graylog", default="*"),
+        ]
+    elif asset_id == "logstash":
+        capability["parameter_template"] = deepcopy(GENERIC_HTTP_API_PARAMETERS) + [
+            _text_parameter("node_stats_path", "节点统计路径", group="logstash", default="/_node/stats"),
+            _text_parameter("pipelines_path", "Pipeline 路径", group="logstash", default="/_node/pipelines"),
+            _text_parameter("hot_threads_path", "Hot Threads 路径", group="logstash", default="/_node/hot_threads"),
+        ]
+    elif asset_id == "opensearch":
+        capability["parameter_template"] = deepcopy(GENERIC_HTTP_API_PARAMETERS) + [
+            _text_parameter("cluster_health_path", "集群健康路径", group="opensearch", default="/_cluster/health"),
+            _text_parameter("indices_path", "索引列表路径", group="opensearch", default="/_cat/indices?format=json"),
+            _text_parameter("query_index", "默认查询索引", group="opensearch"),
+        ]
     elif asset_id == "victoriametrics":
         capability["parameter_template"] = deepcopy(GENERIC_HTTP_API_PARAMETERS) + [
             {
@@ -1323,7 +1349,20 @@ def apply_asset_parameter_template(capability: dict[str, Any], asset_id: str) ->
             _text_parameter("service_name", "服务名", group="registry"),
             _number_parameter("probe_timeout", "超时(秒)", group="registry", default=5),
         ]
-    if asset_id in {"redfish", "harbor", "manageengine", "bastion", "audit", "f5", "a10", "waf"}:
+    if asset_id in {
+        "redfish",
+        "harbor",
+        "manageengine",
+        "bastion",
+        "audit",
+        "f5",
+        "a10",
+        "waf",
+        "elastic_stack",
+        "kibana",
+        "graylog",
+        "opensearch",
+    }:
         for param in capability["parameter_template"]:
             if param.get("field") == "scheme":
                 param["defaultValue"] = "https"

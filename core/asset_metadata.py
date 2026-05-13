@@ -56,7 +56,13 @@ ASSET_CATEGORY_DEFINITIONS: dict[str, dict[str, Any]] = {
         "label": "监控与告警",
         "group": "平台工具",
         "order": 80,
-        "description": "Prometheus、Grafana、Zabbix、日志和告警平台。",
+        "description": "Prometheus、Grafana、Zabbix、指标和告警平台。",
+    },
+    "log": {
+        "label": "日志平台",
+        "group": "平台工具",
+        "order": 85,
+        "description": "ELK/Elastic Stack、Graylog、Loki、Kibana、Logstash 等日志检索和日志管道平台。",
     },
     "service": {
         "label": "应用与网络服务",
@@ -249,6 +255,13 @@ CONNECTOR_GROUP_DEFINITIONS: dict[str, dict[str, Any]] = {
         "order": 78,
         "tools": ["monitoring_api_query"],
         "description": "Prometheus、Grafana、Zabbix、Loki、ManageEngine 等监控平台接口。",
+    },
+    "log_api": {
+        "label": "日志平台接口",
+        "group": "平台 API",
+        "order": 79,
+        "tools": ["monitoring_api_query"],
+        "description": "ELK/Elastic Stack、Graylog、Loki、Kibana、Logstash 等日志平台只读查询接口。",
     },
     "kubernetes_api": {
         "label": "Kubernetes API",
