@@ -57,16 +57,30 @@ async def _test_ssh(req: Any, restored_password: str | None) -> dict[str, Any]:
 
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    extra_args = req.extra_args or {}
+    key_filename = normalize_private_key_path(req.private_key_path)
+    has_password = bool(restored_password)
+    has_key_file = bool(key_filename)
+    default_use_agent = not (has_password or has_key_file)
+    default_lookup_keys = not (has_password or has_key_file)
+    connect_kwargs: dict[str, Any] = {
+        "hostname": req.host,
+        "port": req.port,
+        "username": req.username,
+        "password": restored_password,
+        "key_filename": key_filename,
+        "timeout": int(extra_args.get("connect_timeout") or 5),
+        "banner_timeout": int(extra_args.get("banner_timeout") or 30),
+        "auth_timeout": int(extra_args.get("auth_timeout") or 20),
+        "allow_agent": _bool_arg(extra_args.get("allow_agent"), default_use_agent),
+        "look_for_keys": _bool_arg(extra_args.get("look_for_keys"), default_lookup_keys),
+        "compress": _bool_arg(extra_args.get("compress"), False),
+    }
+    disabled_algorithms = _parse_disabled_algorithms(extra_args.get("disabled_algorithms"))
+    if disabled_algorithms:
+        connect_kwargs["disabled_algorithms"] = disabled_algorithms
     try:
-        await asyncio.to_thread(
-            client.connect,
-            hostname=req.host,
-            port=req.port,
-            username=req.username,
-            password=restored_password,
-            key_filename=normalize_private_key_path(req.private_key_path),
-            timeout=5,
-        )
+        await asyncio.to_thread(client.connect, **connect_kwargs)
         client.close()
         return {
             "status": "success",
@@ -74,6 +88,30 @@ async def _test_ssh(req: Any, restored_password: str | None) -> dict[str, Any]:
         }
     except Exception as exc:
         return connection_error_result(exc, "ssh")
+
+
+def _bool_arg(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _parse_disabled_algorithms(raw: Any) -> dict[str, list[str]] | None:
+    if not isinstance(raw, dict):
+        return None
+    result: dict[str, list[str]] = {}
+    for key, value in raw.items():
+        if isinstance(value, (list, tuple, set)):
+            items = [str(item).strip() for item in value if str(item).strip()]
+        elif isinstance(value, str):
+            items = [part.strip() for part in value.split(",") if part.strip()]
+        else:
+            items = []
+        if items:
+            result[str(key)] = items
+    return result or None
 
 
 async def _test_winrm(req: Any, restored_password: str | None) -> dict[str, Any]:

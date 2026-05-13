@@ -28,6 +28,7 @@ interface SessionItemProps {
   onSelectSession: (sessionId: string, group: string) => void
   onDisconnect: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
   onEdit: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
+  onOpenTerminal: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
 }
 
 function SessionItem({
@@ -37,11 +38,13 @@ function SessionItem({
   onSelectSession,
   onDisconnect,
   onEdit,
+  onOpenTerminal,
 }: SessionItemProps) {
   const attention = sessionAttention(session)
   const needsAttention = attention.type !== 'none'
   const running = isSessionRunning(session)
   const protocolText = protocolLabel(session.protocol || session.asset_type)
+  const supportsTerminal = supportsSshTerminal(session)
   const statusTitle = running ? '会话执行中' : needsAttention ? attention.label : '会话已连接'
   return (
     <div
@@ -75,6 +78,20 @@ function SessionItem({
         <div className={`flex items-center gap-1 transition-opacity ${
           active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
         }`}>
+          {supportsTerminal && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpenTerminal(session.id, event)
+              }}
+              className="grid h-6 w-6 place-items-center rounded-md border border-ops-accent/35 bg-ops-accent/8 text-[10px] font-black text-ops-accent transition-colors hover:bg-ops-accent/14"
+              title="打开终端"
+              aria-label="打开终端"
+            >
+              &gt;_
+            </button>
+          )}
           <button
             type="button"
             onClick={(event) => {
@@ -124,5 +141,10 @@ function areSessionItemsEqual(prev: SessionItemProps, next: SessionItemProps) {
     && prev.session === next.session
     && prev.onDisconnect === next.onDisconnect
     && prev.onEdit === next.onEdit
+    && prev.onOpenTerminal === next.onOpenTerminal
     && prev.onSelectSession === next.onSelectSession
+}
+
+function supportsSshTerminal(session: Session): boolean {
+  return String(session.protocol || '').trim().toLowerCase() === 'ssh'
 }

@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
-import { getAvailableModels, getSafetyPolicy } from '@/api/client'
+import { getAssistantModelConfig, getAvailableModels, getSafetyPolicy } from '@/api/client'
 import type { ModelGroup } from '@/api/client'
-import { useStore } from '@/store'
 
 const CHAT_MODEL_CACHE_TTL_MS = 5 * 60 * 1000
 const CHAT_SAFETY_POLICY_CACHE_TTL_MS = 30 * 1000
+const ASSISTANT_MODEL_CONFIG_CHANGED_EVENT = 'opscore:assistant-model-config-changed'
 
 let availableModelsCache: { value: ModelGroup[]; cachedAt: number } | null = null
 let availableModelsRequest: Promise<ModelGroup[]> | null = null
 let readWriteWarningCache: { value: boolean; cachedAt: number } | null = null
 let readWriteWarningRequest: Promise<boolean> | null = null
+let configuredMainModelCache: { value: string; cachedAt: number } | null = null
+let configuredMainModelRequest: Promise<string> | null = null
 
 function isFresh(cachedAt: number, ttlMs: number) {
   return Date.now() - cachedAt < ttlMs
@@ -56,6 +58,29 @@ function loadReadWriteWarningCached() {
   return readWriteWarningRequest
 }
 
+function loadConfiguredMainModelCached() {
+  if (configuredMainModelCache && isFresh(configuredMainModelCache.cachedAt, CHAT_MODEL_CACHE_TTL_MS)) {
+    return Promise.resolve(configuredMainModelCache.value)
+  }
+  if (configuredMainModelRequest) return configuredMainModelRequest
+
+  configuredMainModelRequest = getAssistantModelConfig()
+    .then((response) => {
+      const modelId = String(response.data.config?.main_model_id || '').trim()
+      configuredMainModelCache = { value: modelId, cachedAt: Date.now() }
+      return modelId
+    })
+    .finally(() => {
+      configuredMainModelRequest = null
+    })
+
+  return configuredMainModelRequest
+}
+
+function getValidModelIds(groups: ModelGroup[]) {
+  return groups.flatMap((group) => group.models.map((model) => model.id))
+}
+
 export function useChatRuntimePreferences() {
   const [modelName, setModelName] = useState(() => {
     const stored = localStorage.getItem('ops_model')
@@ -73,6 +98,9 @@ export function useChatRuntimePreferences() {
   const [availableModels, setAvailableModels] = useState<ModelGroup[]>(
     () => availableModelsCache?.value || []
   )
+  const [configuredMainModel, setConfiguredMainModel] = useState(
+    () => configuredMainModelCache?.value || ''
+  )
   const [readWriteWarningEnabled, setReadWriteWarningEnabled] = useState(
     () => readWriteWarningCache?.value ?? true
   )
@@ -80,15 +108,21 @@ export function useChatRuntimePreferences() {
   useEffect(() => {
     let cancelled = false
     const timer = window.setTimeout(() => {
-      if (useStore.getState().currentView !== 'chat') return
       loadAvailableModelsCached().then((groups) => {
         if (cancelled) return
         setAvailableModels(groups)
-        const validIds = groups.flatMap((group) => group.models.map((model) => model.id))
+        const validIds = getValidModelIds(groups)
         const firstValid = validIds.find((id) => !id.endsWith('|none')) || validIds[0] || ''
-        setModelName((current) => {
-          if (current && validIds.includes(current)) return current
-          return firstValid || current
+        loadConfiguredMainModelCached().catch(() => '').then((configuredMainModel) => {
+          if (cancelled) return
+          setConfiguredMainModel(configuredMainModel)
+          setModelName((current) => {
+            if (configuredMainModel && validIds.includes(configuredMainModel)) {
+              return configuredMainModel
+            }
+            if (current && validIds.includes(current)) return current
+            return firstValid || current
+          })
         })
       }).catch(() => {})
       loadReadWriteWarningCached()
@@ -104,6 +138,33 @@ export function useChatRuntimePreferences() {
   }, [])
 
   useEffect(() => {
+    const handleAssistantConfigChanged = (event: Event) => {
+      const nextMainModel = String((event as CustomEvent<{ main_model_id?: string }>).detail?.main_model_id || '').trim()
+      configuredMainModelCache = { value: nextMainModel, cachedAt: Date.now() }
+      availableModelsCache = null
+      availableModelsRequest = null
+      setConfiguredMainModel(nextMainModel)
+
+      loadAvailableModelsCached().then((groups) => {
+        setAvailableModels(groups)
+        const validIds = getValidModelIds(groups)
+        setModelName((current) => {
+          if (nextMainModel && (validIds.length === 0 || validIds.includes(nextMainModel))) {
+            return nextMainModel
+          }
+          if (current && validIds.includes(current)) return current
+          return validIds.find((id) => !id.endsWith('|none')) || validIds[0] || current
+        })
+      }).catch(() => {
+        if (nextMainModel) setModelName(nextMainModel)
+      })
+    }
+
+    window.addEventListener(ASSISTANT_MODEL_CONFIG_CHANGED_EVENT, handleAssistantConfigChanged)
+    return () => window.removeEventListener(ASSISTANT_MODEL_CONFIG_CHANGED_EVENT, handleAssistantConfigChanged)
+  }, [])
+
+  useEffect(() => {
     if (modelName) localStorage.setItem('ops_model', modelName)
   }, [modelName])
 
@@ -113,6 +174,7 @@ export function useChatRuntimePreferences() {
 
   return {
     availableModels,
+    configuredMainModel,
     modelName,
     readWriteWarningEnabled,
     setModelName,

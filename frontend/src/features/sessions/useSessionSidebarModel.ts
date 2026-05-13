@@ -38,6 +38,9 @@ export function useSessionSidebarModel() {
   const [sessionSearch, setSessionSearch] = useState('')
   const [selectedGroup, setSelectedGroup] = useState(DEFAULT_SESSION_GROUP)
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
+  const [terminalSessionIds, setTerminalSessionIds] = useState<string[]>([])
+  const [activeTerminalSessionId, setActiveTerminalSessionId] = useState<string | null>(null)
+  const [terminalMinimized, setTerminalMinimized] = useState(false)
   const [editingBusy, setEditingBusy] = useState(false)
   const deferredSessionSearch = useDeferredValue(sessionSearch)
 
@@ -51,6 +54,11 @@ export function useSessionSidebarModel() {
   }, [sessionList])
   const currentSession = currentSessionId ? sessionsById[currentSessionId] || null : null
   const editingSession = editingSessionId ? sessionsById[editingSessionId] || null : null
+  const terminalSessions = useMemo(
+    () => terminalSessionIds.map((sid) => sessionsById[sid]).filter(Boolean) as Session[],
+    [terminalSessionIds, sessionsById],
+  )
+  const terminalSession = activeTerminalSessionId ? sessionsById[activeTerminalSessionId] || null : null
   const currentSessionGroup = currentSession ? sessionPrimaryGroup(currentSession) : DEFAULT_SESSION_GROUP
 
   const groupNames = useMemo(() => {
@@ -107,6 +115,26 @@ export function useSessionSidebarModel() {
     if (editingSessionId && !sessionsById[editingSessionId]) setEditingSessionId(null)
   }, [editingSessionId, sessionsById])
 
+  useEffect(() => {
+    const availableIds = new Set(Object.keys(sessionsById))
+    setTerminalSessionIds((current) => current.filter((sid) => availableIds.has(sid)))
+    setActiveTerminalSessionId((current) => {
+      if (!current || availableIds.has(current)) return current
+      return null
+    })
+  }, [sessionsById])
+
+  useEffect(() => {
+    if (terminalSessionIds.length === 0) {
+      if (activeTerminalSessionId !== null) setActiveTerminalSessionId(null)
+      if (terminalMinimized) setTerminalMinimized(false)
+      return
+    }
+    if (!activeTerminalSessionId || !terminalSessionIds.includes(activeTerminalSessionId)) {
+      setActiveTerminalSessionId(terminalSessionIds[terminalSessionIds.length - 1] || null)
+    }
+  }, [activeTerminalSessionId, terminalMinimized, terminalSessionIds])
+
   const sessionMetrics = useMemo(() => summarizeSessions(sessionList), [sessionList])
   const handleDisconnect = useCallback(async (sid: string, event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
@@ -116,6 +144,36 @@ export function useSessionSidebarModel() {
   const handleEditSession = useCallback((sid: string, event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     setEditingSessionId(sid)
+  }, [])
+
+  const handleOpenTerminal = useCallback((sid: string, event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    setTerminalSessionIds((current) => (current.includes(sid) ? current : [...current, sid]))
+    setActiveTerminalSessionId(sid)
+    setTerminalMinimized(false)
+  }, [])
+
+  const handleSelectTerminal = useCallback((sid: string) => {
+    setActiveTerminalSessionId(sid)
+    setTerminalMinimized(false)
+  }, [])
+
+  const handleCloseTerminalTab = useCallback((sid: string) => {
+    setTerminalSessionIds((current) => {
+      const next = current.filter((item) => item !== sid)
+      if (next.length === 0) {
+        setActiveTerminalSessionId(null)
+        setTerminalMinimized(false)
+        return next
+      }
+      setActiveTerminalSessionId((active) => {
+        if (active && active !== sid) return active
+        const sidIndex = current.indexOf(sid)
+        const fallbackIndex = Math.max(0, Math.min(sidIndex, next.length - 1))
+        return next[fallbackIndex] || next[next.length - 1]
+      })
+      return next
+    })
   }, [])
 
   const handleCreateGroup = () => {
@@ -235,10 +293,19 @@ export function useSessionSidebarModel() {
     handleDeleteGroup,
     handleDisconnect,
     handleEditSession,
+    handleOpenTerminal,
+    handleSelectTerminal,
+    handleCloseTerminalTab,
     handleRenameGroup,
     handleSaveSessionEdit,
     handleSelectSession,
     closeSessionEdit: () => setEditingSessionId(null),
+    closeTerminal: () => {
+      if (!activeTerminalSessionId) return
+      handleCloseTerminalTab(activeTerminalSessionId)
+    },
+    minimizeTerminal: () => setTerminalMinimized(true),
+    restoreTerminal: () => setTerminalMinimized(false),
     openConnectModal: () => openModal('connect'),
     allGroupNames: groupNames,
     pendingApprovalCount: sessionMetrics.pendingApproval,
@@ -251,6 +318,10 @@ export function useSessionSidebarModel() {
     setSessionSearch,
     setSelectedGroup,
     sidebarOpen,
+    activeTerminalSessionId,
+    terminalMinimized,
+    terminalSessions,
+    terminalSession,
     totalSessionCount: sessionList.length,
     toggleGroup,
   }

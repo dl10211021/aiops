@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import APIRouter, File, UploadFile
+from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 
 from api.errors import raise_http_error
@@ -21,6 +22,7 @@ from core.chat_session_service import (
     ChatSessionServiceError,
     start_session_chat_run,
 )
+from core.chat_runs import get_chat_run
 
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,15 @@ async def ai_chat_with_system(req: ChatRequest):
     except ChatSessionServiceError as exc:
         raise_http_error(exc)
     return StreamingResponse(run.subscribe(), media_type="text/event-stream")
+
+
+@router.get("/session/{session_id}/chat/stream")
+async def resume_session_chat_stream(session_id: str, from_index: int = 0):
+    """Reconnect to an already running chat stream without starting a new task."""
+    run = get_chat_run(session_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="当前会话没有可恢复的后台任务")
+    return StreamingResponse(run.subscribe(from_index=from_index), media_type="text/event-stream")
 
 
 @router.post("/chat/attachments/preview", response_model=ResponseModel)

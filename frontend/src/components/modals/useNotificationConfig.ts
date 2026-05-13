@@ -19,6 +19,17 @@ export type NotificationConfig = {
   smtp_pass: string
 }
 
+export type NotificationChannelStatus = {
+  channel: string
+  label: string
+  enabled: boolean
+  configured: boolean
+  ready: boolean
+  status: 'ready' | 'missing_config' | 'disabled' | string
+  message: string
+  required_fields: string[]
+}
+
 const DEFAULT_NOTIFICATION_CONFIG: NotificationConfig = {
   wechat_enabled: true,
   wechat_webhook: '',
@@ -40,11 +51,14 @@ export function useNotificationConfig() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testingChannel, setTestingChannel] = useState<string | null>(null)
+  const [channels, setChannels] = useState<NotificationChannelStatus[]>([])
   const [error, setError] = useState('')
 
   useEffect(() => {
     getNotificationConfig().then((r) => {
-      setConfig((prev) => ({ ...prev, ...(r.data as Partial<NotificationConfig>) }))
+      const data = r.data as Partial<NotificationConfig> & { channels?: NotificationChannelStatus[] }
+      setConfig((prev) => ({ ...prev, ...data }))
+      setChannels(Array.isArray(data.channels) ? data.channels : [])
     }).catch((e: unknown) => {
       setError(e instanceof Error ? e.message : '加载告警通道配置失败')
     }).finally(() => setLoading(false))
@@ -80,6 +94,7 @@ export function useNotificationConfig() {
   }
 
   return {
+    channels,
     closeModal,
     config,
     error,

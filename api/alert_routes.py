@@ -29,13 +29,15 @@ async def list_alert_events(
     status: str | None = None,
     severity: str | None = None,
     host: str | None = None,
+    source_family: str | None = None,
+    automation_mode: str | None = None,
     limit: int = 200,
 ):
     """查询告警事件。"""
     return ResponseModel(
         **alert_events_response_kwargs(
             list_alert_event_records(
-                **alert_event_list_query_kwargs(status, severity, host, limit)
+                **alert_event_list_query_kwargs(status, severity, host, source_family, automation_mode, limit)
             )
         )
     )

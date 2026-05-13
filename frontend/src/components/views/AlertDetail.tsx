@@ -42,11 +42,30 @@ export function AlertDetail({
         <div className="grid gap-2 text-xs text-ops-subtext">
           <AlertInfo label="事件ID" value={alert.id} />
           <AlertInfo label="主机" value={alert.host || '-'} />
-          <AlertInfo label="来源" value={alertSourceLabel(alert.source)} />
+          <AlertInfo label="来源" value={alertSourceLabel(alert.source_type || alert.source)} />
+          <AlertInfo label="平台分类" value={alert.source_family || '-'} />
+          <AlertInfo label="告警类型" value={alert.alert_class || '-'} />
+          <AlertInfo label="优先级" value={alert.priority || '-'} />
+          <AlertInfo label="降噪动作" value={alert.noise_action || '-'} />
+          <AlertInfo label="来源标识" value={alert.external_id || '-'} />
+          <AlertInfo label="指纹" value={alert.fingerprint || '-'} />
+          <AlertInfo label="重复" value={alert.repeat_count || 1} />
           <AlertInfo label="创建" value={formatAlertDate(alert.created_at)} />
+          <AlertInfo label="开始" value={formatAlertDate(alert.starts_at)} />
+          <AlertInfo label="恢复" value={formatAlertDate(alert.ends_at)} />
           <AlertInfo label="更新" value={formatAlertDate(alert.updated_at)} />
           <AlertInfo label="关闭" value={alert.closed_at ? formatAlertDate(alert.closed_at) : '-'} />
         </div>
+
+        <section className="ops-data-panel p-4">
+          <div className="mb-2 text-sm font-semibold text-ops-text">AI 自动化策略</div>
+          <div className="grid gap-2 text-xs text-ops-subtext">
+            <AlertInfo label="自动分析" value={alert.automation_decision?.run_ai ? '会触发 AI' : '仅记录'} />
+            <AlertInfo label="通知计划" value={alert.automation_decision?.notify ? '分析完成后通知' : '不通知'} />
+            <AlertInfo label="通知通道" value={alert.notification_plan?.channel || '-'} />
+            <AlertInfo label="策略原因" value={alert.automation_decision?.reason || '-'} />
+          </div>
+        </section>
 
         <div className="ops-data-panel p-4">
           <label className="text-xs text-ops-subtext">负责人</label>

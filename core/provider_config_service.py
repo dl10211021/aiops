@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from core.assistant_model_config import clear_invalid_assistant_model_references
 from core.llm_factory import get_all_providers, mask_provider_secrets, merge_provider_secrets, save_providers
 
 
@@ -24,6 +25,7 @@ def save_provider_config_records(records: list[dict[str, Any]]) -> None:
     try:
         providers = merge_provider_secrets(records, get_all_providers())
         save_providers(providers)
+        clear_invalid_assistant_model_references(providers)
     except Exception as exc:
         logger.error("保存模型供应商配置失败: %s", exc)
         raise ProviderConfigServiceError(500, f"保存供应商配置失败: {exc}") from exc

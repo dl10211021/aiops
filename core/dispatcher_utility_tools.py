@@ -15,6 +15,8 @@ UTILITY_TOOL_NAMES = {
     "send_notification",
     "search_knowledge_base",
     "web_search",
+    "web_extractor",
+    "web_research",
     "search_assets_by_tag",
 }
 
@@ -31,6 +33,10 @@ async def execute_utility_tool(
         return await _search_knowledge_base(args)
     if tool_call_name == "web_search":
         return await _web_search(args, log)
+    if tool_call_name == "web_extractor":
+        return await _web_extractor(args, log)
+    if tool_call_name == "web_research":
+        return await _web_research(args, log)
     if tool_call_name == "search_assets_by_tag":
         return await _search_assets_by_tag(args, log)
     return '{"error": "Unknown utility tool"}'
@@ -261,6 +267,99 @@ async def _web_search(args: dict[str, Any], logger: logging.Logger) -> str:
         return json.dumps({"error": "联网搜索超时，请稍后重试或换一个更具体的关键词。"}, ensure_ascii=False)
     except Exception as e:
         return json.dumps({"error": f"外网检索异常: {str(e)}"}, ensure_ascii=False)
+
+
+def _extract_urls_from_search_results(results: list[dict[str, Any]]) -> list[str]:
+    urls: list[str] = []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        for key in ("href", "url", "link"):
+            raw = item.get(key)
+            if isinstance(raw, str):
+                url = raw.strip()
+                if url and url not in urls:
+                    urls.append(url)
+                break
+    return urls
+
+
+async def _web_extractor(args: dict[str, Any], logger: logging.Logger) -> str:
+    urls = args.get("urls")
+    if not isinstance(urls, list):
+        single_url = args.get("url")
+        if isinstance(single_url, str) and single_url.strip():
+            urls = [single_url.strip()]
+        else:
+            urls = []
+    normalized = [str(url).strip() for url in urls if str(url).strip()][:5]
+    if not normalized:
+        return json.dumps({"error": "web_extractor 需要 url 或 urls 参数。"}, ensure_ascii=False)
+
+    try:
+        from core.hermes_tool_adapter import execute_hermes_tool, hermes_tool_available
+
+        hermes_ok, reason = hermes_tool_available("web_extract")
+        if not hermes_ok:
+            return json.dumps(
+                {
+                    "status": "ERROR",
+                    "error": f"web_extract 不可用: {reason}",
+                },
+                ensure_ascii=False,
+            )
+        return await asyncio.wait_for(
+            asyncio.to_thread(execute_hermes_tool, "web_extract", {"urls": normalized}, {}),
+            timeout=90.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("web_extractor timeout for urls=%s", normalized)
+        return json.dumps({"error": "web_extractor 超时，请减少 URL 数量或稍后重试。"}, ensure_ascii=False)
+    except Exception as exc:
+        logger.warning("web_extractor failed: %s", exc)
+        return json.dumps({"error": f"web_extractor 异常: {type(exc).__name__}: {exc}"}, ensure_ascii=False)
+
+
+async def _web_research(args: dict[str, Any], logger: logging.Logger) -> str:
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return json.dumps({"error": "web_research 的 query 不能为空。"}, ensure_ascii=False)
+
+    limit_raw = args.get("limit")
+    try:
+        limit = int(limit_raw) if limit_raw is not None else 5
+    except (TypeError, ValueError):
+        limit = 5
+    limit = max(1, min(limit, 10))
+
+    search_result = await _web_search({"query": query, "limit": limit}, logger)
+    try:
+        search_payload = json.loads(search_result)
+    except json.JSONDecodeError:
+        search_payload = {"status": "ERROR", "error": "web_search 返回了不可解析内容。", "raw": search_result}
+
+    results = search_payload.get("results") if isinstance(search_payload, dict) else None
+    urls = _extract_urls_from_search_results(results if isinstance(results, list) else [])
+    extract_payload: dict[str, Any]
+    if urls:
+        extract_result = await _web_extractor({"urls": urls[:2]}, logger)
+        try:
+            parsed_extract = json.loads(extract_result)
+            extract_payload = parsed_extract if isinstance(parsed_extract, dict) else {"raw": extract_result}
+        except json.JSONDecodeError:
+            extract_payload = {"raw": extract_result}
+    else:
+        extract_payload = {"status": "SKIPPED", "reason": "搜索结果未提取到可用 URL。"}
+
+    return json.dumps(
+        {
+            "status": "SUCCESS",
+            "query": query,
+            "search": search_payload,
+            "extract": extract_payload,
+        },
+        ensure_ascii=False,
+    )
 
 
 async def _search_assets_by_tag(args: dict[str, Any], logger: logging.Logger) -> str:

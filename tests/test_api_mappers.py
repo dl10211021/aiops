@@ -154,6 +154,7 @@ class TestApiMappers(unittest.TestCase):
                 "thinking_mode": "high",
                 "orchestration_mode": "single",
                 "user_attachments": req.attachments,
+                "analysis_only": False,
             },
         )
 
@@ -371,6 +372,8 @@ class TestApiMappers(unittest.TestCase):
             {
                 "cron_expr": "*/15 * * * *",
                 "message": "inspect database group",
+                "inspection_cycle": "daily",
+                "inspection_depth": "standard",
                 "host": "10.0.0.8",
                 "username": "ops",
                 "agent_profile": "deep",
@@ -410,6 +413,21 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             cron_jobs_response_kwargs(jobs),
             {"status": "success", "data": {"jobs": jobs}},
+        )
+        self.assertEqual(
+            cron_jobs_response_kwargs(
+                jobs,
+                {"page": 1, "page_size": 20, "total": 1, "page_count": 1, "filtered_total": 1},
+                {"total": 1, "scheduled": 1, "paused": 0, "failed": 0, "running": 0},
+            ),
+            {
+                "status": "success",
+                "data": {
+                    "jobs": jobs,
+                    "pagination": {"page": 1, "page_size": 20, "total": 1, "page_count": 1, "filtered_total": 1},
+                    "metrics": {"total": 1, "scheduled": 1, "paused": 0, "failed": 0, "running": 0},
+                },
+            },
         )
         self.assertEqual(
             cron_job_deleted_response_kwargs("job-1"),
@@ -720,11 +738,13 @@ class TestApiMappers(unittest.TestCase):
         webhook_result = {"message": "告警已接收", "data": {"alert": alert}}
 
         self.assertEqual(
-            alert_event_list_query_kwargs("open", "critical", "db.local", 20),
+            alert_event_list_query_kwargs("open", "critical", "db.local", "zabbix", "ai", 20),
             {
                 "status": "open",
                 "severity": "critical",
                 "host": "db.local",
+                "source_family": "zabbix",
+                "automation_mode": "ai",
                 "limit": 20,
             },
         )

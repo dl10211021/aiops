@@ -15,6 +15,7 @@ def chat_stream_agent_kwargs(req: ChatRequest) -> dict[str, Any]:
         "thinking_mode": "off" if orchestration_mode == "fast" else (req.thinking_mode or "off"),
         "orchestration_mode": orchestration_mode,
         "user_attachments": req.attachments,
+        "analysis_only": req.analysis_only,
     }
 
 

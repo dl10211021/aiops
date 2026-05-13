@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import type { Asset, AssetTypeDefinition, ToolDisplayDetail } from '@/types'
+import type { Asset, AssetParamDefinition, AssetTypeDefinition, ToolDisplayDetail } from '@/types'
 import { toolLabel } from '@/utils/assetDisplay'
 import {
   DEFAULT_SESSION_GROUP,
@@ -7,6 +7,19 @@ import {
   uniqueSessionGroups,
   withPrimaryGroup,
 } from '@/features/sessions/sessionGroups'
+import ConnectionAdvancedParamsSection from '@/components/modals/ConnectionAdvancedParamsSection'
+import ConnectionDedicatedParamsSection from '@/components/modals/ConnectionDedicatedParamsSection'
+import { authModeFor } from '@/components/modals/connectionAuthRules'
+import {
+  CORE_ASSET_PARAM_FIELDS,
+  DATABASE_DEDICATED_PARAM_FIELDS,
+  DEDICATED_HTTP_CONNECTORS,
+  HTTP_BACKED_PROTOCOLS,
+  HTTP_DEDICATED_PARAM_FIELDS,
+  K8S_DEDICATED_PARAM_FIELDS,
+  SNMP_DEDICATED_PARAM_FIELDS,
+  groupParamDefinitions,
+} from '@/components/modals/connectionParamDefinitions'
 import type { AssetDisplayMeta } from './AssetVaultParts'
 
 type AssetVaultEditorDrawerProps = {
@@ -32,44 +45,97 @@ export function AssetVaultEditorDrawer({
   onOpenVerification,
   onSave,
 }: AssetVaultEditorDrawerProps) {
-  const initialExtraArgs = asset.extra_args || {}
-  const initialDatabaseKey = Object.prototype.hasOwnProperty.call(initialExtraArgs, 'db_name') ? 'db_name' : 'database'
+  const initialExtraArgs = normalizeExtraArgs(asset.extra_args)
   const [remark, setRemark] = useState(asset.remark || '')
   const [host, setHost] = useState(asset.host || '')
   const [port, setPort] = useState(String(asset.port || ''))
   const [username, setUsername] = useState(asset.username || '')
+  const [password, setPassword] = useState('')
   const [assetType, setAssetType] = useState(asset.asset_type || '')
   const [protocol, setProtocol] = useState(asset.protocol || asset.asset_type || '')
   const [agentProfile, setAgentProfile] = useState(asset.agent_profile || 'default')
   const [groupName, setGroupName] = useState(normalizeSessionGroupName(asset.tags?.[0]) || DEFAULT_SESSION_GROUP)
   const [tagsText, setTagsText] = useState((asset.tags || []).slice(1).join(', '))
-  const [databaseName, setDatabaseName] = useState(String(initialExtraArgs[initialDatabaseKey] || ''))
-  const [oracleServiceName, setOracleServiceName] = useState(String(initialExtraArgs.service_name || ''))
-  const [oracleSid, setOracleSid] = useState(String(initialExtraArgs.SID || initialExtraArgs.sid || ''))
+  const [extraArgs, setExtraArgs] = useState<Record<string, unknown>>(initialExtraArgs)
   const [extraArgsText, setExtraArgsText] = useState(JSON.stringify(initialExtraArgs, null, 2))
   const [error, setError] = useState<string | null>(null)
   const selectedType = useMemo(
     () => catalogTypes.find((item) => item.id === assetType),
     [assetType, catalogTypes]
   )
+  const currentProtocol = protocol.trim() || selectedType?.protocol || asset.protocol || asset.asset_type
   const accessProtocols = selectedType?.access_protocols?.length
     ? selectedType.access_protocols
-    : protocol
-      ? [{ protocol, label: display.protocolLabel || protocol }]
+    : currentProtocol
+      ? [{ protocol: currentProtocol, label: display.protocolLabel || currentProtocol }]
       : []
+  const currentAccessProtocol = accessProtocols.find((item) => item.protocol === currentProtocol)
   const selectedTools = selectedType?.capability?.tools || selectedType?.capability?.connector_group?.tools || []
   const selectedToolDetails: ToolDisplayDetail[] = selectedType?.capability?.tool_details?.length
     ? selectedType.capability.tool_details
     : selectedTools.map((name) => ({ name }))
+  const selectedCategory = selectedType?.category || String(extraArgs.category || '')
+  const selectedSubType = selectedType?.id || String(extraArgs.sub_type || assetType || '')
+  const selectedConnector = selectedType?.capability?.connector || ''
+  const authVisibility = authVisibilityFor(assetType, currentProtocol, selectedType)
+  const isKubernetesAsset = ['k8s', 'kubernetes'].includes(selectedSubType) || currentProtocol === 'k8s'
+  const shouldShowGenericHttpParams =
+    (['http_api', 'redfish'].includes(currentProtocol) || HTTP_BACKED_PROTOCOLS.has(currentProtocol))
+    && !DEDICATED_HTTP_CONNECTORS.has(selectedConnector)
+  const selectedConnectorLabel =
+    currentAccessProtocol?.label
+    || selectedType?.capability?.connector_group?.label
+    || selectedType?.capability?.connector
+    || currentProtocol
+  const extensionParamGroups = useMemo(() => {
+    const params = selectedType?.params || selectedType?.capability?.parameter_template || []
+    return groupParamDefinitions(params.filter((param) => {
+      if (CORE_ASSET_PARAM_FIELDS.has(param.field)) return false
+      if (selectedCategory === 'db' && DATABASE_DEDICATED_PARAM_FIELDS.has(param.field)) return false
+      if (isKubernetesAsset && K8S_DEDICATED_PARAM_FIELDS.has(param.field)) return false
+      if (currentProtocol === 'snmp' && SNMP_DEDICATED_PARAM_FIELDS.has(param.field)) return false
+      if (shouldShowGenericHttpParams && HTTP_DEDICATED_PARAM_FIELDS.has(param.field)) return false
+      return shouldShowParam(param, extraArgs)
+    }))
+  }, [currentProtocol, extraArgs, isKubernetesAsset, selectedCategory, selectedType, shouldShowGenericHttpParams])
   const groupOptions = useMemo(
     () => uniqueSessionGroups([...sessionGroups, ...(asset.tags || []), DEFAULT_SESSION_GROUP]),
     [asset.tags, sessionGroups]
   )
 
+  const syncExtraArgs = (next: Record<string, unknown>) => {
+    setExtraArgs(next)
+    setExtraArgsText(JSON.stringify(next, null, 2))
+    setError(null)
+  }
+
+  const handleExtraArgChange = (field: string, value: unknown) => {
+    syncExtraArgs({ ...extraArgs, [field]: value })
+  }
+
+  const handleExtraArgsPatch = (patch: Record<string, unknown>) => {
+    syncExtraArgs({ ...extraArgs, ...patch })
+  }
+
+  const handleExtraArgsBlur = () => {
+    const parsed = parseExtraArgsText(extraArgsText)
+    if (!parsed) {
+      setError('高级参数 JSON 格式不正确')
+      return
+    }
+    setExtraArgs(parsed)
+    setError(null)
+  }
+
   const applyTypeDefault = () => {
     if (!selectedType) return
     setProtocol(selectedType.protocol || protocol)
     setPort(String(selectedType.default_port || port || ''))
+    handleExtraArgsPatch({
+      category: selectedType.category,
+      sub_type: selectedType.id,
+      ...(selectedType.category === 'db' ? { db_type: selectedType.id } : {}),
+    })
   }
 
   const submit = () => {
@@ -84,32 +150,34 @@ export function AssetVaultEditorDrawer({
       setError('端口必须是 1-65535 之间的数字')
       return
     }
-    let extraArgs: Record<string, unknown>
-    try {
-      extraArgs = JSON.parse(extraArgsText || '{}') as Record<string, unknown>
-      if (!extraArgs || Array.isArray(extraArgs) || typeof extraArgs !== 'object') {
-        setError('高级参数必须是 JSON 对象')
-        return
-      }
-    } catch {
+    const parsedExtraArgs = parseExtraArgsText(extraArgsText)
+    if (!parsedExtraArgs) {
       setError('高级参数 JSON 格式不正确')
       return
     }
-    setOptionalField(extraArgs, initialDatabaseKey, databaseName)
-    setOptionalField(extraArgs, 'service_name', oracleServiceName)
-    setOptionalField(extraArgs, 'SID', oracleSid)
-    delete extraArgs.sid
+    if (selectedType) {
+      parsedExtraArgs.category = selectedType.category
+      parsedExtraArgs.sub_type = selectedType.id
+      if (selectedType.category === 'db') parsedExtraArgs.db_type = selectedType.id
+    }
+    if (currentProtocol) {
+      parsedExtraArgs.login_protocol = currentProtocol
+      parsedExtraArgs.protocol = currentProtocol
+    }
     const patch: Partial<Asset> = {
       remark: remark.trim() || normalizedHost,
       host: normalizedHost,
       port: normalizedPort,
       username: username.trim(),
       asset_type: assetType.trim() || asset.asset_type,
-      protocol: protocol.trim() || asset.protocol || asset.asset_type,
+      protocol: currentProtocol,
       agent_profile: agentProfile.trim() || 'default',
-      extra_args: extraArgs,
+      extra_args: parsedExtraArgs,
       tags: withPrimaryGroup(parseTags(tagsText), normalizedGroup),
       skills: asset.skills || [],
+    }
+    if (authVisibility.showPass) {
+      patch.password = password || (asset.password ? MANAGED_SECRET_MASK : undefined)
     }
     setError(null)
     onSave(asset, patch)
@@ -133,7 +201,7 @@ export function AssetVaultEditorDrawer({
                 {asset.remark || asset.host}
               </h2>
               <p className="mt-1 text-xs text-ops-overlay">
-                修改资产台账信息；凭据由平台托管，密码不会在这里明文展示。
+                修改资产台账信息；密码留空时保留平台托管的原凭据。
               </p>
             </div>
             <button
@@ -158,15 +226,29 @@ export function AssetVaultEditorDrawer({
                 <Field label="显示名称">
                   <input value={remark} onChange={(event) => setRemark(event.target.value)} className={inputClass} placeholder="例如：生产数据库、核心交换机" />
                 </Field>
-                <Field label="账号">
-                  <input value={username} onChange={(event) => setUsername(event.target.value)} className={inputClass} placeholder="登录账号" />
-                </Field>
                 <Field label="主机 / 地址">
                   <input value={host} onChange={(event) => setHost(event.target.value)} className={inputClass} placeholder="IP、域名或 API 地址" />
                 </Field>
                 <Field label="端口">
                   <input value={port} onChange={(event) => setPort(event.target.value)} className={inputClass} inputMode="numeric" placeholder="1-65535" />
                 </Field>
+                {authVisibility.showUser && (
+                  <Field label="账号">
+                    <input value={username} onChange={(event) => setUsername(event.target.value)} className={inputClass} placeholder="登录账号" />
+                  </Field>
+                )}
+                {authVisibility.showPass && (
+                  <Field label={asset.password ? '密码（留空保持原密码）' : '密码'}>
+                    <input
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      className={inputClass}
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder={asset.password ? '留空保持平台托管密码' : '请输入登录密码'}
+                    />
+                  </Field>
+                )}
               </div>
             </EditorBlock>
 
@@ -187,14 +269,22 @@ export function AssetVaultEditorDrawer({
                   </select>
                 </Field>
                 <Field label="主接入协议">
-                  <select value={protocol} onChange={(event) => setProtocol(event.target.value)} className={inputClass}>
+                  <select
+                    value={currentProtocol}
+                    onChange={(event) => {
+                      const nextProtocol = event.target.value
+                      setProtocol(nextProtocol)
+                      handleExtraArgsPatch({ login_protocol: nextProtocol, protocol: nextProtocol })
+                    }}
+                    className={inputClass}
+                  >
                     {accessProtocols.map((item) => (
                       <option key={item.protocol} value={item.protocol}>
                         {item.label || item.protocol}
                       </option>
                     ))}
-                    {!accessProtocols.some((item) => item.protocol === protocol) && protocol && (
-                      <option value={protocol}>{protocol}</option>
+                    {!accessProtocols.some((item) => item.protocol === currentProtocol) && currentProtocol && (
+                      <option value={currentProtocol}>{currentProtocol}</option>
                     )}
                   </select>
                 </Field>
@@ -231,6 +321,42 @@ export function AssetVaultEditorDrawer({
               )}
             </EditorBlock>
 
+            <EditorBlock title="连接参数" hint="与新建资产使用同一套资产类型参数，包含 Oracle、SNMP、K8S、HTTP API 等专用配置。">
+              <div className="space-y-3">
+                <ConnectionDedicatedParamsSection
+                  category={selectedCategory}
+                  currentProtocol={currentProtocol}
+                  extraArgs={extraArgs}
+                  isKubernetesAsset={isKubernetesAsset}
+                  oracleClientConfig={null}
+                  port={Number(port) || selectedType?.default_port || asset.port || 0}
+                  selectedConnectorLabel={selectedConnectorLabel}
+                  shouldShowGenericHttpParams={shouldShowGenericHttpParams}
+                  subType={selectedSubType}
+                  onExtraArgChange={handleExtraArgChange}
+                  onExtraArgsChange={handleExtraArgsPatch}
+                  oracleThickDefaults={() => ({ use_thick_mode: true })}
+                />
+                <ConnectionAdvancedParamsSection
+                  connectorLabel={selectedConnectorLabel}
+                  extraArgs={extraArgs}
+                  maturity={selectedType?.capability?.maturity}
+                  paramGroups={extensionParamGroups}
+                  onParamChange={handleExtraArgChange}
+                />
+                {selectedCategory !== 'db'
+                  && currentProtocol !== 'snmp'
+                  && !isKubernetesAsset
+                  && !shouldShowGenericHttpParams
+                  && extensionParamGroups.length === 0
+                  && (
+                    <p className="rounded-lg bg-ops-surface0/55 px-3 py-2 text-[11px] leading-5 text-ops-subtext">
+                      当前资产类型没有额外连接参数。
+                    </p>
+                  )}
+              </div>
+            </EditorBlock>
+
             <EditorBlock title="分组与标签" hint="资产组会同步用于资产列表和批量会话；其它标签用于检索。">
               <div className="grid gap-3 md:grid-cols-2">
                 <Field label="资产组">
@@ -251,24 +377,11 @@ export function AssetVaultEditorDrawer({
               </div>
             </EditorBlock>
 
-            <EditorBlock title="数据库 / Oracle 参数" hint="只填写当前资产真正需要的字段，避免 MySQL 出 SID 这类错位配置。">
-              <div className="grid gap-3 md:grid-cols-3">
-                <Field label="数据库名 / 实例">
-                  <input value={databaseName} onChange={(event) => setDatabaseName(event.target.value)} className={inputClass} placeholder="MySQL/PostgreSQL 等" />
-                </Field>
-                <Field label="Oracle Service Name">
-                  <input value={oracleServiceName} onChange={(event) => setOracleServiceName(event.target.value)} className={inputClass} placeholder="Oracle 可选" />
-                </Field>
-                <Field label="Oracle SID">
-                  <input value={oracleSid} onChange={(event) => setOracleSid(event.target.value)} className={inputClass} placeholder="Oracle 可选" />
-                </Field>
-              </div>
-            </EditorBlock>
-
             <EditorBlock title="高级参数 JSON" hint="保留少数特殊资产需要的扩展配置；保存前会校验 JSON 对象。">
               <textarea
                 value={extraArgsText}
                 onChange={(event) => setExtraArgsText(event.target.value)}
+                onBlur={handleExtraArgsBlur}
                 className="ops-control min-h-40 w-full px-3 py-2 font-mono text-xs"
                 spellCheck={false}
               />
@@ -351,13 +464,36 @@ function parseTags(value: string) {
     .filter(Boolean)
 }
 
-function setOptionalField(target: Record<string, unknown>, field: string, value: string) {
-  const normalized = value.trim()
-  if (normalized) {
-    target[field] = normalized
-  } else {
-    delete target[field]
+function normalizeExtraArgs(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return { ...(value as Record<string, unknown>) }
+}
+
+function parseExtraArgsText(value: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(value || '{}') as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    return parsed as Record<string, unknown>
+  } catch {
+    return null
   }
 }
+
+function shouldShowParam(param: AssetParamDefinition, extraArgs: Record<string, unknown>) {
+  if (!param.depend) return true
+  return Object.entries(param.depend).every(([field, allowed]) => {
+    const current = extraArgs[field]
+    return allowed.map(String).includes(String(current))
+  })
+}
+
+function authVisibilityFor(assetType: string, protocol: string, selectedType?: AssetTypeDefinition) {
+  const authMode = authModeFor(selectedType?.id || assetType, protocol || selectedType?.protocol, selectedType?.capability)
+  if (authMode === 'password_only') return { showUser: false, showPass: true }
+  if (authMode === 'custom_snmp' || authMode === 'none') return { showUser: false, showPass: false }
+  return { showUser: true, showPass: true }
+}
+
+const MANAGED_SECRET_MASK = '*'.repeat(8)
 
 const inputClass = 'ops-control h-10 px-3 text-sm'

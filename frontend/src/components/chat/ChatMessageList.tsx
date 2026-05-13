@@ -18,7 +18,7 @@ interface ChatMessageListProps {
   onApproval: (approval: ToolApproval, approved: boolean, autoAll?: boolean) => void
   onDelete: (message: ChatMessage) => void
   onEdit: (message: ChatMessage) => void
-  onFeedback: (message: ChatMessage, rating: 'up' | 'down') => void
+  onFeedback: (message: ChatMessage, rating: 'up' | 'down', note?: string) => void
   onInteraction: (requestId: string, value: string, label?: string) => void
   onTraceActionRule: (action: SafetyPolicyAction, decision: SafetyPolicyDecision) => void
   policyRuleBusy: string | null

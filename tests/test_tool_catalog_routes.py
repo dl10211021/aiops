@@ -56,6 +56,8 @@ class TestToolCatalogRoutes(unittest.TestCase):
         self.assertFalse(tools["write_file"]["execution_enabled"])
         self.assertIn("session_search", tools)
         self.assertEqual(tools["session_search"]["status"], "not_wired")
+        self.assertIn("image_gen", tools)
+        self.assertEqual(tools["image_gen"]["status"], "available")
         self.assertTrue(all(not item.lower().startswith("hermes") for item in toolset_ids))
         dumped = json.dumps(payload, ensure_ascii=False).lower()
         self.assertNotIn("hermes", dumped)

@@ -172,12 +172,19 @@ export interface ChatMessage {
   }
   memoryRefs?: MemoryReference[]
   memory_refs?: MemoryReference[]
+  runtimeEvents?: ChatRuntimeEvent[]
   // For tool execution traces
   execTrace?: ExecTraceItem[]
   // For tool approval requests
   toolApproval?: ToolApproval
   // For model-initiated user input or option selection
   userInteraction?: UserInteractionRequest
+}
+
+export interface ChatRuntimeEvent {
+  type: 'status'
+  content: string
+  timestamp: number
 }
 
 export interface MemoryReference {
@@ -495,6 +502,8 @@ export interface CronJob {
   id: string
   cron_expr: string
   message: string
+  inspection_cycle?: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'custom' | string
+  inspection_depth?: 'quick' | 'standard' | 'deep' | string
   host: string
   target_host?: string
   username: string
@@ -509,6 +518,26 @@ export interface CronJob {
   notification_channel?: string
   retry_count?: number
   active_skills?: string[]
+  run_state?: CronRunState
+}
+
+export interface CronRunState {
+  schedule_status: 'scheduled' | 'paused' | string
+  running: boolean
+  running_run_id?: string | null
+  started_at?: string | null
+  effective_status?: 'running' | 'completed' | 'failed' | 'partial' | 'empty' | 'cancelled' | 'orphaned' | string | null
+  latest_run_id?: string | null
+  latest_status?: 'running' | 'completed' | 'failed' | 'partial' | 'empty' | 'cancelled' | string | null
+  latest_message?: string | null
+  latest_started_at?: string | null
+  latest_completed_at?: string | null
+  latest_duration_ms?: number
+  target_count: number
+  success_count: number
+  error_count: number
+  notification_status?: string | null
+  notification_message?: string | null
 }
 
 export interface DashboardOverview {
@@ -567,6 +596,28 @@ export interface AlertEvent {
   severity: string
   description: string
   source: string
+  source_type?: string
+  source_family?: string
+  alert_class?: string
+  priority?: string
+  noise_action?: string
+  automation_decision?: {
+    run_ai?: boolean
+    notify?: boolean
+    reason?: string
+  }
+  notification_plan?: {
+    channel?: string
+    when?: string
+    targets?: string[]
+  }
+  external_id?: string
+  fingerprint?: string
+  starts_at?: string
+  ends_at?: string
+  repeat_count?: number
+  labels?: Record<string, unknown>
+  annotations?: Record<string, unknown>
   payload: Record<string, unknown>
   notes: AlertEventNote[]
 }
@@ -581,6 +632,7 @@ export interface InspectionTemplateStep {
   title: string
   tool: string
   command?: string
+  command_candidates?: string[]
   query?: string
   args?: Record<string, unknown>
 }
@@ -612,17 +664,107 @@ export interface InspectionRunTarget {
   error?: string
 }
 
+export interface InspectionRunEvent {
+  time: string
+  type: string
+  message: string
+  status?: string
+  target?: {
+    asset_id?: number | null
+    host?: string | null
+    asset_type?: string | null
+    protocol?: string | null
+  }
+}
+
+export interface InspectionNotificationResult {
+  status?: string
+  message?: string
+}
+
+export interface InspectionRunTracePhase {
+  id: string
+  label: string
+  status: string
+  started_at?: string | null
+  completed_at?: string | null
+  detail?: string
+}
+
+export interface InspectionRunTrace {
+  trace_id: string
+  kind: 'inspection_run' | string
+  status: string
+  started_at?: string | null
+  completed_at?: string | null
+  duration_ms?: number
+  counters: {
+    events: number
+    targets: number
+    success: number
+    error: number
+    cancelled: number
+  }
+  phases: InspectionRunTracePhase[]
+}
+
+export interface InspectionScoreDimension {
+  id: string
+  label: string
+  score: number
+  weight?: number
+}
+
+export interface InspectionScoreDeduction {
+  dimension: string
+  label: string
+  points: number
+  reason: string
+  host?: string
+}
+
+export interface InspectionTargetScore {
+  target: {
+    asset_id?: number | null
+    host?: string | null
+    asset_type?: string | null
+    protocol?: string | null
+  }
+  status?: string
+  profile: string
+  profile_label: string
+  score: number
+  grade: string
+  grade_label: string
+  dimensions: InspectionScoreDimension[]
+  deductions: InspectionScoreDeduction[]
+}
+
+export interface InspectionScore {
+  score: number
+  grade: string
+  grade_label: string
+  profile: string
+  profile_label: string
+  dimensions: InspectionScoreDimension[]
+  target_scores: InspectionTargetScore[]
+  deductions: InspectionScoreDeduction[]
+  run_status?: string
+}
+
 export interface InspectionRun {
   id: string
   job_id: string
-  status: 'completed' | 'failed' | 'partial' | 'empty' | string
+  status: 'running' | 'completed' | 'failed' | 'partial' | 'empty' | 'cancelled' | string
   target_scope: string
   scope_value?: string | null
   message: string
   target_count: number
   targets: InspectionRunTarget[]
+  events?: InspectionRunEvent[]
+  notification?: InspectionNotificationResult | null
   started_at: string
-  completed_at: string
+  completed_at?: string | null
   duration_ms?: number
 }
 
@@ -654,6 +796,10 @@ export interface InspectionReport {
     error_count: number
     success_rate: number
   }
+  notification?: InspectionNotificationResult | null
+  events?: InspectionRunEvent[]
+  trace?: InspectionRunTrace
+  score?: InspectionScore
   targets: InspectionRunTarget[]
 }
 

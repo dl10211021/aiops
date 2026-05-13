@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getAlertEvents, updateAlertEvent } from '@/api/client'
+import { getAlertEvents, sendAlertWebhook, updateAlertEvent } from '@/api/client'
 import PageHeader from '@/components/layout/PageHeader'
 import { useStore } from '@/store'
 import {
   AlertDetail,
   AlertEmptyState,
   AlertFilters,
+  AlertIntegrationPanel,
   AlertMetric,
   AlertQueueList,
 } from './AlertCenterParts'
@@ -16,21 +17,35 @@ export default function AlertCenter() {
   const [status, setStatus] = useState<AlertEventStatus | 'all'>('open')
   const [severity, setSeverity] = useState('all')
   const [host, setHost] = useState('')
+  const [sourceFamily, setSourceFamily] = useState('all')
+  const [automationMode, setAutomationMode] = useState('all')
   const [alerts, setAlerts] = useState<AlertEvent[]>([])
   const [allAlerts, setAllAlerts] = useState<AlertEvent[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [testingWebhook, setTestingWebhook] = useState(false)
   const [error, setError] = useState('')
   const [assignee, setAssignee] = useState(() => localStorage.getItem('OPSCORE_OPERATOR') || 'user')
   const [note, setNote] = useState('')
+  const webhookUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '/api/v1/webhook/alert'
+    return `${window.location.origin}/api/v1/webhook/alert`
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
       const [filteredRes, allRes] = await Promise.all([
-        getAlertEvents({ status, severity, host: host.trim(), limit: 300 }),
+        getAlertEvents({
+          status,
+          severity,
+          host: host.trim(),
+          source_family: sourceFamily,
+          automation_mode: automationMode,
+          limit: 300,
+        }),
         getAlertEvents({ limit: 1000 }),
       ])
       const nextAlerts = filteredRes.data.alerts || []
@@ -45,7 +60,7 @@ export default function AlertCenter() {
     } finally {
       setLoading(false)
     }
-  }, [host, severity, status])
+  }, [automationMode, host, severity, sourceFamily, status])
 
   useEffect(() => { void load() }, [load])
 
@@ -93,6 +108,48 @@ export default function AlertCenter() {
     }
   }
 
+  const handleCopyWebhookUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(webhookUrl)
+      addToast('告警 Webhook 地址已复制', 'success')
+    } catch {
+      addToast('复制失败，请手动选择地址', 'error')
+    }
+  }
+
+  const handleSendTestAlert = async () => {
+    setTestingWebhook(true)
+    try {
+      const res = await sendAlertWebhook({
+        source: 'manual',
+        source_type: 'manual',
+        host: 'opscore-test.local',
+        alert_name: 'OpsCore Webhook Test',
+        severity: 'warning',
+        description: '这是一条由告警页手动发送的接入测试告警。',
+        fingerprint: `opscore-test-${Date.now()}`,
+      })
+      addToast(`测试告警已接收，注入会话 ${res.data.injected_count || 0} 个`, 'success')
+      setStatus('open')
+      setSeverity('all')
+      setHost('')
+      setSourceFamily('all')
+      setAutomationMode('all')
+      const [filteredRes, allRes] = await Promise.all([
+        getAlertEvents({ status: 'open', severity: 'all', host: '', source_family: 'all', automation_mode: 'all', limit: 300 }),
+        getAlertEvents({ limit: 1000 }),
+      ])
+      const nextAlerts = filteredRes.data.alerts || []
+      setAlerts(nextAlerts)
+      setAllAlerts(allRes.data.alerts || [])
+      setSelectedId(res.data.alert?.id || nextAlerts[0]?.id || null)
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '测试告警发送失败', 'error')
+    } finally {
+      setTestingWebhook(false)
+    }
+  }
+
   return (
     <div className="ops-page">
       <div className="ops-page-inner">
@@ -117,13 +174,24 @@ export default function AlertCenter() {
           <AlertMetric label="全部事件" value={summary.total} tone="slate" />
         </div>
 
+        <AlertIntegrationPanel
+          webhookUrl={webhookUrl}
+          testing={testingWebhook}
+          onCopy={handleCopyWebhookUrl}
+          onSendTest={handleSendTestAlert}
+        />
+
         <AlertFilters
           status={status}
           severity={severity}
           host={host}
+          sourceFamily={sourceFamily}
+          automationMode={automationMode}
           onStatusChange={setStatus}
           onSeverityChange={setSeverity}
           onHostChange={setHost}
+          onSourceFamilyChange={setSourceFamily}
+          onAutomationModeChange={setAutomationMode}
         />
 
         {error && (
@@ -153,7 +221,13 @@ export default function AlertCenter() {
           </div>
         ) : (
           <AlertEmptyState
-            onReset={() => { setStatus('open'); setSeverity('all'); setHost('') }}
+            onReset={() => {
+              setStatus('open')
+              setSeverity('all')
+              setHost('')
+              setSourceFamily('all')
+              setAutomationMode('all')
+            }}
             onRefresh={() => void load()}
           />
         )}

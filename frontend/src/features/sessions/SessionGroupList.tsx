@@ -17,6 +17,7 @@ interface SessionGroupListProps {
   sessionList: Session[]
   onDisconnect: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
   onEdit: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
+  onOpenTerminal: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
   onDeleteGroup: (group: string) => void
   onRenameGroup: (oldName: string, newName: string) => boolean
   onSelectGroup: (group: string) => void
@@ -34,6 +35,7 @@ function SessionGroupList({
   sessionList,
   onDisconnect,
   onEdit,
+  onOpenTerminal,
   onDeleteGroup,
   onRenameGroup,
   onSelectGroup,
@@ -191,6 +193,7 @@ function SessionGroupList({
                         onSelectSession={onSelectSession}
                         onDisconnect={onDisconnect}
                         onEdit={onEdit}
+                        onOpenTerminal={onOpenTerminal}
                       />
                     ))}
                     {hiddenCount > 0 && (
@@ -239,6 +242,7 @@ function areSessionGroupListPropsEqual(prev: SessionGroupListProps, next: Sessio
     && prev.sessionList === next.sessionList
     && prev.onDisconnect === next.onDisconnect
     && prev.onEdit === next.onEdit
+    && prev.onOpenTerminal === next.onOpenTerminal
     && prev.onDeleteGroup === next.onDeleteGroup
     && prev.onRenameGroup === next.onRenameGroup
     && prev.onSelectGroup === next.onSelectGroup

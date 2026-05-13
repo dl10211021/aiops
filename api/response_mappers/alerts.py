@@ -9,12 +9,16 @@ def alert_event_list_query_kwargs(
     status: str | None,
     severity: str | None,
     host: str | None,
+    source_family: str | None,
+    automation_mode: str | None,
     limit: int,
 ) -> dict[str, Any]:
     return {
         "status": status,
         "severity": severity,
         "host": host,
+        "source_family": source_family,
+        "automation_mode": automation_mode,
         "limit": limit,
     }
 

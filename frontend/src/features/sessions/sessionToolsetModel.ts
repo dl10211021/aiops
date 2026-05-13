@@ -18,7 +18,8 @@ export function buildSessionToolsetModel(session: Session, catalog: SessionToolC
   const capabilityItems = [
     `工具 ${activeTools.length || '...'}`,
     `技能 ${session.skills.length}`,
-    pendingCount > 0 ? `待确认 ${pendingCount}` : '',
+    pendingApprovalCount > 0 ? `待审批 ${pendingApprovalCount}` : '',
+    pendingInteractionCount > 0 ? `待交互 ${pendingInteractionCount}` : '',
   ].filter(Boolean)
 
   return {

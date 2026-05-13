@@ -26,7 +26,9 @@ class HermesToolAdapterTests(unittest.TestCase):
     def test_dangerous_hermes_tools_are_not_registered_for_agent_dispatch(self) -> None:
         registered = {tool.name for tool in tool_registry.all_tools()}
 
-        self.assertTrue(HERMES_AGENT_EXCLUDED_TOOL_NAMES.isdisjoint(registered))
+        # web_search is intentionally provided by OpsCore utility tools.
+        excluded_should_not_register = HERMES_AGENT_EXCLUDED_TOOL_NAMES - {"web_search"}
+        self.assertTrue(excluded_should_not_register.isdisjoint(registered))
         self.assertTrue(
             HERMES_AGENT_EXCLUDED_TOOL_NAMES.isdisjoint(
                 dispatcher_hermes_tools.HERMES_DISPATCH_TOOL_NAMES
@@ -58,6 +60,30 @@ class HermesToolAdapterTests(unittest.TestCase):
 
         self.assertEqual(result["summary"]["total"], 1)
         self.assertEqual(result["todos"][0]["content"], "check adapter")
+
+    def test_image_gen_alias_dispatches_to_image_generate(self) -> None:
+        calls: list[str] = []
+
+        class _FakeRegistry:
+            def dispatch(self, name: str, args: dict, **kwargs) -> str:
+                calls.append(name)
+                return json.dumps({"status": "SUCCESS", "tool": name}, ensure_ascii=False)
+
+        with (
+            mock.patch("core.hermes_tool_adapter._registry", return_value=_FakeRegistry()),
+            mock.patch("core.hermes_tool_adapter.hermes_tool_available", return_value=(True, "")),
+        ):
+            payload = json.loads(
+                execute_hermes_tool(
+                    "image_gen",
+                    {"prompt": "blue skyline", "aspect_ratio": "landscape"},
+                    {"session_id": "test-image-gen"},
+                )
+            )
+
+        self.assertEqual(payload["status"], "SUCCESS")
+        self.assertEqual(payload["tool"], "image_generate")
+        self.assertEqual(calls, ["image_generate"])
 
     def test_dispatcher_rejects_hermes_write_tool_without_routing(self) -> None:
         blocked_path = Path("tests/.tmp/hermes_blocked_write.txt")

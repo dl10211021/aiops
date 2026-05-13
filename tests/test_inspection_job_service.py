@@ -3,12 +3,15 @@ import unittest
 
 from core.inspection_job_service import (
     InspectionJobServiceError,
+    cancel_running_inspection_job_record,
     create_inspection_job_record,
     list_inspection_job_records,
+    list_inspection_job_records_page,
     pause_inspection_job_record,
     remove_inspection_job_record,
     resume_inspection_job_record,
     run_inspection_job_record_now,
+    start_inspection_job_record_now,
     update_inspection_job_record,
 )
 
@@ -65,6 +68,18 @@ class FakeInspectionJobManager:
             raise KeyError(job_id)
         return {"job_id": job_id, "status": "completed"}
 
+    @classmethod
+    async def start_job_now(cls, job_id: str):
+        if job_id not in cls.jobs:
+            raise KeyError(job_id)
+        return {"job_id": job_id, "status": "accepted", "run_id": "run-1"}
+
+    @classmethod
+    def cancel_running_job(cls, job_id: str):
+        if job_id not in cls.jobs:
+            raise KeyError(job_id)
+        return {"job_id": job_id, "run_id": "run-1", "status": "cancelling"}
+
 
 class TestInspectionJobService(unittest.TestCase):
     def setUp(self):
@@ -105,10 +120,56 @@ class TestInspectionJobService(unittest.TestCase):
         self.assertEqual(paused["status"], "paused")
         resumed = resume_inspection_job_record("job-1", FakeInspectionJobManager)
         result = asyncio.run(run_inspection_job_record_now("job-1", FakeInspectionJobManager))
+        started = asyncio.run(start_inspection_job_record_now("job-1", FakeInspectionJobManager))
+        cancelled = cancel_running_inspection_job_record("job-1", FakeInspectionJobManager)
 
         self.assertEqual(updated["host"], "db.local")
         self.assertEqual(resumed["status"], "scheduled")
         self.assertEqual(result["status"], "completed")
+        self.assertEqual(started["status"], "accepted")
+        self.assertEqual(cancelled["status"], "cancelling")
+
+    def test_list_jobs_page_filters_and_reports_metrics(self):
+        FakeInspectionJobManager.jobs = {
+            "job-1": {
+                "id": "job-1",
+                "status": "scheduled",
+                "host": "linux-1",
+                "message": "daily linux",
+                "run_state": {"running": False, "latest_status": "completed"},
+            },
+            "job-2": {
+                "id": "job-2",
+                "status": "paused",
+                "host": "oracle-1",
+                "message": "monthly oracle",
+                "run_state": {"running": False, "effective_status": "orphaned", "latest_status": "running"},
+            },
+            "job-3": {
+                "id": "job-3",
+                "status": "scheduled",
+                "host": "linux-2",
+                "message": "weekly linux",
+                "run_state": {"running": True, "latest_status": "running"},
+            },
+        }
+
+        page = list_inspection_job_records_page(
+            page=1,
+            page_size=1,
+            query="linux",
+            status="scheduled",
+            manager=FakeInspectionJobManager,
+        )
+        failed = list_inspection_job_records_page(status="failed", manager=FakeInspectionJobManager)
+
+        self.assertEqual(page["jobs"][0]["id"], "job-1")
+        self.assertEqual(page["pagination"]["filtered_total"], 2)
+        self.assertEqual(page["pagination"]["page_count"], 2)
+        self.assertEqual(page["metrics"]["total"], 3)
+        self.assertEqual(page["metrics"]["running"], 1)
+        self.assertEqual(page["metrics"]["failed"], 1)
+        self.assertEqual([job["id"] for job in failed["jobs"]], ["job-2"])
 
     def test_remove_missing_job_maps_to_404(self):
         with self.assertRaises(InspectionJobServiceError) as ctx:

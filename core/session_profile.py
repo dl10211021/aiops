@@ -145,6 +145,126 @@ def _inspection_excerpt(inspection: dict[str, Any] | None, limit: int = 9000) ->
     return safe[:limit]
 
 
+def _inspection_checks(inspection: dict[str, Any] | None) -> list[dict[str, Any]]:
+    checks = inspection.get("checks", []) if isinstance(inspection, dict) else []
+    return [check for check in checks if isinstance(check, dict)]
+
+
+def _network_peer_role(line: str, check_name: str) -> tuple[str, int]:
+    text = f"{check_name} {line}".lower()
+    if any(token in text for token in ("root", "default", "route", "trunk", "core", "uplink", "aggregation", "agg", "router", "firewall")):
+        return "上联/核心侧候选", 78
+    if any(token in text for token in ("access", "edge", "downlink", "ap", "phone", "camera", "pc", "printer")):
+        return "下联/接入侧候选", 70
+    if "mac" in text or "arp" in text:
+        return "下联或二层学习端候选", 58
+    return "网络邻居", 68
+
+
+def _network_endpoint_from_line(line: str) -> str:
+    patterns = (
+        r"(?:GigabitEthernet|XGigabitEthernet|Ten-GigabitEthernet|FortyGigE|HundredGigE|Ethernet|Eth|GE|Gi|Te|Fa|Port-channel|Bridge-Aggregation|Vlanif|Vlan)\S+",
+        r"\b(?:ge|xe|et)-\d+/\d+/\d+(?:\.\d+)?\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, line, re.IGNORECASE)
+        if match:
+            return match.group(0)
+    return "接口见证据"
+
+
+def _network_peer_from_line(line: str) -> str:
+    clean = re.sub(r"\s+", " ", line).strip()
+    if not clean:
+        return ""
+    ip_match = re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", clean)
+    if ip_match:
+        return ip_match.group(0)
+    mac_match = re.search(r"\b[0-9a-f]{2}(?:[:-][0-9a-f]{2}){5}\b|\b[0-9a-f]{4}[-.][0-9a-f]{4}[-.][0-9a-f]{4}\b", clean, re.IGNORECASE)
+    if mac_match:
+        return mac_match.group(0)
+    parts = [part for part in re.split(r"\s+", clean) if part]
+    for part in parts:
+        if re.match(
+            r"^(?:GigabitEthernet|XGigabitEthernet|Ten-GigabitEthernet|FortyGigE|HundredGigE|Ethernet|Eth|GE|Gi|Te|Fa|Port-channel|Bridge-Aggregation|Vlanif|Vlan)\S+$",
+            part,
+            re.IGNORECASE,
+        ):
+            continue
+        if any(ch.isalpha() for ch in part) and not re.match(r"^(interface|local|port|vlan|mac|ip|address)$", part, re.I):
+            return part[:80]
+    return clean[:80]
+
+
+def _network_relations_from_inspection(
+    context: dict[str, Any],
+    inspection: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    relations: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    host = str(context.get("host") or "")
+    checks = _inspection_checks(inspection)
+    signal_names = {
+        "neighbors",
+        "lldp",
+        "cdp",
+        "mac_table",
+        "arp_table",
+        "routes",
+        "vlans",
+        "stp",
+        "interfaces",
+        "interface_errors",
+    }
+    for check in checks:
+        name = str(check.get("name") or "").lower()
+        title = str(check.get("title") or "").lower()
+        command = str(check.get("command") or "").lower()
+        signal_text = f"{name} {title} {command}"
+        if not any(signal in signal_text for signal in signal_names):
+            continue
+        output = str(check.get("output") or "")
+        lines = [line.strip() for line in output.splitlines() if line.strip()]
+        for line in lines[:18]:
+            if len(line) < 5 or re.match(r"^-+$", line):
+                continue
+            role, confidence = _network_peer_role(line, name)
+            peer = _network_peer_from_line(line)
+            if not peer or peer.lower() in {"interface", "local", "port"}:
+                continue
+            endpoint = _network_endpoint_from_line(line)
+            key = (peer.lower(), endpoint.lower(), role)
+            if key in seen:
+                continue
+            seen.add(key)
+            relations.append(
+                {
+                    "direction": "bidirectional",
+                    "peer": peer,
+                    "peer_role": role,
+                    "endpoint": endpoint,
+                    "protocol": "lldp/cdp/mac/arp/stp/route",
+                    "evidence": line[:320],
+                    "confidence": confidence,
+                }
+            )
+            if len(relations) >= 8:
+                return relations
+    if host and not relations:
+        relations.append(
+            {
+                "direction": "unknown",
+                "peer": "待发现网络邻居",
+                "peer_role": "上下联关系待确认",
+                "endpoint": host,
+                "protocol": "network_cli/snmp",
+                "evidence": "当前巡检未获得可解析的 LLDP/CDP/MAC/ARP/STP 证据；建议启用 LLDP/CDP 或补充 SNMP/配置备份后再确认上下联。",
+                "confidence": 35,
+            }
+        )
+    return relations
+
+
 def _extract_json_object(text: str) -> dict[str, Any] | None:
     candidate = text.strip()
     if candidate.startswith("```"):
@@ -209,6 +329,9 @@ def _fallback_relations(context: dict[str, Any], inspection: dict[str, Any] | No
                 "confidence": 70,
             }
         )
+    if role_category == "network":
+        relations.extend(_network_relations_from_inspection(context, inspection))
+        return relations[:10]
     if database_session_evidence and role_category == "database":
         relations.append(
             {
@@ -307,8 +430,10 @@ def _relation_strategy_for(context: dict[str, Any]) -> list[dict[str, str]]:
 
     if role_category == "network":
         return [
-            item("bidirectional", "网络邻居与上下联", "通过 CLI/SNMP 读取 LLDP/CDP、ARP、MAC 地址表、路由和接口错误，生成上下联关系。", "display/show lldp neighbors、arp、mac-address-table、route、ifTable", "network_cli_execute_command / snmp_get"),
-            item("inbound", "管理入口", "检查 SSH/Telnet/SNMP 管理会话和 ACL，区分运维入口与业务转发流量。", "show users、show ssh、snmp session、ACL/VTY 配置", "network_cli_execute_command"),
+            item("bidirectional", "网络邻居与上下联", "优先读取 LLDP/CDP 明细；如果邻居协议未启用，再用 MAC 地址表、ARP、VLAN/Trunk、STP 根端口和默认路由交叉判断上联、下联或未知邻居。", "display/show lldp neighbors、cdp neighbors、mac-address-table、arp、vlan/trunk、stp、route", "network_cli_execute_command / snmp_get"),
+            item("bidirectional", "交换机端口角色识别", "按接口状态、描述、VLAN、Trunk、聚合口、错误包和 MAC 学习数量识别核心口、上联口、接入口、服务器口、AP 口和异常端口。", "display/show interface brief、interface counters errors、vlan、trunk、port-channel/Bridge-Aggregation", "network_cli_execute_command"),
+            item("outbound", "路由与三层出口", "读取路由表、默认路由、三层接口和网关邻居，把三层出口标成上联候选；方向证据不足时保留 unknown，不强行编业务名。", "display/show ip route、route、ip interface brief、arp", "network_cli_execute_command"),
+            item("inbound", "管理入口", "检查 SSH/Telnet/SNMP 管理会话、VTY/ACL 和最近登录用户，区分运维入口与业务转发流量。", "show/display users、ssh server/status、user-interface/vty、ACL/SNMP 配置", "network_cli_execute_command"),
         ]
 
     if role_category == "storage":
@@ -476,7 +601,7 @@ def _fallback_profile(
     protocol = str(context.get("protocol") or "")
     label = _asset_label(asset_type, protocol)
     role_label, role_category = _role_for(asset_type, protocol)
-    checks = inspection.get("checks", []) if isinstance(inspection, dict) else []
+    checks = _inspection_checks(inspection)
     failed = [c for c in checks if isinstance(c, dict) and c.get("status") not in {"success", "ok"}]
     evidence = [
         {"label": "资产类型", "value": label, "source": "连接信息"},
@@ -502,7 +627,7 @@ def _fallback_profile(
     elif role_category == "linux":
         focus_areas.insert(0, {"title": "系统服务与安全日志", "reason": "优先确认 failed units、认证失败、磁盘挂载和关键进程。", "priority": "P0"})
     elif role_category == "network":
-        focus_areas.insert(0, {"title": "接口与邻居稳定性", "reason": "优先检查接口错误、STP/ARP、路由和防火墙策略。", "priority": "P0"})
+        focus_areas.insert(0, {"title": "接口、邻居和上下联", "reason": "优先检查 LLDP/CDP、MAC/ARP、VLAN/Trunk、STP 根桥/阻塞端口、路由和接口错误，所有上下联结论必须带证据与置信度。", "priority": "P0"})
     elif role_category == "storage":
         focus_areas.insert(0, {"title": "容量与数据保护", "reason": "优先检查容量水位、卷/池状态、复制、快照和备份任务。", "priority": "P0"})
     elif role_category == "middleware":
@@ -623,9 +748,10 @@ role_label, role_category, purpose, confidence, risk_level, evidence, focus_area
 - focus_areas 最多 6 条，每条含 title,reason,priority，priority 用 P0/P1/P2。
 - relations 最多 10 条，用于描述资产互联关系；每条含 direction,peer,peer_role,endpoint,protocol,evidence,confidence。
 - relations.direction 只能是 inbound/outbound/bidirectional/unknown；inbound 表示“哪些业务/系统/用户连接它”，outbound 表示“它主动连接哪些下游/数据库/API/中间件”，bidirectional 表示双向依赖，unknown 表示方向证据不足。
-- relations 必须基于监听端口、已建立连接、访问日志、进程、容器、数据库连接、会话上下文或巡检证据推断；不确定时写 unknown，不要编造业务名。
+- relations 必须基于监听端口、已建立连接、访问日志、进程、容器、数据库连接、网络邻居/MAC/ARP/VLAN/STP/路由、会话上下文或巡检证据推断；不确定时写 unknown，不要编造业务名。
 - 额外输出 relation_strategies，用于说明不同资产类型应该如何继续采集互联证据；每条含 direction,title,method,evidence,tool_hint。
-- relation_strategies 必须协议感知：Linux/SSH 看 ss、lsof、日志、容器；Windows/WinRM 看 Get-NetTCPConnection、事件/IIS/RDP 日志；数据库看原生活跃会话和外部依赖视图；网络设备看 CLI/SNMP 的邻居、ARP、MAC、路由、接口；API/虚拟化看平台 API、访问日志和事件。
+- relation_strategies 必须协议感知：Linux/SSH 看 ss、lsof、日志、容器；Windows/WinRM 看 Get-NetTCPConnection、事件/IIS/RDP 日志；数据库看原生活跃会话和外部依赖视图；网络设备看 CLI/SNMP 的 LLDP/CDP、ARP、MAC、VLAN/Trunk、STP、路由、接口错误和端口描述；API/虚拟化看平台 API、访问日志和事件。
+- 如果是交换机/路由器/防火墙，不要只写“上下行”；应输出证据化的上联候选、下联/接入侧候选、三层出口、管理入口和未知邻居，并用 confidence 表达确定程度。
 - profile_prompt 是写给主会话模型的专业提示词，必须基于本资产画像汇聚生成，说明资产角色、业务用途、排查优先级、风险边界、工具使用注意事项；不要超过 900 字。
 - 不要输出密码、Token、密钥、完整敏感连接串。
 

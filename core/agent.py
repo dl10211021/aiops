@@ -46,6 +46,7 @@ async def chat_stream_agent(
     thinking_mode: str = "off",
     orchestration_mode: str = "single",
     user_attachments: list[dict] | None = None,
+    analysis_only: bool = False,
 ):
     cancel_flags[session_id] = False
     from connections.ssh_manager import ssh_manager
@@ -57,7 +58,7 @@ async def chat_stream_agent(
         session_info,
         skill_path_resolver=dispatcher.get_active_skill_paths,
     )
-    mismatch = find_session_target_mismatch(
+    mismatch = None if analysis_only else find_session_target_mismatch(
         user_display_message or user_message,
         session_context,
     )
@@ -79,6 +80,7 @@ async def chat_stream_agent(
         user_display_message=user_display_message,
         model_name=model_name,
         user_attachments=user_attachments,
+        analysis_only=analysis_only,
         active_sessions=ssh_manager.active_sessions,
         dispatcher=dispatcher,
         memory_store=memory_db,

@@ -1,6 +1,11 @@
+import asyncio
+import contextlib
+import hmac
+import json
 import logging
+import os
 
-from fastapi import APIRouter
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 
 from api.errors import raise_http_error
 from api.response_mappers.session import (
@@ -50,6 +55,7 @@ from core.session_tool_context import (
     SessionToolContextError,
     build_session_tools_payload_for_session,
 )
+from core.security import is_authorized_request
 from core.tool_center_service import build_tool_center_catalog
 from core.tool_registry import tool_registry
 
@@ -241,3 +247,123 @@ async def get_session_commands(session_id: str):
     except SessionToolContextError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_commands_response_kwargs(payload))
+
+
+@router.websocket("/session/{session_id}/terminal/ws")
+async def terminal_websocket(session_id: str, websocket: WebSocket):
+    """Interactive SSH PTY stream for browser terminals."""
+    if not _websocket_authorized(websocket):
+        await websocket.close(
+            code=status.WS_1008_POLICY_VIOLATION,
+            reason="Missing or invalid OpsCore API token",
+        )
+        return
+
+    await websocket.accept()
+    channel = None
+    reader_task: asyncio.Task | None = None
+    try:
+        cols = _int_query(websocket, "cols", 140)
+        rows = _int_query(websocket, "rows", 42)
+        channel = await asyncio.to_thread(
+            ssh_manager.open_terminal_channel,
+            session_id,
+            width=cols,
+            height=rows,
+        )
+        reader_task = asyncio.create_task(_terminal_reader_loop(websocket, channel))
+        await _terminal_writer_loop(websocket, channel)
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        logger.exception("Terminal websocket failure for session %s", session_id)
+        with contextlib.suppress(Exception):
+            await websocket.send_text(f"\r\n[terminal error] {exc}\r\n")
+    finally:
+        if reader_task:
+            reader_task.cancel()
+            with contextlib.suppress(Exception):
+                await reader_task
+        if channel:
+            with contextlib.suppress(Exception):
+                ssh_manager.close_terminal_channel(channel)
+        with contextlib.suppress(Exception):
+            await websocket.close()
+
+
+async def _terminal_reader_loop(websocket: WebSocket, channel) -> None:
+    while True:
+        if channel.closed:
+            break
+        if channel.recv_ready():
+            data = await asyncio.to_thread(channel.recv, 32768)
+            if not data:
+                break
+            try:
+                await websocket.send_text(data.decode("utf-8", errors="replace"))
+            except Exception:
+                break
+            continue
+        await asyncio.sleep(0.02)
+
+
+async def _terminal_writer_loop(websocket: WebSocket, channel) -> None:
+    while True:
+        try:
+            message = await websocket.receive_text()
+        except WebSocketDisconnect:
+            break
+        except RuntimeError as exc:
+            if "not connected" in str(exc).lower():
+                break
+            raise
+        payload = _parse_terminal_message(message)
+        message_type = payload.get("type")
+        if message_type == "input":
+            data = str(payload.get("data") or "")
+            if data:
+                await asyncio.to_thread(channel.send, data)
+            continue
+        if message_type == "resize":
+            cols = int(payload.get("cols") or 140)
+            rows = int(payload.get("rows") or 42)
+            await asyncio.to_thread(
+                ssh_manager.resize_terminal_channel,
+                channel,
+                width=cols,
+                height=rows,
+            )
+            continue
+        if message_type == "ping":
+            await websocket.send_text("")
+
+
+def _parse_terminal_message(raw: str) -> dict:
+    try:
+        payload = json.loads(raw)
+        if isinstance(payload, dict):
+            return payload
+    except Exception:
+        pass
+    # Backward-compatible fallback: treat raw text as terminal input.
+    return {"type": "input", "data": raw}
+
+
+def _int_query(websocket: WebSocket, key: str, default: int) -> int:
+    raw = websocket.query_params.get(key)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except Exception:
+        return default
+
+
+def _websocket_authorized(websocket: WebSocket) -> bool:
+    token = os.environ.get("OPSCORE_API_TOKEN", "")
+    if not token:
+        return True
+    if is_authorized_request(websocket.headers, token):
+        return True
+    query_token = str(websocket.query_params.get("token") or "")
+    return bool(query_token) and hmac.compare_digest(query_token, token)

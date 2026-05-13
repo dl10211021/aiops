@@ -27,11 +27,23 @@ export function streamChat(
     data_url?: string | null
   }> = [],
   signal?: AbortSignal,
+  analysisOnly = false,
 ) {
   return fetch(apiUrl('/chat'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ session_id: sessionId, message, display_message: displayMessage || message, model_name: modelName, thinking_mode: thinkingMode, orchestration_mode: orchestrationMode, attachments }),
+    body: JSON.stringify({ session_id: sessionId, message, display_message: displayMessage || message, model_name: modelName, thinking_mode: thinkingMode, orchestration_mode: orchestrationMode, attachments, analysis_only: analysisOnly }),
+    signal,
+  })
+}
+
+export function resumeChatStream(sessionId: string, signal?: AbortSignal, fromIndex = 0) {
+  const params = new URLSearchParams()
+  if (fromIndex > 0) params.set('from_index', String(fromIndex))
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  return fetch(apiUrl(`/session/${encodeURIComponent(sessionId)}/chat/stream${suffix}`), {
+    method: 'GET',
+    headers: authHeaders(),
     signal,
   })
 }

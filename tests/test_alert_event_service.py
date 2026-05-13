@@ -34,10 +34,12 @@ class TestAlertEventService(unittest.TestCase):
             )
 
             listed = list_alert_event_records(status="open", severity="critical")
+            listed_by_policy = list_alert_event_records(source_family="generic", automation_mode="ai")
             loaded = get_alert_event_record(created["id"])
             updated = update_alert_event_record(created["id"], status="acknowledged", assignee="ops", note="checking")
 
         self.assertEqual(listed[0]["id"], created["id"])
+        self.assertEqual(listed_by_policy[0]["id"], created["id"])
         self.assertEqual(loaded["host"], "db.local")
         self.assertEqual(updated["status"], "acknowledged")
         self.assertEqual(updated["assignee"], "ops")

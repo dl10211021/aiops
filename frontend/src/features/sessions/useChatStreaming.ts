@@ -39,6 +39,10 @@ interface UseChatStreamingArgs {
   setAttachmentsBySession: Dispatch<SetStateAction<Record<string, ChatAttachmentPreview[]>>>
 }
 
+interface SendMessageOptions {
+  analysisOnly?: boolean
+}
+
 export function useChatStreaming({
   currentSessionId,
   input,
@@ -70,7 +74,7 @@ export function useChatStreaming({
     return Boolean(streamControllersRef.current[sessionId])
   }, [])
 
-  const sendMessage = useCallback(async (forcedMessage?: string, forcedSessionId?: string) => {
+  const sendMessage = useCallback(async (forcedMessage?: string, forcedSessionId?: string, options?: SendMessageOptions) => {
     const sessions = useStore.getState().sessions
     const outgoing = resolveOutgoingChatContext({
       attachments,
@@ -119,6 +123,7 @@ export function useChatStreaming({
       const effectiveThinkingMode = orchestrationMode === 'fast' ? 'off' : thinkingMode
       await runChatStream({
         addToast,
+        analysisOnly: Boolean(options?.analysisOnly),
         attachmentPayload,
         controller,
         displayContent,

@@ -1,10 +1,12 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
 import {
   addCronJob,
+  cancelCronJobRun,
   deleteCronJob,
+  deleteInspectionRun,
   pauseCronJob,
   resumeCronJob,
-  runCronJobNow,
+  startCronJobRun,
   updateCronJob,
 } from '@/api/client'
 import { useStore } from '@/store'
@@ -30,6 +32,8 @@ export function useCronJobActions({
   const [showEditor, setShowEditor] = useState(false)
   const [form, setForm] = useState<CronForm>(emptyCronForm)
   const [busyJobId, setBusyJobId] = useState<string | null>(null)
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null)
+  const [deletingRunId, setDeletingRunId] = useState<string | null>(null)
   const [reportRunId, setReportRunId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CronJob | null>(null)
   const [runNowTarget, setRunNowTarget] = useState<CronJob | null>(null)
@@ -53,9 +57,20 @@ export function useCronJobActions({
   }
 
   const handleSave = async () => {
-    const scopeRequiresHost = form.target_scope === 'asset' && !form.asset_id
-    if (!form.cron_expr || !form.message || (scopeRequiresHost && (!form.host || !form.username))) {
-      addToast(scopeRequiresHost ? '单资产任务请填写目标主机和用户名' : '请填写 Cron 和巡检指令', 'error')
+    if (!form.cron_expr || !form.message) {
+      addToast('请填写 Cron 和巡检指令', 'error')
+      return
+    }
+    if (assets.length === 0) {
+      addToast('请先在资产中心添加资产，再创建巡检计划', 'error')
+      return
+    }
+    if (form.target_scope === 'asset' && !form.asset_id) {
+      addToast('请选择资产中心里的巡检资产', 'error')
+      return
+    }
+    if (!['asset', 'all'].includes(form.target_scope) && !form.scope_value) {
+      addToast('请选择资产范围值', 'error')
       return
     }
     try {
@@ -108,17 +123,36 @@ export function useCronJobActions({
   }
 
   const handleRunNowConfirmed = async () => {
-    if (!runNowTarget) return
-    setBusyJobId(runNowTarget.id)
+    const target = runNowTarget
+    if (!target) return
+    setRunNowTarget(null)
+    setBusyJobId(target.id)
     try {
-      await runCronJobNow(runNowTarget.id)
-      setRunNowTarget(null)
-      addToast('巡检计划已手动触发', 'success')
+      const response = await startCronJobRun(target.id)
+      const status = response.data.result?.status
+      if (status === 'running') {
+        addToast('该计划已有巡检正在执行，可在运行记录里查看进度', 'error')
+      } else {
+        addToast('巡检已在后台启动，可在运行记录里查看进度', 'success')
+      }
       await loadJobs()
     } catch (e: unknown) {
       addToast(e instanceof Error ? e.message : '立即执行失败', 'error')
     } finally {
       setBusyJobId(null)
+    }
+  }
+
+  const handleCancelRunningRun = async (job: CronJob) => {
+    setCancellingJobId(job.id)
+    try {
+      await cancelCronJobRun(job.id)
+      addToast('已提交取消请求，运行记录会更新为已取消', 'success')
+      await loadJobs()
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '取消当前巡检失败', 'error')
+    } finally {
+      setCancellingJobId(null)
     }
   }
 
@@ -130,12 +164,32 @@ export function useCronJobActions({
     setReportRunId(null)
   }
 
+  const handleDeleteReport = async (run: InspectionRun) => {
+    const ok = window.confirm(`确认删除巡检报告 ${run.id}？删除后不会影响巡检计划。`)
+    if (!ok) return
+    setDeletingRunId(run.id)
+    try {
+      await deleteInspectionRun(run.id)
+      if (reportRunId === run.id) setReportRunId(null)
+      addToast('巡检报告已删除', 'success')
+      await loadJobs()
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '删除巡检报告失败', 'error')
+    } finally {
+      setDeletingRunId(null)
+    }
+  }
+
   return {
     busyJobId,
+    cancellingJobId,
     closeReport,
     deleteTarget,
+    deletingRunId,
     form,
     handleDeleteConfirmed,
+    handleCancelRunningRun,
+    handleDeleteReport,
     handlePauseResume,
     handleRunNowConfirmed,
     handleSave,

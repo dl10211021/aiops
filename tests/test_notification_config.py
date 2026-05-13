@@ -2,6 +2,7 @@ import unittest
 
 from core.notification_config import (
     MASKED_VALUE,
+    build_notification_channel_statuses,
     build_notification_config,
     build_notification_env_values,
     env_or_existing,
@@ -34,6 +35,9 @@ class TestNotificationConfig(unittest.TestCase):
         self.assertEqual(config["email_address"], "ops@example.com")
         self.assertEqual(config["smtp_port"], 587)
         self.assertEqual(config["smtp_pass"], MASKED_VALUE)
+        self.assertEqual(config["channels"][0]["channel"], "wechat")
+        self.assertEqual(config["channels"][0]["status"], "disabled")
+        self.assertFalse(config["channels"][0]["ready"])
 
     def test_build_notification_config_uses_existing_defaults(self):
         config = build_notification_config({})
@@ -43,6 +47,28 @@ class TestNotificationConfig(unittest.TestCase):
         self.assertTrue(config["email_enabled"])
         self.assertEqual(config["smtp_port"], 465)
         self.assertEqual(config["smtp_pass"], "")
+        self.assertEqual(config["channels"][0]["status"], "missing_config")
+
+    def test_build_notification_channel_statuses_marks_ready_channels(self):
+        channels = build_notification_channel_statuses(
+            {
+                "WECHAT_ENABLED": "1",
+                "WECHAT_WEBHOOK_URL": "https://qy.example/hook",
+                "DINGTALK_ENABLED": "1",
+                "DINGTALK_WEBHOOK_URL": "",
+                "EMAIL_ENABLED": "1",
+                "ALERT_EMAIL_ADDRESS": "ops@example.com",
+                "SMTP_SERVER": "smtp.example.com",
+                "SMTP_USER": "ops",
+                "SMTP_PASS": "secret",
+            }
+        )
+
+        by_channel = {item["channel"]: item for item in channels}
+        self.assertEqual(by_channel["wechat"]["status"], "ready")
+        self.assertTrue(by_channel["wechat"]["ready"])
+        self.assertEqual(by_channel["dingtalk"]["status"], "missing_config")
+        self.assertEqual(by_channel["email"]["status"], "ready")
 
     def test_env_or_existing_preserves_masked_secret(self):
         self.assertEqual(

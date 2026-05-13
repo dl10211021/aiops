@@ -1,5 +1,6 @@
 import json
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from core.agent import chat_stream_agent
@@ -89,6 +90,58 @@ class SessionTargetGuardTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payloads[-1]["type"], "done")
         self.assertEqual(payloads[0]["type"], "chunk")
         self.assertIn("linux/ssh 192.168.122.95", payloads[0]["content"])
+
+    async def test_analysis_only_chat_skips_target_mismatch_guard(self):
+        class FakeDispatcher:
+            def get_active_skill_paths(self, active_skills):
+                return []
+
+        async def fake_loop(**_kwargs):
+            yield 'data: {"type":"done"}\n\n'
+
+        active_sessions = {
+            "sid-linux": {
+                "info": {
+                    "asset_type": "linux",
+                    "protocol": "ssh",
+                    "host": "172.17.10.2",
+                    "port": 22,
+                    "username": "root",
+                    "active_skills": [],
+                    "extra_args": {},
+                }
+            }
+        }
+        fake_run = SimpleNamespace(
+            model_name="test-model",
+            embedding_client=None,
+            embedding_model="",
+            messages=[],
+            context={"analysis_only": True},
+            tools=[],
+            memory_references=[],
+        )
+
+        with (
+            patch("connections.ssh_manager.ssh_manager.active_sessions", active_sessions),
+            patch("core.agent.dispatcher", FakeDispatcher()),
+            patch("core.agent.prepare_chat_agent_run", return_value=fake_run) as prepare_run,
+            patch("core.agent.run_chat_agent_loop", fake_loop),
+        ):
+            events = [
+                event
+                async for event in chat_stream_agent(
+                    session_id="sid-linux",
+                    user_message="【SSH终端记录】\n```text\n              total        used        free      shared  buff/cache   available\n```",
+                    user_display_message=None,
+                    model_name="test-model",
+                    analysis_only=True,
+                )
+            ]
+
+        prepare_run.assert_called_once()
+        self.assertTrue(prepare_run.call_args.kwargs["analysis_only"])
+        self.assertEqual(events, ['data: {"type":"done"}\n\n'])
 
 
 if __name__ == "__main__":

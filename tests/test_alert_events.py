@@ -68,6 +68,117 @@ class TestAlertEvents(unittest.TestCase):
             detail = asyncio.run(alert_routes.get_alert_event(alert_id))
             self.assertEqual(detail.data["alert"]["payload"]["alert_name"], "DiskFull")
 
+    def test_alertmanager_payload_expands_and_preserves_labels(self):
+        from core import alert_events
+
+        store_path = self._store_path("alertmanager")
+        payload = {
+            "receiver": "grafana",
+            "alerts": [
+                {
+                    "status": "firing",
+                    "labels": {
+                        "alertname": "NodeDown",
+                        "instance": "10.0.0.12:9100",
+                        "severity": "critical",
+                    },
+                    "annotations": {
+                        "summary": "node exporter target down",
+                    },
+                    "startsAt": "2026-05-13T08:00:00Z",
+                    "fingerprint": "fp-node-down",
+                }
+            ],
+        }
+
+        with patch.object(alert_events, "ALERT_STORE_PATH", store_path):
+            created = alert_events.create_alert_events(payload)
+
+        self.assertEqual(len(created), 1)
+        self.assertEqual(created[0]["source_type"], "alertmanager")
+        self.assertEqual(created[0]["source"], "grafana")
+        self.assertEqual(created[0]["host"], "10.0.0.12:9100")
+        self.assertEqual(created[0]["alert_name"], "NodeDown")
+        self.assertEqual(created[0]["fingerprint"], "fp-node-down")
+        self.assertEqual(created[0]["labels"]["severity"], "critical")
+
+    def test_duplicate_fingerprint_merges_and_recovery_closes_event(self):
+        from core import alert_events
+
+        store_path = self._store_path("dedupe")
+        with patch.object(alert_events, "ALERT_STORE_PATH", store_path):
+            first = alert_events.create_alert_event(
+                {
+                    "source": "zabbix",
+                    "host": "db.local",
+                    "alert_name": "DiskFull",
+                    "severity": "warning",
+                    "description": "disk 90%",
+                    "fingerprint": "zbx-disk",
+                }
+            )
+            second = alert_events.create_alert_event(
+                {
+                    "source": "zabbix",
+                    "host": "db.local",
+                    "alert_name": "DiskFull",
+                    "severity": "critical",
+                    "description": "disk 98%",
+                    "fingerprint": "zbx-disk",
+                }
+            )
+            recovered = alert_events.create_alert_event(
+                {
+                    "source": "zabbix",
+                    "host": "db.local",
+                    "alert_name": "DiskFull",
+                    "severity": "ok",
+                    "description": "disk recovered",
+                    "status": "resolved",
+                    "fingerprint": "zbx-disk",
+                }
+            )
+            listed = alert_events.list_alert_events(limit=10)
+
+        self.assertEqual(first["id"], second["id"])
+        self.assertEqual(first["id"], recovered["id"])
+        self.assertEqual(recovered["repeat_count"], 3)
+        self.assertEqual(recovered["status"], "closed")
+        self.assertEqual(len(listed), 1)
+
+    def test_list_alert_events_filters_source_family_and_automation(self):
+        from core import alert_events
+
+        store_path = self._store_path("policy_filters")
+        with patch.object(alert_events, "ALERT_STORE_PATH", store_path):
+            zabbix = alert_events.create_alert_event(
+                {
+                    "source": "zabbix",
+                    "host": "db.local",
+                    "alert_name": "DiskFull",
+                    "severity": "critical",
+                    "description": "disk above 95%",
+                    "fingerprint": "zbx-critical",
+                }
+            )
+            info = alert_events.create_alert_event(
+                {
+                    "source": "prometheus",
+                    "host": "web.local",
+                    "alert_name": "FYI",
+                    "severity": "info",
+                    "description": "informational alert",
+                    "fingerprint": "prom-info",
+                }
+            )
+            zabbix_items = alert_events.list_alert_events(source_family="zabbix", limit=10)
+            ai_items = alert_events.list_alert_events(automation_mode="ai", limit=10)
+            record_items = alert_events.list_alert_events(automation_mode="record_only", limit=10)
+
+        self.assertEqual([item["id"] for item in zabbix_items], [zabbix["id"]])
+        self.assertEqual([item["id"] for item in ai_items], [zabbix["id"]])
+        self.assertEqual([item["id"] for item in record_items], [info["id"]])
+
     def test_alert_status_update_and_close_contract(self):
         from core import alert_events
 

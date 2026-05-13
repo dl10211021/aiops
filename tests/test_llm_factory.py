@@ -91,5 +91,69 @@ class TestLLMFactory(unittest.TestCase):
         self.assertIsInstance(client, LocalEmbeddingClient)
         self.assertEqual(model, DEFAULT_LOCAL_EMBEDDING_MODEL)
 
+    def test_clear_invalid_assistant_model_references_after_provider_change(self):
+        assistant_model_config.save_assistant_model_config(
+            {
+                "main_model_id": "google|missing",
+                "enabled": True,
+                "model_id": "anthropic|claude-3-7-sonnet-20250219",
+                "thinking_mode": "high",
+                "tasks": {"memory_compression": True},
+            }
+        )
+
+        config = assistant_model_config.clear_invalid_assistant_model_references(
+            [
+                {
+                    "id": "anthropic",
+                    "models": "claude-3-7-sonnet-20250219",
+                }
+            ]
+        )
+
+        self.assertEqual(config["main_model_id"], "")
+        self.assertEqual(config["model_id"], "anthropic|claude-3-7-sonnet-20250219")
+        self.assertTrue(config["enabled"])
+
+    def test_clear_invalid_assistant_model_reference_disables_missing_assistant(self):
+        assistant_model_config.save_assistant_model_config(
+            {
+                "main_model_id": "google|gemini-2.5-flash",
+                "enabled": True,
+                "model_id": "anthropic|missing",
+                "thinking_mode": "high",
+                "tasks": {"memory_compression": True},
+            }
+        )
+
+        config = assistant_model_config.clear_invalid_assistant_model_references(
+            [
+                {
+                    "id": "google",
+                    "models": "gemini-2.5-flash",
+                }
+            ]
+        )
+
+        self.assertEqual(config["main_model_id"], "google|gemini-2.5-flash")
+        self.assertEqual(config["model_id"], "")
+        self.assertFalse(config["enabled"])
+
+    def test_save_assistant_model_config_filters_invalid_current_provider_models(self):
+        config = assistant_model_config.save_assistant_model_config(
+            {
+                "main_model_id": "google|missing",
+                "enabled": True,
+                "model_id": "anthropic|missing",
+                "thinking_mode": "high",
+                "tasks": {"memory_compression": True},
+            }
+        )
+
+        self.assertEqual(config["main_model_id"], "")
+        self.assertEqual(config["model_id"], "")
+        self.assertFalse(config["enabled"])
+        self.assertEqual(assistant_model_config.get_assistant_model_config()["main_model_id"], "")
+
 if __name__ == '__main__':
     unittest.main()

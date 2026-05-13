@@ -7,12 +7,35 @@ import type {
 } from '@/types'
 import { request } from './http'
 
-export async function getCronJobs() {
-  return request<{ jobs: CronJob[] }>('/cron/list')
+export interface CronJobsPagination {
+  page: number
+  page_size: number
+  total: number
+  filtered_total: number
+  page_count: number
+}
+
+export interface CronJobsMetrics {
+  total: number
+  scheduled: number
+  paused: number
+  failed: number
+  running: number
+}
+
+export async function getCronJobs(params: { page?: number; pageSize?: number; query?: string; status?: string } = {}) {
+  const search = new URLSearchParams()
+  if (params.page) search.set('page', String(params.page))
+  if (params.pageSize) search.set('page_size', String(params.pageSize))
+  if (params.query) search.set('query', params.query)
+  if (params.status && params.status !== 'all') search.set('status', params.status)
+  const suffix = search.toString() ? `?${search.toString()}` : ''
+  return request<{ jobs: CronJob[]; pagination?: CronJobsPagination; metrics?: CronJobsMetrics }>(`/cron/list${suffix}`)
 }
 
 export async function addCronJob(params: {
   cron_expr: string; message: string; host: string;
+  inspection_cycle?: string; inspection_depth?: string;
   username: string; agent_profile?: string; password?: string;
   asset_id?: number | null; target_scope?: string; scope_value?: string;
   template_id?: string; notification_channel?: string; retry_count?: number;
@@ -23,6 +46,7 @@ export async function addCronJob(params: {
 
 export async function updateCronJob(jobId: string, params: {
   cron_expr: string; message: string; host: string;
+  inspection_cycle?: string; inspection_depth?: string;
   username: string; agent_profile?: string; password?: string;
   asset_id?: number | null; target_scope?: string; scope_value?: string;
   template_id?: string; notification_channel?: string; retry_count?: number;
@@ -40,7 +64,24 @@ export async function resumeCronJob(jobId: string) {
 }
 
 export async function runCronJobNow(jobId: string) {
-  return request<{ result: { status: string; job_id: string; run_id: string; target_count: number } }>(`/cron/${jobId}/run`, { method: 'POST' })
+  return request<{ result: { status: string; job_id: string; run_id: string; target_count: number } }>(
+    `/cron/${jobId}/run`,
+    { method: 'POST' }
+  )
+}
+
+export async function startCronJobRun(jobId: string) {
+  return request<{ result: { status: string; job_id: string; run_id?: string; target_count: number; message?: string } }>(
+    `/cron/${jobId}/run/async`,
+    { method: 'POST' }
+  )
+}
+
+export async function cancelCronJobRun(jobId: string) {
+  return request<{ result: { status: string; job_id: string; run_id?: string } }>(
+    `/cron/${jobId}/run/cancel`,
+    { method: 'POST' }
+  )
 }
 
 export async function deleteCronJob(jobId: string) {
@@ -53,6 +94,10 @@ export async function getCronJobRuns(jobId: string, limit = 5) {
 
 export async function getCronJobRun(runId: string) {
   return request<{ run: InspectionRun }>(`/cron/runs/${runId}`)
+}
+
+export async function deleteInspectionRun(runId: string) {
+  return request<{ run_id: string }>(`/inspection-runs/${runId}`, { method: 'DELETE' })
 }
 
 export async function listInspectionRuns(params: { jobId?: string; assetId?: number; limit?: number } = {}) {
@@ -68,7 +113,7 @@ export async function getInspectionRunReport(runId: string) {
   return request<{ report: InspectionReport }>(`/inspection-runs/${runId}/report`)
 }
 
-export async function exportInspectionRunReport(runId: string, format: 'markdown' | 'json' = 'markdown') {
+export async function exportInspectionRunReport(runId: string, format: 'markdown' | 'html' | 'json' = 'markdown') {
   return request<{ format: string; content_type: string; content: string }>(
     `/inspection-runs/${runId}/export?format=${format}`
   )

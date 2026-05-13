@@ -27,6 +27,74 @@ def env_or_existing(value: str, env_key: str, env: Mapping[str, str] | None = No
     return value
 
 
+def _notification_channel_status(
+    *,
+    channel: str,
+    label: str,
+    enabled: bool,
+    configured: bool,
+    required_fields: list[str],
+) -> dict[str, object]:
+    if not enabled:
+        status = "disabled"
+        message = "通道未启用。"
+    elif configured:
+        status = "ready"
+        message = "通道已启用且关键配置完整，可发送测试消息。"
+    else:
+        status = "missing_config"
+        message = "通道已启用，但关键配置不完整。"
+    return {
+        "channel": channel,
+        "label": label,
+        "enabled": enabled,
+        "configured": configured,
+        "ready": enabled and configured,
+        "status": status,
+        "message": message,
+        "required_fields": required_fields,
+    }
+
+
+def build_notification_channel_statuses(source: Mapping[str, str]) -> list[dict[str, object]]:
+    wechat_enabled = source.get("WECHAT_ENABLED", "1") == "1"
+    dingtalk_enabled = source.get("DINGTALK_ENABLED", "1") == "1"
+    email_enabled = source.get("EMAIL_ENABLED", "1") == "1"
+    return [
+        _notification_channel_status(
+            channel="wechat",
+            label="企业微信",
+            enabled=wechat_enabled,
+            configured=bool(source.get("WECHAT_WEBHOOK_URL")),
+            required_fields=["WECHAT_WEBHOOK_URL"],
+        ),
+        _notification_channel_status(
+            channel="dingtalk",
+            label="钉钉",
+            enabled=dingtalk_enabled,
+            configured=bool(source.get("DINGTALK_WEBHOOK_URL")),
+            required_fields=["DINGTALK_WEBHOOK_URL"],
+        ),
+        _notification_channel_status(
+            channel="email",
+            label="邮件",
+            enabled=email_enabled,
+            configured=bool(
+                source.get("ALERT_EMAIL_ADDRESS")
+                and source.get("SMTP_SERVER")
+                and source.get("SMTP_USER")
+                and source.get("SMTP_PASS")
+            ),
+            required_fields=[
+                "ALERT_EMAIL_ADDRESS",
+                "SMTP_SERVER",
+                "SMTP_USER",
+                "SMTP_PASS",
+            ],
+        ),
+    ]
+
+
 def build_notification_config(env: Mapping[str, str] | None = None) -> dict[str, object]:
     source = os.environ if env is None else env
     return {
@@ -40,6 +108,7 @@ def build_notification_config(env: Mapping[str, str] | None = None) -> dict[str,
         "smtp_port": int(source.get("SMTP_PORT", "465")),
         "smtp_user": source.get("SMTP_USER", ""),
         "smtp_pass": MASKED_VALUE if source.get("SMTP_PASS") else "",
+        "channels": build_notification_channel_statuses(source),
     }
 
 

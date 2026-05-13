@@ -3,6 +3,7 @@ import json
 import logging
 import unittest
 from unittest.mock import patch
+from unittest.mock import AsyncMock
 
 from core.dispatcher_utility_tools import (
     _query_prefers_china_search,
@@ -121,6 +122,53 @@ class DispatcherUtilityToolsTest(unittest.TestCase):
         payload = json.loads(result)
         self.assertEqual(payload["status"], "SUCCESS")
         self.assertEqual(payload["results"][0]["body"], "Official")
+
+    def test_web_extractor_delegates_to_hermes_web_extract(self):
+        with (
+            patch("core.hermes_tool_adapter.hermes_tool_available", return_value=(True, "")),
+            patch(
+                "core.hermes_tool_adapter.execute_hermes_tool",
+                return_value=json.dumps({"status": "SUCCESS", "content": [{"url": "https://example.com"}]}, ensure_ascii=False),
+            ),
+        ):
+            result = asyncio.run(
+                execute_utility_tool("web_extractor", {"url": "https://example.com"})
+            )
+
+        payload = json.loads(result)
+        self.assertEqual(payload["status"], "SUCCESS")
+        self.assertEqual(payload["content"][0]["url"], "https://example.com")
+
+    def test_web_research_combines_search_and_extract(self):
+        fake_search_payload = {
+            "status": "SUCCESS",
+            "results": [
+                {"title": "Python", "href": "https://www.python.org"},
+                {"title": "Docs", "href": "https://docs.python.org"},
+            ],
+        }
+        fake_extract_payload = {
+            "status": "SUCCESS",
+            "content": [{"url": "https://www.python.org", "text": "Python docs"}],
+        }
+        with (
+            patch(
+                "core.dispatcher_utility_tools._web_search",
+                new=AsyncMock(return_value=json.dumps(fake_search_payload, ensure_ascii=False)),
+            ),
+            patch(
+                "core.dispatcher_utility_tools._web_extractor",
+                new=AsyncMock(return_value=json.dumps(fake_extract_payload, ensure_ascii=False)),
+            ),
+        ):
+            result = asyncio.run(
+                execute_utility_tool("web_research", {"query": "python documentation"})
+            )
+
+        payload = json.loads(result)
+        self.assertEqual(payload["status"], "SUCCESS")
+        self.assertEqual(payload["search"]["results"][0]["href"], "https://www.python.org")
+        self.assertEqual(payload["extract"]["content"][0]["url"], "https://www.python.org")
 
     def test_bing_html_search_parser_extracts_results(self):
         class FakeResponse:

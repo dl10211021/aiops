@@ -88,7 +88,6 @@ const loadRealtimeCanvas = () => import('@/components/views/RealtimeCanvas')
 const loadObservabilityCenter = () => import('@/components/views/ObservabilityCenter')
 const loadSystemConfigCenter = () => import('@/components/views/SystemConfigCenter')
 const loadConnectionModal = () => import('@/components/modals/ConnectionModal')
-const loadLLMConfigModal = () => import('@/components/modals/LLMConfigModal')
 const loadNotificationsModal = () => import('@/components/modals/NotificationsModal')
 const loadSessionRetentionConfigModal = () => import('@/components/modals/SessionRetentionConfigModal')
 const loadDynamicSkillsModal = () => import('@/components/modals/DynamicSkillsModal')
@@ -108,7 +107,6 @@ const RealtimeCanvas = lazyWithChunkRecovery(loadRealtimeCanvas)
 const ObservabilityCenter = lazyWithChunkRecovery(loadObservabilityCenter)
 const SystemConfigCenter = lazyWithChunkRecovery(loadSystemConfigCenter)
 const ConnectionModal = lazyWithChunkRecovery(loadConnectionModal)
-const LLMConfigModal = lazyWithChunkRecovery(loadLLMConfigModal)
 const NotificationsModal = lazyWithChunkRecovery(loadNotificationsModal)
 const SessionRetentionConfigModal = lazyWithChunkRecovery(loadSessionRetentionConfigModal)
 const DynamicSkillsModal = lazyWithChunkRecovery(loadDynamicSkillsModal)
@@ -227,7 +225,6 @@ function ModalRouter() {
     <ChunkErrorBoundary key={activeModal} area="弹窗">
       <Suspense fallback={<ModalFallback />}>
         {activeModal === 'connect' && <ConnectionModal />}
-        {activeModal === 'llm-config' && <LLMConfigModal />}
         {activeModal === 'notifications' && <NotificationsModal />}
         {activeModal === 'session-retention' && <SessionRetentionConfigModal />}
         {activeModal === 'safety-policy' && <SafetyPolicyModal />}

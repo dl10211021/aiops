@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from api.errors import raise_http_error
 from api.response_mappers.inspection import (
+    inspection_run_deleted_response_kwargs,
     inspection_run_export_response_kwargs,
     inspection_run_report_response_kwargs,
     inspection_run_response_kwargs,
@@ -11,6 +12,7 @@ from api.response_mappers.inspection import (
 from api.schema_models.common import ResponseModel
 from core.inspection_run_service import (
     InspectionRunServiceError,
+    delete_inspection_run_record,
     export_inspection_run_report_content,
     get_inspection_run_record,
     get_inspection_run_report_record,
@@ -50,6 +52,15 @@ async def get_cron_job_run(run_id: str):
     except InspectionRunServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**inspection_run_response_kwargs(run))
+
+
+@router.delete("/inspection-runs/{run_id}", response_model=ResponseModel)
+async def delete_inspection_run(run_id: str):
+    try:
+        delete_inspection_run_record(run_id)
+    except InspectionRunServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**inspection_run_deleted_response_kwargs(run_id))
 
 
 @router.get("/inspection-runs/{run_id}/report", response_model=ResponseModel)

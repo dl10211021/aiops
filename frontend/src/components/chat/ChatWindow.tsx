@@ -34,6 +34,11 @@ const minRightPanelWidth = 340
 const maxRightPanelWidth = 760
 const orchestrationModeStorageKey = 'opscore_chat_orchestration_mode'
 
+function clampRightPanelWidth(width: number, viewportWidth = window.innerWidth) {
+  const responsiveMax = Math.min(maxRightPanelWidth, Math.max(minRightPanelWidth, Math.floor(viewportWidth * 0.42)))
+  return Math.min(Math.max(width, minRightPanelWidth), responsiveMax)
+}
+
 const AiThinkingChainPanel = lazy(() => import('@/features/sessions/AiThinkingChainPanel'))
 
 function IntelPanelFallback() {
@@ -55,9 +60,9 @@ export default function ChatWindow() {
     if (typeof window === 'undefined') return defaultRightPanelWidth
     const storedWidth = Number(localStorage.getItem(rightPanelStorageKey))
     if (Number.isFinite(storedWidth)) {
-      return Math.min(Math.max(storedWidth, minRightPanelWidth), maxRightPanelWidth)
+      return clampRightPanelWidth(storedWidth)
     }
-    return defaultRightPanelWidth
+    return clampRightPanelWidth(defaultRightPanelWidth)
   })
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -86,6 +91,7 @@ export default function ChatWindow() {
   const input = inputDrafts.input
   const {
     availableModels,
+    configuredMainModel,
     modelName,
     readWriteWarningEnabled,
     setModelName,
@@ -164,6 +170,23 @@ export default function ChatWindow() {
     revokeAttachmentPreviews: chatAttachments.revokePreviews,
     setAttachmentsBySession: chatAttachments.setAttachmentsBySession,
   })
+
+  useEffect(() => {
+    const handleExternalChatSend = (event: Event) => {
+      const customEvent = event as CustomEvent<{ sessionId?: string; message?: string; analysisOnly?: boolean; source?: string }>
+      const message = String(customEvent.detail?.message || '').trim()
+      if (!message) return
+      const forcedSessionId = customEvent.detail?.sessionId
+      void sendMessage(message, forcedSessionId, {
+        analysisOnly: Boolean(customEvent.detail?.analysisOnly || customEvent.detail?.source === 'terminal'),
+      })
+    }
+    window.addEventListener('opscore:chat-send', handleExternalChatSend as EventListener)
+    return () => {
+      window.removeEventListener('opscore:chat-send', handleExternalChatSend as EventListener)
+    }
+  }, [sendMessage])
+
   const messageHistoryActions = useMessageHistoryActions(currentSessionId)
   useSessionHistorySync(currentSessionId, session, hasActiveStream)
 
@@ -202,7 +225,7 @@ export default function ChatWindow() {
     const onMouseMove = (event: MouseEvent) => {
       if (!dragStartRef.current) return
       const delta = dragStartRef.current.startX - event.clientX
-      const width = Math.min(Math.max(dragStartRef.current.startWidth + delta, minRightPanelWidth), maxRightPanelWidth)
+      const width = clampRightPanelWidth(dragStartRef.current.startWidth + delta)
       rightPanelWidthRef.current = width
       setRightPanelWidth(width)
     }
@@ -226,6 +249,20 @@ export default function ChatWindow() {
       document.body.style.userSelect = ''
     }
   }, [isResizing])
+
+  useEffect(() => {
+    const syncResponsivePanelWidth = () => {
+      setRightPanelWidth((current) => {
+        const next = clampRightPanelWidth(current)
+        rightPanelWidthRef.current = next
+        if (next !== current) localStorage.setItem(rightPanelStorageKey, String(next))
+        return next
+      })
+    }
+    syncResponsivePanelWidth()
+    window.addEventListener('resize', syncResponsivePanelWidth)
+    return () => window.removeEventListener('resize', syncResponsivePanelWidth)
+  }, [])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing) return
@@ -287,7 +324,7 @@ export default function ChatWindow() {
     event.preventDefault()
     const delta = event.key === 'ArrowLeft' ? 24 : -24
     setRightPanelWidth((current) => {
-      const next = Math.min(Math.max(current + delta, minRightPanelWidth), maxRightPanelWidth)
+      const next = clampRightPanelWidth(current + delta)
       rightPanelWidthRef.current = next
       localStorage.setItem(rightPanelStorageKey, String(next))
       return next
@@ -303,7 +340,9 @@ export default function ChatWindow() {
   }
 
   const toggleWideRightPanel = () => {
-    const next = rightPanelWidth < wideRightPanelWidth ? wideRightPanelWidth : defaultRightPanelWidth
+    const next = rightPanelWidth < wideRightPanelWidth
+      ? clampRightPanelWidth(wideRightPanelWidth)
+      : clampRightPanelWidth(defaultRightPanelWidth)
     rightPanelWidthRef.current = next
     setRightPanelWidth(next)
     localStorage.setItem(rightPanelStorageKey, String(next))
@@ -337,6 +376,7 @@ export default function ChatWindow() {
             catalog={toolCatalog}
             session={session}
             availableModels={availableModels}
+            configuredMainModel={configuredMainModel}
             modelName={modelName}
             orchestrationMode={orchestrationMode}
             thinkingMode={thinkingMode}

@@ -37,6 +37,7 @@ export function SessionIdentityStrip({
 
 export function SessionRuntimeControls({
   availableModels,
+  configuredMainModel,
   modelName,
   orchestrationMode,
   thinkingMode,
@@ -48,6 +49,7 @@ export function SessionRuntimeControls({
   onToggleDetails,
 }: {
   availableModels: ModelGroup[]
+  configuredMainModel: string
   modelName: string
   orchestrationMode: 'single' | 'split' | 'fast'
   thinkingMode: string
@@ -62,6 +64,7 @@ export function SessionRuntimeControls({
     <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
       <ModelSelector
         availableModels={availableModels}
+        configuredMainModel={configuredMainModel}
         modelName={modelName}
         onModelChange={onModelChange}
       />

@@ -35,6 +35,7 @@ HERMES_TOOL_NAMES: set[str] = {
     "cronjob",
     "delegate_task",
     "execute_code",
+    "image_gen",
     "memory",
     "patch",
     "process",
@@ -66,6 +67,7 @@ HERMES_AGENT_EXCLUDED_TOOL_NAMES: set[str] = {
     "session_search",
     "skill_manage",
     "text_to_speech",
+    "web_search",
     "write_file",
 }
 
@@ -79,6 +81,7 @@ _HERMES_MODULES = (
     "tools.cronjob_tools",
     "tools.delegate_tool",
     "tools.code_execution_tool",
+    "tools.image_generation_tool",
     "tools.memory_tool",
     "tools.process_registry",
     "tools.send_message_tool",
@@ -89,6 +92,10 @@ _HERMES_MODULES = (
     "tools.tts_tool",
     "tools.vision_tools",
 )
+
+HERMES_TOOL_ALIASES: dict[str, str] = {
+    "image_gen": "image_generate",
+}
 
 _LOCK = threading.Lock()
 _LOADED = False
@@ -278,6 +285,10 @@ def _registry():
     return registry
 
 
+def _resolve_hermes_tool_name(name: str) -> str:
+    return HERMES_TOOL_ALIASES.get(name, name)
+
+
 def load_error() -> str | None:
     _ensure_loaded()
     return _LOAD_ERROR
@@ -289,7 +300,8 @@ def iter_hermes_tool_schemas(names: Iterable[str] = HERMES_AGENT_TOOL_NAMES) -> 
         return []
     schemas: list[dict[str, Any]] = []
     for name in sorted(set(names)):
-        schema = registry.get_schema(name)
+        resolved_name = _resolve_hermes_tool_name(name)
+        schema = registry.get_schema(resolved_name)
         if not schema:
             continue
         schemas.append({**schema, "name": name})
@@ -302,14 +314,15 @@ def iter_hermes_tool_metadata(names: Iterable[str] = HERMES_AGENT_TOOL_NAMES) ->
         return []
     items: list[dict[str, Any]] = []
     for name in sorted(set(names)):
-        schema = registry.get_schema(name)
+        resolved_name = _resolve_hermes_tool_name(name)
+        schema = registry.get_schema(resolved_name)
         if not schema:
             continue
         items.append(
             {
                 "name": name,
                 "schema": {**schema, "name": name},
-                "toolset": registry.get_toolset_for_tool(name) or "hermes",
+                "toolset": registry.get_toolset_for_tool(resolved_name) or "hermes",
             }
         )
     return items
@@ -319,7 +332,8 @@ def hermes_tool_available(name: str) -> tuple[bool, str]:
     registry = _registry()
     if registry is None:
         return False, _LOAD_ERROR or "Hermes tools are not loaded"
-    entry = registry.get_entry(name)
+    resolved_name = _resolve_hermes_tool_name(name)
+    entry = registry.get_entry(resolved_name)
     if not entry:
         return False, f"Hermes tool is not registered: {name}"
     if entry.check_fn:
@@ -359,10 +373,11 @@ def execute_hermes_tool(name: str, args: dict[str, Any], context: dict[str, Any]
     context = context or {}
     if name not in HERMES_TOOL_NAMES:
         return _json_error(f"Unsupported Hermes tool: {name}", tool=name)
+    resolved_name = _resolve_hermes_tool_name(name)
 
-    if name in {"read_file", "search_files", "write_file", "patch"}:
+    if resolved_name in {"read_file", "search_files", "write_file", "patch"}:
         try:
-            file_result = _execute_file_tool(name, args)
+            file_result = _execute_file_tool(resolved_name, args)
             if file_result is not None:
                 return file_result
         except Exception as exc:
@@ -383,21 +398,21 @@ def execute_hermes_tool(name: str, args: dict[str, Any], context: dict[str, Any]
         "enabled_tools": sorted(HERMES_TOOL_NAMES),
     }
 
-    if name == "todo":
+    if resolved_name == "todo":
         kwargs["store"] = _todo_store(task_id)
-    elif name == "memory":
+    elif resolved_name == "memory":
         kwargs["store"] = _memory_store()
-    elif name == "session_search":
+    elif resolved_name == "session_search":
         return _json_error("session_search is not wired to the OpsCore session database yet.", tool=name)
-    elif name == "delegate_task":
+    elif resolved_name == "delegate_task":
         return _json_error("delegate_task requires a live Hermes parent agent; use OpsCore dispatch_sub_agents for asset-session delegation.", tool=name)
-    elif name == "clarify":
+    elif resolved_name == "clarify":
         return _json_error("clarify is handled by OpsCore's interaction loop and should not be routed through the dispatcher.", tool=name)
 
     old_terminal_cwd = os.environ.get("TERMINAL_CWD")
     os.environ["TERMINAL_CWD"] = str(opscore_root())
     try:
-        return registry.dispatch(name, args, **kwargs)
+        return registry.dispatch(resolved_name, args, **kwargs)
     finally:
         if old_terminal_cwd is None:
             os.environ.pop("TERMINAL_CWD", None)

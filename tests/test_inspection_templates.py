@@ -594,6 +594,36 @@ class TestInspectionTemplates(unittest.TestCase):
         self.assertEqual(report["profile"], "template")
         self.assertEqual(report["template_id"], "builtin-network-cli-core-readonly")
         self.assertTrue(any("lldp" in command.lower() for command in fake_ssh.commands))
+        self.assertTrue(any("mac" in command.lower() for command in fake_ssh.commands))
+
+    def test_network_template_command_candidates_fall_back_to_vendor_syntax(self):
+        from core.session_inspection_template_runner import execute_template_step
+
+        class FakeSSH:
+            def __init__(self):
+                self.commands = []
+
+            def execute_network_cli_command(self, session_id, command, timeout=None):
+                self.commands.append(command)
+                if command.startswith("display "):
+                    return {"success": True, "output": "% Unknown command", "exit_status": 0}
+                return {"success": True, "output": "Cisco IOS XE Software", "exit_status": 0}
+
+        step = {
+            "tool": "network_cli_execute_command",
+            "command": "display version",
+            "command_candidates": ["display version", "show version"],
+            "timeout": 10,
+        }
+        fake = FakeSSH()
+
+        result = asyncio.run(
+            execute_template_step("sid-cisco", {}, "cisco_switch", "ssh", step, {}, fake)
+        )
+
+        self.assertEqual(result["command"], "show version")
+        self.assertEqual(fake.commands, ["display version", "show version"])
+        self.assertIn("Cisco IOS", result["output"])
 
     def test_inspector_uses_builtin_storage_template_for_nas_ssh_subtypes(self):
         from core import inspection_templates, session_inspector

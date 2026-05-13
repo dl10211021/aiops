@@ -6,6 +6,8 @@ export function cronFormFromJob(job: CronJob): CronForm {
     id: job.id,
     cron_expr: job.cron_expr || '0 9 * * *',
     message: job.message || '',
+    inspection_cycle: job.inspection_cycle || 'daily',
+    inspection_depth: job.inspection_depth || 'standard',
     host: job.host || job.target_host || '',
     username: job.username || 'root',
     agent_profile: job.agent_profile || 'default',
@@ -24,6 +26,8 @@ export function cronPayloadFromForm(form: CronForm) {
   return {
     cron_expr: form.cron_expr,
     message: form.message,
+    inspection_cycle: form.inspection_cycle || 'daily',
+    inspection_depth: form.inspection_depth || 'standard',
     host: form.host,
     username: form.username,
     agent_profile: form.agent_profile,

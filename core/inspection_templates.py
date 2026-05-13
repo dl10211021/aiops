@@ -102,6 +102,15 @@ def normalize_template(template: dict[str, Any]) -> dict[str, Any]:
         _assert_safe_text(step.get("bucket"), "bucket")
         _assert_safe_text(step.get("prefix"), "prefix")
         _assert_safe_text(step.get("key"), "key")
+        raw_candidates = step.get("command_candidates")
+        command_candidates = []
+        if isinstance(raw_candidates, list):
+            for candidate in raw_candidates:
+                candidate_text = str(candidate or "").strip()
+                if not candidate_text:
+                    continue
+                _assert_safe_text(candidate_text, "command_candidates")
+                command_candidates.append(candidate_text)
 
         normalized_steps.append(
             {
@@ -109,6 +118,7 @@ def normalize_template(template: dict[str, Any]) -> dict[str, Any]:
                 "title": str(step.get("title") or step.get("name") or f"Step {index}").strip(),
                 "tool": tool,
                 "command": str(step.get("command") or "").strip(),
+                "command_candidates": command_candidates,
                 "sql": str(step.get("sql") or "").strip(),
                 "path": str(step.get("path") or "").strip(),
                 "oid": str(step.get("oid") or "").strip(),

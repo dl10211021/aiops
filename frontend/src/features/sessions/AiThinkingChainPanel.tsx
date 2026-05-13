@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { ChatMessage, ExecTraceItem, SessionMemoryActivity } from '@/types'
+import type { ChatMessage, ChatRuntimeEvent, ExecTraceItem, SessionMemoryActivity } from '@/types'
 import { isAbortError } from '@/api/http'
 import { getSessionMemoryActivity } from '@/api/sessionHistory'
 import { toolLabel } from '@/utils/assetDisplay'
@@ -29,6 +29,7 @@ interface ThinkingChainGroup {
   userPrompt: string
   assistantSummary: string
   traces: ExecTraceItem[]
+  runtimeEvents: ChatRuntimeEvent[]
 }
 
 function compactText(value: string, fallback: string, max = 96) {
@@ -56,6 +57,7 @@ function buildThinkingGroups(messages: ChatMessage[]): ThinkingChainGroup[] {
         userPrompt: compactText(message.content, `第 ${turnNumber} 轮用户请求`, 180),
         assistantSummary: '',
         traces: [],
+        runtimeEvents: [],
       }
       groups.push(currentGroup)
       return
@@ -72,11 +74,15 @@ function buildThinkingGroups(messages: ChatMessage[]): ThinkingChainGroup[] {
         userPrompt: `第 ${index + 1} 条消息前的用户请求`,
         assistantSummary: '',
         traces: [],
+        runtimeEvents: [],
       }
       groups.push(currentGroup)
     }
     if (message.execTrace?.length) {
       currentGroup.traces.push(...message.execTrace)
+    }
+    if (message.runtimeEvents?.length) {
+      currentGroup.runtimeEvents.push(...message.runtimeEvents)
     }
     if (message.content.trim()) {
       currentGroup.assistantSummary = compactText(message.content, 'AI 已输出结果', 180)
@@ -91,13 +97,26 @@ function buildThinkingGroups(messages: ChatMessage[]): ThinkingChainGroup[] {
     return {
       ...group,
       traces,
+      runtimeEvents: dedupeRuntimeEvents(group.runtimeEvents),
     assistantSummary: group.assistantSummary || (
-      traces.length > 0
+      traces.length > 0 || group.runtimeEvents.length > 0
         ? 'AI 已调用工具，结果汇总在左侧会话输出中。'
         : '本轮暂无 AI 输出摘要。'
     ),
     }
   })
+}
+
+function dedupeRuntimeEvents(events: ChatRuntimeEvent[]) {
+  const seen = new Set<string>()
+  const deduped: ChatRuntimeEvent[] = []
+  for (const event of events) {
+    const key = [event.type, event.content, event.timestamp].join('\u0001')
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(event)
+  }
+  return deduped
 }
 
 function dedupeTraces(traces: ExecTraceItem[]) {
@@ -203,6 +222,7 @@ function groupSearchText(group: ThinkingChainGroup) {
     group.outputAt ? formatTimelineTime(group.outputAt) : '',
     group.userPrompt,
     group.assistantSummary,
+    ...group.runtimeEvents.map((event) => event.content),
     ...group.traces.flatMap((trace) => [
       trace.tool,
       trace.args || '',
@@ -401,7 +421,11 @@ export default function AiThinkingChainPanel({
                         输出 {formatTimelineTime(group.outputAt || group.startedAt)}
                       </span>
                       <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[11px] text-ops-subtext">
-                        {group.traces.length > 0 ? `${group.traces.length} 步` : '无工具链路'}
+                        {group.traces.length > 0
+                          ? `${group.traces.length} 步`
+                          : group.runtimeEvents.length > 0
+                            ? `${group.runtimeEvents.length} 条状态`
+                            : '无工具链路'}
                       </span>
                     </div>
                   </div>
@@ -422,9 +446,25 @@ export default function AiThinkingChainPanel({
                     </div>
                     </div>
                     <div className="space-y-2 px-3 py-3">
+                      {group.runtimeEvents.length > 0 && (
+                        <div className="rounded-xl border border-ops-accent/25 bg-ops-accent/10 px-3 py-2">
+                          <div className="mb-1.5 text-[11px] font-semibold text-ops-accent">运行状态</div>
+                          <div className="space-y-1">
+                            {group.runtimeEvents.slice(-12).map((event, index) => (
+                              <div key={`${event.timestamp}-${index}`} className="flex gap-2 text-[11px] leading-5 text-ops-subtext">
+                                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-ops-accent" />
+                                <span className="font-mono text-[10px] text-ops-overlay">{formatTimelineTime(event.timestamp)}</span>
+                                <span>{event.content}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {group.traces.length === 0 ? (
                         <div className="rounded-xl border border-ops-surface0 bg-ops-panel/45 px-3 py-2 text-[11px] leading-5 text-ops-subtext">
-                          本轮没有可展示的工具执行链路。通常表示模型直接生成了回复，或后端没有为本轮持久化工具轨迹。
+                          {group.runtimeEvents.length > 0
+                            ? '本轮暂未产生工具执行结果，状态会先显示在这里；工具开始执行后会追加命令链路。'
+                            : '本轮没有可展示的工具执行链路。通常表示模型直接生成了回复，或后端没有为本轮持久化工具轨迹。'}
                         </div>
                       ) : group.traces.map((trace, index) => (
                         <div

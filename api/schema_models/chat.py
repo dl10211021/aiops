@@ -13,6 +13,7 @@ class ChatRequest(BaseModel):
     thinking_mode: str | None = "off"
     orchestration_mode: str | None = "single"
     attachments: list[dict] = Field(default_factory=list)
+    analysis_only: bool = False
 
     @model_validator(mode="after")
     def validate_attachments(self):

@@ -28,6 +28,7 @@ class TestProviderConfigService(unittest.TestCase):
         with (
             patch.object(provider_config_service, "get_all_providers", return_value=existing),
             patch.object(provider_config_service, "save_providers", side_effect=save),
+            patch.object(provider_config_service, "clear_invalid_assistant_model_references") as clear_refs,
         ):
             save_provider_config_records(
                 [{"id": "openai", "api_key": "********", "base_url": "https://new.example/v1"}]
@@ -35,6 +36,7 @@ class TestProviderConfigService(unittest.TestCase):
 
         self.assertEqual(saved["records"][0]["api_key"], "secret")
         self.assertEqual(saved["records"][0]["base_url"], "https://new.example/v1")
+        clear_refs.assert_called_once_with(saved["records"])
 
     def test_save_provider_configs_maps_errors_to_500(self):
         with patch.object(provider_config_service, "save_providers", side_effect=RuntimeError("disk full")):

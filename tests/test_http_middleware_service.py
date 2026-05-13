@@ -89,9 +89,16 @@ class TestHttpMiddlewareService(unittest.TestCase):
         async def call_next(_request):
             return Response()
 
+        async def missing_asset(_request):
+            return Response(status_code=404)
+
         asset_response = asyncio.run(dispatch_security_headers(
             SimpleNamespace(url=SimpleNamespace(path="/assets/index-abcd.js")),
             call_next,
+        ))
+        missing_asset_response = asyncio.run(dispatch_security_headers(
+            SimpleNamespace(url=SimpleNamespace(path="/assets/missing.js")),
+            missing_asset,
         ))
         index_response = asyncio.run(dispatch_security_headers(
             SimpleNamespace(url=SimpleNamespace(path="/")),
@@ -102,6 +109,7 @@ class TestHttpMiddlewareService(unittest.TestCase):
             asset_response.headers["Cache-Control"],
             "public, max-age=31536000, immutable",
         )
+        self.assertEqual(missing_asset_response.headers["Cache-Control"], "no-store")
         self.assertEqual(index_response.headers["Cache-Control"], "no-cache")
 
 

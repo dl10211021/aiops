@@ -39,6 +39,17 @@ export function applyChatStreamEvent({
 
   switch (type) {
     case 'status':
+      updateLastAssistantMessage(sessionId, (message) => ({
+        ...message,
+        runtimeEvents: [
+          ...(message.runtimeEvents || []),
+          {
+            type: 'status' as const,
+            content: streamString(data.content, '运行中...'),
+            timestamp: Date.now(),
+          },
+        ].slice(-80),
+      }))
       return { done: false, accumulatedMarkdown }
 
     case 'tool_start':

@@ -46,10 +46,16 @@ export function SafetyBoundaryPanel() {
 
 function ToolsetPill({ toolset }: { toolset: ToolsetInfo }) {
   const enabledTools = toolset.tools.filter((tool) => tool.enabled)
+  const hasInteractiveTool = enabledTools.some((tool) => tool.name === 'clarify' || tool.name === 'request_user_interaction')
   return (
     <details className="group">
       <summary className="cursor-pointer list-none rounded-full border border-ops-surface1 bg-ops-dark/70 px-3 py-1.5 text-xs text-ops-text hover:border-ops-accent/50">
         <span title={toolset.id} className="font-semibold text-ops-accent">{toolsetLabel(toolset.id)}</span>
+        {hasInteractiveTool && (
+          <span className="ml-2 rounded-full border border-ops-accent/35 bg-ops-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-ops-accent">
+            交互
+          </span>
+        )}
         <span className="ml-2 text-ops-overlay">{enabledTools.length}</span>
       </summary>
       <div className="absolute z-20 mt-2 w-80 rounded-lg border border-ops-surface1 bg-ops-panel p-3 shadow-2xl">
@@ -57,7 +63,10 @@ function ToolsetPill({ toolset }: { toolset: ToolsetInfo }) {
         <div className="space-y-2">
           {enabledTools.map((tool) => (
             <div key={tool.name} className="rounded-lg bg-ops-dark/70 p-2">
-              <div title={tool.name} className="text-xs font-semibold text-ops-text">{toolLabel(tool.name)}</div>
+              <div className="flex items-center gap-2">
+                <div title={tool.name} className="text-xs font-semibold text-ops-text">{toolLabel(tool.name)}</div>
+                <ToolCategoryBadge toolName={tool.name} />
+              </div>
               <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-ops-subtext">{tool.description}</div>
             </div>
           ))}
@@ -65,4 +74,23 @@ function ToolsetPill({ toolset }: { toolset: ToolsetInfo }) {
       </div>
     </details>
   )
+}
+
+function ToolCategoryBadge({ toolName }: { toolName: string }) {
+  const category = categoryForTool(toolName)
+  if (!category) return null
+  return (
+    <span className="rounded-full border border-ops-surface1/60 bg-ops-panel/45 px-1.5 py-0.5 text-[10px] text-ops-overlay">
+      {category}
+    </span>
+  )
+}
+
+function categoryForTool(toolName: string): string {
+  if (toolName === 'clarify' || toolName === 'request_user_interaction') return '交互'
+  if (toolName === 'todo') return '任务'
+  if (toolName === 'image_gen' || toolName === 'vision_analyze' || toolName === 'browser_vision') return '视觉'
+  if (toolName === 'web_search' || toolName === 'web_extractor' || toolName === 'web_research') return '联网'
+  if (toolName.startsWith('browser_')) return '浏览器'
+  return ''
 }

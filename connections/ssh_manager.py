@@ -4,8 +4,9 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
-from core.asset_protocols import resolve_asset_identity
+from core.asset_protocols import NETWORK_SSH_ASSET_TYPES, resolve_asset_identity
 from core.connection_errors import classify_connection_error
 from core.redaction import redact_value
 
@@ -24,6 +25,121 @@ class SSHConnectionManager:
         self._sessions_lock = threading.Lock()
         # 线程池隔离执行防止死锁阻塞协程
         self.executor = ThreadPoolExecutor(max_workers=100)
+
+    @staticmethod
+    def _bool_arg(extra_args: dict | None, key: str, default: bool) -> bool:
+        value = (extra_args or {}).get(key)
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    @staticmethod
+    def _ssh_disabled_algorithms(extra_args: dict | None) -> dict[str, list[str]] | None:
+        raw = (extra_args or {}).get("disabled_algorithms")
+        if isinstance(raw, dict):
+            result: dict[str, list[str]] = {}
+            for key, value in raw.items():
+                if isinstance(value, (list, tuple, set)):
+                    items = [str(item).strip() for item in value if str(item).strip()]
+                elif isinstance(value, str):
+                    items = [part.strip() for part in value.split(",") if part.strip()]
+                else:
+                    items = []
+                if items:
+                    result[str(key)] = items
+            return result or None
+        return None
+
+    def _build_ssh_connect_kwargs(
+        self,
+        *,
+        host: str,
+        port: int,
+        username: str,
+        password: str | None,
+        key_filename: str | None,
+        extra_args: dict | None,
+    ) -> dict[str, Any]:
+        has_password = bool(password)
+        has_key_file = bool(key_filename)
+        default_use_agent = not (has_password or has_key_file)
+        default_lookup_keys = not (has_password or has_key_file)
+        kwargs: dict[str, Any] = {
+            "hostname": host,
+            "port": port,
+            "username": username,
+            "password": password,
+            "timeout": int((extra_args or {}).get("connect_timeout") or 10),
+            "banner_timeout": int((extra_args or {}).get("banner_timeout") or 30),
+            "auth_timeout": int((extra_args or {}).get("auth_timeout") or 20),
+            # Network devices frequently fail when agent/default keys are tried first.
+            "allow_agent": self._bool_arg(extra_args, "allow_agent", default_use_agent),
+            "look_for_keys": self._bool_arg(extra_args, "look_for_keys", default_lookup_keys),
+            "compress": self._bool_arg(extra_args, "compress", False),
+        }
+        if key_filename:
+            kwargs["key_filename"] = key_filename
+        disabled_algorithms = self._ssh_disabled_algorithms(extra_args)
+        if disabled_algorithms:
+            kwargs["disabled_algorithms"] = disabled_algorithms
+        return kwargs
+
+    @staticmethod
+    def _looks_like_legacy_rsa_negotiation_error(exc: Exception) -> bool:
+        text = str(exc).lower()
+        return (
+            "rsa-sha2" in text
+            or "ssh-rsa" in text
+            or "no matching host key type" in text
+            or "no matching key exchange method" in text
+            or "incompatible ssh peer" in text
+        )
+
+    def _connect_client_with_fallback(
+        self,
+        client: paramiko.SSHClient,
+        *,
+        host: str,
+        port: int,
+        username: str,
+        password: str | None,
+        key_filename: str | None,
+        extra_args: dict | None,
+    ) -> None:
+        connect_kwargs = self._build_ssh_connect_kwargs(
+            host=host,
+            port=port,
+            username=username,
+            password=password,
+            key_filename=key_filename,
+            extra_args=extra_args,
+        )
+        try:
+            client.connect(**connect_kwargs)
+            return
+        except Exception as first_exc:
+            # Legacy fallback: older devices may reject rsa-sha2 signatures.
+            if key_filename and self._looks_like_legacy_rsa_negotiation_error(first_exc):
+                retry_kwargs = dict(connect_kwargs)
+                disabled = dict(retry_kwargs.get("disabled_algorithms") or {})
+                pubkeys = list(disabled.get("pubkeys") or [])
+                for algo in ("rsa-sha2-512", "rsa-sha2-256"):
+                    if algo not in pubkeys:
+                        pubkeys.append(algo)
+                if pubkeys:
+                    disabled["pubkeys"] = pubkeys
+                    retry_kwargs["disabled_algorithms"] = disabled
+                    logger.warning(
+                        "Retrying SSH with legacy RSA signature fallback for %s@%s:%s",
+                        username,
+                        host,
+                        port,
+                    )
+                    client.connect(**retry_kwargs)
+                    return
+            raise first_exc
 
     def connect(
         self,
@@ -95,6 +211,7 @@ class SSHConnectionManager:
                         "port": port,
                         "username": username,
                         "password": password,
+                        "key_filename": key_filename,
                         "connected_at": time.time(),
                         "allow_modifications": allow_modifications,
                         "active_skills": active_skills,
@@ -131,6 +248,7 @@ class SSHConnectionManager:
                         "port": port,
                         "username": username,
                         "password": password,
+                        "key_filename": key_filename,
                         "connected_at": time.time(),
                         "allow_modifications": allow_modifications,
                         "active_skills": active_skills,
@@ -162,14 +280,14 @@ class SSHConnectionManager:
             logger.info(
                 f"Attempting to connect via SSH to {username}@{host}:{port} (Profile: {agent_profile}, Mod: {allow_modifications})..."
             )
-            client.connect(
-                hostname=host,
+            self._connect_client_with_fallback(
+                client,
+                host=host,
                 port=port,
                 username=username,
                 password=password,
                 key_filename=key_filename,
-                timeout=10,  # 超时时间 10 秒
-                banner_timeout=30,
+                extra_args=extra_args,
             )
 
             with self._sessions_lock:
@@ -180,6 +298,7 @@ class SSHConnectionManager:
                         "port": port,
                         "username": username,
                         "password": password,
+                        "key_filename": key_filename,
                         "connected_at": time.time(),
                         "allow_modifications": allow_modifications,
                         "active_skills": active_skills,
@@ -303,13 +422,14 @@ class SSHConnectionManager:
         new_client = paramiko.SSHClient()
         new_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
-            new_client.connect(
-                hostname=info["host"],
+            self._connect_client_with_fallback(
+                new_client,
+                host=info["host"],
                 port=info["port"],
                 username=info["username"],
                 password=info.get("password"),
-                timeout=10,
-                banner_timeout=30,
+                key_filename=info.get("key_filename"),
+                extra_args=info.get("extra_args"),
             )
             session_data["client"] = new_client
             info["last_active"] = time.time()
@@ -317,6 +437,21 @@ class SSHConnectionManager:
         except Exception as e:
             logger.error(f"❌ [Lazy Pool] 重连 {info['host']} 失败: {e}")
             return None
+
+    def _create_client_from_session_info(self, info: dict):
+        """Create a fresh SSH client from saved session credentials."""
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self._connect_client_with_fallback(
+            client,
+            host=info["host"],
+            port=info["port"],
+            username=info["username"],
+            password=info.get("password"),
+            key_filename=info.get("key_filename"),
+            extra_args=info.get("extra_args"),
+        )
+        return client
 
     def execute_command(self, session_id: str, command: str, timeout: int = 30) -> dict:
         """
@@ -363,20 +498,34 @@ class SSHConnectionManager:
         if info.get("is_virtual"):
             return {"success": False, "error": "虚拟会话不支持网络设备 CLI。"}
 
-        client = self._get_or_create_client(session_id)
-        if not client:
-            return {
-                "success": False,
-                "error": "无法建立或恢复到目标网络设备的 SSH 连接。请检查网络或凭据。",
-            }
+        info_snapshot = dict(info)
 
         future = self.executor.submit(
-            self._do_network_cli_execute, client, command, timeout
+            self._do_network_cli_execute_with_dedicated_client,
+            info_snapshot,
+            command,
+            timeout,
         )
         try:
             return future.result(timeout=timeout + 5)
         except Exception as e:
             return {"success": False, "error": f"网络设备 CLI 执行超时或崩溃: {str(e)}"}
+
+    def _do_network_cli_execute_with_dedicated_client(
+        self, info: dict, command: str, timeout: int
+    ) -> dict:
+        client = None
+        try:
+            client = self._create_client_from_session_info(info)
+            return self._do_network_cli_execute(client, command, timeout)
+        except Exception as e:
+            return {"success": False, "error": f"网络设备 CLI 执行失败: {str(e)}"}
+        finally:
+            if client:
+                try:
+                    client.close()
+                except Exception:
+                    pass
 
     def _read_cli_until_idle(self, channel, timeout: int, idle_seconds: float = 0.8) -> str:
         output = b""
@@ -471,6 +620,60 @@ class SSHConnectionManager:
             }
         except Exception as e:
             return {"success": False, "error": f"指令执行超时或崩溃: {str(e)}"}
+
+    def open_terminal_channel(
+        self,
+        session_id: str,
+        *,
+        term: str = "",
+        width: int = 140,
+        height: int = 42,
+    ):
+        """Open an interactive PTY channel for a connected SSH session."""
+        if session_id not in self.active_sessions:
+            raise ValueError("会话已过期或不存在，请重新连接")
+
+        info = self.active_sessions[session_id]["info"]
+        if info.get("is_virtual"):
+            raise ValueError("当前会话为虚拟会话，不支持 SSH 终端")
+
+        client = self._create_client_from_session_info(dict(info))
+
+        asset_type = str(info.get("asset_type") or "").strip().lower()
+        extra_args = info.get("extra_args") or {}
+        terminal_type = str(term or extra_args.get("terminal_type") or "").strip()
+        if not terminal_type:
+            terminal_type = "vt100" if asset_type in NETWORK_SSH_ASSET_TYPES else "xterm-256color"
+
+        safe_width = max(40, min(int(width or 140), 320))
+        safe_height = max(10, min(int(height or 42), 120))
+        try:
+            channel = client.invoke_shell(term=terminal_type, width=safe_width, height=safe_height)
+            channel.settimeout(0.0)
+            setattr(channel, "_opscore_client", client)
+            return channel
+        except Exception:
+            try:
+                client.close()
+            except Exception:
+                pass
+            raise
+
+    def close_terminal_channel(self, channel) -> None:
+        client = getattr(channel, "_opscore_client", None)
+        try:
+            channel.close()
+        finally:
+            if client:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+
+    def resize_terminal_channel(self, channel, *, width: int, height: int) -> None:
+        safe_width = max(40, min(int(width or 140), 320))
+        safe_height = max(10, min(int(height or 42), 120))
+        channel.resize_pty(width=safe_width, height=safe_height)
 
     def disconnect(self, session_id: str) -> bool:
         """安全断开连接"""

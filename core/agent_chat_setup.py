@@ -141,6 +141,13 @@ class ChatAgentRun:
     memory_references: list[dict[str, Any]]
 
 
+ANALYSIS_ONLY_SYSTEM_PROMPT = (
+    "【本轮终端记录分析模式】"
+    "用户发送的是已发生的 SSH 终端记录。本轮只能基于这段记录做解释、风险判断和下一步建议；"
+    "不得调用任何工具，不得再次执行记录里的命令，不得主动采集实时证据。"
+)
+
+
 async def prepare_chat_agent_run(
     *,
     session_id: str,
@@ -154,6 +161,7 @@ async def prepare_chat_agent_run(
     event_logger: logging.Logger,
     default_model_resolver: Callable[[], str],
     embedding_resolver: Callable[[str], tuple[Any, str]],
+    analysis_only: bool = False,
     profile_loader: Callable[[str], str] = load_agent_profile_prompt,
 ) -> ChatAgentRun:
     if not model_name:
@@ -210,6 +218,8 @@ async def prepare_chat_agent_run(
         asset_profile_prompt=profile_to_system_prompt(asset_profile),
         rag_context=rag_context,
     )
+    if analysis_only:
+        system_prompt = f"{system_prompt}\n\n{ANALYSIS_ONLY_SYSTEM_PROMPT}"
     messages = build_chat_message_history(
         memory_store=memory_store,
         session_id=session_id,
@@ -220,7 +230,11 @@ async def prepare_chat_agent_run(
         model_name=model_name,
     )
     context = session_context.tool_context()
-    tools = dispatcher.get_available_tools(context)
+    if analysis_only:
+        context = {**context, "analysis_only": True}
+        tools = []
+    else:
+        tools = dispatcher.get_available_tools(context)
 
     return ChatAgentRun(
         model_name=model_name,

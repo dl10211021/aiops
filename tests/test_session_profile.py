@@ -126,6 +126,45 @@ def test_normalize_profile_corrects_stale_protocol_fallback_for_catalog_assets()
     assert "ssh_execute_command" not in profile["relation_strategies"][0]["tool_hint"]
 
 
+def test_network_fallback_profile_extracts_neighbor_and_port_role_evidence():
+    context = {
+        "session_id": "sid-h3c",
+        "asset_key": "h3c_switch:ssh:10.0.0.3:22",
+        "host": "10.0.0.3",
+        "port": 22,
+        "asset_type": "h3c_switch",
+        "protocol": "ssh",
+        "tags": [],
+    }
+    inspection = {
+        "checks": [
+            {
+                "name": "neighbors",
+                "title": "LLDP 邻居",
+                "status": "success",
+                "command": "display lldp neighbor brief",
+                "output": "GigabitEthernet1/0/48 Core-SW-01 Ten-GigabitEthernet1/0/1",
+            },
+            {
+                "name": "mac_table",
+                "title": "MAC 地址表",
+                "status": "success",
+                "command": "display mac-address",
+                "output": "5489-98aa-bbcc 10 learned GigabitEthernet1/0/10",
+            },
+        ],
+    }
+
+    profile = _fallback_profile("sid-h3c", context, inspection, "fallback")
+
+    assert profile["role_category"] == "network"
+    assert profile["focus_areas"][0]["title"] == "接口、邻居和上下联"
+    assert any(item["peer"] == "Core-SW-01" for item in profile["relations"])
+    assert any("上联" in item["peer_role"] for item in profile["relations"])
+    assert any("lldp" in item["protocol"] for item in profile["relations"])
+    assert "VLAN/Trunk" in profile["relation_strategies"][0]["method"]
+
+
 def test_fallback_profile_raises_risk_for_multiple_failed_checks():
     context = {
         "session_id": "sid-2",

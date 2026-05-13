@@ -49,7 +49,7 @@ async def run_inspection_template(
 
     for step in template.get("steps", []):
         result = await execute_template_step(session_id, info, asset_type, protocol, step, extra_args, ssh_client)
-        command = step.get("command") or step.get("sql") or step.get("path") or step.get("oid") or ""
+        command = result.get("command") or step.get("command") or step.get("sql") or step.get("path") or step.get("oid") or ""
         success = bool(result.get("success")) and not result.get("has_error")
         output = result.get("output") or result.get("error") or json.dumps(result, ensure_ascii=False, default=str)
         checks.append(
@@ -94,12 +94,7 @@ async def execute_template_step(
             step.get("timeout") or 15,
         )
     if tool == "network_cli_execute_command":
-        return await asyncio.to_thread(
-            ssh_client.execute_network_cli_command,
-            session_id,
-            step.get("command"),
-            step.get("timeout") or 15,
-        )
+        return await _execute_network_cli_step(session_id, step, ssh_client)
     if tool == "winrm_execute_command":
         return await _execute_winrm_step(info, step, extra_args)
     if tool == "db_execute_query":
@@ -115,6 +110,70 @@ async def execute_template_step(
     if tool == "snmp_get":
         return await _execute_snmp_step(info, step, extra_args)
     return {"success": False, "error": f"不支持的巡检工具: {tool}"}
+
+
+def _network_cli_command_candidates(step: dict[str, Any]) -> list[str]:
+    candidates = []
+    for command in step.get("command_candidates") or []:
+        text = str(command or "").strip()
+        if text and text not in candidates:
+            candidates.append(text)
+    command = str(step.get("command") or "").strip()
+    if command and command not in candidates:
+        candidates.insert(0, command)
+    return candidates
+
+
+def _looks_like_network_cli_rejection(result: dict[str, Any]) -> bool:
+    if not result.get("success") or result.get("has_error"):
+        return True
+    text = str(result.get("output") or result.get("error") or "").lower()
+    rejection_markers = (
+        "unknown command",
+        "unrecognized command",
+        "invalid input",
+        "incomplete command",
+        "ambiguous command",
+        "wrong parameter",
+        "too many parameters",
+        "command is not found",
+        "can't recognize",
+        "error: unrecognized",
+        "% invalid",
+        "% unknown",
+    )
+    return any(marker in text for marker in rejection_markers) or any(
+        line.strip() == "^" for line in text.splitlines()
+    )
+
+
+async def _execute_network_cli_step(
+    session_id: str,
+    step: dict[str, Any],
+    ssh_client: Any,
+) -> dict[str, Any]:
+    last_result: dict[str, Any] | None = None
+    attempted: list[str] = []
+    for command in _network_cli_command_candidates(step):
+        attempted.append(command)
+        result = await asyncio.to_thread(
+            ssh_client.execute_network_cli_command,
+            session_id,
+            command,
+            step.get("timeout") or 15,
+        )
+        result["command"] = command
+        if not _looks_like_network_cli_rejection(result):
+            return result
+        last_result = result
+    if last_result is None:
+        return {"success": False, "error": "网络设备巡检命令为空", "command": ""}
+    if len(attempted) > 1:
+        last_result["error"] = (
+            str(last_result.get("error") or last_result.get("output") or "")
+            + f"\n已尝试候选命令: {', '.join(attempted)}"
+        ).strip()
+    return last_result
 
 
 async def _execute_winrm_step(info: dict[str, Any], step: dict[str, Any], extra_args: dict[str, Any]) -> dict[str, Any]:

@@ -39,6 +39,7 @@ export async function runChatStream({
   sessionId,
   thinkingMode,
   updateLastAssistantMessage,
+  analysisOnly = false,
 }: {
   addToast: AddToast
   attachmentPayload: AttachmentPayload
@@ -50,6 +51,7 @@ export async function runChatStream({
   sessionId: string
   thinkingMode: string
   updateLastAssistantMessage: UpdateLastAssistantMessage
+  analysisOnly?: boolean
 }) {
   let accumulatedMarkdown = ''
   let renderedMarkdown = ''
@@ -85,6 +87,7 @@ export async function runChatStream({
       displayContent,
       attachmentPayload,
       controller.signal,
+      analysisOnly,
     )
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}))

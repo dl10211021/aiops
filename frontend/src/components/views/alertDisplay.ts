@@ -18,7 +18,9 @@ export function alertSourceLabel(source?: string) {
   const labels: Record<string, string> = {
     webhook: '外部 Webhook',
     alertmanager: 'Alertmanager',
+    grafana: 'Grafana',
     zabbix: 'Zabbix',
+    manageengine: 'ManageEngine',
     prometheus: 'Prometheus',
     hertzbeat: 'HertzBeat',
     api: 'API 接入',
@@ -26,6 +28,37 @@ export function alertSourceLabel(source?: string) {
   }
   const key = String(source || 'webhook').toLowerCase()
   return labels[key] || source || '外部 Webhook'
+}
+
+export function alertClassLabel(value?: string) {
+  const labels: Record<string, string> = {
+    availability: '可用性',
+    capacity: '容量',
+    performance: '性能',
+    network: '网络',
+    database: '数据库',
+    security: '安全',
+    unknown: '未知',
+  }
+  const key = String(value || 'unknown').toLowerCase()
+  return labels[key] || value || '未知'
+}
+
+export function alertNoiseActionLabel(value?: string) {
+  const labels: Record<string, string> = {
+    analyze: 'AI 分析',
+    record_only: '仅记录',
+    dedupe_escalate: '重复升级',
+    close: '恢复关闭',
+    unknown: '未知',
+  }
+  const key = String(value || 'unknown').toLowerCase()
+  return labels[key] || value || '未知'
+}
+
+export function alertPriorityLabel(value?: string) {
+  const key = String(value || 'p2').toLowerCase()
+  return key.toUpperCase()
 }
 
 export function formatAlertDate(value?: string | null) {

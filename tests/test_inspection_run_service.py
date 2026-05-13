@@ -71,10 +71,10 @@ class TestInspectionRunService(unittest.TestCase):
 
     def test_export_report_rejects_unknown_format(self):
         with self.assertRaises(InspectionRunServiceError) as ctx:
-            export_inspection_run_report_content("run-missing", "html")
+            export_inspection_run_report_content("run-missing", "pdf")
 
         self.assertEqual(ctx.exception.status_code, 422)
-        self.assertEqual(ctx.exception.detail, "format 仅支持 markdown 或 json")
+        self.assertEqual(ctx.exception.detail, "format 仅支持 markdown、html 或 json")
 
     def test_missing_run_and_report_raise_404(self):
         store_path = self._store_path("missing")

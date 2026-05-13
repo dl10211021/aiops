@@ -5,6 +5,8 @@ from typing import Any
 
 from core.inspection_results import (
     build_report,
+    delete_run,
+    export_report_html,
     export_report_markdown,
     get_run,
     list_runs,
@@ -38,6 +40,11 @@ def get_inspection_run_record(run_id: str) -> dict[str, Any]:
     return run
 
 
+def delete_inspection_run_record(run_id: str) -> None:
+    if not delete_run(run_id):
+        raise InspectionRunServiceError(404, "巡检报告不存在")
+
+
 def get_inspection_run_report_record(run_id: str) -> dict[str, Any]:
     report = build_report(run_id)
     if not report:
@@ -57,8 +64,11 @@ def export_inspection_run_report_content(
         report = build_report(run_id)
         content = json.dumps(report, ensure_ascii=False, indent=2) if report else None
         content_type = "application/json"
+    elif normalized == "html":
+        content = export_report_html(run_id)
+        content_type = "text/html"
     else:
-        raise InspectionRunServiceError(422, "format 仅支持 markdown 或 json")
+        raise InspectionRunServiceError(422, "format 仅支持 markdown、html 或 json")
     if content is None:
         raise InspectionRunServiceError(404, "巡检报告不存在")
     return {

@@ -26,7 +26,7 @@ export default function TopBar() {
     currentView === 'chat'
       ? '请选择或新建一个会话'
       : currentView === 'config'
-        ? '管理模型、安全和通知等系统级配置'
+        ? '管理安全、通知和保留策略等系统级配置'
         : '统一资产、会话、知识和审计工作流'
 
   return (

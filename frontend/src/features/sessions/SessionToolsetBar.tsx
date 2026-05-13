@@ -12,6 +12,7 @@ interface SessionToolsetBarProps {
   catalog: SessionToolCatalog | null
   session: Session
   availableModels: ModelGroup[]
+  configuredMainModel: string
   modelName: string
   orchestrationMode: 'single' | 'split' | 'fast'
   thinkingMode: string
@@ -24,6 +25,7 @@ function SessionToolsetBar({
   catalog,
   session,
   availableModels,
+  configuredMainModel,
   modelName,
   orchestrationMode,
   thinkingMode,
@@ -45,6 +47,7 @@ function SessionToolsetBar({
         />
         <SessionRuntimeControls
           availableModels={availableModels}
+          configuredMainModel={configuredMainModel}
           modelName={modelName}
           orchestrationMode={orchestrationMode}
           thinkingMode={thinkingMode}

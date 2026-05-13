@@ -108,6 +108,117 @@ class TestSSHManagerSecurity(unittest.TestCase):
         finally:
             manager.disconnect(result["session_id"])
 
+    def test_network_cli_uses_dedicated_client(self):
+        manager = SSHConnectionManager()
+        pooled_client = object()
+        manager.active_sessions["sid-net"] = {
+            "client": pooled_client,
+            "info": {
+                "host": "192.168.100.100",
+                "port": 22,
+                "username": "admin",
+                "password": "secret",
+                "asset_type": "h3c_switch",
+                "protocol": "ssh",
+                "extra_args": {},
+            },
+        }
+
+        class FakeChannel:
+            def __init__(self):
+                self.sent = []
+                self.closed = False
+
+            def settimeout(self, _timeout):
+                pass
+
+            def send(self, data):
+                self.sent.append(data)
+
+            def close(self):
+                self.closed = True
+
+        class FakeClient:
+            def __init__(self):
+                self.channel = FakeChannel()
+                self.closed = False
+
+            def invoke_shell(self, *args, **kwargs):
+                return self.channel
+
+            def close(self):
+                self.closed = True
+
+        dedicated_client = FakeClient()
+        with (
+            patch.object(
+                manager,
+                "_create_client_from_session_info",
+                return_value=dedicated_client,
+            ) as create_client,
+            patch.object(manager, "_read_cli_until_idle", return_value="ok"),
+        ):
+            result = manager.execute_network_cli_command(
+                "sid-net",
+                "display version",
+                timeout=5,
+            )
+
+        self.assertTrue(result["success"])
+        self.assertIs(manager.active_sessions["sid-net"]["client"], pooled_client)
+        create_client.assert_called_once()
+        self.assertTrue(dedicated_client.closed)
+        self.assertIn("display version\n", dedicated_client.channel.sent)
+
+    def test_terminal_channel_closes_dedicated_client(self):
+        manager = SSHConnectionManager()
+        manager.active_sessions["sid-term"] = {
+            "client": object(),
+            "info": {
+                "host": "192.168.100.100",
+                "port": 22,
+                "username": "admin",
+                "password": "secret",
+                "asset_type": "h3c_switch",
+                "protocol": "ssh",
+                "extra_args": {},
+            },
+        }
+
+        class FakeChannel:
+            def __init__(self):
+                self.closed = False
+
+            def settimeout(self, _timeout):
+                pass
+
+            def close(self):
+                self.closed = True
+
+        class FakeClient:
+            def __init__(self):
+                self.channel = FakeChannel()
+                self.closed = False
+
+            def invoke_shell(self, *args, **kwargs):
+                return self.channel
+
+            def close(self):
+                self.closed = True
+
+        dedicated_client = FakeClient()
+        with patch.object(
+            manager,
+            "_create_client_from_session_info",
+            return_value=dedicated_client,
+        ):
+            channel = manager.open_terminal_channel("sid-term", width=120, height=40)
+
+        self.assertIs(getattr(channel, "_opscore_client"), dedicated_client)
+        manager.close_terminal_channel(channel)
+        self.assertTrue(channel.closed)
+        self.assertTrue(dedicated_client.closed)
+
 
 if __name__ == "__main__":
     unittest.main()

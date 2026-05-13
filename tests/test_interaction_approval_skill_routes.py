@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from fastapi import HTTPException
+
 from api import (
     approval_routes,
     chat_routes,
@@ -45,6 +47,7 @@ class TestInteractionApprovalSkillRoutes(unittest.TestCase):
         paths = {route.path for route in routes.router.routes}
 
         self.assertIn("/chat", paths)
+        self.assertIn("/session/{session_id}/chat/stream", paths)
         self.assertIn("/chat/attachments/preview", paths)
 
     def test_chat_attachment_preview_preserves_response_shape(self):
@@ -60,6 +63,12 @@ class TestInteractionApprovalSkillRoutes(unittest.TestCase):
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data, {"attachment": attachment})
+
+    def test_resume_chat_stream_rejects_missing_run(self):
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(chat_routes.resume_session_chat_stream("missing-session"))
+
+        self.assertEqual(ctx.exception.status_code, 404)
 
     def test_interaction_and_approval_routes_preserve_response_shapes(self):
         approval = {"id": "approval-1", "status": "pending"}

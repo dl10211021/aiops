@@ -3,15 +3,6 @@ import { useStore } from '@/store'
 
 const CONFIG_CARDS = [
   {
-    id: 'model',
-    eyebrow: '模型中心',
-    title: '模型配置',
-    description: '统一维护模型供应商、主模型、辅助模型、运行参数和模型拉取结果。',
-    action: '打开模型配置',
-    modal: 'llm-config',
-    stats: ['主模型 / 辅助模型', '供应商连接', '自动获取模型'],
-  },
-  {
     id: 'safety',
     eyebrow: '安全边界',
     title: '安全策略',
@@ -43,7 +34,7 @@ const CONFIG_CARDS = [
 const BOUNDARY_CARDS = [
   {
     title: '系统配置',
-    description: '模型、安全、通知等平台级开关。',
+    description: '安全、通知、数据保留等平台级开关。',
   },
   {
     title: '资产中心',
@@ -63,7 +54,7 @@ export default function SystemConfigCenter() {
       <PageHeader
         eyebrow="系统中枢"
         title="系统配置"
-        description="把模型、安全和通知集中到一个入口。左侧只保留“配置”，这里负责进入具体配置项。"
+        description="把安全、通知和数据保留集中到一个入口。左侧只保留“配置”，这里负责进入具体配置项。"
       />
 
       <section className="grid gap-4 xl:grid-cols-4">

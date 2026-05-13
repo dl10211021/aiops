@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useTransition } from 'react'
 import SessionGroupList from './SessionGroupList'
 import SessionGroupManager from './SessionGroupManager'
 import SessionEditModal from './SessionEditModal'
+import SessionTerminalModal from './SessionTerminalModal'
 import { useSessionSidebarModel } from './useSessionSidebarModel'
 
 export default function SessionSidebar() {
@@ -24,6 +25,16 @@ export default function SessionSidebar() {
               {model.pendingApprovalCount > 0 ? ` / ${model.pendingApprovalCount} 个待审批` : ''}
               {model.pendingInputCount > 0 ? ` / ${model.pendingInputCount} 个待输入` : ''}
             </span>
+            {model.terminalMinimized && model.terminalSession && (
+              <button
+                type="button"
+                onClick={model.restoreTerminal}
+                className="mt-1 inline-flex items-center gap-1 rounded-lg border border-ops-accent/35 bg-ops-accent/10 px-2 py-1 text-[11px] font-semibold text-ops-accent transition-colors hover:bg-ops-accent/15"
+                title="还原最小化终端"
+              >
+                终端已最小化 ({model.terminalSessions.length})
+              </button>
+            )}
           </div>
           <button
             onClick={model.openConnectModal}
@@ -56,6 +67,7 @@ export default function SessionSidebar() {
         sessionList={model.sessionList}
         onDisconnect={model.handleDisconnect}
         onEdit={model.handleEditSession}
+        onOpenTerminal={model.handleOpenTerminal}
         onDeleteGroup={model.handleDeleteGroup}
         onRenameGroup={model.handleRenameGroup}
         onSelectGroup={model.setSelectedGroup}
@@ -72,6 +84,43 @@ export default function SessionSidebar() {
           onClose={model.closeSessionEdit}
           onSave={model.handleSaveSessionEdit}
         />
+      )}
+
+      {model.terminalSession && !model.terminalMinimized && (
+        <SessionTerminalModal
+          sessions={model.terminalSessions}
+          activeSessionId={model.activeTerminalSessionId || model.terminalSession.id}
+          onSelectSession={model.handleSelectTerminal}
+          onCloseSession={model.handleCloseTerminalTab}
+          onClose={model.closeTerminal}
+          onMinimize={model.minimizeTerminal}
+        />
+      )}
+
+      {model.terminalSession && model.terminalMinimized && (
+        <div className="fixed bottom-4 right-4 z-[93] flex items-center gap-2 rounded-xl border border-ops-surface1/80 bg-ops-panel/95 px-3 py-2 shadow-[0_16px_50px_rgba(0,0,0,0.45)] backdrop-blur-sm">
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold text-ops-text">SSH Terminal</div>
+            <div className="max-w-[220px] truncate text-[10px] text-ops-overlay">
+              {model.terminalSession.user}@{model.terminalSession.host}
+            </div>
+            <div className="text-[10px] text-ops-overlay/80">{model.terminalSessions.length} 个终端</div>
+          </div>
+          <button
+            type="button"
+            onClick={model.restoreTerminal}
+            className="rounded-md border border-ops-surface1 bg-ops-dark/45 px-2 py-1 text-xs text-ops-subtext transition-colors hover:text-ops-text"
+          >
+            还原
+          </button>
+          <button
+            type="button"
+            onClick={model.closeTerminal}
+            className="rounded-md px-2 py-1 text-xs text-ops-overlay transition-colors hover:bg-ops-surface0 hover:text-ops-text"
+          >
+            关闭当前
+          </button>
+        </div>
       )}
     </aside>
   )

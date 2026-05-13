@@ -151,11 +151,11 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("RAG-CONTEXT", run.messages[0]["content"])
         self.assertIn("根据知识库资料", run.messages[0]["content"])
         self.assertIn("不要先调用当前会话的数据库/SSH/WinRM/CLI 工具", run.messages[0]["content"])
-        self.assertIn("优先调用 `web_search`", run.messages[0]["content"])
-        self.assertIn("搜索结果片段不能单独作为 AIOps 资料结论", run.messages[0]["content"])
+        self.assertIn("优先调用 `browser_navigate`", run.messages[0]["content"])
+        self.assertIn("浏览器工具是联网研究主路径", run.messages[0]["content"])
         self.assertIn("优先使用中文关键词和中国搜索入口", run.messages[0]["content"])
         self.assertIn("至少核对 2 个可信来源", run.messages[0]["content"])
-        self.assertIn("必须继续调用 `browser_navigate`", run.messages[0]["content"])
+        self.assertIn("先用 `browser_navigate` 打开可信搜索入口扩展候选来源", run.messages[0]["content"])
         self.assertIn("不要停在“我再试试”这类半句话", run.messages[0]["content"])
         self.assertIn("不要把联网查询误当成当前资产巡检", run.messages[0]["content"])
         self.assertEqual(run.messages[1], {"role": "assistant", "content": "历史"})
@@ -282,6 +282,44 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(run.context["memory_scope_ids"], ["sid-oracle-a"])
         self.assertFalse(any(scope.startswith("asset") for scope in run.context["memory_scope_ids"]))
         self.assertEqual(run.memory_references[1]["scope_id"], "SID-Oracle-A")
+
+    async def test_analysis_only_run_disables_tools(self):
+        dispatcher = FakeDispatcher()
+
+        with patch(
+            "core.agent_chat_setup.build_vault_rag_context_for_prompt",
+            return_value={"context": "", "references": []},
+        ):
+            run = await prepare_chat_agent_run(
+                session_id="sid-term",
+                user_message="【SSH终端记录】\n```text\n$ ls\nfile\n```",
+                user_display_message=None,
+                model_name="model-a",
+                user_attachments=[],
+                active_sessions={
+                    "sid-term": {
+                        "info": {
+                            "asset_type": "linux",
+                            "protocol": "ssh",
+                            "host": "172.17.10.2",
+                            "port": 22,
+                        }
+                    }
+                },
+                dispatcher=dispatcher,
+                memory_store=FakeMemoryStore(),
+                event_logger=FakeLogger(),
+                default_model_resolver=lambda: "default-model",
+                embedding_resolver=lambda model: (f"emb:{model}", "embedding-model"),
+                analysis_only=True,
+                profile_loader=lambda profile: f"BASE:{profile}",
+            )
+
+        self.assertEqual(run.tools, [])
+        self.assertEqual(dispatcher.tool_contexts, [])
+        self.assertTrue(run.context["analysis_only"])
+        self.assertIn("本轮终端记录分析模式", run.messages[0]["content"])
+        self.assertIn("不得调用任何工具", run.messages[0]["content"])
 
 
 if __name__ == "__main__":

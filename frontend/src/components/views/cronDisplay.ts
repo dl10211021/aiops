@@ -25,6 +25,21 @@ const CHANNEL_LABELS: Record<string, string> = {
   none: '不通知',
 }
 
+const INSPECTION_CYCLE_LABELS: Record<string, string> = {
+  daily: '日巡检',
+  weekly: '周巡检',
+  monthly: '月巡检',
+  quarterly: '季度巡检',
+  yearly: '年度巡检',
+  custom: '自定义',
+}
+
+const INSPECTION_DEPTH_LABELS: Record<string, string> = {
+  quick: '快速',
+  standard: '标准',
+  deep: '深度',
+}
+
 export function cronScheduleLabel(expr?: string) {
   const value = String(expr || '').trim()
   const labels: Record<string, string> = {
@@ -34,6 +49,14 @@ export function cronScheduleLabel(expr?: string) {
     '0 9 * * 1': '每周一 09:00',
   }
   return labels[value] || value || '-'
+}
+
+export function inspectionCycleLabel(cycle?: string) {
+  return INSPECTION_CYCLE_LABELS[String(cycle || 'daily')] || cycle || '日巡检'
+}
+
+export function inspectionDepthLabel(depth?: string) {
+  return INSPECTION_DEPTH_LABELS[String(depth || 'standard')] || depth || '标准'
 }
 
 export function targetScopeLabel(scope?: string, value?: string | null) {

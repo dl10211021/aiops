@@ -169,7 +169,31 @@ SHARED_PARAMETER_TEMPLATES: dict[str, list[dict[str, Any]]] = {
             "type": "password",
             "required": False,
             "group": "network_cli",
-        }
+        },
+        _select_parameter(
+            "terminal_type",
+            "终端类型",
+            group="network_cli",
+            default="vt100",
+            options=[
+                ("VT100（推荐）", "vt100"),
+                ("xterm", "xterm"),
+                ("xterm-256color", "xterm-256color"),
+                ("ansi", "ansi"),
+            ],
+        ),
+        _boolean_parameter(
+            "allow_agent",
+            "启用 SSH Agent",
+            group="network_cli",
+            default=False,
+        ),
+        _boolean_parameter(
+            "look_for_keys",
+            "搜索本机默认密钥",
+            group="network_cli",
+            default=False,
+        ),
     ],
     "virtualization_shell": [
         _select_parameter(

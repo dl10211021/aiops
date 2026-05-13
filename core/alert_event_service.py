@@ -17,9 +17,18 @@ def list_alert_event_records(
     status: str | None = None,
     severity: str | None = None,
     host: str | None = None,
+    source_family: str | None = None,
+    automation_mode: str | None = None,
     limit: int = 200,
 ) -> list[dict[str, Any]]:
-    return list_alert_events(status=status, severity=severity, host=host, limit=limit)
+    return list_alert_events(
+        status=status,
+        severity=severity,
+        host=host,
+        source_family=source_family,
+        automation_mode=automation_mode,
+        limit=limit,
+    )
 
 
 def get_alert_event_record(alert_id: str) -> dict[str, Any]:

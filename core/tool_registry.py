@@ -351,8 +351,48 @@ def _register_builtin_tools() -> None:
             name="web_search",
             toolset="knowledge",
             scope="base",
-            description="本地知识库没有答案时，联网搜索实时资料、官方文档或社区方案；安装新 Skill 前应先用它检索可信来源。",
-            parameters=_obj({"query": {"type": "string"}}, ["query"]),
+            description="联网搜索实时资料、官方文档与社区方案。",
+            parameters=_obj(
+                {
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "description": "可选，返回结果上限（默认 5）。"},
+                },
+                ["query"],
+            ),
+        )
+    )
+    tool_registry.register(
+        ToolDefinition(
+            name="web_extractor",
+            toolset="knowledge",
+            scope="base",
+            description="从网页 URL 提取正文内容（底层对接 Hermes web_extract）。",
+            parameters=_obj(
+                {
+                    "url": {"type": "string", "description": "单个 URL（与 urls 二选一）。"},
+                    "urls": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "批量 URL 列表，最多 5 个。",
+                    },
+                },
+                [],
+            ),
+        )
+    )
+    tool_registry.register(
+        ToolDefinition(
+            name="web_research",
+            toolset="knowledge",
+            scope="base",
+            description="先搜索再抽取：调用 web_search 获取候选来源，并自动抽取前几个结果正文。",
+            parameters=_obj(
+                {
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "description": "可选，搜索结果上限（默认 5，最大 10）。"},
+                },
+                ["query"],
+            ),
         )
     )
     tool_registry.register(
@@ -896,7 +936,7 @@ def _hermes_safety_category(name: str) -> str:
         return "local_write"
     if name in {"execute_code", "process", "cronjob", "send_message", "text_to_speech"}:
         return "local_execute"
-    if name.startswith("browser_") or name in {"web_search", "vision_analyze"}:
+    if name.startswith("browser_") or name in {"web_search", "vision_analyze", "image_gen"}:
         return "external_read"
     if name in {"memory", "todo", "session_search", "read_file", "search_files", "skills_list", "skill_view"}:
         return "local_read"

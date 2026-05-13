@@ -47,9 +47,11 @@ async def run_single_heartbeat(sid, info, memory_db, dispatcher, trigger_msg=Non
             if "pending_messages" not in info:
                 info["pending_messages"] = []
             info["pending_messages"].append(final_msg)
+        return report
 
     except Exception as e:
         logger.error(f"Heartbeat execution failed for {sid}: {e}")
+        return None
 
     finally:
         info["heartbeat_in_progress"] = False

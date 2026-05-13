@@ -66,8 +66,10 @@ async def dispatch_security_headers(request: Request, call_next: CallNext) -> Re
         if header not in response.headers:
             response.headers[header] = value
     path = getattr(getattr(request, "url", None), "path", "")
-    if path.startswith("/assets/"):
+    if path.startswith("/assets/") and response.status_code < 400:
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "no-store"
     elif path == "/":
         response.headers["Cache-Control"] = "no-cache"
     return response

@@ -46,10 +46,19 @@ def cron_job_created_response_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def cron_jobs_response_kwargs(jobs: list[Any]) -> dict[str, Any]:
+def cron_jobs_response_kwargs(
+    jobs: list[Any],
+    pagination: dict[str, Any] | None = None,
+    metrics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    data: dict[str, Any] = {"jobs": jobs}
+    if pagination is not None:
+        data["pagination"] = pagination
+    if metrics is not None:
+        data["metrics"] = metrics
     return {
         "status": "success",
-        "data": {"jobs": jobs},
+        "data": data,
     }
 
 
@@ -76,6 +85,14 @@ def cron_job_run_trigger_response_kwargs(result: dict[str, Any]) -> dict[str, An
     }
 
 
+def cron_job_run_cancel_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "正在取消当前巡检运行",
+        "data": {"result": result},
+    }
+
+
 def inspection_runs_response_kwargs(runs: list[Any]) -> dict[str, Any]:
     return {
         "status": "success",
@@ -94,6 +111,14 @@ def inspection_run_response_kwargs(run: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "success",
         "data": {"run": run},
+    }
+
+
+def inspection_run_deleted_response_kwargs(run_id: str) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": f"巡检报告 {run_id} 已删除",
+        "data": {"run_id": run_id},
     }
 
 

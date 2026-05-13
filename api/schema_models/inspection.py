@@ -8,6 +8,7 @@ class InspectionTemplateStepPayload(BaseModel):
     title: str | None = None
     tool: str
     command: str | None = ""
+    command_candidates: list[str] = Field(default_factory=list)
     sql: str | None = ""
     path: str | None = ""
     oid: str | None = ""
@@ -28,6 +29,8 @@ class InspectionTemplatePayload(BaseModel):
 class CronAddRequest(BaseModel):
     cron_expr: str = "0 9 * * *"
     message: str = "执行每日系统深度体检，生成资源使用率报告并发送到群组。"
+    inspection_cycle: str = "daily"
+    inspection_depth: str = "standard"
     host: str = ""
     username: str = ""
     agent_profile: str = "default"

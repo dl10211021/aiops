@@ -28,6 +28,7 @@ BUILTIN_TOOL_DESCRIPTIONS: dict[str, str] = {
     "cronjob": "管理定时任务，默认受控。",
     "delegate_task": "委派子任务，暂未接入平台链路。",
     "execute_code": "执行 Python 脚本处理多步任务，默认受控。",
+    "image_gen": "根据文本提示生成图片。",
     "memory": "读写会话记忆，默认受控。",
     "patch": "对文件做精准补丁修改，默认受控。",
     "process": "管理后台进程，默认受控。",
@@ -41,6 +42,8 @@ BUILTIN_TOOL_DESCRIPTIONS: dict[str, str] = {
     "text_to_speech": "将文字转换为语音，默认受控。",
     "todo": "维护当前任务清单。",
     "vision_analyze": "分析图片内容。",
+    "web_extractor": "从网页 URL 抽取正文内容。",
+    "web_research": "先搜索再抽取网页正文，生成研究结果。",
     "web_search": "联网搜索资料。",
     "write_file": "写入仓库文件，默认受控。",
 }

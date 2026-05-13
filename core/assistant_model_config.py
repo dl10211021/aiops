@@ -36,10 +36,63 @@ def get_assistant_model_config() -> dict[str, Any]:
 
 def save_assistant_model_config(config: dict[str, Any]) -> dict[str, Any]:
     normalized = normalize_assistant_model_config(config)
+    from core.llm_factory import get_all_providers
+
+    normalized = clear_invalid_assistant_model_references_in_config(
+        normalized,
+        get_all_providers(),
+    )
+    write_assistant_model_config(normalized)
+    return normalized
+
+
+def write_assistant_model_config(config: dict[str, Any]) -> None:
     ASSISTANT_MODEL_CONFIG_PATH.write_text(
-        json.dumps(normalized, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(config, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+
+
+def valid_model_ids_from_providers(providers: list[dict[str, Any]]) -> set[str]:
+    model_ids: set[str] = set()
+    for provider in providers:
+        provider_id = str(provider.get("id") or "").strip()
+        if not provider_id:
+            continue
+        models = provider.get("models", "")
+        if isinstance(models, list):
+            model_names = [str(model).strip() for model in models]
+        else:
+            model_names = [part.strip() for part in str(models or "").split(",")]
+        model_ids.update(f"{provider_id}|{model}" for model in model_names if model)
+    return model_ids
+
+
+def clear_invalid_assistant_model_references_in_config(
+    config: dict[str, Any],
+    providers: list[dict[str, Any]],
+) -> dict[str, Any]:
+    item = normalize_assistant_model_config(config)
+    valid_model_ids = valid_model_ids_from_providers(providers)
+
+    for key in ("main_model_id", "model_id"):
+        model_id = str(item.get(key) or "").strip()
+        if model_id and model_id not in valid_model_ids:
+            item[key] = ""
+
+    if not item.get("model_id") and item.get("enabled"):
+        item["enabled"] = False
+
+    return item
+
+
+def clear_invalid_assistant_model_references(providers: list[dict[str, Any]]) -> dict[str, Any]:
+    config = get_assistant_model_config()
+    normalized = clear_invalid_assistant_model_references_in_config(config, providers)
+
+    if normalized == config:
+        return config
+    write_assistant_model_config(normalized)
     return normalized
 
 

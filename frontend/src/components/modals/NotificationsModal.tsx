@@ -1,8 +1,9 @@
 import { ChannelSection, Field, notificationInputClass } from './NotificationChannelSection'
-import { useNotificationConfig } from './useNotificationConfig'
+import { type NotificationChannelStatus, useNotificationConfig } from './useNotificationConfig'
 
 export default function NotificationsModal() {
   const {
+    channels,
     closeModal,
     config,
     error,
@@ -40,6 +41,8 @@ export default function NotificationsModal() {
             </div>
           ) : (
             <div className="space-y-4">
+              <NotificationChannelSummary channels={channels} />
+
               <ChannelSection
                 title="企业微信"
                 description="适合运维群即时提醒，支持巡检失败、告警升级和审批通知。"
@@ -94,4 +97,55 @@ export default function NotificationsModal() {
       </div>
     </div>
   )
+}
+
+function NotificationChannelSummary({ channels }: { channels: NotificationChannelStatus[] }) {
+  if (!channels.length) return null
+  const readyCount = channels.filter((channel) => channel.ready).length
+  const wechat = channels.find((channel) => channel.channel === 'wechat')
+  return (
+    <section className="ops-data-panel p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-ops-text">通知通道中心</div>
+          <div className="mt-1 text-xs leading-5 text-ops-subtext">
+            当前 {readyCount}/{channels.length} 个通道可用
+            {wechat ? `，企业微信：${channelStatusLabel(wechat.status)}` : ''}
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {channels.map((channel) => (
+            <div key={channel.channel} className="rounded border border-ops-surface0 bg-ops-dark/30 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-ops-text">{channel.label}</span>
+                <span className={`rounded px-1.5 py-0.5 text-[10px] ${channelStatusClass(channel.status)}`}>
+                  {channelStatusLabel(channel.status)}
+                </span>
+              </div>
+              <div className="mt-2 min-h-10 text-[11px] leading-5 text-ops-subtext">
+                {channel.message}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function channelStatusClass(status: string) {
+  const normalized = String(status || '').toLowerCase()
+  if (normalized === 'ready') return 'bg-ops-success/10 text-ops-success'
+  if (normalized === 'missing_config') return 'bg-ops-accent/10 text-ops-accent'
+  if (normalized === 'disabled') return 'bg-ops-surface0 text-ops-overlay'
+  return 'bg-ops-alert/10 text-ops-alert'
+}
+
+function channelStatusLabel(status: string) {
+  const normalized = String(status || '').toLowerCase()
+  return {
+    ready: '可用',
+    missing_config: '未配置',
+    disabled: '未启用',
+  }[normalized] || status || '-'
 }
