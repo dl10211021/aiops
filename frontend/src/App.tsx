@@ -89,6 +89,7 @@ const loadObservabilityCenter = () => import('@/components/views/ObservabilityCe
 const loadSystemConfigCenter = () => import('@/components/views/SystemConfigCenter')
 const loadConnectionModal = () => import('@/components/modals/ConnectionModal')
 const loadNotificationsModal = () => import('@/components/modals/NotificationsModal')
+const loadModelSettingsModal = () => import('@/components/modals/ModelSettingsModal')
 const loadSessionRetentionConfigModal = () => import('@/components/modals/SessionRetentionConfigModal')
 const loadDynamicSkillsModal = () => import('@/components/modals/DynamicSkillsModal')
 const loadSessionActionsModal = () => import('@/components/modals/SessionActionsModal')
@@ -108,6 +109,7 @@ const ObservabilityCenter = lazyWithChunkRecovery(loadObservabilityCenter)
 const SystemConfigCenter = lazyWithChunkRecovery(loadSystemConfigCenter)
 const ConnectionModal = lazyWithChunkRecovery(loadConnectionModal)
 const NotificationsModal = lazyWithChunkRecovery(loadNotificationsModal)
+const ModelSettingsModal = lazyWithChunkRecovery(loadModelSettingsModal)
 const SessionRetentionConfigModal = lazyWithChunkRecovery(loadSessionRetentionConfigModal)
 const DynamicSkillsModal = lazyWithChunkRecovery(loadDynamicSkillsModal)
 const SessionActionsModal = lazyWithChunkRecovery(loadSessionActionsModal)
@@ -226,6 +228,7 @@ function ModalRouter() {
       <Suspense fallback={<ModalFallback />}>
         {activeModal === 'connect' && <ConnectionModal />}
         {activeModal === 'notifications' && <NotificationsModal />}
+        {activeModal === 'model-settings' && <ModelSettingsModal />}
         {activeModal === 'session-retention' && <SessionRetentionConfigModal />}
         {activeModal === 'safety-policy' && <SafetyPolicyModal />}
         {activeModal === 'dynamic-skills' && <DynamicSkillsModal />}

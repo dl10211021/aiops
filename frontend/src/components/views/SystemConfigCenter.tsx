@@ -3,6 +3,15 @@ import { useStore } from '@/store'
 
 const CONFIG_CARDS = [
   {
+    id: 'model',
+    eyebrow: '模型运行',
+    title: '模型配置',
+    description: '管理模型供应商、主会话模型、辅助思维模型和后台任务模型选择。',
+    action: '打开模型配置',
+    modal: 'model-settings',
+    stats: ['模型供应商', '主会话模型', '辅助思维模型'],
+  },
+  {
     id: 'safety',
     eyebrow: '安全边界',
     title: '安全策略',
