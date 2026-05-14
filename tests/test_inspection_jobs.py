@@ -506,21 +506,27 @@ class TestInspectionJobs(unittest.TestCase):
             ):
                 started = await CronManager.start_job_now(job_id)
                 run = inspection_results.get_run(started["run_id"])
+                job_state = CronManager.get_job(job_id)
                 release.set()
                 for _ in range(100):
                     completed = inspection_results.get_run(started["run_id"])
                     if completed and completed["status"] == "completed":
-                        return started, run, completed
+                        return started, run, job_state, completed
                     await asyncio.sleep(0.01)
                 raise AssertionError("background run did not finish")
 
-        started, running, completed = asyncio.run(run_case())
+        started, running, job_state, completed = asyncio.run(run_case())
 
         self.assertEqual(started["status"], "accepted")
         self.assertIsNotNone(started["run_id"])
+        self.assertEqual(started["progress_total"], 1)
+        self.assertIn(started["current_stage"], {"starting", "target_running"})
         self.assertEqual(running["status"], "running")
         self.assertIn(running["targets"][0]["status"], {"pending", "running"})
         self.assertTrue(running["events"])
+        self.assertTrue(job_state["run_state"]["running"])
+        self.assertEqual(job_state["run_state"]["progress_total"], 1)
+        self.assertIn(job_state["run_state"]["current_stage"], {"starting", "target_running"})
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(completed["notification"]["status"], "SKIPPED")
 
@@ -553,17 +559,19 @@ class TestInspectionJobs(unittest.TestCase):
         self.assertEqual(result["status"], "running")
         self.assertEqual(result["run_id"], "run-existing")
         self.assertEqual(result["message"], "该计划已有巡检正在执行。")
+        self.assertEqual(result["progress_percent"], 0)
 
     def test_trigger_uses_selected_skills_instead_of_entire_registry(self):
         from connections.ssh_manager import ssh_manager
         from core import cron_manager
         from core.dispatcher import dispatcher
 
+        valid_report = "## 检查项明细表\n" + ("检查项 执行方式 命令 SQL API 证据 风险 建议 原始\n" * 20)
         with (
             patch.object(dispatcher, "skills_registry", {"selected-skill": {}, "other-skill": {}}),
             patch.object(ssh_manager, "connect", return_value={"success": True, "session_id": "sid-cron-skill"}) as connect,
             patch.object(ssh_manager, "disconnect") as disconnect,
-            patch("core.agent.headless_agent_chat", new_callable=AsyncMock, return_value="ok") as headless,
+            patch("core.agent.headless_agent_chat", new_callable=AsyncMock, return_value=valid_report) as headless,
         ):
             result = asyncio.run(
                 cron_manager._trigger_proactive_inspection(
@@ -577,7 +585,7 @@ class TestInspectionJobs(unittest.TestCase):
                 )
             )
 
-        self.assertEqual(result, "ok")
+        self.assertEqual(result, valid_report)
         self.assertEqual(connect.call_args.kwargs["active_skills"], ["selected-skill"])
         self.assertNotIn("other-skill", connect.call_args.kwargs["active_skills"])
         headless.assert_awaited_once()
@@ -589,11 +597,12 @@ class TestInspectionJobs(unittest.TestCase):
         from core import cron_manager
         from core.dispatcher import dispatcher
 
+        valid_report = "## 检查项明细表\n" + ("检查项 执行方式 命令 SQL API 证据 风险 建议 原始\n" * 20)
         with (
             patch.object(dispatcher, "skills_registry", {}),
             patch.object(ssh_manager, "connect", return_value={"success": True, "session_id": "sid-cron-cycle"}),
             patch.object(ssh_manager, "disconnect"),
-            patch("core.agent.headless_agent_chat", new_callable=AsyncMock, return_value="ok") as headless,
+            patch("core.agent.headless_agent_chat", new_callable=AsyncMock, return_value=valid_report) as headless,
         ):
             asyncio.run(
                 cron_manager._trigger_proactive_inspection(
@@ -608,11 +617,59 @@ class TestInspectionJobs(unittest.TestCase):
                 )
             )
 
-        prompt = headless.await_args.args[1]
+        prompt = headless.await_args_list[0].args[1]
         self.assertIn("巡检周期：月巡检", prompt)
         self.assertIn("巡检深度：深度巡检", prompt)
         self.assertIn("容量预测", prompt)
         self.assertIn("最近 30 天", prompt)
+        self.assertIn("巡检报告输出要求", prompt)
+        self.assertIn("不允许只写", prompt)
+        self.assertIn("检查项明细表", prompt)
+        self.assertIn("原始证据摘录", prompt)
+
+    def test_trigger_rewrites_overly_thin_inspection_report(self):
+        from connections.ssh_manager import ssh_manager
+        from core import cron_manager
+        from core.dispatcher import dispatcher
+
+        thin_report = "巡检任务已完成。所有 9 项检查项全部执行完毕，上述报告可直接归档至巡检计划。"
+        detailed_report = (
+            "## 检查项明细表\n"
+            "| 检查项 | 执行方式 | 关键输出摘要 | 状态 | 风险等级 | 结论 | 建议 |\n"
+            "| CPU 与负载 | `uptime; top -bn1` | load average 0.12, 0.10, 0.08 | 正常 | P3 | 负载正常 | 持续观察 |\n"
+            "| 内存 | `free -m` | available 2048 MB | 正常 | P3 | 内存充足 | 周巡检复核 |\n"
+            "| 磁盘容量 | `df -h` | / 使用率 42% | 正常 | P3 | 容量充足 | 周巡检复核 |\n"
+            "| 关键服务 | `systemctl --failed` | 0 loaded units listed | 正常 | P3 | 无失败服务 | 保持监控 |\n"
+            "\n## 风险与异常\n"
+            "- P3：当前未发现立即处置风险。\n"
+            "\n## 原始证据摘录\n"
+            "- `df -h`: /dev/vda1 42% mounted on /\n"
+            "- `systemctl --failed`: 0 loaded units listed\n"
+            "\n## 总结建议\n"
+            "- 保持日巡检，下一次重点复核磁盘增长趋势。\n"
+        )
+
+        with (
+            patch.object(dispatcher, "skills_registry", {}),
+            patch.object(ssh_manager, "connect", return_value={"success": True, "session_id": "sid-cron-rewrite"}),
+            patch.object(ssh_manager, "disconnect"),
+            patch("core.agent.headless_agent_chat", new_callable=AsyncMock, side_effect=[thin_report, detailed_report]) as headless,
+        ):
+            result = asyncio.run(
+                cron_manager._trigger_proactive_inspection(
+                    job_id="test_job_rewrite_prompt",
+                    host="10.0.0.10",
+                    agent_profile="default",
+                    message="inspect",
+                    username="root",
+                    password="secret",
+                )
+            )
+
+        self.assertEqual(result, detailed_report)
+        self.assertEqual(headless.await_count, 2)
+        self.assertIn("重新输出完整巡检报告", headless.await_args_list[1].args[1])
+        self.assertIn("检查项明细表", headless.await_args_list[1].args[1])
 
     def test_job_skills_override_asset_default_skills_for_scope_runs(self):
         from core import inspection_results
@@ -792,6 +849,103 @@ class TestInspectionJobs(unittest.TestCase):
         self.assertEqual(deleted.status, "success")
         self.assertEqual(deleted.data["run_id"], run["id"])
         self.assertEqual(remaining, [])
+
+    def test_inspection_runs_route_supports_search_status_and_pagination(self):
+        from core import inspection_results
+
+        with patch.object(inspection_results, "INSPECTION_RUN_STORE_PATH", self._run_store_path("runs_page")):
+            inspection_results.record_run(
+                job_id="job-linux",
+                status="completed",
+                target_scope="asset",
+                scope_value="1",
+                message="linux report",
+                targets=[{"host": "linux01", "status": "success"}],
+            )
+            failed = inspection_results.record_run(
+                job_id="job-oracle",
+                status="failed",
+                target_scope="asset",
+                scope_value="2",
+                message="oracle tablespace report",
+                targets=[{"host": "oracle01", "status": "error", "asset_id": 2}],
+            )
+            inspection_results.record_run(
+                job_id="job-oracle",
+                status="completed",
+                target_scope="asset",
+                scope_value="3",
+                message="oracle backup report",
+                targets=[{"host": "oracle02", "status": "success", "asset_id": 3}],
+            )
+
+            response = asyncio.run(
+                inspection_run_routes.list_inspection_runs(
+                    page=1,
+                    page_size=1,
+                    query="oracle",
+                    status="failed",
+                )
+            )
+
+        self.assertEqual(response.data["runs"][0]["id"], failed["id"])
+        self.assertEqual(response.data["pagination"]["total"], 2)
+        self.assertEqual(response.data["pagination"]["filtered_total"], 1)
+        self.assertEqual(response.data["pagination"]["page_size"], 1)
+        self.assertEqual(response.data["metrics"]["failed"], 1)
+        self.assertEqual(response.data["metrics"]["completed"], 1)
+
+    def test_inspection_run_retention_preview_is_dry_run(self):
+        from core import inspection_results
+
+        with patch.object(inspection_results, "INSPECTION_RUN_STORE_PATH", self._run_store_path("retention_preview")):
+            newest = inspection_results.record_run(
+                job_id="job-retention",
+                status="completed",
+                target_scope="asset",
+                scope_value="1",
+                message="newest report",
+                targets=[{"host": "linux01", "status": "success"}],
+                started_at="2026-05-13T00:00:00+00:00",
+                completed_at="2026-05-13T00:01:00+00:00",
+            )
+            older = inspection_results.record_run(
+                job_id="job-retention",
+                status="failed",
+                target_scope="asset",
+                scope_value="2",
+                message="older report",
+                targets=[{"host": "linux02", "status": "error"}],
+                started_at="2026-01-01T00:00:00+00:00",
+                completed_at="2026-01-01T00:01:00+00:00",
+            )
+            inspection_results.record_run(
+                job_id="job-retention",
+                status="running",
+                target_scope="asset",
+                scope_value="3",
+                message="running report",
+                targets=[{"host": "linux03", "status": "running"}],
+                started_at="2026-01-01T00:00:00+00:00",
+            )
+
+            response = asyncio.run(
+                inspection_run_routes.preview_inspection_run_retention_policy(
+                    keep_latest_per_job=1,
+                    older_than_days=30,
+                    limit=10,
+                )
+            )
+            remaining = inspection_results.list_runs(job_id="job-retention", limit=10)
+
+        preview = response.data["preview"]
+        self.assertTrue(preview["policy"]["dry_run"])
+        self.assertGreaterEqual(preview["summary"]["candidate_count_total"], 1)
+        self.assertEqual(preview["summary"]["skipped_running"], 1)
+        self.assertIn(older["id"], {candidate["id"] for candidate in preview["candidates"]})
+        self.assertNotIn(newest["id"], {candidate["id"] for candidate in preview["candidates"]})
+        self.assertIn(newest["id"], {run["id"] for run in remaining})
+        self.assertIn(older["id"], {run["id"] for run in remaining})
 
     def test_delete_missing_inspection_run_report_maps_to_404(self):
         from fastapi import HTTPException
@@ -1134,9 +1288,18 @@ class TestInspectionJobs(unittest.TestCase):
             notification_channel="wechat",
         )
 
+        detailed_report = (
+            "## 检查项明细表\n"
+            "| 检查项 | 执行方式 | 关键输出摘要 | 状态 | 风险等级 | 结论 | 建议 |\n"
+            "| CPU 与负载 | `uptime; top -bn1` | load average 0.12, 0.10, 0.08 | 正常 | P3 | 负载正常 | 持续观察 |\n"
+            "| 磁盘容量 | `df -h` | / 使用率 42% | 正常 | P3 | 容量充足 | 周巡检复核 |\n"
+            "\n## 原始证据摘录\n"
+            "- `df -h`: /dev/vda1 42% mounted on /\n"
+        )
+
         with (
             patch.object(inspection_results, "INSPECTION_RUN_STORE_PATH", self._run_store_path("notify")),
-            patch("core.cron_manager._trigger_proactive_inspection", new_callable=AsyncMock, return_value="inspection ok"),
+            patch("core.cron_manager._trigger_proactive_inspection", new_callable=AsyncMock, return_value=detailed_report),
             patch("core.notifier.send_notification", return_value={"status": "SUCCESS", "message": "sent"}) as send_notification,
         ):
             result = asyncio.run(CronManager.run_job_now(job_id))
@@ -1150,7 +1313,10 @@ class TestInspectionJobs(unittest.TestCase):
         channel, title, content = send_notification.call_args.args
         self.assertEqual(channel, "wechat")
         self.assertIn("10.0.0.10", title)
-        self.assertIn("inspection ok", content)
+        self.assertIn("## 巡检结果节选", content)
+        self.assertIn("检查项明细表", content)
+        self.assertIn("`df -h`", content)
+        self.assertNotIn("## 摘要", content)
 
     def test_dashboard_inspection_trend_reports_success_rate_and_duration(self):
         from core import inspection_results

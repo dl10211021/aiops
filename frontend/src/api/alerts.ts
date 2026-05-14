@@ -1,4 +1,4 @@
-import type { AlertEvent } from '@/types'
+import type { AlertAutomationPolicy, AlertAutomationPolicyTestResult, AlertEvent, AlertWorkflow } from '@/types'
 import { request } from './http'
 
 export async function getAlertEvents(params: {
@@ -37,5 +37,40 @@ export async function sendAlertWebhook(payload: Record<string, unknown>) {
   return request<{ alert: AlertEvent | null; alerts?: AlertEvent[]; injected_count: number }>('/webhook/alert', {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+export async function getAlertPolicy() {
+  return request<{ policy: AlertAutomationPolicy }>('/alerts/policy')
+}
+
+export async function updateAlertPolicy(policy: AlertAutomationPolicy) {
+  return request<{ policy: AlertAutomationPolicy }>('/alerts/policy', {
+    method: 'POST',
+    body: JSON.stringify({ policy }),
+  })
+}
+
+export async function testAlertPolicy(payload: Record<string, unknown>) {
+  return request<{ result: AlertAutomationPolicyTestResult }>('/alerts/policy/test', {
+    method: 'POST',
+    body: JSON.stringify({ payload }),
+  })
+}
+
+export async function getAlertWorkflow(alertId: string) {
+  return request<{ workflow: AlertWorkflow }>(`/alerts/${alertId}/workflow`)
+}
+
+export async function appendAlertWorkflowMessage(alertId: string, payload: { role?: string; content: string }) {
+  return request<{ workflow: AlertWorkflow }>(`/alerts/${alertId}/workflow/messages`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function runAlertWorkflowReadonly(alertId: string) {
+  return request<{ workflow: AlertWorkflow; injected_count: number }>(`/alerts/${alertId}/workflow/run-readonly`, {
+    method: 'POST',
   })
 }

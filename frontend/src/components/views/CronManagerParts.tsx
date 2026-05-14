@@ -25,6 +25,8 @@ interface CronJobCardProps {
   onOpenReport: (run: InspectionRun) => void
   onPauseResume: (job: CronJob) => void
   onRunNow: (job: CronJob) => void
+  onSelectChange?: (job: CronJob, selected: boolean) => void
+  selected?: boolean
 }
 
 export function CronJobCard({
@@ -42,12 +44,26 @@ export function CronJobCard({
   onOpenReport,
   onPauseResume,
   onRunNow,
+  onSelectChange,
+  selected = false,
 }: CronJobCardProps) {
   return (
     <div className="ops-data-panel p-4 transition-all hover:border-ops-accent/40">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
+            {onSelectChange && (
+              <label className="flex items-center gap-1.5 rounded border border-ops-surface0 bg-ops-dark/25 px-2 py-0.5 text-[11px] text-ops-overlay">
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={(event) => onSelectChange(job, event.target.checked)}
+                  className="h-3.5 w-3.5 accent-ops-accent"
+                  aria-label={`选择巡检计划 ${job.id}`}
+                />
+                选择
+              </label>
+            )}
             <span className="ops-control px-2 py-0.5 text-xs text-ops-accent" title={job.cron_expr || ''}>{cronScheduleLabel(job.cron_expr)}</span>
             <span className={`rounded px-2 py-0.5 text-[11px] ${job.status === 'paused' ? 'bg-ops-alert/15 text-ops-alert' : 'bg-ops-success/15 text-ops-success'}`}>
               {job.status === 'paused' ? '已暂停' : '已调度'}
@@ -97,9 +113,7 @@ export function CronJobCard({
             </div>
           )}
           {running && (
-            <div className="mt-3 rounded border border-ops-accent/25 bg-ops-accent/10 px-3 py-2 text-xs leading-5 text-ops-accent">
-              当前巡检正在执行，后端会持续写入运行记录；需要停止本次执行时可取消当前巡检。
-            </div>
+            <CronRuntimeProgress job={job} />
           )}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -141,6 +155,31 @@ export function CronJobCard({
         onDeleteReport={onDeleteReport}
         onOpenReport={onOpenReport}
       />
+    </div>
+  )
+}
+
+function CronRuntimeProgress({ job }: { job: CronJob }) {
+  const runState = job.run_state
+  const percent = clampProgress(runState?.progress_percent)
+  const total = Math.max(0, Number(runState?.progress_total || 0))
+  const current = Math.max(0, Number(runState?.progress_current || 0))
+  const currentTarget = runState?.current_target
+  const targetLabel = currentTarget?.host || (currentTarget?.asset_id ? `#${currentTarget.asset_id}` : '')
+  return (
+    <div className="mt-3 rounded border border-ops-accent/25 bg-ops-accent/10 px-3 py-2 text-xs leading-5 text-ops-accent">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-semibold">{runtimeStageLabel(runState?.current_stage)}</span>
+        <span className="font-mono text-[11px]">{total > 0 ? `${current}/${total}` : '准备中'} · {percent}%</span>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded bg-ops-dark/70">
+        <div className="h-full rounded bg-ops-accent transition-all" style={{ width: `${percent}%` }} />
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ops-subtext">
+        <span>{runState?.runtime_message || '当前巡检正在执行，后端会持续写入运行记录。'}</span>
+        {targetLabel && <span>当前目标：{targetLabel}</span>}
+        {runState?.elapsed_ms ? <span>已运行：{formatDuration(runState.elapsed_ms)}</span> : null}
+      </div>
     </div>
   )
 }
@@ -189,6 +228,34 @@ function runStateTone(status?: string | null): 'default' | 'success' | 'alert' |
   if (['failed', 'cancelled', 'orphaned'].includes(normalized)) return 'alert'
   if (['running', 'partial'].includes(normalized)) return 'accent'
   return 'default'
+}
+
+function runtimeStageLabel(stage?: string | null) {
+  const normalized = String(stage || '').toLowerCase()
+  return {
+    starting: '启动巡检',
+    target_running: '目标巡检中',
+    target_completed: '目标完成',
+    target_failed: '目标失败',
+    cancelling: '取消中',
+    finished: '运行结束',
+  }[normalized] || '巡检执行中'
+}
+
+function clampProgress(value?: number | null) {
+  const parsed = Number(value || 0)
+  if (!Number.isFinite(parsed)) return 0
+  return Math.max(0, Math.min(100, Math.round(parsed)))
+}
+
+function formatDuration(ms: number) {
+  const seconds = Math.max(0, Math.floor(Number(ms || 0) / 1000))
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  if (minutes < 60) return `${minutes}m ${rest}s`
+  const hours = Math.floor(minutes / 60)
+  return `${hours}h ${minutes % 60}m`
 }
 
 export function CronEmptyState({ onCreate }: { onCreate: () => void }) {

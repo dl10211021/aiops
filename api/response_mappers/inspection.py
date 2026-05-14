@@ -93,10 +93,19 @@ def cron_job_run_cancel_response_kwargs(result: dict[str, Any]) -> dict[str, Any
     }
 
 
-def inspection_runs_response_kwargs(runs: list[Any]) -> dict[str, Any]:
+def inspection_runs_response_kwargs(
+    runs: list[Any],
+    pagination: dict[str, Any] | None = None,
+    metrics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    data = {"runs": runs}
+    if pagination is not None:
+        data["pagination"] = pagination
+    if metrics is not None:
+        data["metrics"] = metrics
     return {
         "status": "success",
-        "data": {"runs": runs},
+        "data": data,
     }
 
 
@@ -104,6 +113,14 @@ def inspection_run_summary_response_kwargs(summary: dict[str, Any]) -> dict[str,
     return {
         "status": "success",
         "data": {"summary": summary},
+    }
+
+
+def inspection_run_retention_preview_response_kwargs(preview: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "巡检报告归档策略预览已生成，未执行删除。",
+        "data": {"preview": preview},
     }
 
 

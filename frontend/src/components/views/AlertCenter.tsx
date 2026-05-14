@@ -1,20 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getAlertEvents, sendAlertWebhook, updateAlertEvent } from '@/api/client'
-import PageHeader from '@/components/layout/PageHeader'
 import { useStore } from '@/store'
 import {
+  AlertConsoleHeader,
   AlertDetail,
   AlertEmptyState,
   AlertFilters,
-  AlertIntegrationPanel,
-  AlertMetric,
   AlertQueueList,
 } from './AlertCenterParts'
+import { AlertPolicyDrawer } from './AlertPolicyDrawer'
 import type { AlertEvent, AlertEventStatus } from '@/types'
 
 export default function AlertCenter() {
   const addToast = useStore((s) => s.addToast)
-  const [status, setStatus] = useState<AlertEventStatus | 'all'>('open')
+  const [status, setStatus] = useState<AlertEventStatus | 'all'>('all')
   const [severity, setSeverity] = useState('all')
   const [host, setHost] = useState('')
   const [sourceFamily, setSourceFamily] = useState('all')
@@ -25,6 +24,7 @@ export default function AlertCenter() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [testingWebhook, setTestingWebhook] = useState(false)
+  const [policyOpen, setPolicyOpen] = useState(false)
   const [error, setError] = useState('')
   const [assignee, setAssignee] = useState(() => localStorage.getItem('OPSCORE_OPERATOR') || 'user')
   const [note, setNote] = useState('')
@@ -85,6 +85,14 @@ export default function AlertCenter() {
     }
     return { byStatus, bySeverity, total: allAlerts.length }
   }, [allAlerts])
+
+  const resetFilters = useCallback(() => {
+    setStatus('all')
+    setSeverity('all')
+    setHost('')
+    setSourceFamily('all')
+    setAutomationMode('all')
+  }, [])
 
   const handleUpdate = async (alert: AlertEvent, nextStatus?: AlertEventStatus) => {
     if (!assignee.trim()) {
@@ -153,28 +161,10 @@ export default function AlertCenter() {
   return (
     <div className="ops-page">
       <div className="ops-page-inner">
-        <PageHeader
-          eyebrow="告警事件台"
-          title="告警事件"
-          description="集中处理外部告警，跟踪负责人、处置备注和事件闭环状态。"
-          actions={(
-            <button
-              onClick={() => void load()}
-              className="ops-control rounded-lg px-4 py-2 text-sm font-semibold"
-            >
-              刷新
-            </button>
-          )}
-        />
-
-        <div className="mb-5 grid gap-3 md:grid-cols-4">
-          <AlertMetric label="未处理" value={summary.byStatus.open || 0} tone="red" />
-          <AlertMetric label="处理中" value={summary.byStatus.acknowledged || 0} tone="amber" />
-          <AlertMetric label="已关闭" value={summary.byStatus.closed || 0} tone="green" />
-          <AlertMetric label="全部事件" value={summary.total} tone="slate" />
-        </div>
-
-        <AlertIntegrationPanel
+        <AlertConsoleHeader
+          summary={summary}
+          onOpenPolicy={() => setPolicyOpen(true)}
+          onRefresh={() => void load()}
           webhookUrl={webhookUrl}
           testing={testingWebhook}
           onCopy={handleCopyWebhookUrl}
@@ -192,6 +182,7 @@ export default function AlertCenter() {
           onHostChange={setHost}
           onSourceFamilyChange={setSourceFamily}
           onAutomationModeChange={setAutomationMode}
+          onReset={resetFilters}
         />
 
         {error && (
@@ -201,7 +192,7 @@ export default function AlertCenter() {
         )}
 
         {loading || alerts.length > 0 ? (
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(360px,0.95fr)_minmax(520px,1.35fr)] xl:items-start">
             <AlertQueueList
               alerts={alerts}
               selectedAlert={selectedAlert}
@@ -221,16 +212,11 @@ export default function AlertCenter() {
           </div>
         ) : (
           <AlertEmptyState
-            onReset={() => {
-              setStatus('open')
-              setSeverity('all')
-              setHost('')
-              setSourceFamily('all')
-              setAutomationMode('all')
-            }}
+            onReset={resetFilters}
             onRefresh={() => void load()}
           />
         )}
+        <AlertPolicyDrawer open={policyOpen} onClose={() => setPolicyOpen(false)} />
       </div>
     </div>
   )

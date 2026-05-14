@@ -32,9 +32,11 @@ export function useCronJobActions({
   const [showEditor, setShowEditor] = useState(false)
   const [form, setForm] = useState<CronForm>(emptyCronForm)
   const [busyJobId, setBusyJobId] = useState<string | null>(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null)
   const [deletingRunId, setDeletingRunId] = useState<string | null>(null)
   const [reportRunId, setReportRunId] = useState<string | null>(null)
+  const [cancelRunTarget, setCancelRunTarget] = useState<CronJob | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CronJob | null>(null)
   const [runNowTarget, setRunNowTarget] = useState<CronJob | null>(null)
 
@@ -122,6 +124,63 @@ export function useCronJobActions({
     }
   }
 
+  const handleBulkPause = async (jobs: CronJob[]) => {
+    const targets = jobs.filter((job) => job.status !== 'paused')
+    if (targets.length === 0) {
+      addToast('选中的计划都已经是暂停状态', 'error')
+      return
+    }
+    setBulkBusy(true)
+    try {
+      const results = await Promise.allSettled(targets.map((job) => pauseCronJob(job.id)))
+      const failed = results.filter((result) => result.status === 'rejected').length
+      await loadJobs()
+      addToast(failed ? `已暂停 ${targets.length - failed} 个计划，${failed} 个失败` : `已暂停 ${targets.length} 个计划`, failed ? 'error' : 'success')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  const handleBulkResume = async (jobs: CronJob[]) => {
+    const targets = jobs.filter((job) => job.status === 'paused')
+    if (targets.length === 0) {
+      addToast('选中的计划都已经是调度状态', 'error')
+      return
+    }
+    setBulkBusy(true)
+    try {
+      const results = await Promise.allSettled(targets.map((job) => resumeCronJob(job.id)))
+      const failed = results.filter((result) => result.status === 'rejected').length
+      await loadJobs()
+      addToast(failed ? `已恢复 ${targets.length - failed} 个计划，${failed} 个失败` : `已恢复 ${targets.length} 个计划`, failed ? 'error' : 'success')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  const handleBulkDelete = async (jobs: CronJob[]) => {
+    const running = jobs.filter((job) => job.run_state?.running)
+    if (running.length > 0) {
+      addToast('选中计划里有正在巡检的任务，请先取消或等待结束后再删除', 'error')
+      return false
+    }
+    if (jobs.length === 0) return false
+    const ok = window.confirm(`确认删除选中的 ${jobs.length} 个巡检计划？已有运行记录和报告不会自动删除。`)
+    if (!ok) return false
+    setBulkBusy(true)
+    try {
+      const results = await Promise.allSettled(jobs.map((job) => deleteCronJob(job.id)))
+      const failed = results.filter((result) => result.status === 'rejected').length
+      const deletedIds = new Set(jobs.filter((_, index) => results[index]?.status === 'fulfilled').map((job) => job.id))
+      setJobs((current) => current.filter((job) => !deletedIds.has(job.id)))
+      await loadJobs()
+      addToast(failed ? `已删除 ${deletedIds.size} 个计划，${failed} 个失败` : `已删除 ${deletedIds.size} 个计划`, failed ? 'error' : 'success')
+      return failed === 0
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
   const handleRunNowConfirmed = async () => {
     const target = runNowTarget
     if (!target) return
@@ -147,6 +206,7 @@ export function useCronJobActions({
     setCancellingJobId(job.id)
     try {
       await cancelCronJobRun(job.id)
+      setCancelRunTarget(null)
       addToast('已提交取消请求，运行记录会更新为已取消', 'success')
       await loadJobs()
     } catch (e: unknown) {
@@ -182,12 +242,17 @@ export function useCronJobActions({
 
   return {
     busyJobId,
+    bulkBusy,
     cancellingJobId,
+    cancelRunTarget,
     closeReport,
     deleteTarget,
     deletingRunId,
     form,
     handleDeleteConfirmed,
+    handleBulkDelete,
+    handleBulkPause,
+    handleBulkResume,
     handleCancelRunningRun,
     handleDeleteReport,
     handlePauseResume,
@@ -200,6 +265,7 @@ export function useCronJobActions({
     runNowTarget,
     selectAsset,
     setDeleteTarget,
+    setCancelRunTarget,
     setRunNowTarget,
     setShowEditor,
     setForm,

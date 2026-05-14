@@ -9,7 +9,8 @@ from typing import Any, Awaitable
 from core import dispatcher as dispatcher_module
 from core import heartbeat as heartbeat_module
 from core import memory as memory_module
-from core.alert_events import create_alert_events
+from core.alert_events import create_alert_events, update_alert_event
+from core.alert_workflows import ensure_alert_workflow
 from core.notification_config import build_notification_channel_statuses
 
 
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 NO_ACTIVE_ALERT_MESSAGE = "告警已接收，但目前无人值守，已记录日志。"
 RECORD_ONLY_ALERT_MESSAGE = "告警已接收，按降噪策略仅记录，不自动启动 AI。"
+FORWARDED_ALERT_MESSAGE = "告警已接收，处于 AI 降噪窗口内，本次仅转发通知。"
 ACTIVE_ALERT_MESSAGE_TEMPLATE = "告警已成功推送到 {count} 个值班中的 AI 大脑中，并已唤醒 AI 进行排查！"
 
 
@@ -62,6 +64,10 @@ def _should_notify(alert_event: dict[str, Any]) -> bool:
     if isinstance(decision, dict):
         return bool(decision.get("notify"))
     return False
+
+
+def _should_forward_without_ai(alert_event: dict[str, Any]) -> bool:
+    return _should_notify(alert_event) and not _should_run_ai(alert_event)
 
 
 def _automation_summary(alert_events: list[dict[str, Any]], ai_alerts: list[dict[str, Any]]) -> dict[str, Any]:
@@ -146,6 +152,28 @@ def build_alert_analysis_notification(alert_events: list[dict[str, Any]], sessio
     return title, "\n".join(lines)
 
 
+def build_alert_forward_notification(alert_events: list[dict[str, Any]]) -> tuple[str, str]:
+    primary = alert_events[0]
+    decision = primary.get("automation_decision") if isinstance(primary.get("automation_decision"), dict) else {}
+    cooldown = decision.get("ai_cooldown") if isinstance(decision.get("ai_cooldown"), dict) else {}
+    title = f"告警已降噪转发：{primary.get('alert_name') or '系统告警'}"
+    lines = [
+        f"- 来源: `{primary.get('source_family') or primary.get('source_type') or '-'}`",
+        f"- 主机: `{primary.get('host') or '-'}`",
+        f"- 级别: `{primary.get('severity') or '-'}`",
+        f"- 优先级: `{primary.get('priority') or '-'}`",
+        f"- 重复次数: `{primary.get('repeat_count') or 1}`",
+        f"- AI 冷却: `{cooldown.get('window_minutes') or 30} 分钟`",
+        f"- 下次允许 AI: `{cooldown.get('next_allowed_at') or '-'}`",
+        "",
+        "## 告警内容",
+        str(primary.get("description") or "-"),
+        "",
+        "本次告警只转发通知，不重复触发 AI 分析。",
+    ]
+    return title, "\n".join(lines)
+
+
 def resolve_alert_notification_channels(
     alert_events: list[dict[str, Any]],
     *,
@@ -188,6 +216,84 @@ def send_alert_analysis_notifications(
     return results
 
 
+def send_alert_forward_notifications(
+    alert_events: list[dict[str, Any]],
+    *,
+    notification_sender: Callable[[str, str, str], dict] | None = None,
+    env: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    channels = resolve_alert_notification_channels(alert_events, env=env)
+    if not channels:
+        return [{"channel": "none", "status": "SKIPPED", "message": "没有已启用且配置完整的告警通知通道。"}]
+    title, content = build_alert_forward_notification(alert_events)
+    sender = _resolve_notification_sender(notification_sender)
+    results: list[dict[str, Any]] = []
+    for channel in channels:
+        result = sender(channel, title, content)
+        if isinstance(result, dict):
+            results.append({"channel": channel, **result})
+        else:
+            results.append({"channel": channel, "status": "UNKNOWN", "message": str(result)})
+    return results
+
+
+def _format_notification_results(results: list[dict[str, Any]]) -> str:
+    if not results:
+        return "- 通知: 未触发"
+    lines = ["- 通知结果:"]
+    for item in results:
+        channel = item.get("channel") or "-"
+        status = item.get("status") or "-"
+        message = item.get("message") or "-"
+        lines.append(f"  - {channel}: {status} / {message}")
+    return "\n".join(lines)
+
+
+def build_alert_analysis_note(
+    *,
+    session_id: str,
+    report: Any,
+    notification_results: list[dict[str, Any]],
+) -> str:
+    report_text = str(report or "AI 已完成告警处理，但没有返回可记录的摘要。")
+    if len(report_text) > 4000:
+        report_text = f"{report_text[:4000]}\n...（分析内容过长，已截断）"
+    return "\n".join(
+        [
+            "【AI 告警分析闭环】",
+            f"- 会话: {session_id}",
+            _format_notification_results(notification_results),
+            "",
+            "AI 分析摘要:",
+            report_text,
+        ]
+    )
+
+
+def append_alert_analysis_notes(
+    alert_events: list[dict[str, Any]],
+    *,
+    session_id: str,
+    report: Any,
+    notification_results: list[dict[str, Any]],
+) -> None:
+    note = build_alert_analysis_note(
+        session_id=session_id,
+        report=report,
+        notification_results=notification_results,
+    )
+    seen: set[str] = set()
+    for alert_event in alert_events:
+        alert_id = str(alert_event.get("id") or "")
+        if not alert_id or alert_id in seen:
+            continue
+        seen.add(alert_id)
+        try:
+            update_alert_event(alert_id, note=note)
+        except Exception as exc:
+            logger.warning("Failed to append alert analysis note for %s: %s", alert_id, exc)
+
+
 async def run_alert_analysis_task(
     *,
     session_id: str,
@@ -207,8 +313,9 @@ async def run_alert_analysis_task(
         dispatcher,
         trigger_msg=trigger_msg,
     )
+    notification_results: list[dict[str, Any]] = []
     if notify_after_analysis:
-        results = send_alert_analysis_notifications(
+        notification_results = send_alert_analysis_notifications(
             alert_events,
             session_id,
             report,
@@ -217,8 +324,14 @@ async def run_alert_analysis_task(
         logger.info(
             "Alert analysis notification completed for session %s: %s",
             session_id,
-            results,
+            notification_results,
         )
+    append_alert_analysis_notes(
+        alert_events,
+        session_id=session_id,
+        report=report,
+        notification_results=notification_results,
+    )
     return report
 
 
@@ -248,6 +361,7 @@ async def handle_alert_webhook(
         }
     primary_alert = alert_events[0]
     ai_alerts = [alert_event for alert_event in alert_events if _should_run_ai(alert_event)]
+    forward_alerts = [alert_event for alert_event in alert_events if _should_forward_without_ai(alert_event)]
     automation = _automation_summary(alert_events, ai_alerts)
     host = primary_alert["host"]
     alert_name = primary_alert["alert_name"]
@@ -264,13 +378,21 @@ async def handle_alert_webhook(
     logger.info("Parsed Alert -> Host: %s, Name: %s, Severity: %s", host, alert_name, severity)
 
     if not ai_alerts:
+        forward_results: list[dict[str, Any]] = []
+        if forward_alerts:
+            forward_results = send_alert_forward_notifications(
+                forward_alerts,
+                notification_sender=notification_sender,
+            )
+        for alert_event in alert_events:
+            ensure_alert_workflow(alert_event, active_sessions=active_sessions, memory_db=memory_db, injected_count=0)
         return {
-            "message": RECORD_ONLY_ALERT_MESSAGE,
+            "message": FORWARDED_ALERT_MESSAGE if forward_alerts else RECORD_ONLY_ALERT_MESSAGE,
             "data": {
                 "alert": primary_alert,
                 "alerts": alert_events,
                 "injected_count": 0,
-                "automation": automation,
+                "automation": {**automation, "forward_notification_results": forward_results},
             },
         }
 
@@ -281,6 +403,8 @@ async def handle_alert_webhook(
     })
     if not affected_sessions:
         logger.warning("Alert received but no active AI session is connected to affected hosts or localhost.")
+        for alert_event in alert_events:
+            ensure_alert_workflow(alert_event, active_sessions=active_sessions, memory_db=memory_db, injected_count=0)
         return {
             "message": NO_ACTIVE_ALERT_MESSAGE,
             "data": {"alert": primary_alert, "alerts": alert_events, "injected_count": 0, "automation": automation},
@@ -289,6 +413,12 @@ async def handle_alert_webhook(
     injection_message = build_alert_batch_injection_message(ai_alerts)
     injected_count = 0
     notification_scheduled = False
+    forward_results: list[dict[str, Any]] = []
+    if forward_alerts:
+        forward_results = send_alert_forward_notifications(
+            forward_alerts,
+            notification_sender=notification_sender,
+        )
     needs_notification = any(_should_notify(alert_event) for alert_event in ai_alerts)
     store = _resolve_memory_db(memory_db)
     resolved_dispatcher = _resolve_dispatcher(dispatcher)
@@ -320,12 +450,24 @@ async def handle_alert_webhook(
                 )
         injected_count += 1
 
+    for alert_event in alert_events:
+        ensure_alert_workflow(
+            alert_event,
+            active_sessions=active_sessions,
+            memory_db=memory_db,
+            injected_count=injected_count if alert_event in ai_alerts else 0,
+        )
+
     return {
         "message": ACTIVE_ALERT_MESSAGE_TEMPLATE.format(count=injected_count),
         "data": {
             "alert": primary_alert,
             "alerts": alert_events,
             "injected_count": injected_count,
-            "automation": {**automation, "notification_scheduled": notification_scheduled},
+            "automation": {
+                **automation,
+                "notification_scheduled": notification_scheduled,
+                "forward_notification_results": forward_results,
+            },
         },
     }

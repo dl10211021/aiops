@@ -4,7 +4,7 @@ import { useStore } from '@/store'
 import type { InspectionReport } from '@/types'
 import { assetTypeLabel, protocolLabel, statusLabel } from '@/utils/assetDisplay'
 
-type ReportView = 'summary' | 'html'
+type ReportView = 'summary' | 'timeline' | 'html'
 
 export default function InspectionReportModal({
   runId,
@@ -149,6 +149,9 @@ export default function InspectionReportModal({
                   <ReportViewButton active={activeView === 'summary'} onClick={() => selectView('summary')}>
                     报告摘要
                   </ReportViewButton>
+                  <ReportViewButton active={activeView === 'timeline'} onClick={() => selectView('timeline')}>
+                    运行时间线
+                  </ReportViewButton>
                   <ReportViewButton active={activeView === 'html'} onClick={() => selectView('html')}>
                     HTML 报告
                   </ReportViewButton>
@@ -167,6 +170,8 @@ export default function InspectionReportModal({
                   onOpenWindow={() => void handleHtmlPreview()}
                   onRetry={() => void loadHtmlPreview(true)}
                 />
+              ) : activeView === 'timeline' ? (
+                <TimelineReportView report={report} />
               ) : (
               <>
               <div className="grid gap-3 md:grid-cols-5">
@@ -367,6 +372,110 @@ export default function InspectionReportModal({
   )
 }
 
+function TimelineReportView({ report }: { report: InspectionReport }) {
+  const transcriptEvents = report.transcript?.events ?? []
+  const legacyEvents = report.events ?? []
+  const tracePhases = report.trace?.phases ?? []
+  const totalEvents = report.transcript?.event_count ?? transcriptEvents.length
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-4">
+        <ReportMetric label="Transcript" value={totalEvents} />
+        <ReportMetric label="进度事件" value={legacyEvents.length} />
+        <ReportMetric label="Trace 阶段" value={tracePhases.length} />
+        <ReportMetric label="目标数" value={report.summary.target_count} tone="amber" />
+      </div>
+
+      {tracePhases.length > 0 && (
+        <section className="ops-data-panel p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold text-ops-text">阶段轨迹</div>
+              <div className="mt-1 font-mono text-[11px] text-ops-overlay">{report.trace?.trace_id || '-'}</div>
+            </div>
+            <span className={`rounded px-2 py-1 text-[11px] ${traceStatusClass(report.trace?.status || report.status)}`}>
+              {traceStatusLabel(report.trace?.status || report.status)}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-2 md:grid-cols-4">
+            {tracePhases.map((phase) => (
+              <div key={phase.id} className="rounded border border-ops-surface0 bg-ops-dark/30 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-xs font-semibold text-ops-text">{phase.label}</span>
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] ${traceStatusClass(phase.status)}`}>
+                    {traceStatusLabel(phase.status)}
+                  </span>
+                </div>
+                <div className="mt-2 min-h-10 text-[11px] leading-5 text-ops-subtext">
+                  {phase.detail || '-'}
+                </div>
+                <div className="mt-2 truncate font-mono text-[10px] text-ops-overlay">
+                  {phase.completed_at || phase.started_at || '-'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="ops-data-panel overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ops-surface0 px-4 py-3">
+          <div>
+            <div className="text-sm font-semibold text-ops-text">底层事件流</div>
+            <div className="mt-1 text-xs text-ops-subtext">用于排查巡检是否卡住、取消、通知失败或目标执行失败。</div>
+          </div>
+          <span className="font-mono text-[11px] text-ops-overlay">{transcriptEvents.length}/{totalEvents}</span>
+        </div>
+        {transcriptEvents.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm text-ops-subtext">
+            这份报告暂未写入 Transcript 事件；新执行的巡检会自动记录完整时间线。
+          </div>
+        ) : (
+          <div className="max-h-[46vh] overflow-auto">
+            {transcriptEvents.map((event, index) => {
+              const payload = transcriptPayloadSummary(event.payload)
+              return (
+                <div key={event.id || `${event.time}-${index}`} className="grid gap-2 border-b border-ops-surface0 px-4 py-3 text-xs last:border-b-0 md:grid-cols-[168px_112px_minmax(0,1fr)_96px]">
+                  <div className="font-mono text-ops-overlay">{event.time || '-'}</div>
+                  <div>
+                    <div className="truncate font-semibold text-ops-text">{transcriptEventLabel(event.type)}</div>
+                    <div className="mt-0.5 truncate text-[11px] text-ops-overlay">{transcriptSourceLabel(event.source)}</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-ops-subtext">{event.message || event.type}</div>
+                    {payload && <div className="mt-1 truncate font-mono text-[11px] text-ops-overlay">{payload}</div>}
+                  </div>
+                  <div className="md:text-right">
+                    <span className={`inline-flex rounded px-2 py-0.5 text-[11px] ${traceStatusClass(event.status || event.type)}`}>
+                      {traceStatusLabel(event.status || event.type)}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
+
+      {transcriptEvents.length === 0 && legacyEvents.length > 0 && (
+        <section className="ops-data-panel p-4">
+          <div className="text-sm font-semibold text-ops-text">兼容进度记录</div>
+          <div className="mt-3 max-h-56 overflow-auto rounded-lg border border-ops-surface0 bg-ops-dark/35">
+            {legacyEvents.map((event, index) => (
+              <div key={`${event.time}-${index}`} className="flex gap-3 border-b border-ops-surface0 px-3 py-2 text-xs last:border-b-0">
+                <span className="w-40 shrink-0 font-mono text-ops-overlay">{event.time || '-'}</span>
+                <span className="min-w-0 flex-1 text-ops-subtext">{event.message || event.type}</span>
+                <span className="shrink-0 text-ops-overlay">{event.status || '-'}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
 function ReportMetric({ label, value, tone = 'default' }: { label: string; value: string | number; tone?: 'default' | 'green' | 'red' | 'amber' }) {
   const toneClass = {
     default: 'text-ops-text',
@@ -524,7 +633,68 @@ function traceStatusLabel(status: string) {
     cancelled: '已取消',
     skipped: '跳过',
     pending: '等待',
+    run_recorded: '已记录',
+    run_updated: '已更新',
+    embedded_event: '事件',
   }[normalized] || status || '-'
+}
+
+function transcriptEventLabel(type: string) {
+  const normalized = String(type || '').toLowerCase()
+  return {
+    run_recorded: '运行记录',
+    run_updated: '运行更新',
+    embedded_event: '巡检事件',
+    target_started: '目标开始',
+    target_completed: '目标完成',
+    target_failed: '目标失败',
+    notification_sent: '通知发送',
+    notification_failed: '通知失败',
+  }[normalized] || type || '-'
+}
+
+function transcriptSourceLabel(source: string) {
+  const normalized = String(source || '').toLowerCase()
+  return {
+    inspection_run_service: '巡检服务',
+    inspection_event: '巡检事件',
+    cron_manager: '调度器',
+    task_runtime: '任务运行态',
+  }[normalized] || source || '-'
+}
+
+function transcriptPayloadSummary(payload?: Record<string, unknown>) {
+  if (!payload) return ''
+  const parts: string[] = []
+  const target = readRecord(payload.target)
+  if (target) {
+    const host = safeText(target.host)
+    const assetId = safeText(target.asset_id)
+    if (host || assetId) parts.push(`目标 ${host || '-'}${assetId ? ` #${assetId}` : ''}`)
+  }
+  const targetCount = safeText(payload.target_count)
+  if (targetCount) parts.push(`目标数 ${targetCount}`)
+  const successCount = safeText(payload.success_count)
+  if (successCount) parts.push(`成功 ${successCount}`)
+  const errorCount = safeText(payload.error_count)
+  if (errorCount) parts.push(`失败 ${errorCount}`)
+  const changedFields = payload.changed_fields
+  if (Array.isArray(changedFields) && changedFields.length > 0) {
+    parts.push(`字段 ${changedFields.map((item) => safeText(item)).filter(Boolean).slice(0, 6).join(', ')}`)
+  }
+  return parts.join(' · ')
+}
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function safeText(value: unknown) {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return ''
 }
 
 function Info({ label, value }: { label: string; value: string | number }) {

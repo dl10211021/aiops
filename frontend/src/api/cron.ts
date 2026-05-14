@@ -23,6 +23,51 @@ export interface CronJobsMetrics {
   running: number
 }
 
+export interface InspectionRunsPagination {
+  page: number
+  page_size: number
+  total: number
+  filtered_total: number
+  page_count: number
+}
+
+export interface InspectionRunsMetrics {
+  total: number
+  completed: number
+  failed: number
+  partial: number
+  running: number
+  cancelled: number
+  empty: number
+}
+
+export interface InspectionRetentionPreview {
+  policy: {
+    keep_latest_per_job: number
+    older_than_days: number
+    limit: number
+    dry_run: boolean
+  }
+  summary: {
+    total_runs: number
+    candidate_count: number
+    candidate_count_total: number
+    skipped_running: number
+    estimated_reclaimable_bytes: number
+  }
+  candidates: Array<{
+    id: string
+    job_id?: string
+    status?: string
+    message?: string
+    target_count?: number
+    started_at?: string
+    completed_at?: string | null
+    reason: string
+    estimated_bytes: number
+  }>
+}
+
 export async function getCronJobs(params: { page?: number; pageSize?: number; query?: string; status?: string } = {}) {
   const search = new URLSearchParams()
   if (params.page) search.set('page', String(params.page))
@@ -100,13 +145,42 @@ export async function deleteInspectionRun(runId: string) {
   return request<{ run_id: string }>(`/inspection-runs/${runId}`, { method: 'DELETE' })
 }
 
-export async function listInspectionRuns(params: { jobId?: string; assetId?: number; limit?: number } = {}) {
+export async function listInspectionRuns(params: {
+  assetId?: number
+  jobId?: string
+  limit?: number
+  page?: number
+  pageSize?: number
+  query?: string
+  status?: string
+} = {}) {
   const search = new URLSearchParams()
   if (params.jobId) search.set('job_id', params.jobId)
   if (params.assetId) search.set('asset_id', String(params.assetId))
   if (params.limit) search.set('limit', String(params.limit))
+  if (params.page) search.set('page', String(params.page))
+  if (params.pageSize) search.set('page_size', String(params.pageSize))
+  if (params.query) search.set('query', params.query)
+  if (params.status && params.status !== 'all') search.set('status', params.status)
   const suffix = search.toString() ? `?${search.toString()}` : ''
-  return request<{ runs: InspectionRun[] }>(`/inspection-runs${suffix}`)
+  return request<{
+    runs: InspectionRun[]
+    pagination?: InspectionRunsPagination
+    metrics?: InspectionRunsMetrics
+  }>(`/inspection-runs${suffix}`)
+}
+
+export async function previewInspectionRunRetention(params: {
+  keepLatestPerJob?: number
+  olderThanDays?: number
+  limit?: number
+} = {}) {
+  const search = new URLSearchParams()
+  if (params.keepLatestPerJob) search.set('keep_latest_per_job', String(params.keepLatestPerJob))
+  if (params.olderThanDays) search.set('older_than_days', String(params.olderThanDays))
+  if (params.limit) search.set('limit', String(params.limit))
+  const suffix = search.toString() ? `?${search.toString()}` : ''
+  return request<{ preview: InspectionRetentionPreview }>(`/inspection-runs/retention/preview${suffix}`)
 }
 
 export async function getInspectionRunReport(runId: string) {

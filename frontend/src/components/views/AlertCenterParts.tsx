@@ -1,8 +1,8 @@
 import type { AlertEvent, AlertEventStatus } from '@/types'
 import {
-  alertClassLabel,
   alertNoiseActionLabel,
   alertPriorityLabel,
+  alertQueueClassLabel,
   alertSourceLabel,
   formatAlertDate,
   type AlertMetricTone,
@@ -11,12 +11,17 @@ import { AlertSeverityBadge, AlertStatusBadge } from './AlertCenterShared'
 
 export { AlertDetail } from './AlertDetail'
 
+type AlertSummary = {
+  byStatus: Record<string, number>
+  total: number
+}
+
 const STATUS_OPTIONS: Array<{ id: AlertEventStatus | 'all'; label: string }> = [
+  { id: 'all', label: '全部' },
   { id: 'open', label: '未处理' },
   { id: 'acknowledged', label: '处理中' },
   { id: 'closed', label: '已关闭' },
   { id: 'suppressed', label: '已抑制' },
-  { id: 'all', label: '全部' },
 ]
 
 const SEVERITY_OPTIONS = [
@@ -39,78 +44,92 @@ const SOURCE_FAMILY_OPTIONS = [
 ]
 
 const AUTOMATION_OPTIONS = [
-  { id: 'all', label: '全部策略' },
-  { id: 'ai', label: '会触发 AI' },
-  { id: 'record_only', label: '仅入库' },
+  { id: 'all', label: '全部流程' },
+  { id: 'ai', label: '会走 AI' },
+  { id: 'record_only', label: '只记录' },
 ]
 
-const PLATFORM_ITEMS = [
-  'Alertmanager / Grafana: 支持 alerts[]、labels、annotations、fingerprint、startsAt/endsAt。',
-  'Zabbix: 支持 host、event_id、triggerid、severity、message、status 等字段。',
-  'ManageEngine / 卓豪: 支持 MonitorName、AlarmName、AlarmMessage、Severity 等字段。',
-  '通用 Webhook: 支持 host、alert_name、severity、description、source。',
-]
-
-const POLICY_ITEMS = [
-  '按来源识别 zabbix、prometheus、grafana、manageengine、generic。',
-  '按故障域识别 availability、capacity、performance、network、database、security。',
-  '恢复、信息类、低优先级告警只记录；高优先级和关键基础设施告警自动进入 AI 分析。',
-  'AI 分析完成后由后端统一发送企业微信、钉钉或邮件通知。',
-]
-
-export function AlertIntegrationPanel({
+export function AlertConsoleHeader({
+  summary,
+  onOpenPolicy,
+  onRefresh,
   webhookUrl,
   testing,
   onCopy,
   onSendTest,
 }: {
+  summary: AlertSummary
+  onOpenPolicy: () => void
+  onRefresh: () => void
   webhookUrl: string
   testing: boolean
   onCopy: () => void
   onSendTest: () => void
 }) {
+  const flowItems = [
+    { title: '接入', text: '监控平台推送告警' },
+    { title: '降噪', text: '同主机同类合并' },
+    { title: '分析', text: 'AI 查监控和会话' },
+    { title: '通知', text: '只读建议或确认修复' },
+  ]
   return (
-    <section className="ops-data-panel mb-5 p-4">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px_320px]">
+    <section className="mb-3 overflow-hidden rounded-lg border border-ops-surface0 bg-ops-panel/80">
+      <div className="flex flex-col gap-4 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-bold text-ops-text">外部告警接入</h2>
             <span className="rounded border border-ops-accent/35 bg-ops-accent/10 px-2 py-0.5 text-[11px] font-semibold text-ops-accent">
-              Webhook
+              告警流程
             </span>
+            <h1 className="text-xl font-black text-ops-text">告警处理台</h1>
           </div>
-          <p className="mt-2 text-xs leading-5 text-ops-subtext">
-            将下面地址配置到监控平台的告警通知 Webhook。系统会归一化事件、按指纹合并重复告警，先完成分类降噪，再按策略决定是否唤醒匹配主机或 localhost 值守会话。
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-ops-subtext">
+            外部告警进来后先变成事件；同一机器同类告警 30 分钟内不重复拉 AI，只更新事件并转发通知。
           </p>
-          <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
-            <code className="ops-control min-w-0 flex-1 truncate px-3 py-2 text-xs text-ops-text">
-              {webhookUrl}
-            </code>
-            <button onClick={onCopy} className="ops-muted-action px-3 py-2 text-xs">
-              复制地址
-            </button>
-            <button onClick={onSendTest} disabled={testing} className="ops-primary-action px-3 py-2 text-xs disabled:opacity-50">
-              {testing ? '发送中...' : '发送测试告警'}
-            </button>
-          </div>
         </div>
-        <div className="rounded-lg border border-ops-surface0 bg-ops-dark/20 p-3">
-          <div className="text-xs font-semibold text-ops-text">已适配格式</div>
-          <ul className="mt-2 space-y-1.5 text-[11px] leading-5 text-ops-subtext">
-            {PLATFORM_ITEMS.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
+
+        <div className="grid min-w-0 flex-1 grid-cols-2 gap-2 md:grid-cols-4 xl:max-w-xl">
+          <AlertMetric label="未处理" value={summary.byStatus.open || 0} tone="red" />
+          <AlertMetric label="处理中" value={summary.byStatus.acknowledged || 0} tone="amber" />
+          <AlertMetric label="已关闭" value={summary.byStatus.closed || 0} tone="green" />
+          <AlertMetric label="全部事件" value={summary.total} tone="slate" />
         </div>
-        <div className="rounded-lg border border-ops-surface0 bg-ops-dark/20 p-3">
-          <div className="text-xs font-semibold text-ops-text">分类降噪策略</div>
-          <ul className="mt-2 space-y-1.5 text-[11px] leading-5 text-ops-subtext">
-            {POLICY_ITEMS.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
+
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button onClick={onOpenPolicy} className="ops-primary-action px-4 py-2 text-sm font-semibold">
+            配置告警流程
+          </button>
+          <button onClick={onRefresh} className="ops-muted-action px-4 py-2 text-sm font-semibold">
+            刷新
+          </button>
         </div>
       </div>
+      <div className="grid gap-2 border-t border-ops-surface0 bg-ops-dark/15 px-5 py-3 md:grid-cols-4">
+        {flowItems.map((item, index) => (
+          <div key={item.title} className="rounded-md border border-ops-surface0 bg-ops-panel/45 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="grid h-5 w-5 place-items-center rounded bg-ops-accent text-[10px] font-black text-ops-dark">{index + 1}</span>
+              <span className="text-xs font-semibold text-ops-text">{item.title}</span>
+            </div>
+            <div className="mt-1 text-[11px] text-ops-subtext">{item.text}</div>
+          </div>
+        ))}
+      </div>
+      <details className="border-t border-ops-surface0 bg-ops-dark/20 px-5 py-2">
+        <summary className="cursor-pointer text-xs font-semibold text-ops-subtext hover:text-ops-text">
+          接入地址和测试
+        </summary>
+        <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center">
+          <code className="ops-control min-w-0 flex-1 truncate px-3 py-2 text-xs text-ops-text">
+            {webhookUrl}
+          </code>
+          <button onClick={onCopy} className="ops-muted-action px-3 py-2 text-xs">
+            复制地址
+          </button>
+          <button onClick={onSendTest} disabled={testing} className="ops-primary-action px-3 py-2 text-xs disabled:opacity-50">
+            {testing ? '发送中...' : '发送测试告警'}
+          </button>
+        </div>
+      </details>
     </section>
   )
 }
@@ -131,9 +150,9 @@ export function AlertMetric({
     slate: 'text-ops-subtext',
   }[tone]
   return (
-    <div className="ops-data-panel p-4">
-      <div className="text-xs text-ops-subtext">{label}</div>
-      <div className={`mt-2 font-mono text-2xl font-bold ${toneClass}`}>{value}</div>
+    <div className="rounded-lg bg-ops-dark/35 px-3 py-2">
+      <div className="text-[11px] text-ops-subtext">{label}</div>
+      <div className={`mt-0.5 font-mono text-xl font-bold ${toneClass}`}>{value}</div>
     </div>
   )
 }
@@ -149,6 +168,7 @@ export function AlertFilters({
   onHostChange,
   onSourceFamilyChange,
   onAutomationModeChange,
+  onReset,
 }: {
   status: AlertEventStatus | 'all'
   severity: string
@@ -160,58 +180,76 @@ export function AlertFilters({
   onHostChange: (value: string) => void
   onSourceFamilyChange: (value: string) => void
   onAutomationModeChange: (value: string) => void
+  onReset: () => void
 }) {
   return (
-    <div className="ops-data-toolbar mb-5 grid gap-3 p-3 xl:grid-cols-[1fr_190px_190px_180px_240px]">
-      <div className="flex flex-wrap gap-2">
-        {STATUS_OPTIONS.map((item) => (
+    <section className="mb-3 rounded-lg border border-ops-surface0 bg-ops-panel/45 px-3 py-3">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-wrap gap-1.5">
+          {STATUS_OPTIONS.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => onStatusChange(item.id)}
+              className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                status === item.id
+                  ? 'border-ops-accent bg-ops-accent text-ops-dark'
+                  : 'border-ops-surface0 bg-ops-panel/55 text-ops-subtext hover:border-ops-surface1 hover:text-ops-text'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div className="grid gap-2 md:grid-cols-[240px_auto]">
+          <input
+            value={host}
+            onChange={(event) => onHostChange(event.target.value)}
+            placeholder="搜索主机 / IP"
+            className="ops-control rounded-md bg-ops-panel/55 px-3 py-1.5 text-xs"
+          />
           <button
-            key={item.id}
-            onClick={() => onStatusChange(item.id)}
-            className={`rounded-full border px-4 py-2 text-sm transition-colors ${
-              status === item.id
-                ? 'border-ops-accent bg-ops-accent text-ops-dark'
-                : 'border-ops-surface1 bg-ops-surface0 text-ops-subtext hover:text-ops-text'
-            }`}
+            onClick={onReset}
+            className="ops-muted-action rounded-md px-3 py-1.5 text-xs font-semibold"
           >
-            {item.label}
+            清空
           </button>
-        ))}
+        </div>
       </div>
-      <select
-        value={severity}
-        onChange={(event) => onSeverityChange(event.target.value)}
-        className="ops-control px-3 py-2 text-sm"
-      >
-        {SEVERITY_OPTIONS.map((item) => (
-          <option key={item.id} value={item.id}>{item.label}</option>
-        ))}
-      </select>
-      <select
-        value={sourceFamily}
-        onChange={(event) => onSourceFamilyChange(event.target.value)}
-        className="ops-control px-3 py-2 text-sm"
-      >
-        {SOURCE_FAMILY_OPTIONS.map((item) => (
-          <option key={item.id} value={item.id}>{item.label}</option>
-        ))}
-      </select>
-      <select
-        value={automationMode}
-        onChange={(event) => onAutomationModeChange(event.target.value)}
-        className="ops-control px-3 py-2 text-sm"
-      >
-        {AUTOMATION_OPTIONS.map((item) => (
-          <option key={item.id} value={item.id}>{item.label}</option>
-        ))}
-      </select>
-      <input
-        value={host}
-        onChange={(event) => onHostChange(event.target.value)}
-        placeholder="按主机过滤"
-        className="ops-control px-3 py-2 text-sm"
-      />
-    </div>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs font-semibold text-ops-subtext hover:text-ops-text">
+          平台、级别和 AI 流程
+        </summary>
+        <div className="mt-2 grid gap-2 md:grid-cols-3 xl:w-[620px]">
+          <select
+            value={severity}
+            onChange={(event) => onSeverityChange(event.target.value)}
+            className="ops-control px-3 py-1.5 text-xs"
+          >
+            {SEVERITY_OPTIONS.map((item) => (
+              <option key={item.id} value={item.id}>{item.label}</option>
+            ))}
+          </select>
+          <select
+            value={sourceFamily}
+            onChange={(event) => onSourceFamilyChange(event.target.value)}
+            className="ops-control px-3 py-1.5 text-xs"
+          >
+            {SOURCE_FAMILY_OPTIONS.map((item) => (
+              <option key={item.id} value={item.id}>{item.label}</option>
+            ))}
+          </select>
+          <select
+            value={automationMode}
+            onChange={(event) => onAutomationModeChange(event.target.value)}
+            className="ops-control px-3 py-1.5 text-xs"
+          >
+            {AUTOMATION_OPTIONS.map((item) => (
+              <option key={item.id} value={item.id}>{item.label}</option>
+            ))}
+          </select>
+        </div>
+      </details>
+    </section>
   )
 }
 
@@ -227,58 +265,70 @@ export function AlertQueueList({
   onSelect: (alertId: string) => void
 }) {
   return (
-    <section className="ops-data-panel overflow-hidden">
-      <div className="ops-data-toolbar m-3 mb-0 px-4 py-3">
+    <section className="flex min-h-[420px] flex-col overflow-hidden rounded-lg border border-ops-surface0 bg-ops-panel/65 md:min-h-[560px] xl:max-h-[calc(100vh-14rem)]">
+      <div className="shrink-0 border-b border-ops-surface0 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-bold text-ops-text">事件队列</h2>
-            <p className="mt-1 text-xs text-ops-subtext">点击事件可查看原始负载和处置记录。</p>
+            <p className="mt-1 text-xs text-ops-subtext">一条事件代表一组已归并的同类告警。</p>
           </div>
           <span className="ops-control px-3 py-1 text-xs text-ops-accent">
-            当前 {alerts.length} 条
+            {alerts.length} 条
           </span>
         </div>
       </div>
-      <div className="divide-y divide-ops-surface0">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
         {loading && <div className="p-8 text-center text-sm text-ops-subtext">正在加载告警事件...</div>}
         {!loading && alerts.map((alert) => (
           <button
             key={alert.id}
             onClick={() => onSelect(alert.id)}
-            className={`grid w-full gap-3 px-4 py-3 text-left transition-colors md:grid-cols-[140px_1fr_120px] ${
-              selectedAlert?.id === alert.id ? 'bg-ops-accent/10' : 'hover:bg-ops-surface0/50'
+            className={`w-full rounded-lg border border-l-4 px-3 py-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ops-accent/65 ${
+              selectedAlert?.id === alert.id ? 'border-ops-surface0 border-l-ops-accent bg-ops-surface0/65' : 'border-ops-surface0 border-l-transparent bg-ops-dark/20 hover:bg-ops-surface0/45'
             }`}
           >
-            <div className="min-w-0">
-              <AlertSeverityBadge severity={alert.severity} />
-              <div className="mt-2 truncate font-mono text-xs text-ops-overlay">{alert.id}</div>
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <AlertStatusBadge status={alert.status} />
-                <span className="rounded border border-ops-surface1 bg-ops-surface0 px-2 py-0.5 text-[11px] font-semibold text-ops-subtext">
-                  {alertSourceLabel(alert.source_family || alert.source_type || alert.source)}
-                </span>
-                <span className="rounded border border-ops-surface1 bg-ops-dark/30 px-2 py-0.5 text-[11px] text-ops-overlay">
-                  {alertClassLabel(alert.alert_class)}
-                </span>
-                <span className="rounded border border-ops-accent/35 bg-ops-accent/10 px-2 py-0.5 text-[11px] font-semibold text-ops-accent">
-                  {alertPriorityLabel(alert.priority)}
-                </span>
-                <span className="truncate font-semibold text-ops-text">{alert.alert_name || '系统告警'}</span>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <AlertSeverityBadge severity={alert.severity} />
+                  <AlertStatusBadge status={alert.status} />
+                  <span className="rounded border border-ops-accent/35 bg-ops-accent/10 px-2 py-0.5 text-[11px] font-semibold text-ops-accent">
+                    {alertPriorityLabel(alert.priority)}
+                  </span>
+                </div>
+                <div className="mt-2 truncate text-sm font-bold text-ops-text">{alert.alert_name || '系统告警'}</div>
               </div>
-              <p className="mt-1 line-clamp-2 text-sm text-ops-subtext">{alert.description || '-'}</p>
-              <div className="mt-2 flex flex-wrap gap-3 text-xs text-ops-overlay">
-                <span>{alert.host || '-'}</span>
-                <span>{alertNoiseActionLabel(alert.noise_action)}</span>
-                <span>{alert.automation_decision?.run_ai ? '会触发 AI' : '仅入库'}</span>
-                <span>{formatAlertDate(alert.created_at)}</span>
+              <div className="shrink-0 text-right">
+                <div className="text-[11px] font-semibold text-ops-subtext">{alert.automation_decision?.run_ai ? 'AI 分析' : '只记录'}</div>
+                <div className="mt-1 text-[10px] text-ops-overlay">重复 {alert.repeat_count || 1} 次</div>
               </div>
             </div>
-            <div className="text-right text-xs text-ops-subtext">
-              <div>负责人</div>
-              <div className="mt-1 truncate font-mono text-ops-text">{alert.assignee || '-'}</div>
-              <div className="mt-3 text-ops-overlay">备注 {alert.notes?.length || 0}</div>
+            <p className="mt-2 line-clamp-2 text-sm leading-5 text-ops-subtext">{alert.description || '-'}</p>
+            <div className="mt-3 grid gap-2 text-xs text-ops-subtext md:grid-cols-2">
+              <div className="min-w-0 truncate">
+                <span className="text-ops-overlay">主机</span>
+                <span className="ml-2 font-mono text-ops-text">{alert.host || '-'}</span>
+              </div>
+              <div className="min-w-0 truncate">
+                <span className="text-ops-overlay">来源</span>
+                <span className="ml-2 text-ops-text">{alertSourceLabel(alert.source_family || alert.source_type || alert.source)}</span>
+              </div>
+              <div className="min-w-0 truncate">
+                <span className="text-ops-overlay">类型</span>
+                <span className="ml-2 text-ops-text">{alertQueueClassLabel(alert)}</span>
+              </div>
+              <div className="min-w-0 truncate">
+                <span className="text-ops-overlay">时间</span>
+                <span className="ml-2 text-ops-text">{formatAlertDate(alert.created_at)}</span>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-ops-overlay">
+              <span className="rounded border border-ops-surface1 bg-ops-dark/25 px-2 py-0.5">
+                {alertNoiseActionLabel(alert.noise_action)}
+              </span>
+              <span className="rounded border border-ops-surface1 bg-ops-dark/25 px-2 py-0.5">
+                处理人 {alert.assignee || '-'}
+              </span>
             </div>
           </button>
         ))}
@@ -295,12 +345,17 @@ export function AlertEmptyState({
   onRefresh: () => void
 }) {
   return (
-    <section className="ops-data-panel p-6">
-      <div className="text-sm font-semibold text-ops-text">当前筛选条件下暂无告警事件</div>
-      <p className="mt-2 max-w-3xl text-sm leading-6 text-ops-subtext">
-        可以调整状态、级别或主机过滤条件；接入告警 Webhook 后，事件会在这里进入分派、处理、备注和闭环流程。
-      </p>
-      <div className="mt-5 flex flex-wrap gap-2">
+    <section className="rounded-lg border border-ops-surface0 bg-ops-panel/65 p-10">
+      <div className="mx-auto max-w-xl text-center">
+        <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg border border-ops-accent/35 bg-ops-accent/10 text-lg font-black text-ops-accent">
+          !
+        </div>
+        <div className="mt-4 text-base font-bold text-ops-text">当前没有符合条件的告警</div>
+        <p className="mt-2 text-sm leading-6 text-ops-subtext">
+          可以清空筛选查看全部历史，或者发送一条测试告警确认接入链路。
+        </p>
+      </div>
+      <div className="mt-6 flex flex-wrap justify-center gap-2">
         <button
           onClick={onReset}
           className="ops-muted-action px-3 py-1.5 text-sm"

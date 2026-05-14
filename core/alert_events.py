@@ -6,7 +6,7 @@ import json
 import threading
 import uuid
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -20,10 +20,29 @@ _STORE_CACHE: tuple[str, float, int, list[dict[str, Any]]] | None = None
 
 ALLOWED_STATUS = {"open", "acknowledged", "closed", "suppressed"}
 RECOVERY_STATUSES = {"resolved", "ok", "closed", "recovered", "recovery"}
+ZERO_TIME_PREFIXES = ("0001-01-01", "1970-01-01")
+ALERT_AI_COOLDOWN_MINUTES = 30
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _read_store() -> list[dict[str, Any]]:
@@ -222,7 +241,56 @@ def normalize_alert_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _is_recovery_event(normalized: dict[str, Any]) -> bool:
     status_hint = _compact_str(normalized.get("status_hint")).lower()
-    return bool(normalized.get("ends_at")) or status_hint in RECOVERY_STATUSES
+    ends_at = _compact_str(normalized.get("ends_at")).lower()
+    has_real_end = bool(ends_at) and not any(ends_at.startswith(prefix) for prefix in ZERO_TIME_PREFIXES)
+    return has_real_end or status_hint in RECOVERY_STATUSES
+
+
+def _apply_ai_cooldown(event: dict[str, Any], *, previous_event: dict[str, Any] | None = None) -> None:
+    decision = event.get("automation_decision")
+    if not isinstance(decision, dict) or not decision.get("run_ai"):
+        return
+    try:
+        cooldown_minutes = max(1, min(int(decision.get("cooldown_minutes") or ALERT_AI_COOLDOWN_MINUTES), 1440))
+    except (TypeError, ValueError):
+        cooldown_minutes = ALERT_AI_COOLDOWN_MINUTES
+    now_text = _now()
+    previous_decision = previous_event.get("automation_decision") if isinstance(previous_event, dict) else {}
+    previous_cooldown = previous_decision.get("ai_cooldown") if isinstance(previous_decision, dict) else {}
+    last_triggered_at = None
+    if isinstance(previous_cooldown, dict):
+        last_triggered_at = previous_cooldown.get("last_triggered_at")
+    last_triggered = _parse_datetime(last_triggered_at)
+    current = _parse_datetime(now_text) or datetime.now(timezone.utc)
+    window = timedelta(minutes=cooldown_minutes)
+    if last_triggered and current - last_triggered < window:
+        decision["run_ai"] = False
+        decision["notify"] = True
+        decision["reason"] = (
+            f"{decision.get('reason') or '命中告警策略。'} 同一事件在 {cooldown_minutes} 分钟 AI 冷却窗口内，"
+            "本次只更新事件并转发通知。"
+        )
+        decision["ai_cooldown"] = {
+            "suppressed": True,
+            "window_minutes": cooldown_minutes,
+            "last_triggered_at": last_triggered_at,
+            "next_allowed_at": (last_triggered + window).isoformat(),
+        }
+        plan = event.get("notification_plan") if isinstance(event.get("notification_plan"), dict) else {}
+        plan["when"] = "received"
+        if not plan.get("targets"):
+            plan["targets"] = ["wechat", "dingtalk", "email"]
+        if not plan.get("channel") or plan.get("channel") == "none":
+            plan["channel"] = "auto"
+        event["notification_plan"] = plan
+        event["noise_action"] = "cooldown_forward"
+        return
+    decision["ai_cooldown"] = {
+        "suppressed": False,
+        "window_minutes": cooldown_minutes,
+        "last_triggered_at": now_text,
+        "next_allowed_at": (current + window).isoformat(),
+    }
 
 
 def _merge_alert_event(items: list[dict[str, Any]], normalized: dict[str, Any]) -> dict[str, Any] | None:
@@ -231,6 +299,7 @@ def _merge_alert_event(items: list[dict[str, Any]], normalized: dict[str, Any]) 
         return None
     for item in items:
         if item.get("fingerprint") == fingerprint and item.get("status") in {"open", "acknowledged"}:
+            previous = dict(item)
             repeat_count = int(item.get("repeat_count") or 1) + 1
             item.update(
                 {
@@ -254,6 +323,7 @@ def _merge_alert_event(items: list[dict[str, Any]], normalized: dict[str, Any]) 
                 item["status"] = "closed"
                 item["closed_at"] = item.get("closed_at") or _now()
             item.update(build_alert_policy(item))
+            _apply_ai_cooldown(item, previous_event=previous)
             return item
     return None
 
@@ -277,6 +347,7 @@ def create_alert_event(payload: dict[str, Any]) -> dict[str, Any]:
     if event["status"] == "closed":
         event["closed_at"] = _now()
     event.update(build_alert_policy(event))
+    _apply_ai_cooldown(event)
     with _LOCK:
         items = _read_store()
         merged = _merge_alert_event(items, normalized)

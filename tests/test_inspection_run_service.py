@@ -57,6 +57,53 @@ class TestInspectionRunService(unittest.TestCase):
         self.assertEqual(report["run_id"], run["id"])
         self.assertEqual(summary["total_runs"], 1)
 
+    def test_run_transcript_records_create_update_report_and_delete(self):
+        store_path = self._store_path("transcript")
+        started_event = {
+            "time": "2026-05-13T00:00:00+00:00",
+            "type": "run_started",
+            "message": "开始巡检。",
+            "status": "running",
+        }
+        target_event = {
+            "time": "2026-05-13T00:00:10+00:00",
+            "type": "target_completed",
+            "message": "目标完成。",
+            "status": "success",
+        }
+        with patch.object(inspection_results, "INSPECTION_RUN_STORE_PATH", store_path):
+            run = inspection_results.record_run(
+                job_id="job-transcript",
+                status="running",
+                target_scope="asset",
+                scope_value="101",
+                message="transcript run",
+                targets=[{"asset_id": 101, "host": "db.local", "status": "running"}],
+                events=[started_event],
+                completed_at=None,
+            )
+            inspection_results.update_run(
+                run["id"],
+                status="completed",
+                targets=[{"asset_id": 101, "host": "db.local", "status": "success"}],
+                events=[started_event, target_event],
+                notification={"status": "SUCCESS", "message": "sent"},
+                completed_at="2026-05-13T00:01:00+00:00",
+            )
+            transcript_events = inspection_results.get_run_transcript_events(run["id"])
+            report = get_inspection_run_report_record(run["id"])
+            deleted = inspection_results.delete_run(run["id"])
+            after_delete = inspection_results.get_run_transcript_events(run["id"])
+
+        event_types = [event["type"] for event in transcript_events]
+        self.assertIn("run_recorded", event_types)
+        self.assertIn("run_started", event_types)
+        self.assertIn("run_updated", event_types)
+        self.assertIn("target_completed", event_types)
+        self.assertEqual(report["transcript"]["event_count"], len(transcript_events))
+        self.assertTrue(deleted)
+        self.assertEqual(after_delete, [])
+
     def test_export_report_supports_markdown_and_json(self):
         store_path = self._store_path("export")
         with patch.object(inspection_results, "INSPECTION_RUN_STORE_PATH", store_path):

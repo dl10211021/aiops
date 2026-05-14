@@ -1,10 +1,11 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from api.errors import raise_http_error
 from api.response_mappers.inspection import (
     inspection_run_deleted_response_kwargs,
     inspection_run_export_response_kwargs,
     inspection_run_report_response_kwargs,
+    inspection_run_retention_preview_response_kwargs,
     inspection_run_response_kwargs,
     inspection_run_summary_response_kwargs,
     inspection_runs_response_kwargs,
@@ -17,7 +18,9 @@ from core.inspection_run_service import (
     get_inspection_run_record,
     get_inspection_run_report_record,
     inspection_run_summary,
+    list_inspection_run_record_page,
     list_inspection_run_records,
+    preview_inspection_run_retention,
 )
 
 
@@ -35,14 +38,46 @@ async def list_inspection_runs(
     job_id: str | None = None,
     asset_id: int | None = None,
     limit: int = 50,
+    page: int = 1,
+    page_size: int = 50,
+    query: str | None = None,
+    status: str | None = None,
 ):
-    runs = list_inspection_run_records(job_id=job_id, asset_id=asset_id, limit=limit)
-    return ResponseModel(**inspection_runs_response_kwargs(runs))
+    result = list_inspection_run_record_page(
+        job_id=job_id,
+        asset_id=asset_id,
+        limit=limit,
+        page=page,
+        page_size=page_size,
+        query=query,
+        status=status,
+    )
+    return ResponseModel(
+        **inspection_runs_response_kwargs(
+            result["runs"],
+            pagination=result["pagination"],
+            metrics=result["metrics"],
+        )
+    )
 
 
 @router.get("/cron/runs/summary", response_model=ResponseModel)
 async def get_cron_run_summary():
     return ResponseModel(**inspection_run_summary_response_kwargs(inspection_run_summary()))
+
+
+@router.get("/inspection-runs/retention/preview", response_model=ResponseModel)
+async def preview_inspection_run_retention_policy(
+    keep_latest_per_job: int = Query(default=20, ge=1, le=500),
+    older_than_days: int = Query(default=90, ge=1, le=3650),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    preview = preview_inspection_run_retention(
+        keep_latest_per_job=keep_latest_per_job,
+        older_than_days=older_than_days,
+        limit=limit,
+    )
+    return ResponseModel(**inspection_run_retention_preview_response_kwargs(preview))
 
 
 @router.get("/cron/runs/{run_id}", response_model=ResponseModel)

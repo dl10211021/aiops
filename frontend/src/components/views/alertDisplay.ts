@@ -1,3 +1,5 @@
+import type { AlertEvent } from '@/types'
+
 export type AlertMetricTone = 'amber' | 'green' | 'red' | 'slate'
 
 export function alertSeverityLabel(severity?: string) {
@@ -44,11 +46,26 @@ export function alertClassLabel(value?: string) {
   return labels[key] || value || '未知'
 }
 
+export function isWebhookTestAlert(alert: Pick<AlertEvent, 'alert_name' | 'host'>) {
+  return alert.alert_name === 'OpsCore Webhook Test' || alert.host === 'opscore-test.local'
+}
+
+export function alertPurposeLabel(alert: Pick<AlertEvent, 'alert_name' | 'host' | 'alert_class'>) {
+  if (isWebhookTestAlert(alert)) return '接入测试告警'
+  return alertClassLabel(alert.alert_class)
+}
+
+export function alertQueueClassLabel(alert: Pick<AlertEvent, 'alert_name' | 'host' | 'alert_class'>) {
+  if (isWebhookTestAlert(alert)) return '接入测试'
+  return alertClassLabel(alert.alert_class)
+}
+
 export function alertNoiseActionLabel(value?: string) {
   const labels: Record<string, string> = {
     analyze: 'AI 分析',
     record_only: '仅记录',
     dedupe_escalate: '重复升级',
+    cooldown_forward: '冷却转发',
     close: '恢复关闭',
     unknown: '未知',
   }

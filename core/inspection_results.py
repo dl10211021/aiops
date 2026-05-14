@@ -3,17 +3,25 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
 import time
 import uuid
 from html import escape
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from core.aiops_run_transcript import (
+    append_run_event,
+    delete_run_events,
+    read_run_events,
+)
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
 INSPECTION_RUN_STORE_PATH = ROOT_DIR / "inspection_runs.json"
+logger = logging.getLogger(__name__)
 _LOCK = threading.Lock()
 _RUN_STORE_CACHE: tuple[str, float, int, list[dict[str, Any]]] | None = None
 _SAVE_REPLACE_ATTEMPTS = 5
@@ -424,6 +432,76 @@ def _completed_at_for_status(status: str, completed_at: str | None) -> str | Non
     return _now()
 
 
+def _transcript_root() -> Path:
+    return INSPECTION_RUN_STORE_PATH.with_name("inspection_run_transcripts")
+
+
+def _run_snapshot_payload(run: dict[str, Any]) -> dict[str, Any]:
+    return _redact(
+        {
+            "job_id": run.get("job_id"),
+            "status": run.get("status"),
+            "target_scope": run.get("target_scope"),
+            "scope_value": run.get("scope_value"),
+            "message": run.get("message"),
+            "target_count": run.get("target_count"),
+            "started_at": run.get("started_at"),
+            "completed_at": run.get("completed_at"),
+            "duration_ms": run.get("duration_ms"),
+        }
+    )
+
+
+def _append_transcript_event(
+    run_id: str,
+    event_type: str,
+    message: str,
+    *,
+    status: str | None = None,
+    payload: dict[str, Any] | None = None,
+    event_time: str | None = None,
+) -> None:
+    try:
+        append_run_event(
+            root=_transcript_root(),
+            run_id=run_id,
+            event_type=event_type,
+            message=message,
+            status=status,
+            payload=_redact(payload or {}),
+            source="inspection_run",
+            event_time=event_time,
+        )
+    except Exception:
+        logger.exception("写入巡检运行 transcript 失败: run=%s type=%s", run_id, event_type)
+
+
+def _append_embedded_run_events(run_id: str, events: list[dict[str, Any]]) -> None:
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        _append_transcript_event(
+            run_id,
+            str(event.get("type") or "run_event"),
+            str(event.get("message") or ""),
+            status=str(event.get("status")) if event.get("status") is not None else None,
+            payload={
+                key: value
+                for key, value in event.items()
+                if key not in {"type", "message", "status", "time"}
+            },
+            event_time=str(event.get("time")) if event.get("time") else None,
+        )
+
+
+def _new_embedded_events(old_run: dict[str, Any], new_run: dict[str, Any]) -> list[dict[str, Any]]:
+    old_events = list(old_run.get("events") or [])
+    new_events = list(new_run.get("events") or [])
+    if len(new_events) <= len(old_events):
+        return []
+    return [event for event in new_events[len(old_events):] if isinstance(event, dict)]
+
+
 def record_run(
     *,
     job_id: str,
@@ -457,6 +535,15 @@ def record_run(
         items = _load()
         items.insert(0, run)
         _save(items[:1000])
+    _append_transcript_event(
+        run["id"],
+        "run_recorded",
+        "巡检运行记录已创建。",
+        status=status,
+        payload=_run_snapshot_payload(run),
+        event_time=started,
+    )
+    _append_embedded_run_events(run["id"], list(run.get("events") or []))
     return run
 
 
@@ -474,6 +561,19 @@ def update_run(run_id: str, **fields: Any) -> dict[str, Any] | None:
                 updated["duration_ms"] = _duration_ms(updated.get("started_at"), updated.get("completed_at"))
             items[index] = updated
             _save(items[:1000])
+            changed_fields = sorted(str(key) for key in fields)
+            _append_transcript_event(
+                run_id,
+                "run_updated",
+                "巡检运行记录已更新。",
+                status=str(updated.get("status") or ""),
+                payload={
+                    "changed_fields": changed_fields,
+                    **_run_snapshot_payload(updated),
+                },
+                event_time=str(updated.get("completed_at") or _now()),
+            )
+            _append_embedded_run_events(run_id, _new_embedded_events(item, updated))
             return updated
     return None
 
@@ -485,6 +585,7 @@ def delete_run(run_id: str) -> bool:
         if len(next_items) == len(items):
             return False
         _save(next_items[:1000])
+        delete_run_events(root=_transcript_root(), run_id=run_id)
         return True
 
 
@@ -498,20 +599,228 @@ def _filter_run_targets_by_asset(run: dict[str, Any], asset_id: int | None = Non
     return _redact(item)
 
 
-def list_runs(job_id: str | None = None, limit: int = 50, asset_id: int | None = None) -> list[dict[str, Any]]:
-    with _LOCK:
-        items = _load()
+def _run_matches_query(run: dict[str, Any], query: str) -> bool:
+    needle = str(query or "").strip().lower()
+    if not needle:
+        return True
+    target_text = " ".join(
+        " ".join(
+            str(value)
+            for value in (
+                target.get("host"),
+                target.get("username"),
+                target.get("asset_id"),
+                target.get("asset_type"),
+                target.get("protocol"),
+                target.get("status"),
+            )
+            if value not in {None, ""}
+        )
+        for target in run.get("targets") or []
+        if isinstance(target, dict)
+    )
+    notification = run.get("notification") if isinstance(run.get("notification"), dict) else {}
+    haystack = " ".join(
+        str(value)
+        for value in (
+            run.get("id"),
+            run.get("job_id"),
+            run.get("status"),
+            run.get("target_scope"),
+            run.get("scope_value"),
+            run.get("message"),
+            notification.get("status"),
+            notification.get("message"),
+            target_text,
+        )
+        if value not in {None, ""}
+    ).lower()
+    return needle in haystack
+
+
+def _filter_runs(
+    items: list[dict[str, Any]],
+    *,
+    asset_id: int | None = None,
+    job_id: str | None = None,
+    query: str | None = None,
+    status: str | None = None,
+) -> list[dict[str, Any]]:
+    filtered = items
     if job_id:
-        items = [item for item in items if item.get("job_id") == job_id]
+        filtered = [item for item in filtered if item.get("job_id") == job_id]
     if asset_id is not None:
-        items = [
+        filtered = [
             _filter_run_targets_by_asset(item, asset_id)
-            for item in items
+            for item in filtered
             if any(target.get("asset_id") == asset_id for target in item.get("targets") or [])
         ]
     else:
-        items = [_redact(item) for item in items]
+        filtered = [_redact(item) for item in filtered]
+    normalized_status = str(status or "").strip().lower()
+    if normalized_status and normalized_status != "all":
+        filtered = [item for item in filtered if str(item.get("status") or "").lower() == normalized_status]
+    if query:
+        filtered = [item for item in filtered if _run_matches_query(item, query)]
+    return filtered
+
+
+def list_runs(job_id: str | None = None, limit: int = 50, asset_id: int | None = None) -> list[dict[str, Any]]:
+    with _LOCK:
+        items = _load()
+    items = _filter_runs(items, asset_id=asset_id, job_id=job_id)
     return items[: max(1, min(int(limit or 50), 500))]
+
+
+def list_runs_page(
+    *,
+    job_id: str | None = None,
+    asset_id: int | None = None,
+    limit: int | None = None,
+    page: int = 1,
+    page_size: int = 50,
+    query: str | None = None,
+    status: str | None = None,
+) -> dict[str, Any]:
+    with _LOCK:
+        items = _load()
+    base_items = _filter_runs(items, asset_id=asset_id, job_id=job_id, query=query)
+    metrics = {
+        "total": len(base_items),
+        "completed": sum(1 for item in base_items if item.get("status") == "completed"),
+        "failed": sum(1 for item in base_items if item.get("status") == "failed"),
+        "partial": sum(1 for item in base_items if item.get("status") == "partial"),
+        "running": sum(1 for item in base_items if item.get("status") == "running"),
+        "cancelled": sum(1 for item in base_items if item.get("status") == "cancelled"),
+        "empty": sum(1 for item in base_items if item.get("status") == "empty"),
+    }
+    filtered = _filter_runs(base_items, status=status)
+    if limit is not None and int(limit or 0) > 0 and page_size == 50:
+        page_size = int(limit)
+    safe_page_size = max(1, min(int(page_size or 50), 200))
+    safe_page = max(1, int(page or 1))
+    total = len(base_items)
+    filtered_total = len(filtered)
+    page_count = max(1, (filtered_total + safe_page_size - 1) // safe_page_size)
+    if safe_page > page_count:
+        safe_page = page_count
+    start = (safe_page - 1) * safe_page_size
+    end = start + safe_page_size
+    return {
+        "runs": filtered[start:end],
+        "pagination": {
+            "page": safe_page,
+            "page_size": safe_page_size,
+            "total": total,
+            "filtered_total": filtered_total,
+            "page_count": page_count,
+        },
+        "metrics": metrics,
+    }
+
+
+def _run_storage_bytes(run: dict[str, Any]) -> int:
+    run_bytes = len(json.dumps(_redact(run), ensure_ascii=False).encode("utf-8"))
+    run_id = str(run.get("id") or "")
+    if not run_id:
+        return run_bytes
+    transcript_path = _transcript_root() / f"{run_id}.jsonl"
+    try:
+        return run_bytes + (transcript_path.stat().st_size if transcript_path.exists() else 0)
+    except OSError:
+        return run_bytes
+
+
+def _retention_candidate_reason(
+    *,
+    index_for_job: int,
+    keep_latest_per_job: int,
+    older_than_days: int,
+    run_time: datetime | None,
+    cutoff: datetime,
+) -> str | None:
+    reasons: list[str] = []
+    if keep_latest_per_job >= 0 and index_for_job >= keep_latest_per_job:
+        reasons.append(f"超过该计划保留最近 {keep_latest_per_job} 份报告的数量")
+    if run_time and run_time < cutoff:
+        reasons.append(f"报告时间早于 {older_than_days} 天")
+    return "；".join(reasons) if reasons else None
+
+
+def preview_run_retention(
+    *,
+    keep_latest_per_job: int = 20,
+    older_than_days: int = 90,
+    limit: int = 100,
+) -> dict[str, Any]:
+    safe_keep_latest = max(1, min(int(keep_latest_per_job or 20), 500))
+    safe_older_than_days = max(1, min(int(older_than_days or 90), 3650))
+    safe_limit = max(1, min(int(limit or 100), 500))
+    cutoff = datetime.now(timezone.utc) - timedelta(days=safe_older_than_days)
+    with _LOCK:
+        items = _load()
+    sorted_items = sorted(
+        items,
+        key=lambda item: _parse_time(item.get("completed_at") or item.get("started_at")) or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
+
+    per_job_seen: dict[str, int] = {}
+    candidates: list[dict[str, Any]] = []
+    total_candidate_count = 0
+    total_reclaimable_bytes = 0
+    skipped_running = 0
+    for item in sorted_items:
+        run = _redact(item)
+        job_id = str(run.get("job_id") or "")
+        index_for_job = per_job_seen.get(job_id, 0)
+        per_job_seen[job_id] = index_for_job + 1
+        if str(run.get("status") or "").lower() == "running":
+            skipped_running += 1
+            continue
+        run_time = _parse_time(run.get("completed_at") or run.get("started_at"))
+        reason = _retention_candidate_reason(
+            index_for_job=index_for_job,
+            keep_latest_per_job=safe_keep_latest,
+            older_than_days=safe_older_than_days,
+            run_time=run_time,
+            cutoff=cutoff,
+        )
+        if not reason:
+            continue
+        total_candidate_count += 1
+        storage_bytes = _run_storage_bytes(run)
+        total_reclaimable_bytes += storage_bytes
+        if len(candidates) < safe_limit:
+            candidates.append(
+                {
+                    "id": run.get("id"),
+                    "job_id": run.get("job_id"),
+                    "status": run.get("status"),
+                    "message": run.get("message"),
+                    "target_count": run.get("target_count") or len(run.get("targets") or []),
+                    "started_at": run.get("started_at"),
+                    "completed_at": run.get("completed_at"),
+                    "reason": reason,
+                    "estimated_bytes": storage_bytes,
+                }
+            )
+    return {
+        "policy": {
+            "keep_latest_per_job": safe_keep_latest,
+            "older_than_days": safe_older_than_days,
+            "limit": safe_limit,
+            "dry_run": True,
+        },
+        "summary": {
+            "total_runs": len(items),
+            "candidate_count": len(candidates),
+            "candidate_count_total": total_candidate_count,
+            "skipped_running": skipped_running,
+            "estimated_reclaimable_bytes": total_reclaimable_bytes,
+        },
+        "candidates": candidates,
+    }
 
 
 def get_run(run_id: str) -> dict[str, Any] | None:
@@ -520,6 +829,10 @@ def get_run(run_id: str) -> dict[str, Any] | None:
             if item.get("id") == run_id:
                 return _redact(item)
     return None
+
+
+def get_run_transcript_events(run_id: str, limit: int = 1000) -> list[dict[str, Any]]:
+    return _redact(read_run_events(root=_transcript_root(), run_id=run_id, limit=limit))
 
 
 def _phase_status_for_targets(targets: list[dict[str, Any]], run_status: str) -> str:
@@ -630,6 +943,7 @@ def build_report(run_id: str) -> dict[str, Any] | None:
     targets = run.get("targets") or []
     success_count = sum(1 for target in targets if target.get("status") == "success")
     error_count = sum(1 for target in targets if target.get("status") == "error")
+    transcript_events = get_run_transcript_events(run_id, limit=5000)
     return {
         "run_id": run.get("id"),
         "job_id": run.get("job_id"),
@@ -647,6 +961,10 @@ def build_report(run_id: str) -> dict[str, Any] | None:
         },
         "notification": run.get("notification"),
         "events": run.get("events") or [],
+        "transcript": {
+            "event_count": len(transcript_events),
+            "events": transcript_events,
+        },
         "trace": _build_run_trace(run, targets),
         "score": _build_inspection_score(run, targets),
         "targets": targets,

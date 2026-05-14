@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from core import alert_events
+from core import alert_events, alert_policy
 from core.alert_event_service import (
     AlertEventServiceError,
     get_alert_event_record,
@@ -23,7 +23,11 @@ class TestAlertEventService(unittest.TestCase):
         return root / "alerts.json"
 
     def test_list_get_and_update_alert_event_records(self):
-        with patch.object(alert_events, "ALERT_STORE_PATH", self._store_path("records")):
+        store_path = self._store_path("records")
+        with (
+            patch.object(alert_events, "ALERT_STORE_PATH", store_path),
+            patch.object(alert_policy, "ALERT_POLICY_CONFIG_PATH", store_path.parent / "policy.json"),
+        ):
             created = alert_events.create_alert_event(
                 {
                     "host": "db.local",
@@ -34,7 +38,7 @@ class TestAlertEventService(unittest.TestCase):
             )
 
             listed = list_alert_event_records(status="open", severity="critical")
-            listed_by_policy = list_alert_event_records(source_family="generic", automation_mode="ai")
+            listed_by_policy = list_alert_event_records(source_family="generic", automation_mode="record_only")
             loaded = get_alert_event_record(created["id"])
             updated = update_alert_event_record(created["id"], status="acknowledged", assignee="ops", note="checking")
 

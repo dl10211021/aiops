@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import uuid
 import os
@@ -6,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from core.aiops_task_runtime import AIOpsTaskRuntime, task_runtime_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +20,13 @@ jobstores = {
 # 初始化异步调度器
 scheduler = AsyncIOScheduler(jobstores=jobstores)
 _PAUSED_JOB_IDS: set[str] = set()
-_RUNNING_INSPECTIONS: dict[str, dict[str, Any]] = {}
+_RUNNING_INSPECTIONS: dict[str, Any] = {}
 _DEFAULT_INSPECTION_TIMEOUT_SECONDS = 600.0
 _DATABASE_INSPECTION_TIMEOUT_SECONDS = 1200.0
 _ORACLE_INSPECTION_TIMEOUT_SECONDS = 1800.0
 _PAUSED_JOB_KWARG = "_opscore_paused"
+_INSPECTION_NOTIFICATION_RESULT_CHARS = 3000
+_INSPECTION_NOTIFICATION_CONTENT_CHARS = 3900
 
 _INSPECTION_CYCLE_PROFILES: dict[str, dict[str, str]] = {
     "daily": {
@@ -65,7 +69,8 @@ _INSPECTION_DEPTH_LABELS: dict[str, str] = {
 
 
 def _active_running_inspection(job_id: str) -> dict[str, Any] | None:
-    running = _RUNNING_INSPECTIONS.get(job_id)
+    running_raw = _RUNNING_INSPECTIONS.get(job_id)
+    running = task_runtime_snapshot(running_raw)
     if not running:
         return None
     task = running.get("task")
@@ -98,6 +103,15 @@ def _cron_run_state(job_id: str, schedule_status: str) -> dict[str, Any]:
         "running": bool(running),
         "running_run_id": running.get("run_id") if running else None,
         "started_at": running.get("started_at") if running else None,
+        "task_status": running.get("status") if running else None,
+        "current_stage": running.get("current_stage") if running else None,
+        "current_target": running.get("current_target") if running else None,
+        "progress_current": running.get("progress_current") if running else 0,
+        "progress_total": running.get("progress_total") if running else 0,
+        "progress_percent": running.get("progress_percent") if running else 0,
+        "elapsed_ms": running.get("elapsed_ms") if running else 0,
+        "cancel_requested_at": running.get("cancel_requested_at") if running else None,
+        "runtime_message": running.get("message") if running else None,
         "effective_status": effective_status,
         "latest_run_id": latest.get("id"),
         "latest_status": latest_status,
@@ -201,6 +215,44 @@ def _inspection_cycle_prompt(cycle: str | None, depth: str | None) -> str:
         f"周期重点：{profile['focus']}"
         f"时间范围：{profile['lookback']}"
         "请按该周期组织检查项、证据、风险等级、整改建议和报告结构。"
+    )
+
+
+def _inspection_report_contract_prompt() -> str:
+    return (
+        "\n【巡检报告输出要求】\n"
+        "你必须返回可归档的完整巡检报告，不允许只写“巡检完成”“全部正常”“所有检查项已执行”这类空泛摘要。\n"
+        "报告必须包含以下部分：\n"
+        "1. 基本信息：目标、资产类型、协议、巡检周期、巡检深度、执行时间范围。\n"
+        "2. 检查项明细表：逐项列出实际执行过的检查项；如果执行了 9 项，就必须列出 9 项。\n"
+        "3. 每个检查项必须包含：检查项名称、执行方式或命令/SQL/API 摘要、关键输出摘要、状态、风险等级、判断结论、处理建议。\n"
+        "4. 风险与异常：列出 P0/P1/P2/P3 风险；无异常也要说明关键证据，而不是只写正常。\n"
+        "5. 原始证据摘录：保留关键命令、SQL 或工具返回的核心字段，避免只给结论。\n"
+        "6. 总结建议：按优先级给出下一步动作、是否需要人工介入、是否需要复查。\n"
+        "如果某项因权限、工具、超时或数据不足无法验证，必须写明“未验证”和原因；不要编造缺失数据。\n"
+        "后端会把你的返回内容保存为巡检报告并发送通知，所以返回内容本身就是巡检报告正文。\n"
+    )
+
+
+def _inspection_report_is_too_thin(result: Any) -> bool:
+    if isinstance(result, dict):
+        return False
+    text = str(result or "").strip()
+    if not text:
+        return True
+    detail_tokens = ("检查项", "执行方式", "命令", "SQL", "API", "证据", "风险", "建议", "原始")
+    detail_score = sum(1 for token in detail_tokens if token in text)
+    generic_tokens = ("巡检任务已完成", "巡检完成", "所有", "全部执行完毕", "可直接归档")
+    generic_score = sum(1 for token in generic_tokens if token in text)
+    return len(text) < 500 or (generic_score >= 2 and detail_score < 4)
+
+
+def _inspection_report_rewrite_prompt() -> str:
+    return (
+        "你刚才返回的巡检报告过于简略，无法作为 OpsCore 巡检报告归档。\n"
+        "请不要重新发送通知，也不要只写完成摘要。请基于本会话刚才已经执行过的工具结果，重新输出完整巡检报告正文。\n"
+        f"{_inspection_report_contract_prompt()}"
+        "如果确实缺少某些工具输出，就逐项写“未验证”和原因；不要编造不存在的结果。"
     )
 
 
@@ -363,7 +415,7 @@ async def _trigger_proactive_inspection(
     定时任务的实际执行体：
     1. 后台悄悄建立 SSH 会话（模拟连通）。
     2. 将指定的巡检要求（message）发送给大模型处理。
-    3. 大模型会自动去执行命令排查，最后根据系统设定，大模型会调用 send_notification 把报告发出去。
+    3. 大模型会自动去执行命令排查，最后返回可归档的完整报告。
     4. 任务结束后清理后台会话。
     """
     logger.info(f"⏰ [CRON JOB {job_id}] 触发巡检任务 -> 目标: {host}, 角色: {agent_profile}")
@@ -419,11 +471,12 @@ async def _trigger_proactive_inspection(
     # 2. 构造系统要求，让 Agent 完成巡检报告；通知由后端统一兜底发送
     cycle_prompt = _inspection_cycle_prompt(inspection_cycle, inspection_depth)
     prompt = (
-        "【系统定时巡检任务】现在是自动巡检时间。请你对当前资产执行只读巡检。"
-        f"{cycle_prompt}"
-        f"当前资产：{asset_type}/{protocol} {host}:{port}。"
-        f"任务范围：{target_scope}；资产ID：{asset_id or 'N/A'}；模板：{template_id or '默认'}。"
-        "巡检完毕后只需要返回完整总结报告；后端会根据巡检计划统一发送通知，请不要自行调用 `send_notification`。"
+        "【系统定时巡检任务】现在是自动巡检时间。请你对当前资产执行只读巡检。\n"
+        f"{cycle_prompt}\n"
+        f"当前资产：{asset_type}/{protocol} {host}:{port}。\n"
+        f"任务范围：{target_scope}；资产ID：{asset_id or 'N/A'}；模板：{template_id or '默认'}。\n"
+        f"{_inspection_report_contract_prompt()}"
+        "巡检完毕后只需要返回完整巡检报告正文；后端会根据巡检计划统一发送通知，请不要自行调用 `send_notification`。\n"
         f"用户原始指令要求：{message}"
     )
     
@@ -431,6 +484,17 @@ async def _trigger_proactive_inspection(
     try:
         timeout_seconds = _inspection_timeout_seconds(protocol, asset_type, extra_args)
         result = await asyncio.wait_for(headless_agent_chat(session_id, prompt), timeout=timeout_seconds)
+        if _inspection_report_is_too_thin(result):
+            logger.warning("⚠️ [CRON JOB %s] AI 巡检报告过于简略，尝试要求重新输出详细报告。", job_id)
+            rewrite_timeout = min(timeout_seconds, 300.0)
+            rewritten = await asyncio.wait_for(
+                headless_agent_chat(session_id, _inspection_report_rewrite_prompt()),
+                timeout=rewrite_timeout,
+            )
+            if rewritten and not _inspection_report_is_too_thin(rewritten):
+                result = rewritten
+            elif rewritten:
+                result = rewritten
         logger.info(f"✅ [CRON JOB {job_id}] AI 巡检完成，摘要: {result[:200] if result else 'N/A'}")
         return result
     except asyncio.TimeoutError:
@@ -455,6 +519,19 @@ def _notification_status_label(status: str) -> str:
         "empty": "无目标",
         "cancelled": "已取消",
     }.get(status, status or "未知")
+
+
+def _notification_text(value: Any) -> str:
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, indent=2)
+    return str(value or "")
+
+
+def _truncate_notification_text(text: str, limit: int, *, suffix: str) -> str:
+    clean = str(text or "").strip()
+    if len(clean) <= limit:
+        return clean
+    return clean[: max(0, limit - len(suffix))].rstrip() + suffix
 
 
 def _build_inspection_notification(job_kwargs: dict[str, Any], run: dict[str, Any], targets: list[dict[str, Any]]) -> tuple[str, str]:
@@ -486,10 +563,25 @@ def _build_inspection_notification(job_kwargs: dict[str, Any], run: dict[str, An
         )
         if first_target.get("error"):
             lines.append(f"- 错误: `{first_target.get('error')}`")
-        result = str(first_target.get("result") or "").strip()
+        result = _notification_text(first_target.get("result")).strip()
         if result:
-            lines.extend(["", "## 摘要", result[:1800]])
-    return title, "\n".join(lines)
+            lines.extend(
+                [
+                    "",
+                    "## 巡检结果节选",
+                    _truncate_notification_text(
+                        result,
+                        _INSPECTION_NOTIFICATION_RESULT_CHARS,
+                        suffix="\n...（内容过长，完整巡检报告请在 OpsCore 报告中心查看）",
+                    ),
+                ]
+            )
+    content = "\n".join(lines)
+    return title, _truncate_notification_text(
+        content,
+        _INSPECTION_NOTIFICATION_CONTENT_CHARS,
+        suffix="\n...（通知内容过长，完整巡检报告请在 OpsCore 报告中心查看）",
+    )
 
 
 async def _send_inspection_completion_notification(job_kwargs: dict[str, Any], run: dict[str, Any], targets: list[dict[str, Any]]) -> dict[str, Any]:
@@ -529,6 +621,10 @@ async def _run_inspection_job(**kwargs) -> dict:
                 "target_count": 0,
                 "targets": [],
                 "message": "该计划已有巡检正在执行。",
+                "current_stage": running.get("current_stage"),
+                "progress_current": running.get("progress_current") or 0,
+                "progress_total": running.get("progress_total") or 0,
+                "progress_percent": running.get("progress_percent") or 0,
             }
     targets = _resolve_targets(kwargs)
     progress_targets = [
@@ -554,12 +650,19 @@ async def _run_inspection_job(**kwargs) -> dict:
         completed_at=None,
     )
     current_task = asyncio.current_task()
+    runtime: AIOpsTaskRuntime | None = None
     if current_task is not None and job_id:
-        _RUNNING_INSPECTIONS[job_id] = {
-            "task": current_task,
-            "run_id": run["id"],
-            "started_at": started_at,
-        }
+        runtime = AIOpsTaskRuntime(
+            task_id=f"inspection:{job_id}:{run['id']}",
+            owner_id=job_id,
+            run_id=run["id"],
+            task=current_task,
+            started_at=started_at,
+            task_type="inspection",
+            message=f"巡检运行已启动，等待处理 {len(targets)} 个目标。",
+            progress_total=len(targets),
+        )
+        _RUNNING_INSPECTIONS[job_id] = runtime
     target_results: list[dict[str, Any]] = []
     retry_count = max(0, int(kwargs.get("retry_count") or 0))
     current_target: dict[str, Any] | None = None
@@ -589,6 +692,14 @@ async def _run_inspection_job(**kwargs) -> dict:
             call_kwargs.pop(_PAUSED_JOB_KWARG, None)
             target_started_at = _now()
             current_target_started_at = target_started_at
+            if runtime:
+                runtime.mark_progress(
+                    stage="target_running",
+                    message=f"正在巡检目标 {target.get('host') or target.get('asset_id') or '-'}。",
+                    current=target_index,
+                    total=len(targets),
+                    target=target,
+                )
             progress_targets[target_index] = _safe_target_result(
                 target,
                 status="running",
@@ -638,6 +749,14 @@ async def _run_inspection_job(**kwargs) -> dict:
             )
             target_results.append(target_result)
             progress_targets[target_index] = target_result
+            if runtime:
+                runtime.mark_progress(
+                    stage="target_completed" if success else "target_failed",
+                    message=f"目标 {target.get('host') or target.get('asset_id') or '-'} 巡检{'完成' if success else '失败'}。",
+                    current=target_index + 1,
+                    total=len(targets),
+                    target=target,
+                )
             events.append(
                 _inspection_event(
                     "target_completed" if success else "target_failed",
@@ -671,6 +790,8 @@ async def _run_inspection_job(**kwargs) -> dict:
                 continue
             target_results.append(_cancelled_target_result(target, started_at))
         status = "cancelled"
+        if runtime:
+            runtime.request_cancel("巡检运行已收到取消请求。")
         events.append(
             _inspection_event(
                 "run_cancelled",
@@ -681,7 +802,10 @@ async def _run_inspection_job(**kwargs) -> dict:
         logger.info("Inspection run cancelled: job=%s run=%s", job_id, run["id"])
     finally:
         running = _RUNNING_INSPECTIONS.get(job_id)
-        if running and running.get("run_id") == run["id"]:
+        running_snapshot = task_runtime_snapshot(running)
+        if running_snapshot and running_snapshot.get("run_id") == run["id"]:
+            if isinstance(running, AIOpsTaskRuntime):
+                running.mark_finished(status if "status" in locals() else "finished")
             _RUNNING_INSPECTIONS.pop(job_id, None)
 
     completed_at = _now()
@@ -924,6 +1048,10 @@ class CronManager:
                 "target_count": 0,
                 "targets": [],
                 "message": "该计划已有巡检正在执行。",
+                "current_stage": running.get("current_stage"),
+                "progress_current": running.get("progress_current") or 0,
+                "progress_total": running.get("progress_total") or 0,
+                "progress_percent": running.get("progress_percent") or 0,
             }
         kwargs = dict(getattr(job, "kwargs", {}) or {})
         kwargs.pop("cron_expr", None)
@@ -949,13 +1077,21 @@ class CronManager:
             "target_count": 0,
             "targets": [],
             "message": "巡检已在后台启动。",
+            "current_stage": running.get("current_stage") if running else None,
+            "progress_current": running.get("progress_current") if running else 0,
+            "progress_total": running.get("progress_total") if running else 0,
+            "progress_percent": running.get("progress_percent") if running else 0,
         }
 
     @staticmethod
     def cancel_running_job(job_id: str) -> dict:
-        running = _RUNNING_INSPECTIONS.get(job_id)
+        running_raw = _RUNNING_INSPECTIONS.get(job_id)
+        running = task_runtime_snapshot(running_raw)
         if not running:
             raise KeyError(job_id)
+        if isinstance(running_raw, AIOpsTaskRuntime):
+            running_raw.request_cancel("用户请求取消当前巡检。")
+            running = running_raw.snapshot()
         task = running.get("task")
         if task is not None and not task.done():
             task.cancel()
@@ -963,6 +1099,10 @@ class CronManager:
             "job_id": job_id,
             "run_id": running.get("run_id"),
             "status": "cancelling",
+            "current_stage": running.get("current_stage"),
+            "progress_current": running.get("progress_current") or 0,
+            "progress_total": running.get("progress_total") or 0,
+            "progress_percent": running.get("progress_percent") or 0,
         }
         
     @staticmethod

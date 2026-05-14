@@ -10,6 +10,8 @@ from core.inspection_results import (
     export_report_markdown,
     get_run,
     list_runs,
+    list_runs_page,
+    preview_run_retention,
     run_summary,
 )
 
@@ -29,8 +31,42 @@ def list_inspection_run_records(
     return list_runs(job_id=job_id, asset_id=asset_id, limit=limit)
 
 
+def list_inspection_run_record_page(
+    *,
+    job_id: str | None = None,
+    asset_id: int | None = None,
+    limit: int | None = None,
+    page: int = 1,
+    page_size: int = 50,
+    query: str | None = None,
+    status: str | None = None,
+) -> dict[str, Any]:
+    return list_runs_page(
+        job_id=job_id,
+        asset_id=asset_id,
+        limit=limit,
+        page=page,
+        page_size=page_size,
+        query=query,
+        status=status,
+    )
+
+
 def inspection_run_summary() -> dict[str, Any]:
     return run_summary()
+
+
+def preview_inspection_run_retention(
+    *,
+    keep_latest_per_job: int = 20,
+    older_than_days: int = 90,
+    limit: int = 100,
+) -> dict[str, Any]:
+    return preview_run_retention(
+        keep_latest_per_job=keep_latest_per_job,
+        older_than_days=older_than_days,
+        limit=limit,
+    )
 
 
 def get_inspection_run_record(run_id: str) -> dict[str, Any]:

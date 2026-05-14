@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { CronJob } from '@/types'
 import {
   agentProfileLabel,
@@ -15,6 +16,7 @@ interface CronActionDialogProps {
   busy: boolean
   confirmLabel: string
   busyLabel: string
+  children?: ReactNode
   onClose: () => void
   onConfirm: () => void
 }
@@ -28,6 +30,7 @@ export function CronActionDialog({
   busy,
   confirmLabel,
   busyLabel,
+  children,
   onClose,
   onConfirm,
 }: CronActionDialogProps) {
@@ -56,6 +59,7 @@ export function CronActionDialog({
               <span>通知：{channelLabel(job.notification_channel)}</span>
             </div>
           </div>
+          {children}
         </div>
         <div className="ops-modal-footer">
           <button

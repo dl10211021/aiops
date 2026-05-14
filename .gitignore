@@ -80,7 +80,11 @@ Thumbs.db
 providers.json
 safety_policy.json
 approval_requests.json
+alert_events.json
+alert_policy_config.json
+alert_workflows.json
 inspection_runs.json
+inspection_run_transcripts/
 inspection_templates.json
 protocol_verification_runs.json
 verification_runs.json
@@ -90,3 +94,6 @@ backups/
 logs/
 .git_log_frontend.txt
 frontend/.vite/
+CC_notes(1)/
+CC_notes(1).zip
+my_custom_skills/*/.versions/
