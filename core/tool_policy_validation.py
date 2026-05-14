@@ -9,6 +9,7 @@ from core.tool_registry import ToolDefinition
 
 
 CONTROLLED_OPERATION_MODES = {"write", "read_write", "destructive", "external_effect"}
+ALLOWED_RETRY_REASONS = {"timeout", "connection_error", "rate_limit", "execution_error"}
 
 
 def validate_tool_runtime_policies(tools: Iterable[ToolDefinition]) -> list[str]:
@@ -48,9 +49,25 @@ def validate_tool_runtime_policy(tool_name: str, policy: Mapping[str, Any]) -> l
         issues.append(f"{issue_prefix}:missing_default_timeout")
     if not isinstance(retry_policy.get("max_attempts"), int):
         issues.append(f"{issue_prefix}:missing_retry_attempts")
+    if "delay_seconds" in retry_policy and not isinstance(retry_policy.get("delay_seconds"), (int, float)):
+        issues.append(f"{issue_prefix}:invalid_retry_delay")
+    retry_on = retry_policy.get("retry_on")
+    if retry_on is not None:
+        issues.extend(_validate_retry_reasons(issue_prefix, retry_on))
 
     return issues
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
+
+
+def _validate_retry_reasons(issue_prefix: str, retry_on: Any) -> list[str]:
+    if not isinstance(retry_on, list):
+        return [f"{issue_prefix}:invalid_retry_on"]
+
+    issues: list[str] = []
+    for reason in retry_on:
+        if not isinstance(reason, str) or reason not in ALLOWED_RETRY_REASONS:
+            issues.append(f"{issue_prefix}:invalid_retry_reason:{reason}")
+    return issues

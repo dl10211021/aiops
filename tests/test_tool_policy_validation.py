@@ -62,11 +62,53 @@ class ToolPolicyValidationTests(unittest.TestCase):
                 "operation_mode": "read",
                 "approval_policy": "none",
                 "timeout_policy": {"default_seconds": 45},
-                "retry_policy": {"max_attempts": 2},
+                "retry_policy": {"max_attempts": 2, "retry_on": ["timeout", "connection_error"]},
             },
         )
 
         self.assertEqual(issues, [])
+
+    def test_rejects_unknown_retry_reason(self):
+        issues = validate_tool_runtime_policy(
+            "read_status",
+            {
+                "operation_mode": "read",
+                "approval_policy": "none",
+                "timeout_policy": {"default_seconds": 45},
+                "retry_policy": {"max_attempts": 2, "retry_on": ["timeout", "network_glitch"]},
+            },
+        )
+
+        self.assertEqual(
+            issues,
+            ["read_status:read:none:invalid_retry_reason:network_glitch"],
+        )
+
+    def test_rejects_non_list_retry_on(self):
+        issues = validate_tool_runtime_policy(
+            "read_status",
+            {
+                "operation_mode": "read",
+                "approval_policy": "none",
+                "timeout_policy": {"default_seconds": 45},
+                "retry_policy": {"max_attempts": 2, "retry_on": "timeout"},
+            },
+        )
+
+        self.assertEqual(issues, ["read_status:read:none:invalid_retry_on"])
+
+    def test_rejects_non_numeric_retry_delay(self):
+        issues = validate_tool_runtime_policy(
+            "read_status",
+            {
+                "operation_mode": "read",
+                "approval_policy": "none",
+                "timeout_policy": {"default_seconds": 45},
+                "retry_policy": {"max_attempts": 2, "delay_seconds": "soon"},
+            },
+        )
+
+        self.assertEqual(issues, ["read_status:read:none:invalid_retry_delay"])
 
 
 if __name__ == "__main__":
