@@ -111,6 +111,38 @@ class TestLegacyCommandService(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertEqual(ctx.exception.detail, "plain failure")
 
+    def test_runtime_policy_timeout_returns_bad_request(self):
+        sessions = {"sid-linux": {"info": session_info("linux", "ssh")}}
+        dispatcher = FakeDispatcher(response=json.dumps({"success": True, "output": "late"}))
+
+        async def slow_execute(tool_name, tool_args, context):
+            await asyncio.sleep(0.02)
+            return dispatcher.response
+
+        dispatcher.route_and_execute = slow_execute
+
+        with patch(
+            "core.legacy_command_service.tool_policy_metadata",
+            return_value={
+                "name": "linux_execute_command",
+                "timeout_policy": {"default_seconds": 0.001},
+                "retry_policy": {"max_attempts": 1, "retry_on": []},
+            },
+        ):
+            with self.assertRaises(LegacyCommandServiceError) as ctx:
+                asyncio.run(
+                    execute_legacy_command_record(
+                        sessions,
+                        FakeToolRegistry(),
+                        session_id="sid-linux",
+                        command="uptime",
+                        dispatcher=dispatcher,
+                    )
+                )
+
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("工具执行超过", ctx.exception.detail)
+
     def test_missing_session_returns_not_found(self):
         with self.assertRaises(LegacyCommandServiceError) as ctx:
             asyncio.run(

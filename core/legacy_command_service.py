@@ -13,6 +13,8 @@ from core.asset_protocols import (
     STORAGE_ASSET_TYPES,
     resolve_asset_identity,
 )
+from core.tool_execution_policy import execute_with_runtime_policy
+from core.tool_registry import tool_policy_metadata
 
 
 HTTP_API_TOOL_PRIORITY = (
@@ -145,7 +147,11 @@ async def execute_legacy_command_record(
             f"该操作需要后端审批：{approval_reason}。请在聊天会话中执行，以便弹出审批确认。",
         )
 
-    result_str = await resolved_dispatcher.route_and_execute(tool_name, tool_args, context)
+    result_str = await execute_with_runtime_policy(
+        tool_name,
+        lambda: resolved_dispatcher.route_and_execute(tool_name, tool_args, context),
+        policy=tool_policy_metadata(tool_name),
+    )
     try:
         result = json.loads(result_str)
     except Exception:
