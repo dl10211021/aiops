@@ -68,6 +68,8 @@ class ToolExecutionPolicyTests(unittest.IsolatedAsyncioTestCase):
                 "retry_delay_seconds": 0.0,
                 "retry_on": [],
                 "timeout_seconds": 0.001,
+                "final_status": "error",
+                "error_type": "tool_timeout",
             },
         )
 

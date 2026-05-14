@@ -280,6 +280,8 @@ def _execution_error_result(
                 "retry_delay_seconds": retry_delay_seconds,
                 "retry_on": sorted(retry_on),
                 "timeout_seconds": timeout_seconds,
+                "final_status": "error",
+                "error_type": error_type,
             },
             "tool": tool_name,
             "tool_policy": policy,
