@@ -147,10 +147,12 @@ async def execute_legacy_command_record(
             f"该操作需要后端审批：{approval_reason}。请在聊天会话中执行，以便弹出审批确认。",
         )
 
+    runtime_execution: dict[str, Any] = {}
     result_str = await execute_with_runtime_policy(
         tool_name,
         lambda: resolved_dispatcher.route_and_execute(tool_name, tool_args, context),
         policy=tool_policy_metadata(tool_name),
+        runtime_stats=runtime_execution,
     )
     try:
         result = json.loads(result_str)
@@ -160,8 +162,11 @@ async def execute_legacy_command_record(
     if not result.get("success"):
         raise LegacyCommandServiceError(400, result.get("error") or result.get("reason") or "执行失败")
 
-    return {
+    response = {
         "output": result.get("output") or result.get("data") or "",
         "has_error": result.get("has_error", False),
         "exit_status": result.get("exit_status", 0),
     }
+    if runtime_execution:
+        response["runtime_execution"] = runtime_execution
+    return response

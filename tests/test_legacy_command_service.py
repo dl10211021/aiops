@@ -71,6 +71,8 @@ class TestLegacyCommandService(unittest.TestCase):
         )
 
         self.assertEqual(result["output"], [{"one": 1}])
+        self.assertEqual(result["runtime_execution"]["attempts"], 1)
+        self.assertEqual(result["runtime_execution"]["final_status"], "success")
         self.assertEqual(dispatcher.executions[0][0], "db_execute_query")
         self.assertEqual(dispatcher.executions[0][1], {"sql": "SELECT 1"})
         self.assertEqual(dispatcher.executions[0][2]["session_id"], "sid-db")
