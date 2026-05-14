@@ -76,6 +76,8 @@ def summarize_tool_result_for_sse(tool_result, preview_limit: int = 300) -> dict
             metadata["policy_decision"] = parsed.get("policy_decision")
         if parsed.get("tool_policy"):
             metadata["tool_policy"] = parsed.get("tool_policy")
+        if parsed.get("runtime_policy"):
+            metadata["runtime_policy"] = parsed.get("runtime_policy")
         if metadata:
             if "statement_type" in metadata or "has_result_set" in metadata:
                 metadata["type"] = "database_statement"

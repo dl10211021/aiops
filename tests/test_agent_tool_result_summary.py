@@ -128,6 +128,34 @@ def test_build_tool_end_event_includes_structured_error_metadata():
     assert "PowerShell 脚本语法错误" in safe_text
 
 
+def test_build_tool_end_event_includes_runtime_policy_error_metadata():
+    runtime_policy = {
+        "attempts": 1,
+        "max_attempts": 2,
+        "retry_delay_seconds": 0,
+        "retry_on": ["timeout"],
+        "timeout_seconds": 0.001,
+    }
+    message, _safe_text = build_tool_end_event(
+        "call-1",
+        "slow_tool",
+        {
+            "status": "ERROR",
+            "error_type": "tool_timeout",
+            "error": "工具执行超过 0.001 秒，已停止。",
+            "runtime_policy": runtime_policy,
+        },
+    )
+
+    payload = json.loads(message)
+
+    assert payload["result_status"] == "error"
+    assert payload["result_meta"]["type"] == "tool_result"
+    assert payload["result_meta"]["error_type"] == "tool_timeout"
+    assert payload["result_meta"]["runtime_policy"] == runtime_policy
+    assert payload["result_meta"]["tool_policy"]["name"] == "slow_tool"
+
+
 def test_build_tool_end_event_attaches_tool_policy_metadata_to_success_result():
     message, safe_text = build_tool_end_event(
         "call-1",
