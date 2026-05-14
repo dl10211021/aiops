@@ -85,6 +85,23 @@ def _format_policy_line(policy: dict) -> str:
     return "；".join(part for part in parts if part)
 
 
+def _format_runtime_line(item: dict) -> str:
+    result_meta = item.get("resultMeta") or item.get("result_meta") or {}
+    if not isinstance(result_meta, dict):
+        return ""
+    runtime = result_meta.get("runtime_execution") or result_meta.get("runtime_policy")
+    if not isinstance(runtime, dict):
+        return ""
+    if _record_value(runtime, "retried").lower() != "true":
+        return ""
+    attempts = _record_value(runtime, "attempts")
+    max_attempts = _record_value(runtime, "max_attempts")
+    if not attempts:
+        return ""
+    total = f"/{max_attempts}" if max_attempts else ""
+    return f"实际重试 {attempts}{total} 次"
+
+
 def format_exec_trace_lines(exec_trace: list[dict]) -> list[str]:
     lines: list[str] = []
     for index, item in enumerate(exec_trace or [], start=1):
@@ -100,6 +117,9 @@ def format_exec_trace_lines(exec_trace: list[dict]) -> list[str]:
         policy_line = _format_policy_line(trace_tool_policy(item, str(tool)))
         if policy_line:
             lines.append(f"  - Policy: {policy_line}")
+        runtime_line = _format_runtime_line(item)
+        if runtime_line:
+            lines.append(f"  - Runtime: {runtime_line}")
         evidence_id = trace_evidence_id(item)
         if evidence_id:
             lines.append(f"  - Evidence: {evidence_id}")

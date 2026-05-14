@@ -106,3 +106,31 @@ class TestSessionExport(unittest.TestCase):
 
         self.assertIn("  - Policy: 读写受控；写入受控；数据库证据", markdown)
         self.assertIn("  - Evidence: tev-db-1-call-1", markdown)
+
+    def test_format_session_history_markdown_includes_runtime_retry_metadata(self):
+        markdown = format_session_history_markdown(
+            [
+                {
+                    "role": "assistant",
+                    "content": "执行完成",
+                    "exec_trace": [
+                        {
+                            "tool": "monitoring_api_query",
+                            "status": "error",
+                            "args": "GET /api/status",
+                            "result": "timeout",
+                            "resultMeta": {
+                                "runtime_policy": {
+                                    "attempts": 2,
+                                    "max_attempts": 2,
+                                    "retried": True,
+                                }
+                            },
+                        }
+                    ],
+                }
+            ],
+            "elk-01",
+        )
+
+        self.assertIn("  - Runtime: 实际重试 2/2 次", markdown)
