@@ -112,6 +112,44 @@ class TestToolRegistry(unittest.TestCase):
         self.assertEqual(memory_delete["approval_policy"], "always_required")
         self.assertEqual(memory_delete["metadata_version"], 2)
 
+    def test_all_registered_tool_runtime_policies_are_consistent(self):
+        issues = []
+        controlled_modes = {"write", "read_write", "destructive", "external_effect"}
+
+        for tool in tool_registry.all_tools():
+            public = tool.public_dict()
+            operation_mode = public.get("operation_mode")
+            approval_policy = public.get("approval_policy")
+            retry_policy = public.get("retry_policy") or {}
+            timeout_policy = public.get("timeout_policy") or {}
+            issue_prefix = f"{tool.name}:{operation_mode}:{approval_policy}"
+
+            if operation_mode in controlled_modes and approval_policy == "none":
+                issues.append(f"{issue_prefix}:controlled_tool_without_approval")
+            if operation_mode in controlled_modes and public.get("concurrency_safe"):
+                issues.append(f"{issue_prefix}:controlled_tool_marked_concurrency_safe")
+            if operation_mode in controlled_modes and retry_policy.get("max_attempts") != 1:
+                issues.append(f"{issue_prefix}:controlled_tool_retries_enabled")
+            if operation_mode == "destructive":
+                if not public.get("destructive"):
+                    issues.append(f"{issue_prefix}:destructive_flag_missing")
+                if approval_policy != "always_required":
+                    issues.append(f"{issue_prefix}:destructive_tool_not_always_required")
+            if operation_mode == "external_effect":
+                if public.get("result_store_policy") != "audit_only":
+                    issues.append(f"{issue_prefix}:external_effect_not_audit_only")
+            if operation_mode == "read" and approval_policy != "none":
+                issues.append(f"{issue_prefix}:read_tool_requires_unexpected_approval")
+            if operation_mode == "interactive":
+                if timeout_policy.get("user_driven") is not True:
+                    issues.append(f"{issue_prefix}:interactive_tool_not_user_driven")
+            if not isinstance(timeout_policy.get("default_seconds"), (int, float)):
+                issues.append(f"{issue_prefix}:missing_default_timeout")
+            if not isinstance(retry_policy.get("max_attempts"), int):
+                issues.append(f"{issue_prefix}:missing_retry_attempts")
+
+        self.assertEqual(issues, [])
+
     def test_memcached_session_enables_memcached_tool(self):
         names = enabled_tool_names(
             {
