@@ -1,6 +1,7 @@
 import asyncio
 import json
 import unittest
+from unittest.mock import patch
 
 from core.tool_execution_policy import (
     evaluate_tool_execution_gate,
@@ -129,6 +130,40 @@ class ToolExecutionPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["error_type"], "tool_connection_error")
         self.assertEqual(payload["retry_attempts"], 1)
         self.assertEqual(attempts, 1)
+
+    async def test_runtime_policy_caps_retry_attempts_and_applies_delay(self):
+        attempts = 0
+        delays = []
+
+        async def failing_tool():
+            nonlocal attempts
+            attempts += 1
+            raise ConnectionError("temporary network failure")
+
+        async def fake_sleep(seconds):
+            delays.append(seconds)
+
+        with patch("core.tool_execution_policy.asyncio.sleep", side_effect=fake_sleep):
+            result = await execute_with_runtime_policy(
+                "flaky_tool",
+                failing_tool,
+                policy={
+                    "name": "flaky_tool",
+                    "timeout_policy": {"default_seconds": 1},
+                    "retry_policy": {
+                        "max_attempts": 99,
+                        "retry_on": ["connection_error"],
+                        "delay_seconds": 99,
+                    },
+                },
+            )
+
+        payload = json.loads(result)
+        self.assertEqual(payload["status"], "ERROR")
+        self.assertEqual(payload["error_type"], "tool_connection_error")
+        self.assertEqual(payload["retry_attempts"], 3)
+        self.assertEqual(attempts, 3)
+        self.assertEqual(delays, [5.0, 5.0])
 
 
 if __name__ == "__main__":

@@ -345,6 +345,7 @@ export interface ToolDefinition {
   retry_policy?: {
     max_attempts: number
     retry_on: string[]
+    delay_seconds?: number
   }
   metadata_version?: number
   runtime_scope?: string

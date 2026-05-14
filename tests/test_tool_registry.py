@@ -104,6 +104,7 @@ class TestToolRegistry(unittest.TestCase):
         self.assertEqual(linux_tool["evidence_family"], "host_cli")
         self.assertEqual(linux_tool["ui_renderer"], "terminal")
         self.assertFalse(linux_tool["concurrency_safe"])
+        self.assertIn("delay_seconds", linux_tool["retry_policy"])
         self.assertEqual(sql_tool["evidence_family"], "database")
         self.assertEqual(sql_tool["ui_renderer"], "sql_result")
         self.assertEqual(memory_delete["operation_mode"], "destructive")

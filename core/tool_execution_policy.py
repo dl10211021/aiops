@@ -7,6 +7,9 @@ from typing import Any, Awaitable, Callable
 
 from core.tool_registry import tool_policy_metadata
 
+MAX_RETRY_ATTEMPTS = 3
+MAX_RETRY_DELAY_SECONDS = 5.0
+
 
 @dataclass(frozen=True)
 class ToolExecutionGate:
@@ -52,7 +55,11 @@ async def execute_with_runtime_policy(
     timeout_policy = effective_policy.get("timeout_policy") if isinstance(effective_policy.get("timeout_policy"), dict) else {}
     retry_policy = effective_policy.get("retry_policy") if isinstance(effective_policy.get("retry_policy"), dict) else {}
     timeout_seconds = _bounded_timeout_seconds(timeout_policy)
-    max_attempts = _positive_int(retry_policy.get("max_attempts"), default=1)
+    max_attempts = min(
+        _positive_int(retry_policy.get("max_attempts"), default=1),
+        MAX_RETRY_ATTEMPTS,
+    )
+    retry_delay_seconds = _bounded_retry_delay_seconds(retry_policy)
     retry_on = {str(item) for item in retry_policy.get("retry_on") or []}
 
     attempt = 0
@@ -73,6 +80,7 @@ async def execute_with_runtime_policy(
                     error=f"工具执行超过 {int(timeout_seconds or 0)} 秒，已停止。",
                     attempts=attempt,
                 )
+            await _sleep_before_retry(retry_delay_seconds)
         except Exception as exc:
             last_error = exc
             error_type = _classify_exception(exc)
@@ -84,6 +92,7 @@ async def execute_with_runtime_policy(
                     error=str(exc) or exc.__class__.__name__,
                     attempts=attempt,
                 )
+            await _sleep_before_retry(retry_delay_seconds)
 
     return _execution_error_result(
         tool_name,
@@ -125,6 +134,18 @@ def _bounded_timeout_seconds(timeout_policy: dict[str, Any]) -> float | None:
     if max_seconds is None:
         return default_seconds
     return min(default_seconds, max_seconds)
+
+
+def _bounded_retry_delay_seconds(retry_policy: dict[str, Any]) -> float:
+    delay_seconds = _positive_float(retry_policy.get("delay_seconds"))
+    if delay_seconds is None:
+        return 0.0
+    return min(delay_seconds, MAX_RETRY_DELAY_SECONDS)
+
+
+async def _sleep_before_retry(delay_seconds: float) -> None:
+    if delay_seconds > 0:
+        await asyncio.sleep(delay_seconds)
 
 
 def _classify_exception(exc: Exception) -> str:

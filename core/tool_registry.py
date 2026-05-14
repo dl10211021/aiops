@@ -219,10 +219,14 @@ def _timeout_policy(operation_mode: str, evidence_family: str) -> dict[str, Any]
 
 def _retry_policy(operation_mode: str, evidence_family: str) -> dict[str, Any]:
     if operation_mode in {"write", "read_write", "destructive", "external_effect"}:
-        return {"max_attempts": 1, "retry_on": []}
+        return {"max_attempts": 1, "retry_on": [], "delay_seconds": 0}
     if evidence_family in {"http_api", "observability", "knowledge"}:
-        return {"max_attempts": 2, "retry_on": ["timeout", "connection_error", "rate_limit"]}
-    return {"max_attempts": 1, "retry_on": ["timeout"]}
+        return {
+            "max_attempts": 2,
+            "retry_on": ["timeout", "connection_error", "rate_limit"],
+            "delay_seconds": 0.25,
+        }
+    return {"max_attempts": 1, "retry_on": ["timeout"], "delay_seconds": 0}
 
 
 def _approval_policy(operation_mode: str, safety_category: str) -> str:
