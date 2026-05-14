@@ -98,7 +98,9 @@ function classifyErrorMessage(message: string): Pick<ApiErrorInfo, 'code' | 'cat
     text.includes('failed to fetch') ||
     text.includes('connection refused') ||
     text.includes('timed out') ||
-    text.includes('timeout')
+    text.includes('timeout') ||
+    message.includes('超时') ||
+    message.includes('执行超过')
   ) {
     return { code: 'connection_failed', category: 'connection' }
   }
@@ -112,8 +114,13 @@ function errorInfoFromObject(value: unknown, status?: number): ApiErrorInfo | nu
   if (!isRecord(value)) return null
   const message = stringifyDetail(value.message)
   if (!message) return null
-  const code = typeof value.code === 'string' ? value.code : undefined
-  const category = typeof value.category === 'string' ? value.category : undefined
+  const inferred = classifyErrorMessage(message)
+  const code = typeof value.code === 'string'
+    ? value.code
+    : typeof value.error_type === 'string'
+      ? value.error_type
+      : inferred.code
+  const category = typeof value.category === 'string' ? value.category : inferred.category
   return {
     message,
     code,
