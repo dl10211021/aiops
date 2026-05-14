@@ -9,6 +9,8 @@ import sqlite3
 from dataclasses import asdict, dataclass
 from typing import Any, Mapping
 
+from core.tool_trace_policy import policy_summary, trace_evidence_id, trace_tool_policy
+
 
 DEFAULT_RETENTION_INTERVAL_SECONDS = 24 * 60 * 60
 RETENTION_RUN_HISTORY_LIMIT = 50
@@ -452,6 +454,7 @@ def summarize_tool_result(raw: str, *, max_chars: int = 1200) -> str:
         "error_type",
         "error",
         "message",
+        "tool_policy",
     ):
         if key in parsed:
             summary[key] = parsed[key]
@@ -486,11 +489,24 @@ def _message_audit_summary(message: dict[str, Any], max_chars: int) -> str:
     content = str(message.get("content") or "")
     traces = message.get("exec_trace") or message.get("execTrace") or []
     tool_names = []
+    evidence_ids = []
+    policy_bits = []
     if isinstance(traces, list):
-        tool_names = [str(trace.get("tool") or "") for trace in traces if isinstance(trace, dict)]
+        for trace in traces:
+            if not isinstance(trace, dict):
+                continue
+            tool_names.append(str(trace.get("tool") or ""))
+            evidence_id = trace_evidence_id(trace)
+            if evidence_id:
+                evidence_ids.append(evidence_id)
+            policy = trace_tool_policy(trace, fallback_to_registry=False)
+            if policy:
+                policy_bits.append(policy_summary(policy))
     parts = [
         f"role={message.get('role') or ''}",
         f"tools={','.join([name for name in tool_names if name]) or '-'}",
+        f"evidence={','.join(evidence_ids) or '-'}",
+        f"policy={';'.join(policy_bits) or '-'}",
         f"content={_truncate(content, max_chars)}",
     ]
     return "\n".join(parts)

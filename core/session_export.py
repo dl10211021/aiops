@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from core.tool_display import tool_label
+from core.tool_trace_policy import trace_evidence_id, trace_tool_policy
 
 
 def chat_history_messages(messages: list[dict]) -> list[dict]:
@@ -26,6 +27,64 @@ def format_attachment_lines(attachments: list[dict]) -> list[str]:
     return lines
 
 
+def _record_value(record: dict | None, key: str) -> str:
+    if not isinstance(record, dict):
+        return ""
+    value = record.get(key)
+    if isinstance(value, (str, int, float, bool)):
+        return str(value)
+    return ""
+
+
+def _operation_label(mode: str) -> str:
+    return {
+        "read": "只读",
+        "write": "写入",
+        "read_write": "读写受控",
+        "destructive": "破坏性",
+        "external_effect": "外发",
+        "interactive": "人工交互",
+    }.get(mode, mode or "")
+
+
+def _approval_label(policy: str) -> str:
+    return {
+        "none": "无需审批",
+        "guarded_write": "写入受控",
+        "always_required": "强制审批",
+    }.get(policy, policy or "")
+
+
+def _evidence_label(family: str) -> str:
+    return {
+        "database": "数据库证据",
+        "host_cli": "主机命令证据",
+        "http_api": "HTTP/API 证据",
+        "observability": "可观测证据",
+        "network": "网络证据",
+        "storage": "存储证据",
+        "virtualization": "虚拟化证据",
+        "container": "容器证据",
+        "knowledge": "知识证据",
+        "notification": "通知审计",
+        "memory": "记忆审计",
+        "human_interaction": "人工输入",
+        "local_runtime": "本地运行时",
+        "platform": "平台证据",
+    }.get(family, family or "")
+
+
+def _format_policy_line(policy: dict) -> str:
+    parts = [
+        _operation_label(_record_value(policy, "operation_mode")),
+        _approval_label(_record_value(policy, "approval_policy")),
+        _evidence_label(_record_value(policy, "evidence_family")),
+    ]
+    if _record_value(policy, "destructive").lower() == "true":
+        parts.append("破坏性")
+    return "；".join(part for part in parts if part)
+
+
 def format_exec_trace_lines(exec_trace: list[dict]) -> list[str]:
     lines: list[str] = []
     for index, item in enumerate(exec_trace or [], start=1):
@@ -38,6 +97,12 @@ def format_exec_trace_lines(exec_trace: list[dict]) -> list[str]:
         args = str(item.get("args") or "").strip()
         result = str(item.get("result") or "").strip()
         lines.append(f"- Step {index}: {tool_text} [{status}]")
+        policy_line = _format_policy_line(trace_tool_policy(item, str(tool)))
+        if policy_line:
+            lines.append(f"  - Policy: {policy_line}")
+        evidence_id = trace_evidence_id(item)
+        if evidence_id:
+            lines.append(f"  - Evidence: {evidence_id}")
         if args:
             lines.append(f"  - Execute: {args}")
         if result:

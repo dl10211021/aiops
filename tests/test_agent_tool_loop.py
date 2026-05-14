@@ -74,6 +74,14 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payloads[0]["type"], "tool_start")
         self.assertEqual(payloads[0]["cmd"], "uptime")
         self.assertEqual(payloads[0]["args"], "uptime")
+        self.assertEqual(
+            payloads[0]["result_meta"]["tool_policy"]["name"],
+            "linux_execute_command",
+        )
+        self.assertEqual(
+            payloads[0]["result_meta"]["tool_policy"]["evidence_family"],
+            "host_cli",
+        )
         self.assertEqual(payloads[1]["type"], "tool_end")
         self.assertEqual(payloads[1]["result_status"], "done")
         self.assertEqual(payloads[1]["evidence"]["session_id"], "sid-tool")
@@ -87,6 +95,43 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(messages[0]["tool_call_id"], "call-1")
         self.assertEqual(memory_store.appended[0][1], messages[0])
+
+    async def test_approval_request_includes_tool_policy(self):
+        memory_store = FakeMemoryStore()
+        dispatcher = FakeDispatcher()
+        dispatcher.check_approval_needed = lambda tool_name, args, context: (True, "需要审批")
+        messages = []
+
+        async def never_resolve(_future, timeout):
+            raise TimeoutError()
+
+        with patch("asyncio.wait_for", side_effect=never_resolve), patch(
+            "core.agent_tool_loop.record_tool_approval_request",
+            return_value={"metadata": {"policy": {}}},
+        ), patch("core.approval_queue.mark_approval_timeout"):
+            events = await collect_tool_events(
+                tool_calls=[
+                    {
+                        "id": "call-approval",
+                        "function": {
+                            "name": "db_execute_query",
+                            "arguments": json.dumps({"sql": "delete from t"}),
+                        },
+                    }
+                ],
+                session_id="sid-tool",
+                messages=messages,
+                memory_store=memory_store,
+                dispatcher=dispatcher,
+                context={"session_id": "sid-tool"},
+                iteration=0,
+            )
+
+        payloads = [decode_sse(event) for event in events]
+        approval = payloads[0]
+        self.assertEqual(approval["type"], "tool_ask_approval")
+        self.assertEqual(approval["tool_policy"]["name"], "db_execute_query")
+        self.assertEqual(approval["tool_policy"]["evidence_family"], "database")
 
     async def test_parse_error_appends_tool_error_without_executing(self):
         memory_store = FakeMemoryStore()

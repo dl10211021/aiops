@@ -13,6 +13,13 @@ import {
   isToolErrorResult,
   traceExecutionText,
 } from './traceUtils'
+import {
+  approvalLabel,
+  evidenceLabel,
+  operationLabel,
+  recordValue,
+  toolPolicyFromTrace,
+} from './toolPolicyPresentation'
 
 interface ToolTraceListProps {
   items: ExecTraceItem[]
@@ -42,6 +49,7 @@ function ToolTraceCard({
 }: Omit<ToolTraceListProps, 'items'> & { item: ExecTraceItem }) {
   const status = item.status || (item.type === 'tool_start' ? 'running' : 'done')
   const parsedResult = item.resultMeta || parseJsonRecord(item.result || '')
+  const toolPolicy = toolPolicyFromTrace(item)
   const primaryAction = extractPrimaryAction(parsedResult)
   const isPolicyBlocked = isPolicyBlockedResult(parsedResult)
   const isToolError = !isPolicyBlocked && isToolErrorResult(parsedResult)
@@ -71,11 +79,37 @@ function ToolTraceCard({
             {evidence.tool_family}
           </span>
         )}
+        {item.toolCallId && (
+          <span className="rounded-full border border-ops-surface1 px-2 py-0.5 font-mono text-[10px] text-ops-overlay">
+            {item.toolCallId}
+          </span>
+        )}
         {elapsed && <span className="ml-auto font-mono text-[10px] text-ops-overlay">{elapsed}</span>}
       </div>
       {evidenceId && (
         <div className="border-t border-ops-surface0/80 px-3 py-1.5 font-mono text-[10px] text-ops-overlay">
           evidence: {evidenceId}
+        </div>
+      )}
+      {toolPolicy && (
+        <div className="border-t border-ops-surface0/80 px-3 py-2">
+          <div className="mb-1 text-[11px] text-ops-overlay">工具策略</div>
+          <div className="flex flex-wrap gap-1.5 text-[11px]">
+            <span className="rounded border border-ops-surface1/65 bg-ops-dark/35 px-2 py-0.5 font-semibold text-ops-subtext">
+              {operationLabel(recordValue(toolPolicy, 'operation_mode'))}
+            </span>
+            <span className="rounded border border-ops-surface1/65 bg-ops-dark/35 px-2 py-0.5 font-semibold text-ops-subtext">
+              {approvalLabel(recordValue(toolPolicy, 'approval_policy'))}
+            </span>
+            <span className="rounded border border-ops-surface1/65 bg-ops-dark/35 px-2 py-0.5 font-semibold text-ops-subtext">
+              {evidenceLabel(recordValue(toolPolicy, 'evidence_family'))}
+            </span>
+            {recordValue(toolPolicy, 'destructive') === 'true' && (
+              <span className="rounded border border-ops-alert/35 bg-ops-alert/10 px-2 py-0.5 font-semibold text-ops-alert">
+                破坏性
+              </span>
+            )}
+          </div>
         </div>
       )}
       {executionText && (

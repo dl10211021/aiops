@@ -17,6 +17,7 @@ from core.assistant_model_config import (
 )
 from core.memory import memory_db
 from core.redaction import redact_json_text, redact_text
+from core.tool_trace_policy import trace_evidence_id, trace_policy_summary
 
 
 PROFILE_VERSION = 1
@@ -123,6 +124,29 @@ def _role_for(asset_type: str, protocol: str) -> tuple[str, str]:
     return "运维资产", "general"
 
 
+def _history_trace_lines(message: dict[str, Any]) -> list[str]:
+    traces = message.get("exec_trace") or message.get("execTrace") or []
+    if not isinstance(traces, list):
+        return []
+    lines: list[str] = []
+    for trace in traces[:8]:
+        if not isinstance(trace, dict):
+            continue
+        tool = str(trace.get("tool") or "unknown")
+        status = str(trace.get("status") or "done")
+        policy = trace_policy_summary(trace)
+        evidence_id = trace_evidence_id(trace)
+        args = str(trace.get("args") or "").strip()
+        result = str(trace.get("result") or "").strip()
+        lines.append(
+            "[工具轨迹] "
+            f"tool={tool}; status={status}; policy={policy or '-'}; "
+            f"evidence={evidence_id or '-'}; execute={args[:260] or '-'}; "
+            f"result={result[:320] or '-'}"
+        )
+    return lines
+
+
 def _history_excerpt(session_id: str, limit: int = 7000) -> str:
     messages = memory_db.get_messages(session_id, for_ui=True)
     lines: list[str] = []
@@ -134,6 +158,8 @@ def _history_excerpt(session_id: str, limit: int = 7000) -> str:
             continue
         role = "用户" if msg.get("role") == "user" else "AI"
         lines.append(f"[{role}] {content[:1200]}")
+        if msg.get("role") == "assistant":
+            lines.extend(_history_trace_lines(msg))
     text = "\n".join(lines)
     return redact_text(text)[-limit:]
 

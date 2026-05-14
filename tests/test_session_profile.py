@@ -1,5 +1,6 @@
 from core.session_profile import (
     _fallback_profile,
+    _history_excerpt,
     _normalize_profile,
     profile_to_markdown,
     profile_to_system_prompt,
@@ -198,6 +199,46 @@ def test_profile_prompt_is_reused_without_manual_realtime_confirmation_wording()
 
     assert "不需要每轮人工确认" in prompt
     assert "实时工具结果验证" not in prompt
+
+
+def test_history_excerpt_includes_tool_policy_and_evidence_for_profile_generation(monkeypatch):
+    class FakeMemory:
+        def get_messages(self, session_id: str, for_ui: bool = True):
+            assert session_id == "sid-1"
+            assert for_ui is True
+            return [
+                {"role": "user", "content": "检查数据库连接"},
+                {
+                    "role": "assistant",
+                    "content": "数据库连接正常。",
+                    "exec_trace": [
+                        {
+                            "tool": "db_execute_query",
+                            "status": "done",
+                            "args": "select 1 from dual",
+                            "result": '{"success": true}',
+                            "resultMeta": {
+                                "tool_policy": {
+                                    "operation_mode": "read_write",
+                                    "approval_policy": "guarded_write",
+                                    "evidence_family": "database",
+                                }
+                            },
+                            "evidenceId": "tev-sid-1-call-1",
+                        }
+                    ],
+                },
+            ]
+
+    monkeypatch.setattr("core.session_profile.memory_db", FakeMemory())
+
+    excerpt = _history_excerpt("sid-1")
+
+    assert "[工具轨迹]" in excerpt
+    assert "tool=db_execute_query" in excerpt
+    assert "policy=read_write/guarded_write/database" in excerpt
+    assert "evidence=tev-sid-1-call-1" in excerpt
+    assert "execute=select 1 from dual" in excerpt
 
 
 def test_profile_to_system_prompt_synthesizes_from_structured_profile_when_prompt_missing():

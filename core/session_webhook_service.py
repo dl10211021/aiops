@@ -49,6 +49,33 @@ def resolve_session_webhook_target(url: str, allow_private_targets: bool = False
         raise SessionWebhookServiceError(exc.status_code, exc.detail) from exc
 
 
+def _session_webhook_audit_excerpt(markdown: str, max_lines: int = 24) -> str:
+    lines = str(markdown or "").splitlines()
+    blocks: list[list[str]] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if not line.startswith("- Step "):
+            index += 1
+            continue
+        block = [line]
+        index += 1
+        while index < len(lines) and not lines[index].startswith("- Step "):
+            if lines[index].startswith("  - Policy:") or lines[index].startswith("  - Evidence:"):
+                block.append(lines[index])
+            if lines[index].startswith("## ") or lines[index].startswith("### "):
+                break
+            index += 1
+        if len(block) > 1:
+            blocks.append(block)
+
+    flattened = [line for block in blocks for line in block]
+    if not flattened:
+        return ""
+    excerpt = "\n".join(flattened[:max_lines])
+    return f"## 执行审计摘要\n\n{excerpt}"
+
+
 async def build_session_webhook_markdown(
     active_sessions: Mapping[str, dict],
     session_id: str,
@@ -83,7 +110,12 @@ async def build_session_webhook_markdown(
         session_id,
     )
     summary = history_markdown[:1800] if history_markdown else "当前会话暂无可发送的聊天摘要。"
-    return f"{profile_markdown}\n\n## 会话摘要\n\n{summary}", profile
+    audit_excerpt = _session_webhook_audit_excerpt(history_markdown)
+    sections = [profile_markdown]
+    if audit_excerpt:
+        sections.append(audit_excerpt)
+    sections.append(f"## 会话摘要\n\n{summary}")
+    return "\n\n".join(sections), profile
 
 
 def ensure_session_webhook_markdown(markdown: str) -> None:

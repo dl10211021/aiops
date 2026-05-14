@@ -1,5 +1,6 @@
 import type { ApprovalRequest } from '@/types'
 import { assetTypeLabel, protocolLabel, toolLabel } from '@/utils/assetDisplay'
+import { approvalLabel, evidenceLabel, operationLabel, recordValue } from '@/features/sessions/toolPolicyPresentation'
 import { ApprovalInfo } from './ApprovalCenterShared'
 
 export function ApprovalDecisionModal({
@@ -24,6 +25,7 @@ export function ApprovalDecisionModal({
   onSubmit: () => void
 }) {
   const action = approved ? '批准' : '拒绝'
+  const toolPolicy = approval.metadata?.tool_policy
   return (
     <div className="ops-modal-backdrop" onClick={onClose}>
       <section className="ops-modal-surface w-full max-w-lg" onClick={(event) => event.stopPropagation()}>
@@ -40,6 +42,13 @@ export function ApprovalDecisionModal({
               <ApprovalInfo label="资产" value={approval.context?.remark || approval.context?.host || '-'} />
               <ApprovalInfo label="协议" value={`${assetTypeLabel(String(approval.context?.asset_type || ''))} / ${protocolLabel(String(approval.context?.protocol || ''))}`} />
               <ApprovalInfo label="会话" value={approval.session_id || '-'} />
+              {toolPolicy && (
+                <>
+                  <ApprovalInfo label="工具模式" value={operationLabel(recordValue(toolPolicy, 'operation_mode'))} />
+                  <ApprovalInfo label="审批策略" value={approvalLabel(recordValue(toolPolicy, 'approval_policy'))} />
+                  <ApprovalInfo label="证据类型" value={evidenceLabel(recordValue(toolPolicy, 'evidence_family'))} />
+                </>
+              )}
             </div>
           </div>
           <div>

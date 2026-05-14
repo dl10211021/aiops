@@ -140,6 +140,8 @@ class TestSessionHistory(unittest.TestCase):
         self.assertEqual(trace["args"], '{"command": "Get-Service"}')
         self.assertEqual(trace["status"], "done")
         self.assertEqual(trace["resultMeta"]["output"], "Spooler Running")
+        self.assertEqual(trace["resultMeta"]["tool_policy"]["name"], "winrm_execute_command")
+        self.assertEqual(trace["resultMeta"]["tool_policy"]["evidence_family"], "host_cli")
         self.assertNotIn("exec_trace", messages[1])
 
     def test_attach_legacy_exec_traces_covers_asset_tool_families(self):
@@ -186,6 +188,10 @@ class TestSessionHistory(unittest.TestCase):
             ],
         )
         self.assertEqual([trace["status"] for trace in traces], ["done", "done", "done", "done"])
+        self.assertEqual(
+            [trace["resultMeta"]["tool_policy"]["evidence_family"] for trace in traces],
+            ["host_cli", "database", "network", "host_cli"],
+        )
 
     def test_attach_legacy_exec_traces_marks_blocked_or_failed_results(self):
         messages = [
@@ -255,6 +261,10 @@ class TestSessionHistory(unittest.TestCase):
         self.assertEqual(hydrated[0]["exec_trace"][0]["tool"], "custom_asset_protocol_probe")
         self.assertEqual(hydrated[0]["exec_trace"][0]["status"], "done")
         self.assertEqual(hydrated[0]["exec_trace"][0]["resultMeta"]["output"], "custom ok")
+        self.assertEqual(
+            hydrated[0]["exec_trace"][0]["resultMeta"]["tool_policy"]["name"],
+            "custom_asset_protocol_probe",
+        )
 
     def test_attach_legacy_exec_traces_preserves_existing_trace(self):
         messages = [

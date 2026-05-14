@@ -22,6 +22,7 @@ from core.assistant_model_config import (
 from core.chat_execution_intent import ExecutionIntent, classify_execution_intent
 from core.tool_display import tool_label
 from core.tool_trace import make_tool_trace_collector
+from core.tool_trace_policy import trace_evidence_id, trace_policy_summary
 
 
 NATIVE_ASSET_TOOL_NAMES = {
@@ -376,6 +377,7 @@ async def run_chat_agent_loop(
             session_id=session_id,
             max_steps=max_steps,
             memory_store=memory_store,
+            exec_trace=turn_exec_trace,
         ):
             yield event
 
@@ -571,11 +573,15 @@ def _build_trace_review_prompt(
     trace_lines = []
     for index, item in enumerate(exec_trace[-12:], start=1):
         tool = _display_tool_name(item.get("tool"))
+        policy = trace_policy_summary(item)
+        evidence = trace_evidence_id(item)
         trace_lines.append(
             "\n".join(
                 [
                     f"{index}. 工具：{tool}",
                     f"状态：{item.get('status') or '-'}",
+                    f"策略：{policy or '-'}",
+                    f"证据：{evidence or '-'}",
                     f"执行：{str(item.get('args') or '-')[:900]}",
                     f"结果：{str(item.get('result') or '-')[:1400]}",
                 ]
@@ -964,6 +970,7 @@ async def _run_split_model_chat_agent_loop(
         session_id=session_id,
         max_steps=max_steps,
         memory_store=memory_store,
+        exec_trace=turn_exec_trace,
     ):
         yield event
 
@@ -989,8 +996,11 @@ def build_successful_execution_memory(
         tool = _display_tool_name(item.get("tool"))
         args = str(item.get("args") or "").strip()
         result = str(item.get("result") or "").strip()
+        policy = trace_policy_summary(item)
+        evidence = trace_evidence_id(item)
         steps.append(
-            f"{index}. 工具={tool}; 执行={args[:500] or '-'}; 成功结果={result[:700] or '-'}"
+            f"{index}. 工具={tool}; 策略={policy or '-'}; 证据={evidence or '-'}; "
+            f"执行={args[:500] or '-'}; 成功结果={result[:700] or '-'}"
         )
     content = f"""
 【成功执行经验】

@@ -38,6 +38,9 @@ class TestApprovalQueue(unittest.TestCase):
         self.assertEqual(pending[0]["args"]["password"], "***")
         self.assertEqual(pending[0]["metadata"]["policy"]["primary_action"]["id"], "sql.data_write")
         self.assertEqual(pending[0]["metadata"]["policy"]["primary_action"]["label"], "数据库数据写入")
+        self.assertEqual(pending[0]["metadata"]["tool_policy"]["name"], "db_execute_query")
+        self.assertEqual(pending[0]["metadata"]["tool_policy"]["operation_mode"], "read_write")
+        self.assertEqual(pending[0]["metadata"]["tool_policy"]["evidence_family"], "database")
         self.assertNotIn("asset-secret", str(pending[0]))
 
     def test_evolve_skill_approval_records_summary_instead_of_full_content(self):

@@ -241,6 +241,7 @@ export interface ChatMessageAttachment {
 
 export interface ExecTraceItem {
   type: 'tool_start' | 'tool_end'
+  toolCallId?: string
   tool: string
   args?: string
   result?: string
@@ -289,6 +290,7 @@ export interface ToolApproval {
   reason?: string
   actions?: SafetyPolicyAction[]
   primaryAction?: SafetyPolicyAction | null
+  toolPolicy?: Record<string, unknown> | null
   uniqueId: string
   resolved: boolean
   decision?: 'approved' | 'rejected' | 'timeout'
@@ -328,6 +330,24 @@ export interface ToolDefinition {
   protocols: string[]
   asset_types: string[]
   requires_virtual: boolean
+  operation_mode?: 'read' | 'write' | 'read_write' | 'destructive' | 'external_effect' | 'interactive' | string
+  destructive?: boolean
+  concurrency_safe?: boolean
+  approval_policy?: 'none' | 'guarded_write' | 'always_required' | string
+  evidence_family?: string
+  ui_renderer?: string
+  result_store_policy?: 'evidence' | 'audit_only' | 'audit_and_evidence' | string
+  timeout_policy?: {
+    default_seconds: number
+    max_seconds: number
+    user_driven?: boolean
+  }
+  retry_policy?: {
+    max_attempts: number
+    retry_on: string[]
+  }
+  metadata_version?: number
+  runtime_scope?: string
   enabled?: boolean
 }
 
@@ -370,7 +390,7 @@ export interface ToolCenterTool extends ToolDefinition {
   status_label: string
   model_exposed: boolean
   execution_enabled: boolean
-  source: 'opscore' | 'hermes' | string
+  source: 'opscore' | 'builtin' | string
   control_reason?: string
 }
 
@@ -526,6 +546,20 @@ export interface CronRunState {
   running: boolean
   running_run_id?: string | null
   started_at?: string | null
+  task_status?: 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled' | string | null
+  current_stage?: string | null
+  current_target?: {
+    asset_id?: number | null
+    host?: string | null
+    asset_type?: string | null
+    protocol?: string | null
+  } | null
+  progress_current?: number
+  progress_total?: number
+  progress_percent?: number
+  elapsed_ms?: number
+  cancel_requested_at?: string | null
+  runtime_message?: string | null
   effective_status?: 'running' | 'completed' | 'failed' | 'partial' | 'empty' | 'cancelled' | 'orphaned' | string | null
   latest_run_id?: string | null
   latest_status?: 'running' | 'completed' | 'failed' | 'partial' | 'empty' | 'cancelled' | string | null
@@ -605,6 +639,17 @@ export interface AlertEvent {
     run_ai?: boolean
     notify?: boolean
     reason?: string
+    rule_id?: string
+    rule_name?: string
+    remediation_mode?: string
+    allowed_remediation_actions?: string[]
+    cooldown_minutes?: number
+    ai_cooldown?: {
+      suppressed?: boolean
+      window_minutes?: number
+      last_triggered_at?: string
+      next_allowed_at?: string
+    }
   }
   notification_plan?: {
     channel?: string
@@ -620,6 +665,101 @@ export interface AlertEvent {
   annotations?: Record<string, unknown>
   payload: Record<string, unknown>
   notes: AlertEventNote[]
+}
+
+export interface AlertAutomationRuleConditions {
+  source_families?: string[]
+  severities?: string[]
+  alert_classes?: string[]
+  priorities?: string[]
+  host_contains?: string[]
+  name_contains?: string[]
+  label_contains?: string[]
+  min_repeat_count?: number
+  recovery?: boolean
+}
+
+export type AlertAutomationAction = 'record_only' | 'analyze' | 'dedupe_escalate' | 'suppress' | 'close'
+
+export interface AlertAutomationRule {
+  id: string
+  name: string
+  enabled: boolean
+  conditions: AlertAutomationRuleConditions
+  action: AlertAutomationAction
+  notify: boolean
+  channels: string[]
+  remediation_mode?: string
+  allowed_remediation_actions?: string[]
+  cooldown_minutes?: number
+  reason: string
+}
+
+export interface AlertAutomationPolicy {
+  version: number
+  rules: AlertAutomationRule[]
+}
+
+export interface AlertAutomationPolicyTestResult {
+  alert: Record<string, unknown>
+  policy: {
+    source_family?: string
+    alert_class?: string
+    priority?: string
+    noise_action?: string
+    automation_decision?: AlertEvent['automation_decision']
+    notification_plan?: AlertEvent['notification_plan']
+  }
+}
+
+export interface AlertWorkflowStep {
+  id: string
+  title: string
+  status: string
+  summary?: string
+  details?: Record<string, unknown>
+}
+
+export interface AlertWorkflowMessage {
+  role: string
+  time: string
+  content: string
+}
+
+export interface AlertWorkflowSessionLink {
+  session_id: string
+  host: string
+  remark?: string
+  asset_type?: string
+  protocol?: string
+  allow_modifications?: boolean
+  active_skills?: string[]
+  tags?: string[]
+}
+
+export interface AlertWorkflowAssetCandidate {
+  asset_id?: number | string
+  host: string
+  remark?: string
+  asset_type?: string
+  protocol?: string
+  tags?: string[]
+  can_create_session?: boolean
+}
+
+export interface AlertWorkflow {
+  id: string
+  alert_id: string
+  created_at: string
+  updated_at: string
+  status: string
+  alert_name?: string
+  host?: string
+  source_family?: string
+  linked_sessions?: AlertWorkflowSessionLink[]
+  asset_candidates?: AlertWorkflowAssetCandidate[]
+  steps: AlertWorkflowStep[]
+  messages: AlertWorkflowMessage[]
 }
 
 export interface RiskRankingItem {
@@ -675,6 +815,17 @@ export interface InspectionRunEvent {
     asset_type?: string | null
     protocol?: string | null
   }
+}
+
+export interface InspectionRunTranscriptEvent {
+  id: string
+  run_id: string
+  time: string
+  type: string
+  source: string
+  message: string
+  status?: string
+  payload?: Record<string, unknown>
 }
 
 export interface InspectionNotificationResult {
@@ -798,6 +949,10 @@ export interface InspectionReport {
   }
   notification?: InspectionNotificationResult | null
   events?: InspectionRunEvent[]
+  transcript?: {
+    event_count: number
+    events: InspectionRunTranscriptEvent[]
+  }
   trace?: InspectionRunTrace
   score?: InspectionScore
   targets: InspectionRunTarget[]
@@ -1349,6 +1504,21 @@ export interface ApprovalRequest {
   tool_name: string
   args: Record<string, unknown>
   metadata?: {
+    tool_policy?: {
+      name?: string
+      label?: string
+      toolset?: string
+      safety_category?: string
+      operation_mode?: 'read' | 'write' | 'read_write' | 'destructive' | 'external_effect' | 'interactive' | string
+      destructive?: boolean
+      concurrency_safe?: boolean
+      approval_policy?: 'none' | 'guarded_write' | 'always_required' | string
+      evidence_family?: string
+      ui_renderer?: string
+      result_store_policy?: 'evidence' | 'audit_only' | 'audit_and_evidence' | string
+      runtime_scope?: string
+      metadata_version?: number
+    }
     policy?: {
       actions?: SafetyPolicyAction[]
       primary_action?: SafetyPolicyAction | null

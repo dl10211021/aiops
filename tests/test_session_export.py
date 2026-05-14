@@ -57,6 +57,14 @@ class TestSessionExport(unittest.TestCase):
                             "status": "success",
                             "args": "uptime",
                             "result": "load average: 0.01",
+                            "resultMeta": {
+                                "tool_policy": {
+                                    "operation_mode": "read_write",
+                                    "approval_policy": "guarded_write",
+                                    "evidence_family": "local_runtime",
+                                }
+                            },
+                            "evidenceId": "tev-linux-01-call-1",
                         }
                     ],
                 }
@@ -68,5 +76,33 @@ class TestSessionExport(unittest.TestCase):
             "- Step 1: 本地技能脚本 (`local_execute_script`) [success]",
             markdown,
         )
+        self.assertIn("  - Policy: 读写受控；写入受控；本地运行时", markdown)
+        self.assertIn("  - Evidence: tev-linux-01-call-1", markdown)
         self.assertIn("  - Execute: uptime", markdown)
         self.assertIn("  - Result: load average: 0.01", markdown)
+
+    def test_format_session_history_markdown_falls_back_to_tool_policy_metadata(self):
+        markdown = format_session_history_markdown(
+            [
+                {
+                    "role": "assistant",
+                    "content": "查询完成",
+                    "exec_trace": [
+                        {
+                            "tool": "db_execute_query",
+                            "status": "done",
+                            "args": "select 1 from dual",
+                            "result": '{"success": true}',
+                            "evidence": {
+                                "evidence_id": "tev-db-1-call-1",
+                                "result_meta": {},
+                            },
+                        }
+                    ],
+                }
+            ],
+            "oracle-01",
+        )
+
+        self.assertIn("  - Policy: 读写受控；写入受控；数据库证据", markdown)
+        self.assertIn("  - Evidence: tev-db-1-call-1", markdown)

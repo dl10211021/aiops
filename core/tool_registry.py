@@ -45,6 +45,7 @@ from core.asset_protocols import (
 
 
 JsonSchema = dict[str, Any]
+ToolRuntimeMetadata = dict[str, Any]
 STORAGE_API_ASSET_TYPES = set(STORAGE_ASSET_TYPES) - STORAGE_SSH_ASSET_TYPES - {"nas"}
 SERVICE_PROBE_ASSET_TYPES = set(SERVICE_ASSET_TYPES) | {
     "dns_sd",
@@ -106,7 +107,7 @@ class ToolDefinition:
         }
 
     def public_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             "name": self.name,
             "label": self.label or TOOL_LABELS.get(self.name, self.name),
             "toolset": self.toolset,
@@ -117,6 +118,8 @@ class ToolDefinition:
             "asset_types": sorted(self.asset_types),
             "requires_virtual": self.requires_virtual,
         }
+        data.update(tool_runtime_metadata(self.name, self.toolset, self.safety_category, self.scope))
+        return data
 
 
 def _obj(properties: dict[str, Any] | None = None, required: list[str] | None = None) -> JsonSchema:
@@ -136,6 +139,182 @@ def _identity(context: dict[str, Any]) -> dict[str, Any]:
         context.get("port"),
         context.get("remark"),
     )
+
+
+def _name_has_any(name: str, tokens: tuple[str, ...]) -> bool:
+    return any(token in name for token in tokens)
+
+
+def _operation_mode(name: str, safety_category: str) -> str:
+    if name == "request_user_interaction":
+        return "interactive"
+    if name == "send_notification" or name.endswith("_message"):
+        return "external_effect"
+    if _name_has_any(name, ("delete", "remove", "drop", "truncate", "kill", "shutdown", "reboot")):
+        return "destructive"
+    if safety_category in {"local_write", "local_execute"}:
+        return "write"
+    if _name_has_any(name, ("write", "edit", "patch", "create", "update", "set_", "execute_on_scope")):
+        return "read_write"
+    if _name_has_any(name, ("execute_command", "execute_query", "_request", "_query", "_command")):
+        return "read_write"
+    return "read"
+
+
+def _evidence_family(name: str, toolset: str, safety_category: str) -> str:
+    if name == "request_user_interaction":
+        return "human_interaction"
+    if name == "send_notification" or name.endswith("_message"):
+        return "notification"
+    if name.startswith("memory_") or name == "memory":
+        return "memory"
+    if name in {"search_knowledge_base", "web_search", "web_research", "web_extractor"}:
+        return "knowledge"
+    if safety_category.startswith("local"):
+        return "local_runtime"
+    if "database" in toolset or name.startswith("db_"):
+        return "database"
+    if "monitor" in toolset or "log" in toolset:
+        return "observability"
+    if "network" in toolset:
+        return "network"
+    if "storage" in toolset:
+        return "storage"
+    if "virtualization" in toolset:
+        return "virtualization"
+    if "container" in toolset or name.startswith("k8s_"):
+        return "container"
+    if "api" in name or safety_category in {"http_api", "external_read"}:
+        return "http_api"
+    if name.endswith("_execute_command") or name == "execute_on_scope":
+        return "host_cli"
+    return "platform"
+
+
+def _ui_renderer(name: str, toolset: str, evidence_family: str) -> str:
+    if name.startswith("db_"):
+        return "sql_result"
+    if name.endswith("_execute_command") or name == "execute_on_scope":
+        return "terminal"
+    if evidence_family in {"http_api", "observability", "container", "virtualization"} or name.endswith("_request"):
+        return "json"
+    if evidence_family in {"knowledge", "notification", "memory"}:
+        return "markdown"
+    if toolset.startswith("hermes-browser") or name.startswith("browser_"):
+        return "browser"
+    return "text"
+
+
+def _timeout_policy(operation_mode: str, evidence_family: str) -> dict[str, Any]:
+    if operation_mode == "interactive":
+        return {"default_seconds": 0, "max_seconds": 0, "user_driven": True}
+    if evidence_family in {"database", "observability", "http_api"}:
+        return {"default_seconds": 60, "max_seconds": 300}
+    if evidence_family in {"host_cli", "network", "storage", "container", "virtualization"}:
+        return {"default_seconds": 120, "max_seconds": 600}
+    if evidence_family == "local_runtime":
+        return {"default_seconds": 60, "max_seconds": 300}
+    return {"default_seconds": 45, "max_seconds": 180}
+
+
+def _retry_policy(operation_mode: str, evidence_family: str) -> dict[str, Any]:
+    if operation_mode in {"write", "read_write", "destructive", "external_effect"}:
+        return {"max_attempts": 1, "retry_on": []}
+    if evidence_family in {"http_api", "observability", "knowledge"}:
+        return {"max_attempts": 2, "retry_on": ["timeout", "connection_error", "rate_limit"]}
+    return {"max_attempts": 1, "retry_on": ["timeout"]}
+
+
+def _approval_policy(operation_mode: str, safety_category: str) -> str:
+    if operation_mode == "destructive":
+        return "always_required"
+    if safety_category in {"local_write", "local_execute"}:
+        return "always_required"
+    if operation_mode in {"write", "read_write", "external_effect"}:
+        return "guarded_write"
+    return "none"
+
+
+def tool_runtime_metadata(
+    name: str,
+    toolset: str = "",
+    safety_category: str = "general",
+    scope: str = "asset",
+) -> ToolRuntimeMetadata:
+    normalized_name = str(name or "")
+    normalized_toolset = str(toolset or "")
+    normalized_safety = str(safety_category or "general")
+    operation_mode = _operation_mode(normalized_name, normalized_safety)
+    destructive = operation_mode == "destructive"
+    evidence_family = _evidence_family(normalized_name, normalized_toolset, normalized_safety)
+    approval_policy = _approval_policy(operation_mode, normalized_safety)
+    concurrency_safe = operation_mode == "read" and evidence_family != "local_runtime"
+    result_store_policy = "audit_only" if evidence_family in {"notification", "memory", "human_interaction"} else "evidence"
+    if destructive or approval_policy == "always_required":
+        result_store_policy = "audit_and_evidence"
+    return {
+        "operation_mode": operation_mode,
+        "destructive": destructive,
+        "concurrency_safe": concurrency_safe,
+        "approval_policy": approval_policy,
+        "evidence_family": evidence_family,
+        "ui_renderer": _ui_renderer(normalized_name, normalized_toolset, evidence_family),
+        "result_store_policy": result_store_policy,
+        "timeout_policy": _timeout_policy(operation_mode, evidence_family),
+        "retry_policy": _retry_policy(operation_mode, evidence_family),
+        "metadata_version": 2,
+        "runtime_scope": str(scope or "asset"),
+    }
+
+
+def _operation_label(mode: str) -> str:
+    return {
+        "read": "只读",
+        "write": "写入",
+        "read_write": "读写受控",
+        "destructive": "破坏性",
+        "external_effect": "外发",
+        "interactive": "人工交互",
+    }.get(mode, mode or "未知")
+
+
+def _approval_label(policy: str) -> str:
+    return {
+        "none": "无需审批",
+        "guarded_write": "写入受控",
+        "always_required": "强制审批",
+    }.get(policy, policy or "未知")
+
+
+def _evidence_label(family: str) -> str:
+    return {
+        "database": "数据库证据",
+        "host_cli": "主机命令证据",
+        "http_api": "HTTP/API 证据",
+        "observability": "可观测证据",
+        "network": "网络证据",
+        "storage": "存储证据",
+        "virtualization": "虚拟化证据",
+        "container": "容器证据",
+        "knowledge": "知识证据",
+        "notification": "通知审计",
+        "memory": "记忆审计",
+        "human_interaction": "人工输入",
+        "local_runtime": "本地运行时",
+        "platform": "平台证据",
+    }.get(family, family or "未知")
+
+
+def _prompt_policy_summary(tool: ToolDefinition) -> str:
+    metadata = tool_runtime_metadata(tool.name, tool.toolset, tool.safety_category, tool.scope)
+    parts = [
+        f"模式：{_operation_label(str(metadata.get('operation_mode') or ''))}",
+        f"审批：{_approval_label(str(metadata.get('approval_policy') or ''))}",
+        f"证据：{_evidence_label(str(metadata.get('evidence_family') or ''))}",
+    ]
+    if metadata.get("concurrency_safe"):
+        parts.append("可并发")
+    return "；".join(parts)
 
 
 class ToolRegistry:
@@ -188,7 +367,7 @@ class ToolRegistry:
             display_name = (
                 f"{label} (`{tool.name}`)" if label != tool.name else f"`{tool.name}`"
             )
-            lines.append(f"- {display_name}: {tool.description}")
+            lines.append(f"- {display_name}: [{_prompt_policy_summary(tool)}] {tool.description}")
         return "\n".join(lines)
 
 
@@ -206,6 +385,27 @@ def tool_public_dict(name: str) -> dict[str, Any]:
         "protocols": [],
         "asset_types": [],
         "requires_virtual": False,
+        **tool_runtime_metadata(name, "unknown", "unknown", "asset"),
+    }
+
+
+def tool_policy_metadata(name: str) -> dict[str, Any]:
+    tool = tool_registry.get(name)
+    if tool:
+        metadata = tool_runtime_metadata(tool.name, tool.toolset, tool.safety_category, tool.scope)
+        return {
+            "name": tool.name,
+            "label": tool.label or TOOL_LABELS.get(tool.name, tool.name),
+            "toolset": tool.toolset,
+            "safety_category": tool.safety_category,
+            **metadata,
+        }
+    return {
+        "name": name,
+        "label": TOOL_LABELS.get(name, name),
+        "toolset": "unknown",
+        "safety_category": "unknown",
+        **tool_runtime_metadata(name, "unknown", "unknown", "asset"),
     }
 
 

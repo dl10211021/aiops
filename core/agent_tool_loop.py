@@ -18,6 +18,7 @@ from core.agent_tool_events import (
     prepare_tool_call,
 )
 from core.safety_policy import approval_timeout_seconds
+from core.tool_registry import tool_policy_metadata
 
 
 class ChatMemoryStore(Protocol):
@@ -130,6 +131,7 @@ async def process_chat_tool_calls(
             context,
         )
         approval_required = False
+        tool_policy = tool_policy_metadata(func_name)
 
         if needs_approval:
             approval_required = True
@@ -151,6 +153,7 @@ async def process_chat_tool_calls(
                     "reason": reason,
                     "actions": policy_metadata.get("actions") or [],
                     "primary_action": policy_metadata.get("primary_action"),
+                    "tool_policy": tool_policy,
                     "id": tc_id,
                     "tool": func_name,
                     "cmd": display_cmd,
@@ -233,6 +236,7 @@ async def process_chat_tool_calls(
                 "tool": func_name,
                 "args": display_cmd,
                 "cmd": display_cmd,
+                "result_meta": {"tool_policy": tool_policy},
                 "started_at": started_at,
             }
         )
@@ -240,8 +244,10 @@ async def process_chat_tool_calls(
             trace_collector(
                 {
                     "type": "tool_start",
+                    "toolCallId": tc_id,
                     "tool": func_name,
                     "args": display_cmd,
+                    "resultMeta": {"tool_policy": tool_policy},
                     "startedAt": started_at,
                 }
             )
@@ -304,6 +310,7 @@ def _collect_tool_end_trace(
     trace_collector(
         {
             "type": "tool_end",
+            "toolCallId": payload.get("id") or payload.get("tool_call_id") or "",
             "tool": payload.get("tool") or "unknown",
             "result": payload.get("result") or "",
             "resultMeta": payload.get("result_meta") or {},

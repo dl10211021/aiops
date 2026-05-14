@@ -59,6 +59,11 @@ class TestSessionRetention(unittest.TestCase):
                     "success": True,
                     "statement_type": "select",
                     "count": 31,
+                    "tool_policy": {
+                        "operation_mode": "read_write",
+                        "approval_policy": "guarded_write",
+                        "evidence_family": "database",
+                    },
                     "data": [{"TABLESPACE_NAME": "USERS", "PCT_USED": 93.2}],
                 },
                 ensure_ascii=False,
@@ -68,6 +73,8 @@ class TestSessionRetention(unittest.TestCase):
         self.assertIn('"success": true', summary)
         self.assertIn('"statement_type": "select"', summary)
         self.assertIn('"count": 31', summary)
+        self.assertIn('"tool_policy"', summary)
+        self.assertIn('"evidence_family": "database"', summary)
         self.assertIn("TABLESPACE_NAME", summary)
 
     def test_apply_session_retention_compacts_old_tool_rows_and_trace_results(self):
@@ -150,7 +157,23 @@ class TestSessionRetention(unittest.TestCase):
         conn = self.make_memory_conn()
         old_compressed_id = insert_message(
             conn,
-            message={"role": "assistant", "content": "旧内容", "exec_trace": [{"tool": "linux_execute_command"}]},
+            message={
+                "role": "assistant",
+                "content": "旧内容",
+                "exec_trace": [
+                    {
+                        "tool": "linux_execute_command",
+                        "evidenceId": "tev-sid-1-call-1",
+                        "resultMeta": {
+                            "tool_policy": {
+                                "operation_mode": "read_write",
+                                "approval_policy": "guarded_write",
+                                "evidence_family": "host_cli",
+                            }
+                        },
+                    }
+                ],
+            },
             timestamp="2025-01-01 00:00:00",
             is_compressed=1,
         )
@@ -178,6 +201,8 @@ class TestSessionRetention(unittest.TestCase):
         self.assertEqual(audit[0], old_compressed_id)
         self.assertEqual(audit[1], "delete_compressed_history")
         self.assertIn("linux_execute_command", audit[2])
+        self.assertIn("tev-sid-1-call-1", audit[2])
+        self.assertIn("read_write/guarded_write/host_cli", audit[2])
 
     def test_dry_run_reports_without_mutating(self):
         conn = self.make_memory_conn()

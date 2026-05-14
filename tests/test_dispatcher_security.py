@@ -108,6 +108,10 @@ class TestDispatcherSecurity(unittest.TestCase):
         self.assertEqual(payload["status"], "BLOCKED")
         self.assertEqual(payload["policy_decision"], "deny")
         self.assertEqual(payload["primary_action"]["id"], "sql.dangerous_drop")
+        self.assertEqual(payload["tool_policy"]["name"], "db_execute_query")
+        self.assertEqual(payload["tool_policy"]["operation_mode"], "read_write")
+        self.assertEqual(payload["tool_policy"]["approval_policy"], "guarded_write")
+        self.assertEqual(payload["tool_policy"]["evidence_family"], "database")
 
 
 if __name__ == "__main__":

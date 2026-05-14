@@ -60,6 +60,12 @@ def test_summarize_tool_result_for_sse_preserves_policy_action_metadata():
             "actions": [action],
             "primary_action": action,
             "policy_decision": "readonly_block",
+            "tool_policy": {
+                "name": "linux_execute_command",
+                "operation_mode": "read_write",
+                "approval_policy": "guarded_write",
+                "evidence_family": "host_cli",
+            },
         }
     )
 
@@ -70,6 +76,8 @@ def test_summarize_tool_result_for_sse_preserves_policy_action_metadata():
     assert summary["metadata"]["actions"] == [action]
     assert summary["metadata"]["primary_action"] == action
     assert summary["metadata"]["policy_decision"] == "readonly_block"
+    assert summary["metadata"]["tool_policy"]["name"] == "linux_execute_command"
+    assert summary["metadata"]["tool_policy"]["evidence_family"] == "host_cli"
 
 
 def test_summarize_tool_result_for_sse_preserves_winrm_error_metadata():
@@ -120,6 +128,24 @@ def test_build_tool_end_event_includes_structured_error_metadata():
     assert "PowerShell 脚本语法错误" in safe_text
 
 
+def test_build_tool_end_event_attaches_tool_policy_metadata_to_success_result():
+    message, safe_text = build_tool_end_event(
+        "call-1",
+        "linux_execute_command",
+        {"success": True, "stdout": "ok"},
+    )
+
+    payload = json.loads(message)
+
+    assert payload["result_status"] == "done"
+    assert payload["result_meta"]["type"] == "tool_result"
+    assert payload["result_meta"]["tool_policy"]["name"] == "linux_execute_command"
+    assert payload["result_meta"]["tool_policy"]["operation_mode"] == "read_write"
+    assert payload["result_meta"]["tool_policy"]["approval_policy"] == "guarded_write"
+    assert payload["result_meta"]["tool_policy"]["evidence_family"] == "host_cli"
+    assert "ok" in safe_text
+
+
 def test_build_tool_end_event_can_attach_standard_tool_evidence():
     message, _safe_text = build_tool_end_event(
         "call-1",
@@ -148,6 +174,11 @@ def test_build_tool_end_event_can_attach_standard_tool_evidence():
     assert payload["evidence"]["tool_family"] == "database"
     assert payload["evidence"]["input_summary"] == "select 1 from dual"
     assert payload["evidence"]["asset_ref"]["host"] == "db.local"
+    assert payload["evidence"]["result_meta"]["tool_policy"]["name"] == "db_execute_query"
+    assert (
+        payload["evidence"]["result_meta"]["tool_policy"]["evidence_family"]
+        == "database"
+    )
     assert payload["evidence"]["started_at"] == 100
     assert payload["evidence"]["finished_at"] == 150
 

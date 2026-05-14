@@ -2,6 +2,7 @@ import type { ToolApproval } from '@/types'
 import { toolLabel } from '@/utils/assetDisplay'
 import TraceInfo from './TraceInfo'
 import { policyActionTone } from './policyTones'
+import { approvalLabel, evidenceLabel, operationLabel, recordValue } from './toolPolicyPresentation'
 
 type ApprovalAction = NonNullable<ToolApproval['actions']>[number]
 type ApprovalRow = { label: string; value: string; wide?: boolean }
@@ -48,6 +49,19 @@ export function ToolApprovalCardHeader({
           <span className="rounded-full border border-yellow-300/25 px-2 py-0.5 text-[11px] text-yellow-100">
             {approval.primaryAction?.label || '敏感操作'}
           </span>
+          {approval.toolPolicy && (
+            <>
+              <span className="rounded-full border border-ops-surface1/65 px-2 py-0.5 text-[11px] text-ops-subtext">
+                {operationLabel(recordValue(approval.toolPolicy, 'operation_mode'))}
+              </span>
+              <span className="rounded-full border border-ops-surface1/65 px-2 py-0.5 text-[11px] text-ops-subtext">
+                {approvalLabel(recordValue(approval.toolPolicy, 'approval_policy'))}
+              </span>
+              <span className="rounded-full border border-ops-surface1/65 px-2 py-0.5 text-[11px] text-ops-subtext">
+                {evidenceLabel(recordValue(approval.toolPolicy, 'evidence_family'))}
+              </span>
+            </>
+          )}
         </div>
       </div>
       <span className="font-mono text-[11px] text-ops-overlay">{approval.toolCallId}</span>

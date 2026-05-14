@@ -221,6 +221,14 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
                     "args": "uptime",
                     "result": "load average: 0.01, 0.01, 0.00",
                     "status": "done",
+                    "resultMeta": {
+                        "tool_policy": {
+                            "operation_mode": "read_write",
+                            "approval_policy": "guarded_write",
+                            "evidence_family": "host_cli",
+                        }
+                    },
+                    "evidenceId": "tev-sid-1-call-1",
                 }
             ],
             assistant_content="系统负载正常。",
@@ -233,6 +241,8 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("无需用户每次点赞", memory["content"])
         self.assertIn("只可作为当前会话后续轮次", memory["content"])
         self.assertIn("工具=Linux/Unix 命令 (`linux_execute_command`)", memory["content"])
+        self.assertIn("策略=read_write/guarded_write/host_cli", memory["content"])
+        self.assertIn("证据=tev-sid-1-call-1", memory["content"])
         self.assertNotIn("工具=linux_execute_command;", memory["content"])
         self.assertNotIn("同类资产排查", memory["content"])
 
@@ -251,6 +261,14 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
                     "args": "select 1 from dual",
                     "result": "1",
                     "status": "done",
+                    "resultMeta": {
+                        "tool_policy": {
+                            "operation_mode": "read_write",
+                            "approval_policy": "guarded_write",
+                            "evidence_family": "database",
+                        }
+                    },
+                    "evidenceId": "tev-sid-1-call-1",
                 }
             ],
             "数据库只读检查完成。",
@@ -259,6 +277,8 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertIn("工具：数据库 SQL 执行 (`db_execute_query`)", prompt)
+        self.assertIn("策略：read_write/guarded_write/database", prompt)
+        self.assertIn("证据：tev-sid-1-call-1", prompt)
         self.assertNotIn("工具：db_execute_query\n", prompt)
         self.assertIn("【思维链审查】", prompt)
         self.assertIn("【风险建议】", prompt)

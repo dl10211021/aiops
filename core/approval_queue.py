@@ -129,6 +129,12 @@ def _policy_metadata(tool_name: str, args: dict[str, Any], context: dict[str, An
 
 def _approval_metadata(tool_name: str, args: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     metadata: dict[str, Any] = {}
+    try:
+        from core.tool_registry import tool_policy_metadata
+
+        metadata["tool_policy"] = redact_value(tool_policy_metadata(tool_name))
+    except Exception:
+        pass
     policy = _policy_metadata(tool_name, args, context)
     if policy:
         metadata["policy"] = policy

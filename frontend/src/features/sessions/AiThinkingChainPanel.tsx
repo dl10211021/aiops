@@ -6,6 +6,14 @@ import { getSessionMemoryActivity } from '@/api/sessionHistory'
 import { toolLabel } from '@/utils/assetDisplay'
 import { parseJsonRecord } from './jsonRecords'
 import { resultReason, traceExecutionText, traceTargetLabel } from './traceUtils'
+import {
+  approvalLabel,
+  evidenceLabel,
+  operationLabel,
+  recordValue,
+  toolPolicyFromTrace,
+  toolPolicySearchText,
+} from './toolPolicyPresentation'
 
 interface AiThinkingChainPanelProps {
   sessionId: string | null
@@ -177,6 +185,10 @@ function traceEvidenceId(trace: ExecTraceItem) {
   return trace.evidenceId || trace.evidence?.evidence_id || ''
 }
 
+function tracePolicySearchText(trace: ExecTraceItem) {
+  return toolPolicySearchText(toolPolicyFromTrace(trace))
+}
+
 function recordResultLabel(record: Record<string, unknown>) {
   const reason = record.reason || record.error
   if (typeof reason === 'string' && reason.trim()) return resultReason(record)
@@ -233,6 +245,7 @@ function groupSearchText(group: ThinkingChainGroup) {
       trace.evidence?.redacted_input || '',
       trace.evidence?.output_preview || '',
       traceTargetLabel(trace),
+      tracePolicySearchText(trace),
     ]),
   ].join(' ').toLowerCase()
 }
@@ -466,66 +479,88 @@ export default function AiThinkingChainPanel({
                             ? '本轮暂未产生工具执行结果，状态会先显示在这里；工具开始执行后会追加命令链路。'
                             : '本轮没有可展示的工具执行链路。通常表示模型直接生成了回复，或后端没有为本轮持久化工具轨迹。'}
                         </div>
-                      ) : group.traces.map((trace, index) => (
-                        <div
-                          key={`${trace.tool}-${index}-${trace.startedAt || trace.completedAt || ''}`}
-                          className="rounded-xl border border-ops-surface0 bg-ops-panel/45 px-3 py-2"
-                        >
-                          <div className="flex items-center gap-2 text-xs">
-                            <span className={`h-2 w-2 rounded-full ${
-                              trace.status === 'running'
-                                ? 'animate-pulse bg-ops-accent'
-                                : trace.status === 'error'
-                                  ? 'bg-ops-alert'
-                                  : 'bg-ops-success'
-                            }`} />
-                            <span className="font-semibold text-ops-text">{index + 1}. {toolLabel(trace.tool)}</span>
-                            <span className="ml-auto text-[10px] text-ops-overlay">{trace.status || 'done'}</span>
-                          </div>
-                          <div className="mt-1 text-[11px] leading-5 text-ops-subtext">
-                            <span className="font-semibold text-ops-overlay">执行：</span>
-                            {compactText(traceTargetLabel(trace), trace.tool, 160)}
-                          </div>
-                          {(trace.evidence?.tool_family || traceEvidenceId(trace)) && (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {trace.evidence?.tool_family && (
-                                <span className="rounded-full border border-ops-surface1 px-2 py-0.5 font-mono text-[10px] text-ops-overlay">
-                                  {trace.evidence.tool_family}
-                                </span>
-                              )}
-                              {traceEvidenceId(trace) && (
-                                <span className="rounded-full border border-ops-surface1 px-2 py-0.5 font-mono text-[10px] text-ops-overlay">
-                                  evidence: {traceEvidenceId(trace)}
-                                </span>
-                              )}
+                      ) : group.traces.map((trace, index) => {
+                        const toolPolicy = toolPolicyFromTrace(trace)
+                        const operation = operationLabel(recordValue(toolPolicy, 'operation_mode'))
+                        const evidence = evidenceLabel(recordValue(toolPolicy, 'evidence_family'))
+                        const approval = recordValue(toolPolicy, 'approval_policy')
+                        const approvalText = approvalLabel(approval)
+                        return (
+                          <div
+                            key={`${trace.tool}-${index}-${trace.startedAt || trace.completedAt || ''}`}
+                            className="rounded-xl border border-ops-surface0 bg-ops-panel/45 px-3 py-2"
+                          >
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className={`h-2 w-2 rounded-full ${
+                                trace.status === 'running'
+                                  ? 'animate-pulse bg-ops-accent'
+                                  : trace.status === 'error'
+                                    ? 'bg-ops-alert'
+                                    : 'bg-ops-success'
+                              }`} />
+                              <span className="font-semibold text-ops-text">{index + 1}. {toolLabel(trace.tool)}</span>
+                              <span className="ml-auto text-[10px] text-ops-overlay">{trace.status || 'done'}</span>
                             </div>
-                          )}
-                          {traceExecutionDetail(trace) && (
-                            <div className="mt-2 rounded-md border border-ops-surface0 bg-ops-dark/35">
-                              <div className="border-b border-ops-surface0 px-2.5 py-1.5 text-[11px] font-semibold text-ops-overlay">
-                                完整命令 / SQL / 参数
+                            <div className="mt-1 text-[11px] leading-5 text-ops-subtext">
+                              <span className="font-semibold text-ops-overlay">执行：</span>
+                              {compactText(traceTargetLabel(trace), trace.tool, 160)}
+                            </div>
+                            {(trace.evidence?.tool_family || traceEvidenceId(trace) || toolPolicy) && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {operation && (
+                                  <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-subtext">
+                                    {operation}
+                                  </span>
+                                )}
+                                {evidence && (
+                                  <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-subtext">
+                                    {evidence}
+                                  </span>
+                                )}
+                                {approvalText && approval !== 'none' && (
+                                  <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-[10px] text-ops-accent">
+                                    {approvalText}
+                                  </span>
+                                )}
+                                {trace.evidence?.tool_family && (
+                                  <span className="rounded-full border border-ops-surface1 px-2 py-0.5 font-mono text-[10px] text-ops-overlay">
+                                    {trace.evidence.tool_family}
+                                  </span>
+                                )}
+                                {traceEvidenceId(trace) && (
+                                  <span className="rounded-full border border-ops-surface1 px-2 py-0.5 font-mono text-[10px] text-ops-overlay">
+                                    evidence: {traceEvidenceId(trace)}
+                                  </span>
+                                )}
                               </div>
-                              <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words px-2.5 py-2 text-[11px] leading-5 text-ops-text">
-                                {traceExecutionDetail(trace)}
-                              </pre>
+                            )}
+                            {traceExecutionDetail(trace) && (
+                              <div className="mt-2 rounded-md border border-ops-surface0 bg-ops-dark/35">
+                                <div className="border-b border-ops-surface0 px-2.5 py-1.5 text-[11px] font-semibold text-ops-overlay">
+                                  完整命令 / SQL / 参数
+                                </div>
+                                <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words px-2.5 py-2 text-[11px] leading-5 text-ops-text">
+                                  {traceExecutionDetail(trace)}
+                                </pre>
+                              </div>
+                            )}
+                            <div className="mt-1 text-[11px] leading-5 text-ops-subtext">
+                              <span className="font-semibold text-ops-overlay">结果：</span>
+                              {traceResultLabel(trace)}
                             </div>
-                          )}
-                          <div className="mt-1 text-[11px] leading-5 text-ops-subtext">
-                            <span className="font-semibold text-ops-overlay">结果：</span>
-                            {traceResultLabel(trace)}
+                            {traceResultDetail(trace) && (
+                              <details className="mt-2 rounded-md border border-ops-surface0 bg-ops-dark/35">
+                                <summary className="cursor-pointer px-2.5 py-1.5 text-[11px] font-semibold text-ops-overlay hover:text-ops-text">
+                                  查看完整结果
+                                </summary>
+                                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words px-2.5 pb-2 text-[11px] leading-5 text-ops-subtext">
+                                  {traceResultDetail(trace)}
+                                </pre>
+                              </details>
+                            )}
                           </div>
-                          {traceResultDetail(trace) && (
-                            <details className="mt-2 rounded-md border border-ops-surface0 bg-ops-dark/35">
-                              <summary className="cursor-pointer px-2.5 py-1.5 text-[11px] font-semibold text-ops-overlay hover:text-ops-text">
-                                查看完整结果
-                              </summary>
-                              <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words px-2.5 pb-2 text-[11px] leading-5 text-ops-subtext">
-                                {traceResultDetail(trace)}
-                              </pre>
-                            </details>
-                          )}
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </>
                 )}

@@ -120,6 +120,11 @@ export default function ChatWindow() {
     setSelectedSlashCommandIndex(0)
   }, [input, visibleSlashCommands.length])
 
+  const isImeKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    const nativeEvent = event.nativeEvent as { isComposing?: boolean; keyCode?: number }
+    return nativeEvent.isComposing || nativeEvent.keyCode === 229 || event.key === 'Process'
+  }
+
   useEffect(() => {
     const handleProfileFocus = () => {
       setView('chat')
@@ -264,8 +269,8 @@ export default function ChatWindow() {
     return () => window.removeEventListener('resize', syncResponsivePanelWidth)
   }, [])
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.nativeEvent.isComposing) return
+  const handleKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (isImeKeyDown(e)) return
 
     if (visibleSlashCommands.length > 0) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {

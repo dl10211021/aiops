@@ -9,6 +9,7 @@ from core.hermes_tool_adapter import (
     load_error,
 )
 from core.tool_display import TOOL_LABELS, TOOLSET_LABELS
+from core.tool_registry import tool_runtime_metadata
 
 
 NOT_WIRED_HERMES_TOOLS = {"delegate_task", "session_search"}
@@ -152,6 +153,12 @@ def _controlled_hermes_tool_items(registered_names: set[str]) -> list[dict[str, 
                 "protocols": [],
                 "asset_types": [],
                 "requires_virtual": False,
+                **tool_runtime_metadata(
+                    name,
+                    raw_toolset,
+                    "local_write" if name in {"write_file", "patch", "skill_manage"} else "local_execute",
+                    "base",
+                ),
                 "enabled": False,
                 "status": status,
                 "status_label": _status_label(status),

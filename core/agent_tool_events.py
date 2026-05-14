@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from core.redaction import redact_json_text, redact_text
 from core.tool_evidence import build_tool_evidence
+from core.tool_registry import tool_policy_metadata
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,8 @@ def summarize_tool_result_for_sse(tool_result, preview_limit: int = 300) -> dict
             metadata["primary_action"] = parsed.get("primary_action")
         if parsed.get("policy_decision"):
             metadata["policy_decision"] = parsed.get("policy_decision")
+        if parsed.get("tool_policy"):
+            metadata["tool_policy"] = parsed.get("tool_policy")
         if metadata:
             if "statement_type" in metadata or "has_result_set" in metadata:
                 metadata["type"] = "database_statement"
@@ -89,6 +92,15 @@ def summarize_tool_result_for_sse(tool_result, preview_limit: int = 300) -> dict
     }
 
 
+def _result_metadata_with_tool_policy(tool_name: str, metadata: dict) -> dict:
+    enriched = dict(metadata or {})
+    if "tool_policy" not in enriched:
+        enriched["tool_policy"] = tool_policy_metadata(tool_name)
+    if enriched and "type" not in enriched:
+        enriched["type"] = "tool_result"
+    return enriched
+
+
 def build_tool_end_event(
     tool_call_id: str,
     tool_name: str,
@@ -102,13 +114,17 @@ def build_tool_end_event(
     approval_ref: str | None = None,
 ) -> tuple[str, str]:
     result_summary = summarize_tool_result_for_sse(tool_result)
+    result_meta = _result_metadata_with_tool_policy(
+        tool_name,
+        result_summary["metadata"],
+    )
     payload = {
         "type": "tool_end",
         "id": tool_call_id,
         "tool": tool_name,
         "result": result_summary["preview"],
         "result_status": result_summary["status"],
-        "result_meta": result_summary["metadata"],
+        "result_meta": result_meta,
     }
     if started_at is not None:
         payload["started_at"] = started_at
@@ -123,7 +139,7 @@ def build_tool_end_event(
             input_summary=input_summary,
             output_preview=result_summary["preview"],
             result_status=result_summary["status"],
-            result_meta=result_summary["metadata"],
+            result_meta=result_meta,
             started_at=started_at,
             finished_at=finished_at,
             approval_ref=approval_ref,

@@ -111,6 +111,7 @@ export function actionRuleDomain(actionId: string): string {
 
 export function completeLastTrace(items: ExecTraceItem[], data: Record<string, unknown>): ExecTraceItem[] {
   const result = String(data.result || '')
+  const toolCallId = stringValue(data.id ?? data.tool_call_id)
   const dataStatus = data.result_status === 'error' || data.result_status === 'done'
     ? data.result_status
     : null
@@ -131,12 +132,22 @@ export function completeLastTrace(items: ExecTraceItem[], data: Record<string, u
       : Date.now()
   const next = [...items]
   for (let i = next.length - 1; i >= 0; i--) {
-    if (next[i].type === 'tool_start' && next[i].status === 'running') {
+    const itemCallId = stringValue(next[i].toolCallId)
+    if (
+      next[i].type === 'tool_start' &&
+      next[i].status === 'running' &&
+      (!toolCallId || !itemCallId || itemCallId === toolCallId)
+    ) {
+      const mergedResultMeta = {
+        ...(next[i].resultMeta || {}),
+        ...(resultMeta || {}),
+      }
       next[i] = {
         ...next[i],
         type: 'tool_end',
+        toolCallId: toolCallId || next[i].toolCallId,
         result,
-        resultMeta,
+        resultMeta: Object.keys(mergedResultMeta).length > 0 ? mergedResultMeta : undefined,
         evidenceId,
         evidence,
         status,
@@ -147,6 +158,7 @@ export function completeLastTrace(items: ExecTraceItem[], data: Record<string, u
   }
   next.push({
     type: 'tool_end',
+    toolCallId,
     tool: String(data.tool || 'unknown'),
     result,
     resultMeta,

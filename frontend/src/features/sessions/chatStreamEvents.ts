@@ -29,6 +29,12 @@ function streamMemoryRefs(value: unknown): MemoryReference[] {
   ))
 }
 
+function streamRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined
+}
+
 export function applyChatStreamEvent({
   sessionId,
   data,
@@ -57,8 +63,10 @@ export function applyChatStreamEvent({
         ...message,
         execTrace: [...(message.execTrace || []), {
           type: 'tool_start',
+          toolCallId: streamString(data.id ?? data.tool_call_id),
           tool: streamString(data.tool, 'unknown'),
           args: streamArgs(data.args ?? data.cmd),
+          resultMeta: streamRecord(data.result_meta),
           status: 'running',
           startedAt: typeof data.started_at === 'number' ? data.started_at : Date.now(),
         } as ExecTraceItem],
@@ -82,6 +90,7 @@ export function applyChatStreamEvent({
         primaryAction: data.primary_action && typeof data.primary_action === 'object'
           ? data.primary_action as ToolApproval['primaryAction']
           : null,
+        toolPolicy: streamRecord(data.tool_policy) || null,
         uniqueId: `approval-${Date.now()}`,
         resolved: false,
       }

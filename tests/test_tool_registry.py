@@ -70,6 +70,47 @@ class TestToolRegistry(unittest.TestCase):
         self.assertIn("审批", description)
         self.assertNotIn("只支持 SELECT", description)
 
+    def test_tool_catalog_exposes_runtime_policy_metadata(self):
+        linux_tool = enabled_tool(
+            {
+                "target_scope": "asset",
+                "asset_type": "linux",
+                "protocol": "ssh",
+                "extra_args": {},
+            },
+            "linux_execute_command",
+        )
+        sql_tool = enabled_tool(
+            {
+                "target_scope": "asset",
+                "asset_type": "mysql",
+                "protocol": "mysql",
+                "extra_args": {"db_type": "mysql"},
+            },
+            "db_execute_query",
+        )
+        memory_delete = enabled_tool(
+            {
+                "target_scope": "asset",
+                "asset_type": "linux",
+                "protocol": "ssh",
+                "extra_args": {},
+            },
+            "memory_delete",
+        )
+
+        self.assertEqual(linux_tool["operation_mode"], "read_write")
+        self.assertEqual(linux_tool["approval_policy"], "guarded_write")
+        self.assertEqual(linux_tool["evidence_family"], "host_cli")
+        self.assertEqual(linux_tool["ui_renderer"], "terminal")
+        self.assertFalse(linux_tool["concurrency_safe"])
+        self.assertEqual(sql_tool["evidence_family"], "database")
+        self.assertEqual(sql_tool["ui_renderer"], "sql_result")
+        self.assertEqual(memory_delete["operation_mode"], "destructive")
+        self.assertTrue(memory_delete["destructive"])
+        self.assertEqual(memory_delete["approval_policy"], "always_required")
+        self.assertEqual(memory_delete["metadata_version"], 2)
+
     def test_memcached_session_enables_memcached_tool(self):
         names = enabled_tool_names(
             {
@@ -542,6 +583,27 @@ class TestToolRegistry(unittest.TestCase):
                 prompt = tool_registry.prompt_lines(context)
                 self.assertIn(expected_label, prompt)
                 self.assertNotIn(raw_prefix, prompt)
+                self.assertIn("模式：", prompt)
+                self.assertIn("审批：", prompt)
+                self.assertIn("证据：", prompt)
+
+    def test_prompt_lines_expose_runtime_policy_boundaries(self):
+        linux_prompt = tool_registry.prompt_lines(
+            {"target_scope": "asset", "asset_type": "linux", "protocol": "ssh"}
+        )
+        mysql_prompt = tool_registry.prompt_lines(
+            {
+                "target_scope": "asset",
+                "asset_type": "mysql",
+                "protocol": "mysql",
+                "extra_args": {"db_type": "mysql"},
+            }
+        )
+        web_prompt = tool_registry.prompt_lines({"target_scope": "asset", "asset_type": "linux", "protocol": "ssh"})
+
+        self.assertIn("Linux/Unix 命令 (`linux_execute_command`): [模式：读写受控；审批：写入受控；证据：主机命令证据]", linux_prompt)
+        self.assertIn("数据库 SQL 执行 (`db_execute_query`): [模式：读写受控；审批：写入受控；证据：数据库证据]", mysql_prompt)
+        self.assertNotIn("发送通知", web_prompt)
 
     def test_asset_capability_tools_are_registered_and_named(self):
         issues = []

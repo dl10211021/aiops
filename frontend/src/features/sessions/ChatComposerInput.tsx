@@ -35,13 +35,13 @@ export default function ChatComposerInput({
   onStop,
 }: ChatComposerInputProps) {
   const [hasLocalText, setHasLocalText] = useState(() => Boolean(input.trim()))
-  const syncTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
   const resizeFrameRef = useRef<number | null>(null)
   const localInputRef = useRef(input)
   const hasLocalTextRef = useRef(Boolean(input.trim()))
   const lastSyncedInputRef = useRef(input)
   const lastDraftKeyRef = useRef(draftKey)
   const historyResetRef = useRef(false)
+  const isComposingRef = useRef(false)
 
   const updateHasLocalText = (value: string) => {
     const next = Boolean(value.trim())
@@ -69,32 +69,22 @@ export default function ChatComposerInput({
   }
 
   useEffect(() => () => {
-    if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
     if (resizeFrameRef.current !== null) window.cancelAnimationFrame(resizeFrameRef.current)
   }, [])
 
   useEffect(() => {
     const draftKeyChanged = draftKey !== lastDraftKeyRef.current
-    const el = textareaRef.current
     if (
       !draftKeyChanged &&
       input === lastSyncedInputRef.current &&
-      localInputRef.current === input &&
-      (!el || el.value === input)
+      localInputRef.current === input
     ) {
       return
-    }
-    if (draftKeyChanged && syncTimerRef.current) {
-      window.clearTimeout(syncTimerRef.current)
-      syncTimerRef.current = null
     }
     lastDraftKeyRef.current = draftKey
     lastSyncedInputRef.current = input
     localInputRef.current = input
     historyResetRef.current = false
-    if (el && el.value !== input) {
-      el.value = input
-    }
     updateHasLocalText(input)
     scheduleResize()
   }, [draftKey, input, textareaRef])
@@ -104,15 +94,20 @@ export default function ChatComposerInput({
   }, [])
 
   const syncInput = (value: string) => {
-    if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
     localInputRef.current = value
     lastSyncedInputRef.current = value
     onInputChange(value)
   }
 
-  const scheduleInputSync = (value: string) => {
-    if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current)
-    syncTimerRef.current = window.setTimeout(() => syncInput(value), 120)
+  const markEdited = () => {
+    if (historyResetRef.current) return
+    historyResetRef.current = true
+    onHistoryReset()
+  }
+
+  const isImeKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    const nativeEvent = event.nativeEvent as { isComposing?: boolean; keyCode?: number }
+    return isComposingRef.current || nativeEvent.isComposing || nativeEvent.keyCode === 229 || event.key === 'Process'
   }
 
   const currentInput = () => textareaRef.current?.value ?? localInputRef.current
@@ -135,22 +130,33 @@ export default function ChatComposerInput({
 
       <textarea
         ref={textareaRef}
-        defaultValue={input}
+        value={input}
+        onCompositionStart={() => {
+          isComposingRef.current = true
+        }}
+        onCompositionEnd={(event) => {
+          isComposingRef.current = false
+          const nextInput = event.currentTarget.value
+          localInputRef.current = nextInput
+          updateHasLocalText(nextInput)
+          scheduleResize()
+          syncInput(nextInput)
+          markEdited()
+        }}
         onChange={(event) => {
           const nextInput = event.target.value
           localInputRef.current = nextInput
           updateHasLocalText(nextInput)
           scheduleResize()
-          scheduleInputSync(nextInput)
-          if (!historyResetRef.current) {
-            historyResetRef.current = true
-            onHistoryReset()
-          }
+          syncInput(nextInput)
+          markEdited()
         }}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+          const isComposing = isImeKeyDown(event)
+          if (event.key === 'Enter' && !event.shiftKey && !isComposing) {
             syncInput(event.currentTarget.value)
           }
+          if (isComposing) return
           onKeyDown(event)
         }}
         onPaste={onPaste}

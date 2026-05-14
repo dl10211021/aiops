@@ -13,7 +13,7 @@ class FakeMemoryStore:
         self.messages.append((session_id, message))
 
 
-async def collect_step_summary_events(chunks_or_error):
+async def collect_step_summary_events(chunks_or_error, exec_trace=None):
     async def executor(model_name, messages, thinking_mode, tools=None):
         if isinstance(chunks_or_error, Exception):
             raise chunks_or_error
@@ -29,6 +29,7 @@ async def collect_step_summary_events(chunks_or_error):
         session_id="sid-1",
         max_steps=2,
         memory_store=memory_store,
+        exec_trace=exec_trace,
         stream_executor=executor,
     ):
         events.append(event)
@@ -122,6 +123,48 @@ class AgentStepSummaryTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(source_messages[0], {"role": "assistant", "content": "原始"})
         self.assertEqual(seen_messages[-1]["content"], agent_step_limit_instruction(2))
+
+    async def test_summary_receives_tool_audit_context_before_instruction(self):
+        seen_messages = []
+
+        async def executor(model_name, messages, thinking_mode, tools=None):
+            seen_messages.extend(messages)
+            yield {"type": "content", "content": "ok"}
+
+        memory_store = FakeMemoryStore()
+        async for _ in stream_step_limit_summary(
+            model_name="model-a",
+            messages=[{"role": "assistant", "content": "工具执行中"}],
+            session_id="sid-1",
+            max_steps=2,
+            memory_store=memory_store,
+            exec_trace=[
+                {
+                    "tool": "db_execute_query",
+                    "status": "done",
+                    "args": "select 1 from dual",
+                    "result": '{"success": true}',
+                    "resultMeta": {
+                        "tool_policy": {
+                            "operation_mode": "read_write",
+                            "approval_policy": "guarded_write",
+                            "evidence_family": "database",
+                        }
+                    },
+                    "evidenceId": "tev-sid-1-call-1",
+                }
+            ],
+            stream_executor=executor,
+        ):
+            pass
+
+        self.assertEqual(seen_messages[-1]["content"], agent_step_limit_instruction(2))
+        audit = seen_messages[-2]["content"]
+        self.assertIn("[工具审计上下文]", audit)
+        self.assertIn("tool=db_execute_query", audit)
+        self.assertIn("policy=read_write/guarded_write/database", audit)
+        self.assertIn("evidence=tev-sid-1-call-1", audit)
+        self.assertIn("execute=select 1 from dual", audit)
 
 
 if __name__ == "__main__":

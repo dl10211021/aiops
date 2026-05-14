@@ -4,6 +4,7 @@ import json
 from collections.abc import Mapping
 
 from core.session_export import format_session_history_markdown
+from core.tool_registry import tool_policy_metadata
 
 
 USER_VISIBLE_ROLES = {"user", "assistant"}
@@ -84,7 +85,7 @@ def _legacy_exec_traces_for_message(
         args = function.get("arguments") if function else call.get("arguments")
         result_message = tool_results.get(call_id)
         result = str((result_message or {}).get("content") or "")
-        result_meta = _legacy_result_meta(result)
+        result_meta = _legacy_result_meta(result, tool_name)
         traces.append(
             {
                 "type": "tool_end",
@@ -98,12 +99,16 @@ def _legacy_exec_traces_for_message(
     return traces
 
 
-def _legacy_result_meta(result: str) -> dict:
+def _legacy_result_meta(result: str, tool_name: str = "") -> dict:
     try:
         parsed = json.loads(result)
     except Exception:
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
+        parsed = {}
+    if not isinstance(parsed, dict):
+        parsed = {}
+    if tool_name and not parsed.get("tool_policy"):
+        parsed = {**parsed, "tool_policy": tool_policy_metadata(tool_name)}
+    return parsed
 
 
 def _legacy_trace_status(result_meta: dict) -> str:

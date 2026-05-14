@@ -5,6 +5,7 @@ from typing import Protocol
 
 from core.agent_runtime_config import agent_step_limit_instruction
 from core.agent_sse import sse_event
+from core.tool_trace_policy import trace_evidence_id, trace_policy_summary
 
 
 class StepSummaryMemoryStore(Protocol):
@@ -30,6 +31,34 @@ async def _default_step_summary_executor(
         yield chunk
 
 
+def _step_summary_audit_message(exec_trace: list[dict] | None) -> dict | None:
+    if not exec_trace:
+        return None
+    lines: list[str] = []
+    for index, trace in enumerate(exec_trace[-12:], start=1):
+        if not isinstance(trace, dict):
+            continue
+        lines.append(
+            f"{index}. tool={trace.get('tool') or 'unknown'}; "
+            f"status={trace.get('status') or 'done'}; "
+            f"policy={trace_policy_summary(trace) or '-'}; "
+            f"evidence={trace_evidence_id(trace) or '-'}; "
+            f"execute={str(trace.get('args') or '-')[:500]}; "
+            f"result={str(trace.get('result') or '-')[:900]}"
+        )
+    if not lines:
+        return None
+    return {
+        "role": "system",
+        "content": (
+            "[工具审计上下文]\n"
+            "下面是本轮达到步数上限前已经完成的工具轨迹。阶段性报告必须基于这些真实证据，"
+            "并保留策略、证据编号和失败/阻断状态；不要继续调用工具。\n"
+            + "\n".join(lines)
+        ),
+    }
+
+
 async def stream_step_limit_summary(
     *,
     model_name: str,
@@ -37,6 +66,7 @@ async def stream_step_limit_summary(
     session_id: str,
     max_steps: int,
     memory_store: StepSummaryMemoryStore,
+    exec_trace: list[dict] | None = None,
     stream_executor: StepSummaryExecutor | None = None,
 ) -> AsyncIterator[str]:
     yield sse_event(
@@ -48,9 +78,13 @@ async def stream_step_limit_summary(
     )
 
     executor = stream_executor or _default_step_summary_executor
-    summary_messages = messages + [
+    audit_message = _step_summary_audit_message(exec_trace)
+    summary_messages = list(messages)
+    if audit_message:
+        summary_messages.append(audit_message)
+    summary_messages.append(
         {"role": "system", "content": agent_step_limit_instruction(max_steps)}
-    ]
+    )
     summary_content = ""
 
     try:
