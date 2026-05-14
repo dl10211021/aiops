@@ -142,7 +142,18 @@ def _identity(context: dict[str, Any]) -> dict[str, Any]:
 
 
 def _name_has_any(name: str, tokens: tuple[str, ...]) -> bool:
-    return any(token in name for token in tokens)
+    parts = {part for part in name.split("_") if part}
+    for token in tokens:
+        stripped = token.strip("_")
+        if not stripped:
+            continue
+        if token.startswith("_") and name.endswith(token):
+            return True
+        if token.endswith("_") and name.startswith(token):
+            return True
+        if stripped in parts:
+            return True
+    return False
 
 
 def _operation_mode(name: str, safety_category: str) -> str:

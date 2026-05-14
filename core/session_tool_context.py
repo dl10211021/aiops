@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.asset_protocols import resolve_asset_identity
-from core.tool_display import asset_tool_detail
+from core.tool_registry import tool_public_dict
 
 
 class SessionToolContextError(Exception):
@@ -52,7 +52,7 @@ def build_session_tools_response(tool_registry, info: dict[str, Any]) -> dict[st
         for tool in toolset["tools"]
         if tool.get("enabled")
     ]
-    active_tool_details = [asset_tool_detail(tool_name) for tool_name in active_tools]
+    active_tool_details = [tool_public_dict(tool_name) for tool_name in active_tools]
     return {
         **catalog,
         "active_tools": active_tools,

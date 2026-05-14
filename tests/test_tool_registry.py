@@ -113,6 +113,31 @@ class TestToolRegistry(unittest.TestCase):
         self.assertEqual(memory_delete["approval_policy"], "always_required")
         self.assertEqual(memory_delete["metadata_version"], 2)
 
+    def test_skill_tools_are_not_misclassified_as_destructive(self):
+        skills_list = enabled_tool(
+            {
+                "target_scope": "asset",
+                "asset_type": "linux",
+                "protocol": "ssh",
+                "extra_args": {},
+            },
+            "skills_list",
+        )
+        skill_view = enabled_tool(
+            {
+                "target_scope": "asset",
+                "asset_type": "linux",
+                "protocol": "ssh",
+                "extra_args": {},
+            },
+            "skill_view",
+        )
+
+        self.assertEqual(skills_list["operation_mode"], "read")
+        self.assertFalse(skills_list["destructive"])
+        self.assertEqual(skill_view["operation_mode"], "read")
+        self.assertFalse(skill_view["destructive"])
+
     def test_all_registered_tool_runtime_policies_are_consistent(self):
         self.assertEqual(validate_tool_runtime_policies(tool_registry.all_tools()), [])
 

@@ -50,6 +50,10 @@ class TestSessionToolContext(unittest.TestCase):
         self.assertNotIn("linux_execute_command", payload["active_tools"])
         tool_details = {item["name"]: item for item in payload["active_tool_details"]}
         self.assertEqual(tool_details["winrm_execute_command"]["label"], "Windows PowerShell 命令")
+        self.assertEqual(tool_details["winrm_execute_command"]["operation_mode"], "read_write")
+        self.assertEqual(tool_details["winrm_execute_command"]["approval_policy"], "guarded_write")
+        self.assertIn("timeout_policy", tool_details["winrm_execute_command"])
+        self.assertIn("retry_policy", tool_details["winrm_execute_command"])
         dumped = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("managed-secret", dumped)
         self.assertNotIn("secret-key", dumped)
@@ -89,3 +93,4 @@ class TestSessionToolContext(unittest.TestCase):
         self.assertIn("winrm_execute_command", payload["active_tools"])
         tool_details = {item["name"]: item for item in payload["active_tool_details"]}
         self.assertEqual(tool_details["winrm_execute_command"]["label"], "Windows PowerShell 命令")
+        self.assertEqual(tool_details["winrm_execute_command"]["operation_mode"], "read_write")
