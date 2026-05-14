@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-import re
+import ast
 from pathlib import Path
 
 
@@ -18,10 +18,7 @@ ALLOWED_EXECUTION_FILES = {
 SKIPPED_FILES = {
     "core/dispatcher.py",
 }
-ROUTE_EXECUTION_PATTERN = re.compile(r"\broute_and_execute\s*\(")
-SAFETY_APPROVAL_QUALIFIED_PATTERN = re.compile(r"\bcore\.safety_policy\.check_approval_needed\s*\(")
 POLICY_WRAPPER = "execute_with_runtime_policy"
-WRAPPER_LOOKBACK_LINES = 8
 
 
 def _normalize(path: Path) -> str:
@@ -30,22 +27,24 @@ def _normalize(path: Path) -> str:
 
 def runtime_policy_coverage_issues_for_text(rel_path: str, text: str) -> list[str]:
     issues: list[str] = []
-    issues.extend(approval_policy_coverage_issues_for_text(rel_path, text))
-    if not ROUTE_EXECUTION_PATTERN.search(text):
+    tree = _parse_source(rel_path, text)
+    if isinstance(tree, str):
+        return [tree]
+
+    issues.extend(approval_policy_coverage_issues_for_tree(rel_path, tree))
+
+    route_calls = _route_and_execute_calls(tree)
+    if not route_calls:
         return issues
     if rel_path not in ALLOWED_EXECUTION_FILES:
         issues.append(f"{rel_path}: route_and_execute call is not on the reviewed execution allowlist")
         return issues
 
-    lines = text.splitlines()
-    for line_number, line in enumerate(lines, start=1):
-        if not ROUTE_EXECUTION_PATTERN.search(line):
-            continue
-        start = max(0, line_number - WRAPPER_LOOKBACK_LINES - 1)
-        context = "\n".join(lines[start:line_number])
-        if POLICY_WRAPPER not in context:
+    parents = _parent_map(tree)
+    for call in route_calls:
+        if not _has_policy_wrapper_ancestor(call, parents):
             issues.append(
-                f"{rel_path}:{line_number}: route_and_execute call is not wrapped by {POLICY_WRAPPER}"
+                f"{rel_path}:{call.lineno}: route_and_execute call is not wrapped by {POLICY_WRAPPER}"
             )
     return issues
 
@@ -53,34 +52,100 @@ def runtime_policy_coverage_issues_for_text(rel_path: str, text: str) -> list[st
 def approval_policy_coverage_issues_for_text(rel_path: str, text: str) -> list[str]:
     if rel_path == "core/dispatcher.py":
         return []
+    tree = _parse_source(rel_path, text)
+    if isinstance(tree, str):
+        return [tree]
+    return approval_policy_coverage_issues_for_tree(rel_path, tree)
+
+
+def approval_policy_coverage_issues_for_tree(rel_path: str, tree: ast.AST) -> list[str]:
+    if rel_path == "core/dispatcher.py":
+        return []
+
     issues: list[str] = []
-    if _imports_safety_policy_approval(text):
+    aliases = _safety_policy_aliases(tree)
+
+    if _imports_safety_policy_approval(tree):
         issues.append(
             f"{rel_path}: import dispatcher.check_approval_needed instead of core.safety_policy.check_approval_needed"
         )
-    if SAFETY_APPROVAL_QUALIFIED_PATTERN.search(text):
+    if _calls_safety_policy_approval(tree, aliases):
         issues.append(
             f"{rel_path}: call dispatcher.check_approval_needed instead of core.safety_policy.check_approval_needed"
         )
     return issues
 
 
-def _imports_safety_policy_approval(text: str) -> bool:
-    lines = text.splitlines()
-    index = 0
-    while index < len(lines):
-        line = lines[index].strip()
-        if not line.startswith("from core.safety_policy import"):
-            index += 1
-            continue
-        import_text = line
-        while import_text.count("(") > import_text.count(")") and index + 1 < len(lines):
-            index += 1
-            import_text += "\n" + lines[index].strip()
-        if re.search(r"\bcheck_approval_needed\b", import_text):
+def _parse_source(rel_path: str, text: str) -> ast.AST | str:
+    try:
+        return ast.parse(text)
+    except SyntaxError as exc:
+        return f"{rel_path}: unable to parse Python source for runtime policy coverage: {exc.msg}"
+
+
+def _parent_map(tree: ast.AST) -> dict[ast.AST, ast.AST]:
+    return {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+
+
+def _route_and_execute_calls(tree: ast.AST) -> list[ast.Call]:
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and _call_name(node.func).endswith("route_and_execute")
+    ]
+
+
+def _has_policy_wrapper_ancestor(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> bool:
+    current = parents.get(node)
+    while current is not None:
+        if isinstance(current, ast.Call) and _call_name(current.func).endswith(POLICY_WRAPPER):
             return True
-        index += 1
+        current = parents.get(current)
     return False
+
+
+def _imports_safety_policy_approval(tree: ast.AST) -> bool:
+    return any(
+        isinstance(node, ast.ImportFrom)
+        and node.module == "core.safety_policy"
+        and any(alias.name == "check_approval_needed" for alias in node.names)
+        for node in ast.walk(tree)
+    )
+
+
+def _safety_policy_aliases(tree: ast.AST) -> set[str]:
+    aliases: set[str] = {"core.safety_policy", "safety_policy"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "core.safety_policy":
+                    aliases.add(alias.asname or alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module == "core":
+            for alias in node.names:
+                if alias.name == "safety_policy":
+                    aliases.add(alias.asname or alias.name)
+    return aliases
+
+
+def _calls_safety_policy_approval(tree: ast.AST, aliases: set[str]) -> bool:
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = _call_name(node.func)
+        if name == "core.safety_policy.check_approval_needed":
+            return True
+        if name.endswith(".check_approval_needed") and name.rsplit(".", 1)[0] in aliases:
+            return True
+    return False
+
+
+def _call_name(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _call_name(node.value)
+        return f"{parent}.{node.attr}" if parent else node.attr
+    return ""
 
 
 def find_runtime_policy_coverage_issues() -> list[str]:
