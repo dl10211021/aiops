@@ -118,6 +118,7 @@ def main() -> int:
         ),
         ("python compile", [sys.executable, "-m", "compileall", "core", "connections", "api", "scripts"], ROOT),
         ("tool policy validation", [sys.executable, "scripts/check_tool_policies.py"], ROOT),
+        ("runtime policy coverage", [sys.executable, "scripts/check_runtime_policy_coverage.py"], ROOT),
         ("secret scan", [sys.executable, "scripts/security_scan.py"], ROOT),
         ("python dependency check", [sys.executable, "-m", "pip", "check"], ROOT),
         ("frontend npm audit", npm_command("audit", "--audit-level=high"), ROOT / "frontend"),
