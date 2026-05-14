@@ -143,7 +143,11 @@ class TestLegacyCommandService(unittest.TestCase):
                 )
 
         self.assertEqual(ctx.exception.status_code, 400)
-        self.assertIn("工具执行超过", ctx.exception.detail)
+        self.assertIn("工具执行超过", ctx.exception.detail["message"])
+        self.assertEqual(ctx.exception.detail["error_type"], "tool_timeout")
+        self.assertEqual(ctx.exception.detail["tool"], "linux_execute_command")
+        self.assertEqual(ctx.exception.detail["runtime_policy"]["attempts"], 1)
+        self.assertEqual(ctx.exception.detail["runtime_policy"]["final_status"], "error")
 
     def test_missing_session_returns_not_found(self):
         with self.assertRaises(LegacyCommandServiceError) as ctx:

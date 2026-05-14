@@ -160,7 +160,19 @@ async def execute_legacy_command_record(
         result = {"success": False, "error": result_str}
 
     if not result.get("success"):
-        raise LegacyCommandServiceError(400, result.get("error") or result.get("reason") or "执行失败")
+        message = result.get("error") or result.get("reason") or "执行失败"
+        if result.get("runtime_policy"):
+            raise LegacyCommandServiceError(
+                400,
+                {
+                    "message": message,
+                    "error": message,
+                    "error_type": result.get("error_type"),
+                    "runtime_policy": result.get("runtime_policy"),
+                    "tool": result.get("tool") or tool_name,
+                },
+            )
+        raise LegacyCommandServiceError(400, message)
 
     response = {
         "output": result.get("output") or result.get("data") or "",
