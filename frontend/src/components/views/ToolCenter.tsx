@@ -84,6 +84,27 @@ function evidenceText(family?: string) {
   }[family || ''] || family || '未知'
 }
 
+function secondsText(value?: number) {
+  if (!value || value <= 0) return ''
+  return value >= 10 ? `${Math.round(value)}s` : `${Number(value.toFixed(2))}s`
+}
+
+function timeoutText(tool: ToolCenterTool) {
+  const policy = tool.timeout_policy
+  if (!policy?.default_seconds) return '-'
+  const defaultText = secondsText(policy.default_seconds)
+  const maxText = secondsText(policy.max_seconds)
+  return maxText ? `${defaultText} / 最大 ${maxText}` : defaultText
+}
+
+function retryText(tool: ToolCenterTool) {
+  const policy = tool.retry_policy
+  if (!policy?.max_attempts || policy.max_attempts <= 1) return '不自动重试'
+  const delay = secondsText(policy.delay_seconds)
+  const trigger = policy.retry_on?.length ? policy.retry_on.join(', ') : '默认错误'
+  return `${policy.max_attempts} 次${delay ? ` / 间隔 ${delay}` : ''} / ${trigger}`
+}
+
 function sourceText(source?: string) {
   return {
     opscore: '平台内置',
@@ -323,6 +344,8 @@ function ToolRow({ tool }: { tool: ToolCenterTool }) {
         <InfoLine label="范围" value={scopeText(tool.scope)} />
         <InfoLine label="审批" value={approvalText(tool.approval_policy)} />
         <InfoLine label="证据" value={evidenceText(tool.evidence_family)} />
+        <InfoLine label="超时" value={timeoutText(tool)} />
+        <InfoLine label="重试" value={retryText(tool)} />
         <InfoLine label="结果" value={tool.ui_renderer || '-'} />
         <InfoLine label="适配" value={protocolText(tool)} />
       </div>

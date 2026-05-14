@@ -11,6 +11,7 @@ import {
   evidenceLabel,
   operationLabel,
   recordValue,
+  runtimePolicyLabels,
   toolPolicyFromTrace,
   toolPolicySearchText,
 } from './toolPolicyPresentation'
@@ -485,6 +486,7 @@ export default function AiThinkingChainPanel({
                         const evidence = evidenceLabel(recordValue(toolPolicy, 'evidence_family'))
                         const approval = recordValue(toolPolicy, 'approval_policy')
                         const approvalText = approvalLabel(approval)
+                        const runtimeLabels = runtimePolicyLabels(toolPolicy)
                         return (
                           <div
                             key={`${trace.tool}-${index}-${trace.startedAt || trace.completedAt || ''}`}
@@ -532,6 +534,11 @@ export default function AiThinkingChainPanel({
                                     evidence: {traceEvidenceId(trace)}
                                   </span>
                                 )}
+                                {runtimeLabels.map((label) => (
+                                  <span key={label} className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-subtext">
+                                    {label}
+                                  </span>
+                                ))}
                               </div>
                             )}
                             {traceExecutionDetail(trace) && (

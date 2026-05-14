@@ -18,6 +18,7 @@ import {
   evidenceLabel,
   operationLabel,
   recordValue,
+  runtimePolicyLabels,
   toolPolicyFromTrace,
 } from './toolPolicyPresentation'
 
@@ -50,6 +51,7 @@ function ToolTraceCard({
   const status = item.status || (item.type === 'tool_start' ? 'running' : 'done')
   const parsedResult = item.resultMeta || parseJsonRecord(item.result || '')
   const toolPolicy = toolPolicyFromTrace(item)
+  const runtimeLabels = runtimePolicyLabels(toolPolicy)
   const primaryAction = extractPrimaryAction(parsedResult)
   const isPolicyBlocked = isPolicyBlockedResult(parsedResult)
   const isToolError = !isPolicyBlocked && isToolErrorResult(parsedResult)
@@ -109,6 +111,11 @@ function ToolTraceCard({
                 破坏性
               </span>
             )}
+            {runtimeLabels.map((label) => (
+              <span key={label} className="rounded border border-ops-surface1/65 bg-ops-dark/35 px-2 py-0.5 font-semibold text-ops-subtext">
+                {label}
+              </span>
+            ))}
           </div>
         </div>
       )}
