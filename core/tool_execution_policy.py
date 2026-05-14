@@ -282,6 +282,7 @@ def _execution_error_result(
                 "timeout_seconds": timeout_seconds,
                 "final_status": "error",
                 "error_type": error_type,
+                "retried": attempts > 1,
             },
             "tool": tool_name,
             "tool_policy": policy,

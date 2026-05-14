@@ -70,6 +70,7 @@ class ToolExecutionPolicyTests(unittest.IsolatedAsyncioTestCase):
                 "timeout_seconds": 0.001,
                 "final_status": "error",
                 "error_type": "tool_timeout",
+                "retried": False,
             },
         )
 
@@ -187,6 +188,7 @@ class ToolExecutionPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["error_type"], "tool_connection_error")
         self.assertEqual(payload["retry_attempts"], 3)
         self.assertEqual(payload["runtime_policy"]["max_attempts"], 3)
+        self.assertTrue(payload["runtime_policy"]["retried"])
         self.assertEqual(payload["runtime_policy"]["retry_delay_seconds"], 5.0)
         self.assertEqual(payload["runtime_policy"]["retry_on"], ["connection_error"])
         self.assertEqual(attempts, 3)
