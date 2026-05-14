@@ -85,6 +85,53 @@ class TestDispatcherSecurity(unittest.TestCase):
         self.assertFalse(needs_approval)
         self.assertEqual(reason, "")
 
+    def test_runtime_external_effect_requires_approval_even_with_auto_approve(self):
+        dispatcher = SkillDispatcher.__new__(SkillDispatcher)
+
+        with patch(
+            "connections.ssh_manager.ssh_manager.active_sessions",
+            {"sid-auto": {"info": {"auto_approve_all": True}}},
+        ):
+            needs_approval, reason = dispatcher.check_approval_needed(
+                "send_notification",
+                {"channel": "wechat", "title": "巡检", "message": "done"},
+                {"session_id": "sid-auto", "allow_modifications": True},
+            )
+
+        self.assertTrue(needs_approval)
+        self.assertIn("工具执行策略要求审批", reason)
+
+    def test_auto_approve_only_bypasses_safety_policy_not_runtime_policy(self):
+        policy_path = str(Path.cwd() / "dispatcher_security_policy_auto_approve.json")
+        if os.path.exists(policy_path):
+            os.remove(policy_path)
+
+        dispatcher = SkillDispatcher.__new__(SkillDispatcher)
+        try:
+            with (
+                patch("core.safety_policy.POLICY_PATH", policy_path),
+                patch(
+                    "connections.ssh_manager.ssh_manager.active_sessions",
+                    {"sid-auto": {"info": {"auto_approve_all": True}}},
+                ),
+            ):
+                needs_approval, reason = dispatcher.check_approval_needed(
+                    "linux_execute_command",
+                    {"command": "systemctl restart nginx"},
+                    {
+                        "session_id": "sid-auto",
+                        "allow_modifications": True,
+                        "asset_type": "linux",
+                        "protocol": "ssh",
+                    },
+                )
+        finally:
+            if os.path.exists(policy_path):
+                os.remove(policy_path)
+
+        self.assertFalse(needs_approval)
+        self.assertEqual(reason, "")
+
     def test_hard_blocked_execution_returns_policy_metadata(self):
         policy_path = str(Path.cwd() / "dispatcher_security_policy_block_metadata.json")
         if os.path.exists(policy_path):

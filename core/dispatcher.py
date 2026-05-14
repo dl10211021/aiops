@@ -24,8 +24,9 @@ from core.safety_policy import (
 )
 from core.skill_lifecycle import validate_skill_frontmatter
 from core.skill_registry_service import SkillRegistryService
+from core.tool_execution_policy import evaluate_tool_execution_gate
 from core.tool_policy_response import blocked_tool_response
-from core.tool_registry import tool_registry
+from core.tool_registry import tool_policy_metadata, tool_registry
 
 logger = logging.getLogger(__name__)
 
@@ -154,16 +155,32 @@ class SkillDispatcher:
         from connections.ssh_manager import ssh_manager
         
         session_id = context.get("session_id")
-        if session_id and session_id in ssh_manager.active_sessions:
-            if ssh_manager.active_sessions[session_id]["info"].get("auto_approve_all", False):
-                return False, ""
         hard_blocked, _ = check_hard_block(tool_call_name, args, context)
         if hard_blocked:
             return False, ""
         readonly_blocked, _ = check_readonly_block(tool_call_name, args, context)
         if readonly_blocked:
             return False, ""
-        return policy_check_approval_needed(tool_call_name, args, context)
+
+        runtime_gate = evaluate_tool_execution_gate(
+            tool_call_name,
+            policy=tool_policy_metadata(tool_call_name),
+        )
+        if runtime_gate.approval_required:
+            return True, runtime_gate.reason
+
+        if session_id and session_id in ssh_manager.active_sessions:
+            if ssh_manager.active_sessions[session_id]["info"].get("auto_approve_all", False):
+                return False, ""
+
+        needs_approval, reason = policy_check_approval_needed(tool_call_name, args, context)
+        gate = evaluate_tool_execution_gate(
+            tool_call_name,
+            safety_needs_approval=needs_approval,
+            safety_reason=reason,
+            policy=runtime_gate.policy,
+        )
+        return gate.approval_required, gate.reason
 
     def get_available_tools(
 
