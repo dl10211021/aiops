@@ -37,7 +37,7 @@ ASSET_PROTOCOL_MAP = {
     "dameng": "dameng",
     "dm": "dameng",
     "kingbase": "postgresql",
-    "elasticsearch": "elasticsearch",
+    "elasticsearch": "http_api",
     "nebula_graph": "nebula_graph",
     "nebula_graph_cluster": "nebula_graph",
     "doris_fe": "mysql",
@@ -172,7 +172,7 @@ LEGACY_GENERIC_TYPES = GENERIC_ASSET_TYPES | {"linux", "ssh"}
 
 SQL_PROTOCOLS = {"mysql", "oracle", "postgresql", "mssql", "db2", "dameng", "xugu", "hive", "iotdb"}
 DATASTORE_PROTOCOLS = {"redis", "mongodb", "memcached"}
-DATABASE_HTTP_PROTOCOLS = {"clickhouse", "elasticsearch", "nebula_graph"}
+DATABASE_HTTP_PROTOCOLS = {"clickhouse", "nebula_graph"}
 DATABASE_HTTP_ASSET_TYPES = {
     item["id"]
     for item in ASSET_CATALOG
@@ -251,6 +251,7 @@ MONITORING_ASSET_TYPES = {
     "tdengine_promql",
 }
 LOG_PLATFORM_ASSET_TYPES = {
+    "elasticsearch",
     "elastic_stack",
     "graylog",
     "kibana",

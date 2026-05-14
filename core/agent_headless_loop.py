@@ -9,6 +9,11 @@ from core.agent_approval import record_headless_approval_block
 from core.agent_runtime_config import agent_max_steps
 from core.agent_tool_events import parse_tool_arguments
 from core.safety_policy import explain_policy_decision
+from core.tool_execution_policy import (
+    evaluate_tool_execution_gate,
+    execute_with_runtime_policy,
+)
+from core.tool_registry import tool_policy_metadata
 
 
 StreamExecutor = Callable[[str, list[dict], str, Any], AsyncIterator[dict]]
@@ -85,6 +90,15 @@ async def run_headless_agent_loop(
                 func_args,
                 context,
             )
+            tool_policy = tool_policy_metadata(func_name)
+            execution_gate = evaluate_tool_execution_gate(
+                func_name,
+                safety_needs_approval=needs_approval,
+                safety_reason=reason,
+                policy=tool_policy,
+            )
+            needs_approval = execution_gate.approval_required
+            reason = execution_gate.reason
             if not needs_approval:
                 reason = _headless_high_risk_action_reason(func_name, func_args, context)
                 needs_approval = bool(reason)
@@ -113,10 +127,14 @@ async def run_headless_agent_loop(
                     ensure_ascii=False,
                 )
             else:
-                tool_res = await dispatcher.route_and_execute(
+                tool_res = await execute_with_runtime_policy(
                     func_name,
-                    func_args,
-                    context,
+                    lambda: dispatcher.route_and_execute(
+                        func_name,
+                        func_args,
+                        context,
+                    ),
+                    policy=tool_policy,
                 )
 
             tool_msg = {

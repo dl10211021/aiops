@@ -261,7 +261,7 @@ CONNECTOR_GROUP_DEFINITIONS: dict[str, dict[str, Any]] = {
         "group": "平台 API",
         "order": 79,
         "tools": ["monitoring_api_query"],
-        "description": "ELK/Elastic Stack、Graylog、Loki、Kibana、Logstash 等日志平台只读查询接口。",
+        "description": "ELK/Elastic Stack、Elasticsearch、OpenSearch、Graylog、Loki、Kibana、Logstash 等日志平台只读查询接口。",
     },
     "kubernetes_api": {
         "label": "Kubernetes API",

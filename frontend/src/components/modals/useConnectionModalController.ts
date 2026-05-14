@@ -82,6 +82,19 @@ export function useConnectionModalController() {
     setSelectedSkills(skillsForSelectedSubType(newSubTypeId, skills))
   }
 
+  const handleAssetTypePick = (newCategory: string, newSubTypeId: string) => {
+    const nextForm = formForSubTypeSelection({
+      assetSubTypes,
+      form: { ...form, category: newCategory },
+      newSubTypeId,
+      oracleThickDefaults,
+    })
+    if (!nextForm) return
+    setAssetTypeSearch('')
+    setForm(nextForm)
+    setSelectedSkills(skillsForSelectedSubType(newSubTypeId, skills))
+  }
+
   const handleProtocolChange = (protocol: string) => {
     setForm(formForProtocolSelection({
       form,
@@ -127,6 +140,7 @@ export function useConnectionModalController() {
     skills,
     toggleSkill,
     handleCategoryChange,
+    handleAssetTypePick,
     handleProtocolChange,
     handleSubTypeChange,
   }

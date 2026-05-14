@@ -30,6 +30,10 @@ export const HTTP_DEDICATED_PARAM_FIELDS = new Set([
   'scheme',
   'base_path',
   'api_token',
+  'auth_type',
+  'auth_header',
+  'token_header',
+  'custom_headers',
 ])
 
 export const DATABASE_DEDICATED_PARAM_FIELDS = new Set([
@@ -70,6 +74,7 @@ export const FIELD_GROUP_LABELS: Record<string, string> = {
   mongodb: 'MongoDB 连接选项',
   database_http: '数据库接口参数',
   elastic_stack: 'Elastic Stack 参数',
+  elasticsearch: 'Elasticsearch 参数',
   graylog: 'Graylog 参数',
   logstash: 'Logstash 参数',
   opensearch: 'OpenSearch 参数',

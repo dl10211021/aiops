@@ -30,6 +30,7 @@ class AssetProtocolConstantsTests(unittest.TestCase):
         self.assertEqual(ASSET_PROTOCOL_MAP["nas"], "ssh")
         self.assertEqual(ASSET_PROTOCOL_MAP["kafka"], "ssh")
         self.assertEqual(ASSET_PROTOCOL_MAP["promethues"], "http_api")
+        self.assertEqual(ASSET_PROTOCOL_MAP["elasticsearch"], "http_api")
         self.assertEqual(ASSET_PROTOCOL_MAP["elastic_stack"], "http_api")
         self.assertEqual(ASSET_PROTOCOL_MAP["graylog"], "http_api")
         self.assertEqual(ASSET_TYPE_ALIASES["postgres"], "postgresql")
@@ -47,7 +48,7 @@ class AssetProtocolConstantsTests(unittest.TestCase):
         self.assertIn("rabbitmq", MIDDLEWARE_API_ASSET_TYPES)
         self.assertIn("harbor", CONTAINER_API_ASSET_TYPES)
         self.assertIn("rabbitmq", DOMAIN_HTTP_API_ASSET_TYPES)
-        self.assertLessEqual({"elastic_stack", "graylog", "loki"}, LOG_PLATFORM_ASSET_TYPES)
+        self.assertLessEqual({"elasticsearch", "elastic_stack", "graylog", "loki"}, LOG_PLATFORM_ASSET_TYPES)
 
     def test_domain_shell_asset_sets_cover_catalog_specific_types(self):
         self.assertLessEqual(

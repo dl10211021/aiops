@@ -53,6 +53,20 @@ const COMMON_ASSET_TYPE_IDS = new Set([
   'ping',
 ])
 
+export interface CatalogCategorySummary {
+  id: string
+  label: string
+  group: string
+  total: number
+  common: number
+}
+
+export type CatalogSearchOption = AssetSubType & {
+  category: string
+  categoryLabel: string
+  categoryGroup: string
+}
+
 export function getProtocolForSubType(
   assetSubTypes: Record<string, AssetSubType[]>,
   category: string,
@@ -146,6 +160,26 @@ export function buildConnectionModalModel({
   const isKubernetesAsset = ['k8s', 'kubernetes'].includes(form.sub_type) || currentProtocol === 'k8s'
   const categoryGroups = groupOptions(assetCategories, (item) => item.group || '其它')
   const subTypeOptions = assetSubTypes[form.category] || []
+  const categoryLookup = new Map(assetCategories.map((item) => [item.id, item]))
+  const categorySummaries: CatalogCategorySummary[] = assetCategories.map((item) => {
+    const items = assetSubTypes[item.id] || []
+    return {
+      id: item.id,
+      label: item.label,
+      group: item.group || '其它',
+      total: items.length,
+      common: items.filter((assetType) => COMMON_ASSET_TYPE_IDS.has(assetType.id)).length,
+    }
+  })
+  const allSearchOptions: CatalogSearchOption[] = Object.entries(assetSubTypes).flatMap(([categoryId, items]) => {
+    const meta = categoryLookup.get(categoryId)
+    return items.map((item) => ({
+      ...item,
+      category: categoryId,
+      categoryLabel: meta?.label || CATEGORY_FALLBACK_LABELS[categoryId] || categoryId.toUpperCase(),
+      categoryGroup: meta?.group || '其它',
+    }))
+  })
   const normalizedAssetTypeSearch = assetTypeSearch.trim().toLowerCase()
   const commonSubTypeOptions = subTypeOptions.filter((item) => COMMON_ASSET_TYPE_IDS.has(item.id))
   const catalogModeSubTypeOptions =
@@ -160,9 +194,30 @@ export function buildConnectionModalModel({
         return haystack.includes(normalizedAssetTypeSearch)
       })
     : searchSourceOptions
+  const globalSearchOptions = normalizedAssetTypeSearch
+    ? allSearchOptions.filter((item) => {
+        const accessText = (item.access_protocols || []).map((protocol) => `${protocol.protocol} ${protocol.label}`).join(' ')
+        const paramText = (item.params || []).map((param) => `${param.field} ${param.label}`).join(' ')
+        const haystack = [
+          item.id,
+          item.label,
+          item.asset_type,
+          item.defaultPort,
+          item.category,
+          item.categoryLabel,
+          item.categoryGroup,
+          accessText,
+          paramText,
+          item.capability?.connector,
+          item.capability?.connector_group?.label,
+        ].join(' ').toLowerCase()
+        return haystack.includes(normalizedAssetTypeSearch)
+      })
+    : []
   const filteredSubTypeOptions = selectedSubInfo && !searchedSubTypeOptions.some((item) => item.id === selectedSubInfo.id)
     ? [selectedSubInfo, ...searchedSubTypeOptions]
     : searchedSubTypeOptions
+  const globalSearchGroups = groupOptions(globalSearchOptions, (item) => `${item.categoryLabel} · ${item.categoryGroup}`)
   const subTypeGroups = groupOptions(filteredSubTypeOptions, (item) => item.capability?.connector_group?.label || item.asset_type.toUpperCase())
   const databaseDriverInfo = form.category === 'db' ? databaseDrivers[databaseDriverKey(form, currentProtocol)] : undefined
   const authVisibility = getAuthVisibility(assetSubTypes, form.sub_type, form.category)
@@ -204,7 +259,31 @@ export function buildConnectionModalModel({
     subTypeGroups,
     subTypeOptions,
     catalogModeSubTypeOptions,
+    categorySummaries,
+    globalSearchGroups,
+    globalSearchOptions,
   }
+}
+
+const CATEGORY_FALLBACK_LABELS: Record<string, string> = {
+  os: '操作系统与主机',
+  db: '数据库与缓存',
+  container: '容器与云原生',
+  middleware: '中间件与消息',
+  bigdata: '大数据与分析',
+  network: '网络设备',
+  storage: '存储与备份',
+  virtualization: '虚拟化与私有云',
+  monitor: '监控与告警',
+  log: '日志平台',
+  service: '应用与网络服务',
+  discovery: '服务发现',
+  oob: '硬件带外',
+  security: '安全与身份',
+  ai: 'AI 与大模型',
+  cicd: 'CI/CD 与发布',
+  custom: '自定义与扩展',
+  other: '其它',
 }
 
 function toolsForCurrentProtocol(category: string, currentProtocol: string, subInfo?: AssetSubType) {

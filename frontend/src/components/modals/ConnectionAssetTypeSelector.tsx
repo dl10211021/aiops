@@ -2,6 +2,7 @@ import { toolLabel } from '@/utils/assetDisplay'
 import type { AssetAccessProtocol, ToolDisplayDetail } from '@/types'
 import { MATURITY_LABELS } from './connectionModalHelpers'
 import type { AssetCatalogStatus, AssetCategoryOption, AssetSubType } from './connectionModalHelpers'
+import type { CatalogCategorySummary, CatalogSearchOption } from './connectionModalModel'
 
 interface OptionGroup<T> {
   group: string
@@ -15,10 +16,13 @@ interface ConnectionAssetTypeSelectorProps {
   catalogStatus: AssetCatalogStatus
   category: string
   categoryGroups: Array<OptionGroup<AssetCategoryOption>>
+  categorySummaries: CatalogCategorySummary[]
   currentAccessProtocol?: AssetAccessProtocol
   currentProtocol: string
   accessProtocolOptions: AssetAccessProtocol[]
   filteredSubTypeOptions: AssetSubType[]
+  globalSearchGroups: Array<OptionGroup<CatalogSearchOption>>
+  globalSearchOptions: CatalogSearchOption[]
   normalizedAssetTypeSearch: string
   searchedSubTypeOptions: AssetSubType[]
   selectedConnectionHint: string
@@ -31,6 +35,7 @@ interface ConnectionAssetTypeSelectorProps {
   subType: string
   subTypeGroups: Array<OptionGroup<AssetSubType>>
   subTypeOptions: AssetSubType[]
+  onAssetTypePick: (category: string, subType: string) => void
   onCategoryChange: (category: string) => void
   onCatalogModeChange: (mode: 'common' | 'all') => void
   onProtocolChange: (protocol: string) => void
@@ -45,10 +50,13 @@ export default function ConnectionAssetTypeSelector({
   catalogStatus,
   category,
   categoryGroups,
+  categorySummaries,
   currentAccessProtocol,
   currentProtocol,
   accessProtocolOptions,
   filteredSubTypeOptions,
+  globalSearchGroups,
+  globalSearchOptions,
   normalizedAssetTypeSearch,
   searchedSubTypeOptions,
   selectedConnectionHint,
@@ -61,6 +69,7 @@ export default function ConnectionAssetTypeSelector({
   subType,
   subTypeGroups,
   subTypeOptions,
+  onAssetTypePick,
   onCategoryChange,
   onCatalogModeChange,
   onProtocolChange,
@@ -75,6 +84,8 @@ export default function ConnectionAssetTypeSelector({
     : catalogStatus.source === 'backend'
       ? `后端真实目录 ${catalogStatus.total} 类`
       : `离线兜底 ${catalogStatus.total} 类`
+  const selectedCategorySummary = categorySummaries.find((item) => item.id === category)
+  const selectedSearchValue = `${category}::${subType}`
 
   return (
     <section className="ops-data-panel p-3">
@@ -128,6 +139,29 @@ export default function ConnectionAssetTypeSelector({
           </button>
         </div>
       </div>
+      <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {categorySummaries
+          .filter((item) => item.total > 0)
+          .slice(0, 8)
+          .map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onCategoryChange(item.id)}
+              className={`rounded-lg border px-2.5 py-2 text-left transition ${
+                item.id === category
+                  ? 'border-ops-accent bg-ops-accent/12 text-ops-text'
+                  : 'border-ops-surface0 bg-ops-dark/20 text-ops-subtext hover:border-ops-surface1 hover:text-ops-text'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 text-xs font-semibold">
+                <span className="truncate">{item.label}</span>
+                <span className="shrink-0 text-[10px] text-ops-overlay">{item.total}</span>
+              </div>
+              <div className="mt-1 truncate text-[10px] text-ops-overlay">{item.group} · 常用 {item.common}</div>
+            </button>
+          ))}
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="mb-1 block text-xs text-ops-subtext">资产类别</label>
@@ -143,7 +177,7 @@ export default function ConnectionAssetTypeSelector({
             ))}
           </select>
           <div className="mt-1 text-[11px] text-ops-overlay">
-            {assetCategories.length} 个分类 · {assetCategories.find((item) => item.id === category)?.group || '其它'}
+            {assetCategories.length} 个分类 · {selectedCategorySummary?.group || '其它'} · 本类 {selectedCategorySummary?.total || 0} 项
           </div>
         </div>
         <div>
@@ -156,21 +190,53 @@ export default function ConnectionAssetTypeSelector({
           <input
             value={assetTypeSearch}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="搜索资产类型或主接入方式"
+            placeholder="全目录搜索：ELK / 9200 / Basic / SSH"
             className="ops-control mb-2 w-full px-3 py-2 text-sm"
           />
-          <select
-            value={subType}
-            onChange={(event) => onSubTypeChange(event.target.value)}
-            className="ops-control w-full appearance-none px-3 py-2 text-sm"
-          >
-            {subTypeGroups.map((group) => (
-              <optgroup key={group.group} label={group.group}>
-                {group.items.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-              </optgroup>
-            ))}
-            {filteredSubTypeOptions.length === 0 && <option value={subType}>没有匹配项</option>}
-          </select>
+          {normalizedAssetTypeSearch ? (
+            <select
+              value={selectedSearchValue}
+              onChange={(event) => {
+                const [nextCategory, nextSubType] = event.target.value.split('::')
+                if (nextCategory && nextSubType) onAssetTypePick(nextCategory, nextSubType)
+              }}
+              className="ops-control w-full appearance-none px-3 py-2 text-sm"
+            >
+              {selectedSubInfo && !globalSearchOptions.some((item) => item.category === category && item.id === subType) && (
+                <option value={selectedSearchValue}>
+                  当前选择 · {selectedSubInfo.label}
+                </option>
+              )}
+              {globalSearchGroups.map((group) => (
+                <optgroup key={group.group} label={group.group}>
+                  {group.items.map((item) => (
+                    <option key={`${item.category}:${item.id}`} value={`${item.category}::${item.id}`}>
+                      {item.label} · {item.asset_type.toUpperCase()} · {item.defaultPort || '-'}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+              {globalSearchOptions.length === 0 && <option value={selectedSearchValue}>没有匹配项</option>}
+            </select>
+          ) : (
+            <select
+              value={subType}
+              onChange={(event) => onSubTypeChange(event.target.value)}
+              className="ops-control w-full appearance-none px-3 py-2 text-sm"
+            >
+              {subTypeGroups.map((group) => (
+                <optgroup key={group.group} label={group.group}>
+                  {group.items.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                </optgroup>
+              ))}
+              {filteredSubTypeOptions.length === 0 && <option value={subType}>没有匹配项</option>}
+            </select>
+          )}
+          {normalizedAssetTypeSearch && (
+            <div className="mt-1 text-[11px] text-ops-overlay">
+              全目录匹配 {globalSearchOptions.length} 项，选择后自动切换分类。
+            </div>
+          )}
         </div>
         {selectedSubInfo && (
           <div className="ops-data-panel col-span-2 px-3 py-2">

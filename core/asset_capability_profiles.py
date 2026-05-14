@@ -37,7 +37,6 @@ DATABASE_ALIASES = {
 DATABASE_HTTP_IDS = {
     "clickhouse",
     "doris_be",
-    "elasticsearch",
     "hbase_master",
     "hbase_regionserver",
     "hugegraph",
@@ -50,7 +49,6 @@ DATABASE_HTTP_IDS = {
 
 DATABASE_HTTP_PROTOCOLS = {
     "clickhouse",
-    "elasticsearch",
     "nebula_graph",
 }
 

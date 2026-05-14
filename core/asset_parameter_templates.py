@@ -29,6 +29,37 @@ GENERIC_HTTP_API_PARAMETERS = [
         "required": False,
         "group": "http_api",
     },
+    {
+        "field": "auth_type",
+        "label": "认证模式",
+        "type": "select",
+        "required": False,
+        "defaultValue": "auto",
+        "options": [
+            {"label": "自动识别", "value": "auto"},
+            {"label": "Bearer Token", "value": "bearer"},
+            {"label": "Basic Token", "value": "basic"},
+            {"label": "API Key Header", "value": "api_key"},
+            {"label": "原样写入", "value": "raw"},
+        ],
+        "group": "http_api",
+    },
+    {
+        "field": "auth_header",
+        "label": "认证请求头",
+        "type": "text",
+        "required": False,
+        "defaultValue": "Authorization",
+        "group": "http_api",
+    },
+    {
+        "field": "custom_headers",
+        "label": "自定义 Headers",
+        "type": "textarea",
+        "required": False,
+        "placeholder": "kbn-xsrf: true\nX-Requested-By: OpsCore",
+        "group": "http_api",
+    },
 ]
 
 

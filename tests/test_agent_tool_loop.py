@@ -1,3 +1,4 @@
+import asyncio
 import json
 import unittest
 from unittest.mock import patch
@@ -132,6 +133,144 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(approval["type"], "tool_ask_approval")
         self.assertEqual(approval["tool_policy"]["name"], "db_execute_query")
         self.assertEqual(approval["tool_policy"]["evidence_family"], "database")
+
+    async def test_runtime_policy_can_require_approval_even_without_safety_hit(self):
+        memory_store = FakeMemoryStore()
+        dispatcher = FakeDispatcher()
+        messages = []
+
+        async def never_resolve(_future, timeout):
+            raise TimeoutError()
+
+        with patch("asyncio.wait_for", side_effect=never_resolve), patch(
+            "core.agent_tool_loop.record_tool_approval_request",
+            return_value={"metadata": {"policy": {}}},
+        ), patch("core.approval_queue.mark_approval_timeout"):
+            events = await collect_tool_events(
+                tool_calls=[
+                    {
+                        "id": "call-delete",
+                        "function": {
+                            "name": "memory_delete",
+                            "arguments": json.dumps({"key": "old"}),
+                        },
+                    }
+                ],
+                session_id="sid-tool",
+                messages=messages,
+                memory_store=memory_store,
+                dispatcher=dispatcher,
+                context={"session_id": "sid-tool"},
+                iteration=0,
+            )
+
+        payloads = [decode_sse(event) for event in events]
+        approval = payloads[0]
+        self.assertEqual(approval["type"], "tool_ask_approval")
+        self.assertEqual(approval["tool_policy"]["approval_policy"], "always_required")
+        self.assertEqual(dispatcher.executed, [])
+
+    async def test_runtime_policy_timeout_returns_tool_error(self):
+        memory_store = FakeMemoryStore()
+        dispatcher = FakeDispatcher()
+        messages = []
+
+        async def slow_execute(tool_name, args, context):
+            await asyncio.sleep(0.05)
+            return {"status": "OK"}
+
+        dispatcher.route_and_execute = slow_execute
+
+        with patch(
+            "core.agent_tool_loop.tool_policy_metadata",
+            return_value={
+                "name": "slow_tool",
+                "operation_mode": "read",
+                "approval_policy": "none",
+                "destructive": False,
+                "timeout_policy": {"default_seconds": 0.001},
+                "retry_policy": {"max_attempts": 1, "retry_on": []},
+                "evidence_family": "platform",
+            },
+        ):
+            events = await collect_tool_events(
+                tool_calls=[
+                    {
+                        "id": "call-timeout",
+                        "function": {
+                            "name": "slow_tool",
+                            "arguments": json.dumps({}),
+                        },
+                    }
+                ],
+                session_id="sid-tool",
+                messages=messages,
+                memory_store=memory_store,
+                dispatcher=dispatcher,
+                context={"session_id": "sid-tool"},
+                iteration=0,
+            )
+
+        payloads = [decode_sse(event) for event in events]
+        self.assertEqual(payloads[1]["type"], "tool_end")
+        self.assertEqual(payloads[1]["result_status"], "error")
+        self.assertEqual(payloads[1]["result_meta"]["error_type"], "tool_timeout")
+        self.assertIn("tool_timeout", messages[0]["content"])
+
+    async def test_concurrency_safe_tools_run_in_parallel_batch(self):
+        memory_store = FakeMemoryStore()
+        dispatcher = FakeDispatcher()
+        messages = []
+        active = 0
+        max_active = 0
+
+        async def parallel_execute(tool_name, args, context):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.02)
+            active -= 1
+            return {"status": "OK", "tool": tool_name}
+
+        dispatcher.route_and_execute = parallel_execute
+
+        def read_policy(name):
+            return {
+                "name": name,
+                "operation_mode": "read",
+                "approval_policy": "none",
+                "destructive": False,
+                "concurrency_safe": True,
+                "timeout_policy": {"default_seconds": 1},
+                "retry_policy": {"max_attempts": 1, "retry_on": []},
+                "evidence_family": "platform",
+            }
+
+        with patch("core.agent_tool_loop.tool_policy_metadata", side_effect=read_policy):
+            events = await collect_tool_events(
+                tool_calls=[
+                    {
+                        "id": "call-read-1",
+                        "function": {"name": "read_one", "arguments": json.dumps({})},
+                    },
+                    {
+                        "id": "call-read-2",
+                        "function": {"name": "read_two", "arguments": json.dumps({})},
+                    },
+                ],
+                session_id="sid-tool",
+                messages=messages,
+                memory_store=memory_store,
+                dispatcher=dispatcher,
+                context={"session_id": "sid-tool"},
+                iteration=0,
+            )
+
+        payloads = [decode_sse(event) for event in events]
+        self.assertEqual([payload["type"] for payload in payloads], ["tool_start", "tool_start", "tool_end", "tool_end", "status"])
+        self.assertTrue(payloads[0]["result_meta"]["concurrent"])
+        self.assertGreaterEqual(max_active, 2)
+        self.assertEqual([message["name"] for message in messages], ["read_one", "read_two"])
 
     async def test_parse_error_appends_tool_error_without_executing(self):
         memory_store = FakeMemoryStore()

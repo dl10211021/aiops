@@ -66,7 +66,6 @@ export const ASSET_SUB_TYPES: Record<string, AssetSubType[]> = {
     { id: 'redis', label: 'Redis', asset_type: 'redis', defaultPort: 6379, authMode: 'password_only' },
     { id: 'mongodb', label: 'MongoDB', asset_type: 'mongodb', defaultPort: 27017 },
     { id: 'clickhouse', label: 'ClickHouse', asset_type: 'clickhouse', defaultPort: 8123 },
-    { id: 'elasticsearch', label: 'ElasticSearch', asset_type: 'elasticsearch', defaultPort: 9200 },
     { id: 'nebula_graph', label: 'NebulaGraph', asset_type: 'nebula_graph', defaultPort: 9669 },
   ],
   container: [
@@ -124,6 +123,7 @@ export const ASSET_SUB_TYPES: Record<string, AssetSubType[]> = {
   log: [
     { id: 'elastic_stack', label: 'ELK / Elastic Stack', asset_type: 'http_api', defaultPort: 5601 },
     { id: 'kibana', label: 'Kibana', asset_type: 'http_api', defaultPort: 5601 },
+    { id: 'elasticsearch', label: 'Elasticsearch API', asset_type: 'http_api', defaultPort: 9200 },
     { id: 'logstash', label: 'Logstash', asset_type: 'http_api', defaultPort: 9600 },
     { id: 'graylog', label: 'Graylog', asset_type: 'http_api', defaultPort: 9000 },
     { id: 'loki', label: 'Loki', asset_type: 'http_api', defaultPort: 3100 },

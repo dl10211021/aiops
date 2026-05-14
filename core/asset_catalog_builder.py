@@ -118,7 +118,7 @@ BASE_ASSET_CATALOG = [
     {
         "id": "elasticsearch",
         "label": "ElasticSearch",
-        "category": "db",
+        "category": "log",
         "protocol": "http_api",
         "default_port": 9200,
         "inspection_profile": "http_api",
@@ -621,7 +621,6 @@ ASSET_PROTOCOL_OVERRIDES = {
     # These databases expose query/control APIs over HTTP, but the asset
     # protocol should still read as a database protocol in OpsCore.
     "clickhouse": "clickhouse",
-    "elasticsearch": "elasticsearch",
     "nebula_graph": "nebula_graph",
     "nebula_graph_cluster": "nebula_graph",
     # Platform APIs keep their domain protocol name for operators while still
@@ -716,6 +715,7 @@ ASSET_CATEGORY_OVERRIDES = {
     "influxdb_promql": "monitor",
     "kafka_promql": "monitor",
     "logstash": "log",
+    "elasticsearch": "log",
     "opensearch": "log",
     "tdengine_promql": "monitor",
     "doris_be": "db",

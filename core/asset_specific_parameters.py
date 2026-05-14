@@ -712,11 +712,12 @@ def apply_asset_parameter_template(capability: dict[str, Any], asset_id: str) ->
             _text_parameter("pipelines_path", "Pipeline 路径", group="logstash", default="/_node/pipelines"),
             _text_parameter("hot_threads_path", "Hot Threads 路径", group="logstash", default="/_node/hot_threads"),
         ]
-    elif asset_id == "opensearch":
+    elif asset_id in {"elasticsearch", "opensearch"}:
+        group = "elasticsearch" if asset_id == "elasticsearch" else "opensearch"
         capability["parameter_template"] = deepcopy(GENERIC_HTTP_API_PARAMETERS) + [
-            _text_parameter("cluster_health_path", "集群健康路径", group="opensearch", default="/_cluster/health"),
-            _text_parameter("indices_path", "索引列表路径", group="opensearch", default="/_cat/indices?format=json"),
-            _text_parameter("query_index", "默认查询索引", group="opensearch"),
+            _text_parameter("cluster_health_path", "集群健康路径", group=group, default="/_cluster/health"),
+            _text_parameter("indices_path", "索引列表路径", group=group, default="/_cat/indices?format=json"),
+            _text_parameter("query_index", "默认查询索引", group=group),
         ]
     elif asset_id == "victoriametrics":
         capability["parameter_template"] = deepcopy(GENERIC_HTTP_API_PARAMETERS) + [

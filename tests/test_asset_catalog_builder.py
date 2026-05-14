@@ -73,7 +73,7 @@ class AssetCatalogBuilderTests(unittest.TestCase):
         self.assertEqual(catalog["mongodb"]["capability"]["connector"], "native_document")
         self.assertIn("auth_source", fields("mongodb"))
 
-        for asset_id in ("elastic_stack", "kibana", "logstash", "graylog", "loki", "opensearch"):
+        for asset_id in ("elastic_stack", "kibana", "elasticsearch", "logstash", "graylog", "loki", "opensearch"):
             with self.subTest(asset_id=asset_id):
                 self.assertEqual(catalog[asset_id]["category"], "log")
                 self.assertEqual(catalog[asset_id]["protocol"], "http_api")
@@ -81,6 +81,10 @@ class AssetCatalogBuilderTests(unittest.TestCase):
                 self.assertEqual(catalog[asset_id]["capability"]["connector"], "log_api")
                 self.assertEqual(catalog[asset_id]["capability"]["tools"], ["monitoring_api_query"])
         self.assertIn("kibana_base_path", fields("elastic_stack"))
+        self.assertIn("auth_type", fields("elastic_stack"))
+        self.assertIn("auth_header", fields("graylog"))
+        self.assertIn("custom_headers", fields("opensearch"))
+        self.assertIn("cluster_health_path", fields("elasticsearch"))
         self.assertIn("search_path", fields("graylog"))
         self.assertIn("node_stats_path", fields("logstash"))
         self.assertIn("query_range_path", fields("loki"))

@@ -23,6 +23,7 @@ export default function ConnectionModal() {
     canSubmitAsset,
     catalogStatus,
     categoryGroups,
+    categorySummaries,
     closeModal,
     connecting,
     currentProtocol,
@@ -32,6 +33,7 @@ export default function ConnectionModal() {
     filteredSubTypeOptions,
     form,
     handleCategoryChange,
+    handleAssetTypePick,
     handleConnect,
     handleProtocolChange,
     handleSaveOnly,
@@ -40,6 +42,8 @@ export default function ConnectionModal() {
     inferredHostFromEndpoint,
     isEndpointBackedAsset,
     isKubernetesAsset,
+    globalSearchGroups,
+    globalSearchOptions,
     normalizedAssetTypeSearch,
     searchedSubTypeOptions,
     selectedConnectionHint,
@@ -92,10 +96,13 @@ export default function ConnectionModal() {
               catalogStatus={catalogStatus}
               category={form.category}
               categoryGroups={categoryGroups}
+              categorySummaries={categorySummaries}
               currentAccessProtocol={currentAccessProtocol}
               currentProtocol={currentProtocol}
               accessProtocolOptions={accessProtocolOptions}
               filteredSubTypeOptions={filteredSubTypeOptions}
+              globalSearchGroups={globalSearchGroups}
+              globalSearchOptions={globalSearchOptions}
               normalizedAssetTypeSearch={normalizedAssetTypeSearch}
               searchedSubTypeOptions={searchedSubTypeOptions}
               selectedConnectionHint={selectedConnectionHint}
@@ -108,6 +115,7 @@ export default function ConnectionModal() {
               subType={form.sub_type}
               subTypeGroups={subTypeGroups}
               subTypeOptions={subTypeOptions}
+              onAssetTypePick={handleAssetTypePick}
               onCategoryChange={handleCategoryChange}
               onCatalogModeChange={setAssetCatalogMode}
               onProtocolChange={handleProtocolChange}

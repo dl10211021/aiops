@@ -189,6 +189,50 @@ class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
         record.assert_called_once()
         self.assertIn("高风险动作", record.call_args.kwargs["reason"])
 
+    async def test_headless_blocks_runtime_policy_approval_gate(self):
+        messages = [{"role": "system", "content": "sys"}]
+        dispatcher = FakeDispatcher()
+
+        with patch("core.agent_headless_loop.record_headless_approval_block") as record:
+            record.return_value = {"id": "call-delete"}
+            report = await run_headless_agent_loop(
+                model_name="model",
+                messages=messages,
+                tools=[],
+                context={"session_id": "sid", "execution_mode": "headless"},
+                session_id="sid",
+                agent_profile="default",
+                host="host.local",
+                dispatcher=dispatcher,
+                event_logger=FakeLogger(),
+                stream_executor=stream_executor_factory(
+                    [
+                        [
+                            {"type": "content", "content": "准备清理"},
+                            {
+                                "type": "tool_calls",
+                                "tool_calls": [
+                                    {
+                                        "id": "call-delete",
+                                        "function": {
+                                            "name": "memory_delete",
+                                            "arguments": json.dumps({"key": "old"}),
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                        [{"type": "content", "content": "已阻断"}],
+                    ]
+                ),
+                max_steps=3,
+            )
+
+        self.assertEqual(report, "来自 default Agent (host.local) 的协同任务报告：\n已阻断")
+        self.assertEqual(dispatcher.executed, [])
+        record.assert_called_once()
+        self.assertIn("工具执行策略要求审批", record.call_args.kwargs["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

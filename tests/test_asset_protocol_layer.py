@@ -192,7 +192,7 @@ class TestAssetProtocolLayer(unittest.TestCase):
             "hdfs": "ssh",
             "glusterfs": "ssh",
             "clickhouse": "clickhouse",
-            "elasticsearch": "elasticsearch",
+            "elasticsearch": "http_api",
             "manageengine": "http_api",
             "redfish": "redfish",
             "snmp": "snmp",
@@ -346,9 +346,6 @@ class TestAssetProtocolLayer(unittest.TestCase):
         self.assertEqual(by_id["clickhouse"]["protocol"], "clickhouse")
         self.assertEqual(by_id["clickhouse"]["capability"]["connector"], "database_http")
         self.assertEqual(by_id["clickhouse"]["capability"]["tools"], ["database_api_request"])
-        self.assertEqual(by_id["elasticsearch"]["protocol"], "elasticsearch")
-        self.assertEqual(by_id["elasticsearch"]["capability"]["connector"], "database_http")
-        self.assertEqual(by_id["elasticsearch"]["capability"]["tools"], ["database_api_request"])
         self.assertEqual(by_id["nebula_graph"]["protocol"], "nebula_graph")
         self.assertEqual(by_id["nebula_graph_cluster"]["protocol"], "nebula_graph")
         self.assertEqual(by_id["db2"]["protocol"], "db2")
@@ -382,8 +379,16 @@ class TestAssetProtocolLayer(unittest.TestCase):
         self.assertEqual(by_id["elastic_stack"]["capability"]["connector"], "log_api")
         self.assertEqual(by_id["elastic_stack"]["capability"]["tools"], ["monitoring_api_query"])
         self.assertEqual(params("elastic_stack")["kibana_base_path"]["defaultValue"], "/api")
+        self.assertEqual(params("elastic_stack")["auth_type"]["defaultValue"], "auto")
+        self.assertEqual(params("elastic_stack")["auth_header"]["defaultValue"], "Authorization")
+        self.assertEqual(by_id["elasticsearch"]["category"], "log")
+        self.assertEqual(by_id["elasticsearch"]["protocol"], "http_api")
+        self.assertEqual(by_id["elasticsearch"]["capability"]["connector"], "log_api")
+        self.assertEqual(by_id["elasticsearch"]["capability"]["tools"], ["monitoring_api_query"])
+        self.assertEqual(params("elasticsearch")["cluster_health_path"]["defaultValue"], "/_cluster/health")
         self.assertEqual(by_id["graylog"]["category"], "log")
         self.assertEqual(params("graylog")["search_path"]["defaultValue"], "/api/search/universal/relative")
+        self.assertIn("custom_headers", params("graylog"))
         self.assertEqual(params("logstash")["node_stats_path"]["defaultValue"], "/_node/stats")
         self.assertEqual(by_id["loki"]["category"], "log")
         self.assertEqual(params("loki")["query_range_path"]["defaultValue"], "/loki/api/v1/query_range")
