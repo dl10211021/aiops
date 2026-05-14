@@ -5,11 +5,11 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from core.tool_execution_policy import RETRYABLE_ERROR_TYPES
 from core.tool_registry import ToolDefinition
 
 
 CONTROLLED_OPERATION_MODES = {"write", "read_write", "destructive", "external_effect"}
-ALLOWED_RETRY_REASONS = {"timeout", "connection_error", "rate_limit", "execution_error"}
 
 
 def validate_tool_runtime_policies(tools: Iterable[ToolDefinition]) -> list[str]:
@@ -68,6 +68,6 @@ def _validate_retry_reasons(issue_prefix: str, retry_on: Any) -> list[str]:
 
     issues: list[str] = []
     for reason in retry_on:
-        if not isinstance(reason, str) or reason not in ALLOWED_RETRY_REASONS:
+        if not isinstance(reason, str) or reason not in RETRYABLE_ERROR_TYPES:
             issues.append(f"{issue_prefix}:invalid_retry_reason:{reason}")
     return issues

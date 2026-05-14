@@ -1,5 +1,6 @@
 import unittest
 
+from core.tool_execution_policy import RETRYABLE_ERROR_TYPES
 from core.tool_policy_validation import validate_tool_runtime_policy
 
 
@@ -62,7 +63,7 @@ class ToolPolicyValidationTests(unittest.TestCase):
                 "operation_mode": "read",
                 "approval_policy": "none",
                 "timeout_policy": {"default_seconds": 45},
-                "retry_policy": {"max_attempts": 2, "retry_on": ["timeout", "connection_error"]},
+                "retry_policy": {"max_attempts": 2, "retry_on": sorted(RETRYABLE_ERROR_TYPES)},
             },
         )
 

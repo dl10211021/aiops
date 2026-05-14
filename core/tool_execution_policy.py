@@ -9,6 +9,7 @@ from core.tool_registry import tool_policy_metadata
 
 MAX_RETRY_ATTEMPTS = 3
 MAX_RETRY_DELAY_SECONDS = 5.0
+RETRYABLE_ERROR_TYPES = frozenset({"timeout", "connection_error", "rate_limit", "execution_error"})
 
 
 @dataclass(frozen=True)
