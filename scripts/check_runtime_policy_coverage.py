@@ -18,15 +18,37 @@ ALLOWED_EXECUTION_FILES = {
 SKIPPED_FILES = {
     "core/dispatcher.py",
 }
+ROUTE_EXECUTION_PATTERN = re.compile(r"\broute_and_execute\s*\(")
+POLICY_WRAPPER = "execute_with_runtime_policy"
+WRAPPER_LOOKBACK_LINES = 8
 
 
 def _normalize(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
 
 
+def runtime_policy_coverage_issues_for_text(rel_path: str, text: str) -> list[str]:
+    if not ROUTE_EXECUTION_PATTERN.search(text):
+        return []
+    if rel_path not in ALLOWED_EXECUTION_FILES:
+        return [f"{rel_path}: route_and_execute call is not on the reviewed execution allowlist"]
+
+    issues: list[str] = []
+    lines = text.splitlines()
+    for line_number, line in enumerate(lines, start=1):
+        if not ROUTE_EXECUTION_PATTERN.search(line):
+            continue
+        start = max(0, line_number - WRAPPER_LOOKBACK_LINES - 1)
+        context = "\n".join(lines[start:line_number])
+        if POLICY_WRAPPER not in context:
+            issues.append(
+                f"{rel_path}:{line_number}: route_and_execute call is not wrapped by {POLICY_WRAPPER}"
+            )
+    return issues
+
+
 def find_runtime_policy_coverage_issues() -> list[str]:
     issues: list[str] = []
-    call_pattern = re.compile(r"\broute_and_execute\s*\(")
 
     for root in SCAN_ROOTS:
         for path in (ROOT / root).rglob("*.py"):
@@ -34,13 +56,7 @@ def find_runtime_policy_coverage_issues() -> list[str]:
             if rel_path in SKIPPED_FILES:
                 continue
             text = path.read_text(encoding="utf-8", errors="replace")
-            if not call_pattern.search(text):
-                continue
-            if rel_path not in ALLOWED_EXECUTION_FILES:
-                issues.append(f"{rel_path}: route_and_execute call is not on the reviewed execution allowlist")
-                continue
-            if "execute_with_runtime_policy" not in text:
-                issues.append(f"{rel_path}: route_and_execute call is not wrapped by execute_with_runtime_policy")
+            issues.extend(runtime_policy_coverage_issues_for_text(rel_path, text))
 
     return issues
 
