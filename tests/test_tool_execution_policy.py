@@ -176,6 +176,66 @@ class ToolExecutionPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(attempts, 3)
         self.assertEqual(delays, [5.0, 5.0])
 
+    async def test_runtime_policy_ignores_invalid_retry_on_metadata(self):
+        attempts = 0
+        runtime_stats = {}
+
+        async def failing_tool():
+            nonlocal attempts
+            attempts += 1
+            raise ConnectionError("temporary network failure")
+
+        result = await execute_with_runtime_policy(
+            "flaky_tool",
+            failing_tool,
+            policy={
+                "name": "flaky_tool",
+                "timeout_policy": {"default_seconds": 1},
+                "retry_policy": {
+                    "max_attempts": 2,
+                    "retry_on": "connection_error",
+                },
+            },
+            runtime_stats=runtime_stats,
+        )
+
+        payload = json.loads(result)
+        self.assertEqual(payload["status"], "ERROR")
+        self.assertEqual(payload["error_type"], "tool_connection_error")
+        self.assertEqual(payload["retry_attempts"], 1)
+        self.assertEqual(attempts, 1)
+        self.assertEqual(runtime_stats["retry_on"], [])
+
+    async def test_runtime_policy_filters_unknown_retry_reasons(self):
+        attempts = 0
+        runtime_stats = {}
+
+        async def failing_tool():
+            nonlocal attempts
+            attempts += 1
+            raise ConnectionError("temporary network failure")
+
+        result = await execute_with_runtime_policy(
+            "flaky_tool",
+            failing_tool,
+            policy={
+                "name": "flaky_tool",
+                "timeout_policy": {"default_seconds": 1},
+                "retry_policy": {
+                    "max_attempts": 2,
+                    "retry_on": ["connection_error", "network_glitch"],
+                },
+            },
+            runtime_stats=runtime_stats,
+        )
+
+        payload = json.loads(result)
+        self.assertEqual(payload["status"], "ERROR")
+        self.assertEqual(payload["error_type"], "tool_connection_error")
+        self.assertEqual(payload["retry_attempts"], 2)
+        self.assertEqual(attempts, 2)
+        self.assertEqual(runtime_stats["retry_on"], ["connection_error"])
+
 
 if __name__ == "__main__":
     unittest.main()

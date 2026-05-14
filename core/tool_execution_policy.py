@@ -62,7 +62,7 @@ async def execute_with_runtime_policy(
         MAX_RETRY_ATTEMPTS,
     )
     retry_delay_seconds = _bounded_retry_delay_seconds(retry_policy)
-    retry_on = {str(item) for item in retry_policy.get("retry_on") or []}
+    retry_on = _retry_on_error_types(retry_policy)
 
     attempt = 0
     last_error: BaseException | None = None
@@ -184,6 +184,13 @@ def _bounded_retry_delay_seconds(retry_policy: dict[str, Any]) -> float:
     if delay_seconds is None:
         return 0.0
     return min(delay_seconds, MAX_RETRY_DELAY_SECONDS)
+
+
+def _retry_on_error_types(retry_policy: dict[str, Any]) -> set[str]:
+    retry_on = retry_policy.get("retry_on")
+    if not isinstance(retry_on, list):
+        return set()
+    return {item for item in retry_on if isinstance(item, str) and item in RETRYABLE_ERROR_TYPES}
 
 
 async def _sleep_before_retry(delay_seconds: float) -> None:
