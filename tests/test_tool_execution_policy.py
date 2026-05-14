@@ -63,6 +63,7 @@ class ToolExecutionPolicyTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_runtime_policy_retries_allowed_timeout_once(self):
         attempts = 0
+        runtime_stats = {}
 
         async def flaky_tool():
             nonlocal attempts
@@ -79,16 +80,22 @@ class ToolExecutionPolicyTests(unittest.IsolatedAsyncioTestCase):
                 "timeout_policy": {"default_seconds": 0.001},
                 "retry_policy": {"max_attempts": 2, "retry_on": ["timeout"]},
             },
+            runtime_stats=runtime_stats,
         )
 
         self.assertEqual(result, {"status": "OK", "attempts": 2})
         self.assertEqual(attempts, 2)
+        self.assertEqual(runtime_stats["attempts"], 2)
+        self.assertEqual(runtime_stats["max_attempts"], 2)
+        self.assertTrue(runtime_stats["retried"])
+        self.assertEqual(runtime_stats["final_status"], "success")
 
     async def test_runtime_policy_clamps_default_timeout_to_max_seconds(self):
         async def slow_tool():
             await asyncio.sleep(0.02)
             return {"status": "OK"}
 
+        runtime_stats = {}
         result = await execute_with_runtime_policy(
             "slow_tool",
             slow_tool,
@@ -97,12 +104,16 @@ class ToolExecutionPolicyTests(unittest.IsolatedAsyncioTestCase):
                 "timeout_policy": {"default_seconds": 10, "max_seconds": 0.001},
                 "retry_policy": {"max_attempts": 1, "retry_on": []},
             },
+            runtime_stats=runtime_stats,
         )
 
         payload = json.loads(result)
         self.assertEqual(payload["status"], "ERROR")
         self.assertEqual(payload["error_type"], "tool_timeout")
         self.assertEqual(payload["retry_attempts"], 1)
+        self.assertEqual(runtime_stats["attempts"], 1)
+        self.assertEqual(runtime_stats["final_status"], "error")
+        self.assertEqual(runtime_stats["error_type"], "tool_timeout")
 
     async def test_runtime_policy_invalid_retry_attempts_falls_back_to_one(self):
         attempts = 0

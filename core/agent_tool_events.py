@@ -112,12 +112,15 @@ def build_tool_end_event(
     started_at: int | None = None,
     finished_at: int | None = None,
     approval_ref: str | None = None,
+    extra_result_meta: dict | None = None,
 ) -> tuple[str, str]:
     result_summary = summarize_tool_result_for_sse(tool_result)
     result_meta = _result_metadata_with_tool_policy(
         tool_name,
         result_summary["metadata"],
     )
+    if extra_result_meta:
+        result_meta.update(extra_result_meta)
     payload = {
         "type": "tool_end",
         "id": tool_call_id,

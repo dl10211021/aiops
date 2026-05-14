@@ -18,6 +18,7 @@ import {
   evidenceLabel,
   operationLabel,
   recordValue,
+  runtimeExecutionLabels,
   runtimePolicyLabels,
   toolPolicyFromTrace,
 } from './toolPolicyPresentation'
@@ -52,6 +53,7 @@ function ToolTraceCard({
   const parsedResult = item.resultMeta || parseJsonRecord(item.result || '')
   const toolPolicy = toolPolicyFromTrace(item)
   const runtimeLabels = runtimePolicyLabels(toolPolicy)
+  const executionLabels = runtimeExecutionLabels(item)
   const primaryAction = extractPrimaryAction(parsedResult)
   const isPolicyBlocked = isPolicyBlockedResult(parsedResult)
   const isToolError = !isPolicyBlocked && isToolErrorResult(parsedResult)
@@ -113,6 +115,11 @@ function ToolTraceCard({
             )}
             {runtimeLabels.map((label) => (
               <span key={label} className="rounded border border-ops-surface1/65 bg-ops-dark/35 px-2 py-0.5 font-semibold text-ops-subtext">
+                {label}
+              </span>
+            ))}
+            {executionLabels.map((label) => (
+              <span key={label} className="rounded border border-amber-400/35 bg-amber-400/10 px-2 py-0.5 font-semibold text-amber-100">
                 {label}
               </span>
             ))}

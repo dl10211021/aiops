@@ -291,10 +291,12 @@ async def process_chat_tool_calls(
         yield sse_raw(msg_start)
         await sleep(0.05)
 
+        runtime_execution: dict[str, Any] = {}
         tool_res = await execute_with_runtime_policy(
             func_name,
             lambda: dispatcher.route_and_execute(func_name, func_args, context),
             policy=tool_policy,
+            runtime_stats=runtime_execution,
         )
         if approval_required:
             try:
@@ -314,6 +316,9 @@ async def process_chat_tool_calls(
             started_at=started_at,
             finished_at=finished_at,
             approval_ref=tc_id if approval_required else None,
+            extra_result_meta={"runtime_execution": runtime_execution}
+            if runtime_execution
+            else None,
         )
         _collect_tool_end_trace(trace_collector, msg_end)
         yield sse_raw(msg_end)
@@ -418,17 +423,21 @@ async def _process_concurrent_tool_calls(
 
     await sleep(0.05)
 
-    async def run_tool(item: dict[str, Any]) -> Any:
+    async def run_tool(item: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
         prepared_call: PreparedToolCall = item["call"]
-        return await execute_with_runtime_policy(
+        runtime_execution: dict[str, Any] = {}
+        tool_res = await execute_with_runtime_policy(
             prepared_call.name,
             lambda: dispatcher.route_and_execute(prepared_call.name, prepared_call.args, context),
             policy=item["policy"],
+            runtime_stats=runtime_execution,
         )
+        return tool_res, runtime_execution
 
     results = await asyncio.gather(*(run_tool(item) for item in plan))
-    for item, tool_res in zip(plan, results):
+    for item, result in zip(plan, results):
         prepared_call: PreparedToolCall = item["call"]
+        tool_res, runtime_execution = result
         finished_at = int(time.time() * 1000)
         msg_end, safe_tool_res = build_tool_end_event(
             prepared_call.id,
@@ -439,6 +448,9 @@ async def _process_concurrent_tool_calls(
             input_summary=prepared_call.display_cmd,
             started_at=started_at_by_id.get(prepared_call.id),
             finished_at=finished_at,
+            extra_result_meta={"runtime_execution": runtime_execution}
+            if runtime_execution
+            else None,
         )
         _collect_tool_end_trace(trace_collector, msg_end)
         yield sse_raw(msg_end)

@@ -217,6 +217,64 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payloads[1]["result_meta"]["error_type"], "tool_timeout")
         self.assertIn("tool_timeout", messages[0]["content"])
 
+    async def test_runtime_policy_success_retry_is_attached_to_tool_trace(self):
+        memory_store = FakeMemoryStore()
+        dispatcher = FakeDispatcher()
+        messages = []
+        attempts = 0
+
+        async def flaky_execute(tool_name, args, context):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise ConnectionError("temporary connection issue")
+            return {"status": "OK", "attempts": attempts}
+
+        dispatcher.route_and_execute = flaky_execute
+
+        with patch(
+            "core.agent_tool_loop.tool_policy_metadata",
+            return_value={
+                "name": "flaky_tool",
+                "operation_mode": "read",
+                "approval_policy": "none",
+                "destructive": False,
+                "timeout_policy": {"default_seconds": 1},
+                "retry_policy": {
+                    "max_attempts": 2,
+                    "retry_on": ["connection_error"],
+                    "delay_seconds": 0,
+                },
+                "evidence_family": "platform",
+            },
+        ):
+            events = await collect_tool_events(
+                tool_calls=[
+                    {
+                        "id": "call-flaky",
+                        "function": {
+                            "name": "flaky_tool",
+                            "arguments": json.dumps({}),
+                        },
+                    }
+                ],
+                session_id="sid-tool",
+                messages=messages,
+                memory_store=memory_store,
+                dispatcher=dispatcher,
+                context={"session_id": "sid-tool"},
+                iteration=0,
+            )
+
+        payloads = [decode_sse(event) for event in events]
+        runtime_execution = payloads[1]["result_meta"]["runtime_execution"]
+        self.assertEqual(payloads[1]["result_status"], "done")
+        self.assertEqual(runtime_execution["attempts"], 2)
+        self.assertEqual(runtime_execution["max_attempts"], 2)
+        self.assertTrue(runtime_execution["retried"])
+        self.assertEqual(runtime_execution["final_status"], "success")
+        self.assertEqual(attempts, 2)
+
     async def test_concurrency_safe_tools_run_in_parallel_batch(self):
         memory_store = FakeMemoryStore()
         dispatcher = FakeDispatcher()

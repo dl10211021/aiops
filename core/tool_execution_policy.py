@@ -50,6 +50,7 @@ async def execute_with_runtime_policy(
     executor: Callable[[], Awaitable[Any]],
     *,
     policy: dict[str, Any] | None = None,
+    runtime_stats: dict[str, Any] | None = None,
 ) -> Any:
     effective_policy = policy or tool_policy_metadata(tool_name)
     timeout_policy = effective_policy.get("timeout_policy") if isinstance(effective_policy.get("timeout_policy"), dict) else {}
@@ -68,11 +69,32 @@ async def execute_with_runtime_policy(
         attempt += 1
         try:
             if timeout_seconds:
-                return await asyncio.wait_for(executor(), timeout=timeout_seconds)
-            return await executor()
+                result = await asyncio.wait_for(executor(), timeout=timeout_seconds)
+            else:
+                result = await executor()
+            _update_runtime_stats(
+                runtime_stats,
+                attempts=attempt,
+                max_attempts=max_attempts,
+                retry_delay_seconds=retry_delay_seconds,
+                retry_on=retry_on,
+                timeout_seconds=timeout_seconds,
+                final_status="success",
+            )
+            return result
         except asyncio.TimeoutError as exc:
             last_error = exc
             if attempt >= max_attempts or "timeout" not in retry_on:
+                _update_runtime_stats(
+                    runtime_stats,
+                    attempts=attempt,
+                    max_attempts=max_attempts,
+                    retry_delay_seconds=retry_delay_seconds,
+                    retry_on=retry_on,
+                    timeout_seconds=timeout_seconds,
+                    final_status="error",
+                    error_type="tool_timeout",
+                )
                 return _execution_error_result(
                     tool_name,
                     effective_policy,
@@ -85,6 +107,16 @@ async def execute_with_runtime_policy(
             last_error = exc
             error_type = _classify_exception(exc)
             if attempt >= max_attempts or error_type not in retry_on:
+                _update_runtime_stats(
+                    runtime_stats,
+                    attempts=attempt,
+                    max_attempts=max_attempts,
+                    retry_delay_seconds=retry_delay_seconds,
+                    retry_on=retry_on,
+                    timeout_seconds=timeout_seconds,
+                    final_status="error",
+                    error_type=f"tool_{error_type}",
+                )
                 return _execution_error_result(
                     tool_name,
                     effective_policy,
@@ -94,6 +126,16 @@ async def execute_with_runtime_policy(
                 )
             await _sleep_before_retry(retry_delay_seconds)
 
+    _update_runtime_stats(
+        runtime_stats,
+        attempts=attempt,
+        max_attempts=max_attempts,
+        retry_delay_seconds=retry_delay_seconds,
+        retry_on=retry_on,
+        timeout_seconds=timeout_seconds,
+        final_status="error",
+        error_type="tool_execution_failed",
+    )
     return _execution_error_result(
         tool_name,
         effective_policy,
@@ -146,6 +188,35 @@ def _bounded_retry_delay_seconds(retry_policy: dict[str, Any]) -> float:
 async def _sleep_before_retry(delay_seconds: float) -> None:
     if delay_seconds > 0:
         await asyncio.sleep(delay_seconds)
+
+
+def _update_runtime_stats(
+    runtime_stats: dict[str, Any] | None,
+    *,
+    attempts: int,
+    max_attempts: int,
+    retry_delay_seconds: float,
+    retry_on: set[str],
+    timeout_seconds: float | None,
+    final_status: str,
+    error_type: str | None = None,
+) -> None:
+    if runtime_stats is None:
+        return
+    runtime_stats.clear()
+    runtime_stats.update(
+        {
+            "attempts": attempts,
+            "max_attempts": max_attempts,
+            "retried": attempts > 1,
+            "retry_delay_seconds": retry_delay_seconds,
+            "retry_on": sorted(retry_on),
+            "timeout_seconds": timeout_seconds,
+            "final_status": final_status,
+        }
+    )
+    if error_type:
+        runtime_stats["error_type"] = error_type
 
 
 def _classify_exception(exc: Exception) -> str:

@@ -104,6 +104,16 @@ export function runtimePolicyLabels(policy: Record<string, unknown> | null) {
   ].filter(Boolean)
 }
 
+export function runtimeExecutionLabels(trace: ExecTraceItem) {
+  const execution = objectRecord(trace.resultMeta?.runtime_execution)
+  const attempts = numberValue(execution, 'attempts')
+  const maxAttempts = numberValue(execution, 'max_attempts')
+  const retried = recordValue(execution, 'retried') === 'true'
+  if (!attempts || attempts <= 1 || !retried) return []
+  const totalText = maxAttempts && maxAttempts > 0 ? `/${Math.round(maxAttempts)}` : ''
+  return [`实际重试 ${Math.round(attempts)}${totalText} 次`]
+}
+
 export function toolPolicySearchText(policy: Record<string, unknown> | null) {
   if (!policy) return ''
   const operation = recordValue(policy, 'operation_mode')
