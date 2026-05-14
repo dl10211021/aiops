@@ -272,6 +272,116 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreaterEqual(max_active, 2)
         self.assertEqual([message["name"] for message in messages], ["read_one", "read_two"])
 
+    async def test_mixed_batch_parallelizes_safe_prefix_then_guards_unsafe_tool(self):
+        memory_store = FakeMemoryStore()
+        dispatcher = FakeDispatcher()
+        messages = []
+        active = 0
+        max_active = 0
+
+        async def parallel_execute(tool_name, args, context):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.02)
+            active -= 1
+            dispatcher.executed.append((tool_name, args, context))
+            return {"status": "OK", "tool": tool_name}
+
+        dispatcher.route_and_execute = parallel_execute
+
+        def policy_for(name):
+            if name.startswith("read_"):
+                return {
+                    "name": name,
+                    "operation_mode": "read",
+                    "approval_policy": "none",
+                    "destructive": False,
+                    "concurrency_safe": True,
+                    "timeout_policy": {"default_seconds": 0},
+                    "retry_policy": {"max_attempts": 1, "retry_on": []},
+                    "evidence_family": "platform",
+                }
+            return {
+                "name": name,
+                "operation_mode": "destructive",
+                "approval_policy": "always_required",
+                "destructive": True,
+                "concurrency_safe": False,
+                "timeout_policy": {"default_seconds": 1},
+                "retry_policy": {"max_attempts": 1, "retry_on": []},
+                "evidence_family": "memory",
+            }
+
+        async def never_resolve(_future, timeout):
+            raise TimeoutError()
+
+        with patch(
+            "core.agent_tool_loop.tool_policy_metadata",
+            side_effect=policy_for,
+        ), patch(
+            "asyncio.wait_for",
+            side_effect=never_resolve,
+        ), patch(
+            "core.agent_tool_loop.record_tool_approval_request",
+            return_value={"metadata": {"policy": {}}},
+        ), patch("core.approval_queue.mark_approval_timeout"):
+            events = await collect_tool_events(
+                tool_calls=[
+                    {
+                        "id": "call-read-1",
+                        "function": {
+                            "name": "read_one",
+                            "arguments": json.dumps({}),
+                        },
+                    },
+                    {
+                        "id": "call-read-2",
+                        "function": {
+                            "name": "read_two",
+                            "arguments": json.dumps({}),
+                        },
+                    },
+                    {
+                        "id": "call-delete",
+                        "function": {
+                            "name": "memory_delete",
+                            "arguments": json.dumps({"key": "old"}),
+                        },
+                    },
+                ],
+                session_id="sid-tool",
+                messages=messages,
+                memory_store=memory_store,
+                dispatcher=dispatcher,
+                context={"session_id": "sid-tool"},
+                iteration=0,
+            )
+
+        payloads = [decode_sse(event) for event in events]
+        self.assertEqual(
+            [payload["type"] for payload in payloads],
+            [
+                "tool_start",
+                "tool_start",
+                "tool_end",
+                "tool_end",
+                "tool_ask_approval",
+                "tool_end",
+                "status",
+            ],
+        )
+        self.assertTrue(payloads[0]["result_meta"]["concurrent"])
+        self.assertGreaterEqual(max_active, 2)
+        self.assertEqual(
+            [call[0] for call in dispatcher.executed],
+            ["read_one", "read_two"],
+        )
+        self.assertEqual(
+            [message["name"] for message in messages],
+            ["read_one", "read_two", "memory_delete"],
+        )
+
     async def test_parse_error_appends_tool_error_without_executing(self):
         memory_store = FakeMemoryStore()
         dispatcher = FakeDispatcher()

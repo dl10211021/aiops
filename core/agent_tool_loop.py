@@ -43,30 +43,31 @@ async def process_chat_tool_calls(
     trace_collector: Callable[[dict], None] | None = None,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> AsyncIterator[str]:
-    concurrent_plan = _build_concurrent_plan(tool_calls, dispatcher, context)
-    if concurrent_plan:
-        async for event in _process_concurrent_tool_calls(
-            concurrent_plan,
-            session_id=session_id,
-            messages=messages,
-            memory_store=memory_store,
-            dispatcher=dispatcher,
-            context=context,
-            trace_collector=trace_collector,
-            sleep=sleep,
-        ):
-            yield event
-        msg_loop = json.dumps(
-            {
-                "type": "status",
-                "content": f"🔄 收集结果，执行第 {iteration + 2} 步...",
-            }
+    index = 0
+    while index < len(tool_calls):
+        concurrent_plan = _build_concurrent_plan(
+            tool_calls,
+            dispatcher,
+            context,
+            start_index=index,
         )
-        yield sse_raw(msg_loop)
-        await sleep(0.05)
-        return
+        if concurrent_plan:
+            async for event in _process_concurrent_tool_calls(
+                concurrent_plan,
+                session_id=session_id,
+                messages=messages,
+                memory_store=memory_store,
+                dispatcher=dispatcher,
+                context=context,
+                trace_collector=trace_collector,
+                sleep=sleep,
+            ):
+                yield event
+            index += len(concurrent_plan)
+            continue
 
-    for tc in tool_calls:
+        tc = tool_calls[index]
+        index += 1
         prepared_call = prepare_tool_call(tc)
         func_name = prepared_call.name
         func_args = prepared_call.args
@@ -341,21 +342,19 @@ def _build_concurrent_plan(
     tool_calls: list[dict],
     dispatcher: Any,
     context: dict,
+    *,
+    start_index: int = 0,
 ) -> list[dict[str, Any]] | None:
-    if len(tool_calls) < 2:
+    if len(tool_calls) - start_index < 2:
         return None
     prepared: list[dict[str, Any]] = []
-    for tc in tool_calls:
+    for tc in tool_calls[start_index:]:
         prepared_call = prepare_tool_call(tc)
         if prepared_call.parse_error or prepared_call.name in {"request_user_interaction", "clarify"}:
-            return None
+            break
         tool_policy = tool_policy_metadata(prepared_call.name)
         if not tool_policy.get("concurrency_safe"):
-            return None
-        prepared.append({"call": prepared_call, "policy": tool_policy})
-
-    for item in prepared:
-        prepared_call = item["call"]
+            break
         needs_approval, reason = dispatcher.check_approval_needed(
             prepared_call.name,
             prepared_call.args,
@@ -365,10 +364,14 @@ def _build_concurrent_plan(
             prepared_call.name,
             safety_needs_approval=needs_approval,
             safety_reason=reason,
-            policy=item["policy"],
+            policy=tool_policy,
         )
         if gate.approval_required:
-            return None
+            break
+        prepared.append({"call": prepared_call, "policy": tool_policy})
+
+    if len(prepared) < 2:
+        return None
     return prepared
 
 
