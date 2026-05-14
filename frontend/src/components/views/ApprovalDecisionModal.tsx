@@ -1,5 +1,6 @@
 import type { ApprovalRequest } from '@/types'
 import { assetTypeLabel, protocolLabel, toolLabel } from '@/utils/assetDisplay'
+import { ApprovalSourceSummary } from '@/features/sessions/ApprovalSourceSummary'
 import { ToolPolicyRuntimeGrid } from '@/features/sessions/ToolPolicyRuntimeSummary'
 import { ApprovalInfo } from './ApprovalCenterShared'
 
@@ -34,9 +35,9 @@ export function ApprovalDecisionModal({
             {action}敏感工具调用
           </div>
           <h2 className="mt-1 text-lg font-bold text-ops-text">{toolLabel(approval.tool_name)}</h2>
-          <p className="mt-1 text-sm leading-6 text-ops-subtext">{approval.reason || '命中后端审批策略'}</p>
         </div>
         <div className="ops-modal-body space-y-4 p-5">
+          <ApprovalSourceSummary source={approval.metadata?.approval_source || null} reason={approval.reason} />
           <div className="ops-data-panel p-3 text-xs text-ops-subtext">
             <div className="grid gap-2">
               <ApprovalInfo label="资产" value={approval.context?.remark || approval.context?.host || '-'} />

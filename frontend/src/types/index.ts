@@ -290,6 +290,7 @@ export interface ToolApproval {
   reason?: string
   actions?: SafetyPolicyAction[]
   primaryAction?: SafetyPolicyAction | null
+  approvalSource?: Record<string, unknown> | null
   toolPolicy?: Record<string, unknown> | null
   uniqueId: string
   resolved: boolean
@@ -1533,6 +1534,12 @@ export interface ApprovalRequest {
     policy?: {
       actions?: SafetyPolicyAction[]
       primary_action?: SafetyPolicyAction | null
+    }
+    approval_source?: {
+      layer?: string
+      label?: string
+      detail?: string
+      reason?: string
     }
     skill_change?: {
       type: string

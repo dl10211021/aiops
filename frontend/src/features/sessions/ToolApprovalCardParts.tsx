@@ -1,5 +1,6 @@
 import type { ToolApproval } from '@/types'
 import { toolLabel } from '@/utils/assetDisplay'
+import { ApprovalSourceSummary } from './ApprovalSourceSummary'
 import TraceInfo from './TraceInfo'
 import { policyActionTone } from './policyTones'
 import { ToolPolicyRuntimeChips, ToolPolicyRuntimeGrid } from './ToolPolicyRuntimeSummary'
@@ -68,6 +69,10 @@ export function ToolApprovalReason({ reason }: { reason?: string }) {
       {reason}
     </div>
   )
+}
+
+export function ToolApprovalSource({ approval }: { approval: ToolApproval }) {
+  return <ApprovalSourceSummary source={approval.approvalSource || null} reason={approval.reason} />
 }
 
 export function ToolApprovalResolution({

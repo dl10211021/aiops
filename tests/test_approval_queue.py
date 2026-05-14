@@ -41,7 +41,28 @@ class TestApprovalQueue(unittest.TestCase):
         self.assertEqual(pending[0]["metadata"]["tool_policy"]["name"], "db_execute_query")
         self.assertEqual(pending[0]["metadata"]["tool_policy"]["operation_mode"], "read_write")
         self.assertEqual(pending[0]["metadata"]["tool_policy"]["evidence_family"], "database")
+        self.assertEqual(pending[0]["metadata"]["approval_source"]["layer"], "action_policy")
+        self.assertEqual(pending[0]["metadata"]["approval_source"]["label"], "动作策略")
         self.assertNotIn("asset-secret", str(pending[0]))
+
+    def test_record_approval_request_classifies_runtime_policy_source(self):
+        from core import approval_queue
+
+        store_path = self._store_path("runtime_source")
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path):
+            request = approval_queue.record_approval_request(
+                tool_call_id="call-runtime",
+                session_id="sid-1",
+                tool_name="memory_delete",
+                args={"key": "old"},
+                reason="工具执行策略要求审批：删除记忆，模式=destructive，审批策略=always_required，原因=强制审批",
+                context={"session_id": "sid-1", "asset_type": "virtual", "protocol": "virtual"},
+            )
+
+        source = request["metadata"]["approval_source"]
+        self.assertEqual(source["layer"], "runtime_policy")
+        self.assertEqual(source["label"], "运行策略")
+        self.assertIn("destructive", source["detail"])
 
     def test_evolve_skill_approval_records_summary_instead_of_full_content(self):
         from core import approval_queue

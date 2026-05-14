@@ -90,6 +90,7 @@ export function applyChatStreamEvent({
         primaryAction: data.primary_action && typeof data.primary_action === 'object'
           ? data.primary_action as ToolApproval['primaryAction']
           : null,
+        approvalSource: streamRecord(data.approval_source) || null,
         toolPolicy: streamRecord(data.tool_policy) || null,
         uniqueId: `approval-${Date.now()}`,
         resolved: false,

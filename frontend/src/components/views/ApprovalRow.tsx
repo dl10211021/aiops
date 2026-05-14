@@ -1,5 +1,6 @@
 import { assetTypeLabel, protocolLabel, toolLabel } from '@/utils/assetDisplay'
 import type { ApprovalRequest } from '@/types'
+import { ApprovalSourceSummary } from '@/features/sessions/ApprovalSourceSummary'
 import { ToolPolicyRuntimeGrid } from '@/features/sessions/ToolPolicyRuntimeSummary'
 import { approvalPolicyActionTone } from './approvalDisplay'
 import { ApprovalInfo, ApprovalStatusBadge } from './ApprovalCenterShared'
@@ -38,7 +39,9 @@ export function ApprovalRow({
           )}
           <span className="text-xs text-ops-overlay">{approval.id}</span>
         </div>
-        <p className="mt-2 text-sm text-ops-text">{approval.reason || '命中后端审批策略'}</p>
+        <div className="mt-3">
+          <ApprovalSourceSummary source={approval.metadata?.approval_source || null} reason={approval.reason} />
+        </div>
         {toolPolicy && (
           <div className="mt-3">
             <ToolPolicyRuntimeGrid policy={toolPolicy} />

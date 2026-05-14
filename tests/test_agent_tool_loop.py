@@ -108,7 +108,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("asyncio.wait_for", side_effect=never_resolve), patch(
             "core.agent_tool_loop.record_tool_approval_request",
-            return_value={"metadata": {"policy": {}}},
+            return_value={"metadata": {"policy": {}, "approval_source": {"layer": "action_policy", "label": "动作策略"}}},
         ), patch("core.approval_queue.mark_approval_timeout"):
             events = await collect_tool_events(
                 tool_calls=[
@@ -133,6 +133,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(approval["type"], "tool_ask_approval")
         self.assertEqual(approval["tool_policy"]["name"], "db_execute_query")
         self.assertEqual(approval["tool_policy"]["evidence_family"], "database")
+        self.assertEqual(approval["approval_source"]["layer"], "action_policy")
 
     async def test_runtime_policy_can_require_approval_even_without_safety_hit(self):
         memory_store = FakeMemoryStore()
@@ -144,7 +145,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("asyncio.wait_for", side_effect=never_resolve), patch(
             "core.agent_tool_loop.record_tool_approval_request",
-            return_value={"metadata": {"policy": {}}},
+            return_value={"metadata": {"policy": {}, "approval_source": {"layer": "runtime_policy", "label": "运行策略"}}},
         ), patch("core.approval_queue.mark_approval_timeout"):
             events = await collect_tool_events(
                 tool_calls=[
@@ -168,6 +169,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         approval = payloads[0]
         self.assertEqual(approval["type"], "tool_ask_approval")
         self.assertEqual(approval["tool_policy"]["approval_policy"], "always_required")
+        self.assertEqual(approval["approval_source"]["layer"], "runtime_policy")
         self.assertEqual(dispatcher.executed, [])
 
     async def test_runtime_policy_timeout_returns_tool_error(self):
@@ -382,7 +384,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
             side_effect=never_resolve,
         ), patch(
             "core.agent_tool_loop.record_tool_approval_request",
-            return_value={"metadata": {"policy": {}}},
+            return_value={"metadata": {"policy": {}, "approval_source": {"layer": "runtime_policy", "label": "运行策略"}}},
         ), patch("core.approval_queue.mark_approval_timeout"):
             events = await collect_tool_events(
                 tool_calls=[

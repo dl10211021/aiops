@@ -181,6 +181,7 @@ async def process_chat_tool_calls(
                 context=context,
             )
             policy_metadata = (approval_record.get("metadata") or {}).get("policy") or {}
+            approval_source = (approval_record.get("metadata") or {}).get("approval_source") or {}
             msg_ask = json.dumps(
                 {
                     "type": "tool_ask_approval",
@@ -190,6 +191,7 @@ async def process_chat_tool_calls(
                     "reason": reason,
                     "actions": policy_metadata.get("actions") or [],
                     "primary_action": policy_metadata.get("primary_action"),
+                    "approval_source": approval_source,
                     "tool_policy": tool_policy,
                     "id": tc_id,
                     "tool": func_name,

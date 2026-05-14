@@ -127,17 +127,67 @@ def _policy_metadata(tool_name: str, args: dict[str, Any], context: dict[str, An
     return metadata
 
 
-def _approval_metadata(tool_name: str, args: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+def _approval_source_metadata(
+    *,
+    reason: str,
+    tool_policy: dict[str, Any] | None,
+    policy: dict[str, Any],
+) -> dict[str, str]:
+    policy = policy or {}
+    if isinstance(policy.get("primary_action"), dict):
+        action = policy["primary_action"]
+        return {
+            "layer": "action_policy",
+            "label": "动作策略",
+            "detail": str(action.get("label") or action.get("id") or "命中动作审批规则"),
+            "reason": str(reason or ""),
+        }
+
+    tool_policy = tool_policy or {}
+    operation_mode = str(tool_policy.get("operation_mode") or "")
+    approval_policy = str(tool_policy.get("approval_policy") or "")
+    destructive = bool(tool_policy.get("destructive"))
+    if (
+        str(reason or "").startswith("工具执行策略要求审批")
+        or destructive
+        or approval_policy == "always_required"
+        or operation_mode == "external_effect"
+    ):
+        return {
+            "layer": "runtime_policy",
+            "label": "运行策略",
+            "detail": f"模式={operation_mode or 'unknown'}，审批={approval_policy or 'unknown'}",
+            "reason": str(reason or ""),
+        }
+
+    return {
+        "layer": "safety_policy",
+        "label": "安全策略",
+        "detail": "命中安全审批规则或只读边界",
+        "reason": str(reason or ""),
+    }
+
+
+def _approval_metadata(tool_name: str, args: dict[str, Any], context: dict[str, Any], reason: str) -> dict[str, Any]:
     metadata: dict[str, Any] = {}
+    tool_policy: dict[str, Any] | None = None
     try:
         from core.tool_registry import tool_policy_metadata
 
-        metadata["tool_policy"] = redact_value(tool_policy_metadata(tool_name))
+        tool_policy = tool_policy_metadata(tool_name)
+        metadata["tool_policy"] = redact_value(tool_policy)
     except Exception:
         pass
     policy = _policy_metadata(tool_name, args, context)
     if policy:
         metadata["policy"] = policy
+    metadata["approval_source"] = redact_value(
+        _approval_source_metadata(
+            reason=reason,
+            tool_policy=tool_policy,
+            policy=policy,
+        )
+    )
     if tool_name == "evolve_skill":
         metadata["skill_change"] = _skill_change_metadata(args)
     elif tool_name == "rollback_skill":
@@ -273,7 +323,7 @@ def record_approval_request(
             "tool_name": str(tool_name or ""),
             "args": _safe_args(str(tool_name or ""), args or {}),
             "reason": str(reason or ""),
-            "metadata": _approval_metadata(str(tool_name or ""), args or {}, context or {}),
+            "metadata": _approval_metadata(str(tool_name or ""), args or {}, context or {}, str(reason or "")),
             "context": _safe_context({**(context or {}), "session_id": session_id or context.get("session_id")}),
             "status": "pending",
             "decision": None,

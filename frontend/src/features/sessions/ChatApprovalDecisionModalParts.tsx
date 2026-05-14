@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { toolLabel } from '@/utils/assetDisplay'
+import { ApprovalSourceSummary } from './ApprovalSourceSummary'
 import { approvalArgumentRows } from './approvalRows'
 import type { ChatApprovalDecision } from './approvalTypes'
 import { policyActionTone } from './policyTones'
@@ -37,11 +38,7 @@ export function ChatApprovalContextPanel({ decision }: { decision: ChatApprovalD
   const approvalActions = decision.approval.actions || []
   return (
     <>
-      {decision.approval.reason && (
-        <div className="rounded-lg border border-yellow-300/20 bg-yellow-300/8 px-3 py-2 text-xs leading-5 text-yellow-100">
-          {decision.approval.reason}
-        </div>
-      )}
+      <ApprovalSourceSummary source={decision.approval.approvalSource || null} reason={decision.approval.reason} />
       {approvalActions.length > 0 && (
         <div className="grid gap-2 md:grid-cols-2">
           {approvalActions.slice(0, 4).map((policyAction) => (
