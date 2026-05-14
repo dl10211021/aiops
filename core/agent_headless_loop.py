@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator, Callable
@@ -19,6 +20,17 @@ from core.tool_registry import tool_policy_metadata
 StreamExecutor = Callable[[str, list[dict], str, Any], AsyncIterator[dict]]
 
 
+def _parse_headless_tool_call(tc: dict) -> tuple[str, dict]:
+    func_name = tc.get("function", {}).get("name", "")
+    try:
+        func_args = parse_tool_arguments(
+            tc.get("function", {}).get("arguments", "{}")
+        )
+    except Exception:
+        func_args = {}
+    return func_name, func_args
+
+
 def _headless_high_risk_action_reason(tool_name: str, args: dict, context: dict) -> str:
     policy = explain_policy_decision(tool_name, args, context)
     if policy.get("decision") != "allow":
@@ -30,6 +42,94 @@ def _headless_high_risk_action_reason(tool_name: str, args: dict, context: dict)
 
     label = primary_action.get("label") or primary_action.get("id") or "高风险动作"
     return f"后台无人值守任务不自动执行高风险动作：{label}"
+
+
+def _headless_approval_reason(
+    *,
+    tool_name: str,
+    args: dict,
+    context: dict,
+    dispatcher: Any,
+    tool_policy: dict[str, Any],
+) -> str:
+    needs_approval, reason = dispatcher.check_approval_needed(
+        tool_name,
+        args,
+        context,
+    )
+    execution_gate = evaluate_tool_execution_gate(
+        tool_name,
+        safety_needs_approval=needs_approval,
+        safety_reason=reason,
+        policy=tool_policy,
+    )
+    if execution_gate.approval_required:
+        return execution_gate.reason
+    return _headless_high_risk_action_reason(tool_name, args, context)
+
+
+def _build_headless_concurrent_plan(
+    tool_calls: list[dict],
+    *,
+    dispatcher: Any,
+    context: dict,
+) -> list[dict[str, Any]] | None:
+    if len(tool_calls) < 2:
+        return None
+
+    plan: list[dict[str, Any]] = []
+    for tc in tool_calls:
+        func_name, func_args = _parse_headless_tool_call(tc)
+        tool_policy = tool_policy_metadata(func_name)
+        if not tool_policy.get("concurrency_safe"):
+            return None
+        if _headless_approval_reason(
+            tool_name=func_name,
+            args=func_args,
+            context=context,
+            dispatcher=dispatcher,
+            tool_policy=tool_policy,
+        ):
+            return None
+        plan.append(
+            {
+                "id": tc.get("id", ""),
+                "name": func_name,
+                "args": func_args,
+                "policy": tool_policy,
+            }
+        )
+    return plan
+
+
+async def _run_headless_concurrent_plan(
+    plan: list[dict[str, Any]],
+    *,
+    messages: list[dict],
+    dispatcher: Any,
+    context: dict,
+) -> None:
+    async def run_tool(item: dict[str, Any]) -> Any:
+        return await execute_with_runtime_policy(
+            item["name"],
+            lambda: dispatcher.route_and_execute(
+                item["name"],
+                item["args"],
+                context,
+            ),
+            policy=item["policy"],
+        )
+
+    results = await asyncio.gather(*(run_tool(item) for item in plan))
+    for item, tool_res in zip(plan, results):
+        messages.append(
+            {
+                "tool_call_id": item["id"],
+                "role": "tool",
+                "name": item["name"],
+                "content": str(tool_res),
+            }
+        )
 
 
 async def run_headless_agent_loop(
@@ -76,34 +176,32 @@ async def run_headless_agent_loop(
 
         messages.append(safe_msg)
 
+        concurrent_plan = _build_headless_concurrent_plan(
+            tool_calls,
+            dispatcher=dispatcher,
+            context=context,
+        )
+        if concurrent_plan:
+            await _run_headless_concurrent_plan(
+                concurrent_plan,
+                messages=messages,
+                dispatcher=dispatcher,
+                context=context,
+            )
+            continue
+
         for tc in tool_calls:
-            func_name = tc.get("function", {}).get("name", "")
-            try:
-                func_args = parse_tool_arguments(
-                    tc.get("function", {}).get("arguments", "{}")
-                )
-            except Exception:
-                func_args = {}
-
-            needs_approval, reason = dispatcher.check_approval_needed(
-                func_name,
-                func_args,
-                context,
-            )
+            func_name, func_args = _parse_headless_tool_call(tc)
             tool_policy = tool_policy_metadata(func_name)
-            execution_gate = evaluate_tool_execution_gate(
-                func_name,
-                safety_needs_approval=needs_approval,
-                safety_reason=reason,
-                policy=tool_policy,
+            reason = _headless_approval_reason(
+                tool_name=func_name,
+                args=func_args,
+                context=context,
+                dispatcher=dispatcher,
+                tool_policy=tool_policy,
             )
-            needs_approval = execution_gate.approval_required
-            reason = execution_gate.reason
-            if not needs_approval:
-                reason = _headless_high_risk_action_reason(func_name, func_args, context)
-                needs_approval = bool(reason)
 
-            if needs_approval:
+            if reason:
                 blocked = record_headless_approval_block(
                     tool_call_id=tc.get("id", ""),
                     session_id=session_id,

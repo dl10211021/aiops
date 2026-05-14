@@ -1,3 +1,4 @@
+import asyncio
 import json
 import unittest
 from unittest.mock import patch
@@ -232,6 +233,90 @@ class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(dispatcher.executed, [])
         record.assert_called_once()
         self.assertIn("工具执行策略要求审批", record.call_args.kwargs["reason"])
+
+    async def test_headless_concurrency_safe_tools_run_in_parallel(self):
+        messages = [{"role": "system", "content": "sys"}]
+        context = {"session_id": "sid", "execution_mode": "headless"}
+        dispatcher = FakeDispatcher()
+        active = 0
+        max_active = 0
+
+        async def parallel_execute(tool_name, args, context):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            await asyncio.sleep(0.02)
+            active -= 1
+            dispatcher.executed.append((tool_name, args, context))
+            return {"status": "OK", "tool": tool_name}
+
+        def read_policy(name):
+            return {
+                "name": name,
+                "operation_mode": "read",
+                "approval_policy": "none",
+                "destructive": False,
+                "concurrency_safe": True,
+                "timeout_policy": {"default_seconds": 1},
+                "retry_policy": {"max_attempts": 1, "retry_on": []},
+                "evidence_family": "platform",
+            }
+
+        dispatcher.route_and_execute = parallel_execute
+        with patch(
+            "core.agent_headless_loop.tool_policy_metadata",
+            side_effect=read_policy,
+        ):
+            report = await run_headless_agent_loop(
+                model_name="model",
+                messages=messages,
+                tools=[],
+                context=context,
+                session_id="sid",
+                agent_profile="default",
+                host="host.local",
+                dispatcher=dispatcher,
+                event_logger=FakeLogger(),
+                stream_executor=stream_executor_factory(
+                    [
+                        [
+                            {"type": "content", "content": "准备读取"},
+                            {
+                                "type": "tool_calls",
+                                "tool_calls": [
+                                    {
+                                        "id": "read-1",
+                                        "function": {
+                                            "name": "read_one",
+                                            "arguments": json.dumps({}),
+                                        },
+                                    },
+                                    {
+                                        "id": "read-2",
+                                        "function": {
+                                            "name": "read_two",
+                                            "arguments": json.dumps({}),
+                                        },
+                                    },
+                                ],
+                            },
+                        ],
+                        [{"type": "content", "content": "读取完成"}],
+                    ]
+                ),
+                max_steps=3,
+            )
+
+        self.assertEqual(report, "来自 default Agent (host.local) 的协同任务报告：\n读取完成")
+        self.assertGreaterEqual(max_active, 2)
+        self.assertEqual(
+            [message["name"] for message in messages[2:]],
+            ["read_one", "read_two"],
+        )
+        self.assertEqual(
+            [call[0] for call in dispatcher.executed],
+            ["read_one", "read_two"],
+        )
 
 
 if __name__ == "__main__":
