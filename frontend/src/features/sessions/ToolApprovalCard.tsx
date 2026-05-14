@@ -4,6 +4,7 @@ import {
   ToolApprovalCardHeader,
   ToolApprovalDecisionActions,
   ToolApprovalPayload,
+  ToolApprovalPolicySummary,
   ToolApprovalReason,
   ToolApprovalResolution,
   getToolApprovalDisplay,
@@ -34,6 +35,7 @@ export default function ToolApprovalCard({
 
       <div className="space-y-3 px-4 py-3 text-xs text-ops-subtext">
         <ToolApprovalReason reason={approval.reason} />
+        <ToolApprovalPolicySummary approval={approval} />
         <ToolApprovalResolution
           approval={approval}
           decisionLabel={decisionLabel}

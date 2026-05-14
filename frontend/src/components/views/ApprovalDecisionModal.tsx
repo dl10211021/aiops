@@ -1,6 +1,6 @@
 import type { ApprovalRequest } from '@/types'
 import { assetTypeLabel, protocolLabel, toolLabel } from '@/utils/assetDisplay'
-import { approvalLabel, evidenceLabel, operationLabel, recordValue } from '@/features/sessions/toolPolicyPresentation'
+import { ToolPolicyRuntimeGrid } from '@/features/sessions/ToolPolicyRuntimeSummary'
 import { ApprovalInfo } from './ApprovalCenterShared'
 
 export function ApprovalDecisionModal({
@@ -42,15 +42,9 @@ export function ApprovalDecisionModal({
               <ApprovalInfo label="资产" value={approval.context?.remark || approval.context?.host || '-'} />
               <ApprovalInfo label="协议" value={`${assetTypeLabel(String(approval.context?.asset_type || ''))} / ${protocolLabel(String(approval.context?.protocol || ''))}`} />
               <ApprovalInfo label="会话" value={approval.session_id || '-'} />
-              {toolPolicy && (
-                <>
-                  <ApprovalInfo label="工具模式" value={operationLabel(recordValue(toolPolicy, 'operation_mode'))} />
-                  <ApprovalInfo label="审批策略" value={approvalLabel(recordValue(toolPolicy, 'approval_policy'))} />
-                  <ApprovalInfo label="证据类型" value={evidenceLabel(recordValue(toolPolicy, 'evidence_family'))} />
-                </>
-              )}
             </div>
           </div>
+          {toolPolicy && <ToolPolicyRuntimeGrid policy={toolPolicy} columns="sm:grid-cols-2" />}
           <div>
             <label className="text-xs text-ops-subtext">操作人</label>
             <input

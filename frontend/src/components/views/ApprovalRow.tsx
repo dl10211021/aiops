@@ -1,6 +1,6 @@
 import { assetTypeLabel, protocolLabel, toolLabel } from '@/utils/assetDisplay'
 import type { ApprovalRequest } from '@/types'
-import { approvalLabel, evidenceLabel, operationLabel, recordValue } from '@/features/sessions/toolPolicyPresentation'
+import { ToolPolicyRuntimeGrid } from '@/features/sessions/ToolPolicyRuntimeSummary'
 import { approvalPolicyActionTone } from './approvalDisplay'
 import { ApprovalInfo, ApprovalStatusBadge } from './ApprovalCenterShared'
 
@@ -40,11 +40,8 @@ export function ApprovalRow({
         </div>
         <p className="mt-2 text-sm text-ops-text">{approval.reason || '命中后端审批策略'}</p>
         {toolPolicy && (
-          <div className="mt-3 grid gap-2 rounded-lg border border-ops-surface1/55 bg-ops-dark/25 p-3 text-xs text-ops-subtext md:grid-cols-4">
-            <ApprovalInfo label="工具模式" value={operationLabel(recordValue(toolPolicy, 'operation_mode'))} />
-            <ApprovalInfo label="审批策略" value={approvalLabel(recordValue(toolPolicy, 'approval_policy'))} />
-            <ApprovalInfo label="证据类型" value={evidenceLabel(recordValue(toolPolicy, 'evidence_family'))} />
-            <ApprovalInfo label="结果策略" value={recordValue(toolPolicy, 'result_store_policy') || '-'} />
+          <div className="mt-3">
+            <ToolPolicyRuntimeGrid policy={toolPolicy} />
           </div>
         )}
         {policyActions.length > 0 && (

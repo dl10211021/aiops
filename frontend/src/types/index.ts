@@ -1517,6 +1517,16 @@ export interface ApprovalRequest {
       evidence_family?: string
       ui_renderer?: string
       result_store_policy?: 'evidence' | 'audit_only' | 'audit_and_evidence' | string
+      timeout_policy?: {
+        default_seconds?: number
+        max_seconds?: number
+        user_driven?: boolean
+      }
+      retry_policy?: {
+        max_attempts?: number
+        retry_on?: string[]
+        delay_seconds?: number
+      }
       runtime_scope?: string
       metadata_version?: number
     }
