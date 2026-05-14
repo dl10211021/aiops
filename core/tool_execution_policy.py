@@ -102,6 +102,10 @@ async def execute_with_runtime_policy(
                     error_type="tool_timeout",
                     error=f"工具执行超过 {_format_seconds(timeout_seconds)} 秒，已停止。",
                     attempts=attempt,
+                    max_attempts=max_attempts,
+                    retry_on=retry_on,
+                    retry_delay_seconds=retry_delay_seconds,
+                    timeout_seconds=timeout_seconds,
                 )
             await _sleep_before_retry(retry_delay_seconds)
         except Exception as exc:
@@ -124,6 +128,10 @@ async def execute_with_runtime_policy(
                     error_type=f"tool_{error_type}",
                     error=str(exc) or exc.__class__.__name__,
                     attempts=attempt,
+                    max_attempts=max_attempts,
+                    retry_on=retry_on,
+                    retry_delay_seconds=retry_delay_seconds,
+                    timeout_seconds=timeout_seconds,
                 )
             await _sleep_before_retry(retry_delay_seconds)
 
@@ -143,6 +151,10 @@ async def execute_with_runtime_policy(
         error_type="tool_execution_failed",
         error=str(last_error) if last_error else "工具执行失败。",
         attempts=attempt,
+        max_attempts=max_attempts,
+        retry_on=retry_on,
+        retry_delay_seconds=retry_delay_seconds,
+        timeout_seconds=timeout_seconds,
     )
 
 
@@ -251,6 +263,10 @@ def _execution_error_result(
     error_type: str,
     error: str,
     attempts: int,
+    max_attempts: int,
+    retry_on: set[str],
+    retry_delay_seconds: float,
+    timeout_seconds: float | None,
 ) -> str:
     return json.dumps(
         {
@@ -258,6 +274,13 @@ def _execution_error_result(
             "error_type": error_type,
             "error": error,
             "retry_attempts": attempts,
+            "runtime_policy": {
+                "attempts": attempts,
+                "max_attempts": max_attempts,
+                "retry_delay_seconds": retry_delay_seconds,
+                "retry_on": sorted(retry_on),
+                "timeout_seconds": timeout_seconds,
+            },
             "tool": tool_name,
             "tool_policy": policy,
         },
