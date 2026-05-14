@@ -83,6 +83,53 @@ class ToolExecutionPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, {"status": "OK", "attempts": 2})
         self.assertEqual(attempts, 2)
 
+    async def test_runtime_policy_clamps_default_timeout_to_max_seconds(self):
+        async def slow_tool():
+            await asyncio.sleep(0.02)
+            return {"status": "OK"}
+
+        result = await execute_with_runtime_policy(
+            "slow_tool",
+            slow_tool,
+            policy={
+                "name": "slow_tool",
+                "timeout_policy": {"default_seconds": 10, "max_seconds": 0.001},
+                "retry_policy": {"max_attempts": 1, "retry_on": []},
+            },
+        )
+
+        payload = json.loads(result)
+        self.assertEqual(payload["status"], "ERROR")
+        self.assertEqual(payload["error_type"], "tool_timeout")
+        self.assertEqual(payload["retry_attempts"], 1)
+
+    async def test_runtime_policy_invalid_retry_attempts_falls_back_to_one(self):
+        attempts = 0
+
+        async def failing_tool():
+            nonlocal attempts
+            attempts += 1
+            raise ConnectionError("temporary network failure")
+
+        result = await execute_with_runtime_policy(
+            "flaky_tool",
+            failing_tool,
+            policy={
+                "name": "flaky_tool",
+                "timeout_policy": {"default_seconds": 1},
+                "retry_policy": {
+                    "max_attempts": "not-a-number",
+                    "retry_on": ["connection_error"],
+                },
+            },
+        )
+
+        payload = json.loads(result)
+        self.assertEqual(payload["status"], "ERROR")
+        self.assertEqual(payload["error_type"], "tool_connection_error")
+        self.assertEqual(payload["retry_attempts"], 1)
+        self.assertEqual(attempts, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

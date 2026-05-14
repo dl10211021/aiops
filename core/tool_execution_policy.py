@@ -51,8 +51,8 @@ async def execute_with_runtime_policy(
     effective_policy = policy or tool_policy_metadata(tool_name)
     timeout_policy = effective_policy.get("timeout_policy") if isinstance(effective_policy.get("timeout_policy"), dict) else {}
     retry_policy = effective_policy.get("retry_policy") if isinstance(effective_policy.get("retry_policy"), dict) else {}
-    timeout_seconds = _positive_float(timeout_policy.get("default_seconds"))
-    max_attempts = max(1, int(retry_policy.get("max_attempts") or 1))
+    timeout_seconds = _bounded_timeout_seconds(timeout_policy)
+    max_attempts = _positive_int(retry_policy.get("max_attempts"), default=1)
     retry_on = {str(item) for item in retry_policy.get("retry_on") or []}
 
     attempt = 0
@@ -107,6 +107,24 @@ def _positive_float(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return parsed if parsed > 0 else None
+
+
+def _positive_int(value: Any, *, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return max(1, default)
+    return max(1, parsed)
+
+
+def _bounded_timeout_seconds(timeout_policy: dict[str, Any]) -> float | None:
+    default_seconds = _positive_float(timeout_policy.get("default_seconds"))
+    max_seconds = _positive_float(timeout_policy.get("max_seconds"))
+    if default_seconds is None:
+        return None
+    if max_seconds is None:
+        return default_seconds
+    return min(default_seconds, max_seconds)
 
 
 def _classify_exception(exc: Exception) -> str:
