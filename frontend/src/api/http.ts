@@ -32,6 +32,41 @@ export class OpsApiError extends Error {
   }
 }
 
+function classifyErrorCode(code: string | undefined): Pick<ApiErrorInfo, 'category'> {
+  const text = (code || '').toLowerCase()
+  if (!text) return {}
+  if (
+    text.includes('credential') ||
+    text.includes('auth') ||
+    text.includes('permission_denied')
+  ) {
+    return { category: 'credential' }
+  }
+  if (
+    text.includes('timeout') ||
+    text.includes('connection') ||
+    text.includes('backend_unreachable')
+  ) {
+    return { category: 'connection' }
+  }
+  if (text.includes('rate_limit') || text.includes('rate_limited')) {
+    return { category: 'rate_limit' }
+  }
+  if (text.includes('approval')) {
+    return { category: 'approval' }
+  }
+  if (text.includes('policy') || text.includes('blocked')) {
+    return { category: 'policy' }
+  }
+  if (text.includes('execution')) {
+    return { category: 'execution' }
+  }
+  if (text.includes('internal')) {
+    return { category: 'internal' }
+  }
+  return {}
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
@@ -104,6 +139,20 @@ function classifyErrorMessage(message: string): Pick<ApiErrorInfo, 'code' | 'cat
   ) {
     return { code: 'connection_failed', category: 'connection' }
   }
+  if (
+    text.includes('rate limit') ||
+    text.includes('too many requests') ||
+    text.includes('429') ||
+    message.includes('限流')
+  ) {
+    return { code: 'rate_limited', category: 'rate_limit' }
+  }
+  if (message.includes('审批')) {
+    return { code: 'approval_required', category: 'approval' }
+  }
+  if (message.includes('策略') || text.includes('blocked')) {
+    return { code: 'policy_blocked', category: 'policy' }
+  }
   if (message.includes('内部错误')) {
     return { code: 'internal_error', category: 'internal' }
   }
@@ -114,13 +163,16 @@ function errorInfoFromObject(value: unknown, status?: number): ApiErrorInfo | nu
   if (!isRecord(value)) return null
   const message = stringifyDetail(value.message)
   if (!message) return null
-  const inferred = classifyErrorMessage(message)
+  const messageInferred = classifyErrorMessage(message)
   const code = typeof value.code === 'string'
     ? value.code
     : typeof value.error_type === 'string'
       ? value.error_type
-      : inferred.code
-  const category = typeof value.category === 'string' ? value.category : inferred.category
+      : messageInferred.code
+  const codeInferred = classifyErrorCode(code)
+  const category = typeof value.category === 'string'
+    ? value.category
+    : codeInferred.category || messageInferred.category
   return {
     message,
     code,
