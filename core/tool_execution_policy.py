@@ -100,7 +100,7 @@ async def execute_with_runtime_policy(
                     tool_name,
                     effective_policy,
                     error_type="tool_timeout",
-                    error=f"工具执行超过 {int(timeout_seconds or 0)} 秒，已停止。",
+                    error=f"工具执行超过 {_format_seconds(timeout_seconds)} 秒，已停止。",
                     attempts=attempt,
                 )
             await _sleep_before_retry(retry_delay_seconds)
@@ -184,6 +184,14 @@ def _bounded_retry_delay_seconds(retry_policy: dict[str, Any]) -> float:
     if delay_seconds is None:
         return 0.0
     return min(delay_seconds, MAX_RETRY_DELAY_SECONDS)
+
+
+def _format_seconds(seconds: float | None) -> str:
+    if seconds is None:
+        return "0"
+    if seconds >= 1:
+        return f"{seconds:g}"
+    return f"{seconds:.3f}".rstrip("0").rstrip(".")
 
 
 def _retry_on_error_types(retry_policy: dict[str, Any]) -> set[str]:

@@ -110,6 +110,7 @@ class ToolExecutionPolicyTests(unittest.IsolatedAsyncioTestCase):
         payload = json.loads(result)
         self.assertEqual(payload["status"], "ERROR")
         self.assertEqual(payload["error_type"], "tool_timeout")
+        self.assertIn("0.001 秒", payload["error"])
         self.assertEqual(payload["retry_attempts"], 1)
         self.assertEqual(runtime_stats["attempts"], 1)
         self.assertEqual(runtime_stats["final_status"], "error")
