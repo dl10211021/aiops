@@ -72,6 +72,14 @@
 
 P0：先做产品级验收，不新增代码。
 
+可用快速验收命令：
+
+```powershell
+python scripts/runtime_policy_smoke.py
+```
+
+该命令只跑运行策略相关的聚焦用例，覆盖强制审批、超时结构化错误、重试元数据、只读并发和混合批次串行/审批边界。完整发布前仍以 `python scripts/preflight.py --check-git` 为准。
+
 P1：如验收发现实际体验问题，再按明确问题开小切片修复。
 
 P2：如果需要继续增强，可考虑：
