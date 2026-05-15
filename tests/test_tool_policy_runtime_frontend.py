@@ -76,3 +76,15 @@ def test_empty_tool_policy_is_not_rendered_as_unknown_chips():
     assert "meaningfulToolPolicy(metaPolicy)" in presentation
     assert "meaningfulToolPolicy(evidencePolicy)" in presentation
     assert "['operation_mode', 'approval_policy', 'evidence_family']" in presentation
+
+
+def test_runtime_execution_labels_show_actual_timeout_and_failure_state():
+    presentation = Path(
+        "frontend/src/features/sessions/toolPolicyPresentation.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "const finalStatus = recordValue(execution, 'final_status')" in presentation
+    assert "const errorType = recordValue(execution, 'error_type')" in presentation
+    assert "实际超时 ${secondsText(timeoutSeconds)}" in presentation
+    assert "实际执行失败" in presentation
+    assert "labels.push(`实际重试 ${Math.round(attempts)}${totalText} 次`)" in presentation

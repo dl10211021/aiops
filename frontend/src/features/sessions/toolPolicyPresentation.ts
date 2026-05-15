@@ -173,10 +173,18 @@ export function runtimeExecutionLabels(trace: ExecTraceItem) {
   const attempts = numberValue(execution, 'attempts')
   const maxAttempts = numberValue(execution, 'max_attempts')
   const retried = recordValue(execution, 'retried') === 'true'
-  if (!attempts || attempts <= 1) return []
-  if (trace.resultMeta?.runtime_execution && !retried) return []
+  const finalStatus = recordValue(execution, 'final_status')
+  const errorType = recordValue(execution, 'error_type')
+  const timeoutSeconds = numberValue(execution, 'timeout_seconds')
+  const labels: string[] = []
+  if (finalStatus === 'error') {
+    labels.push(errorType === 'tool_timeout' && timeoutSeconds ? `实际超时 ${secondsText(timeoutSeconds)}` : '实际执行失败')
+  }
+  if (!attempts || attempts <= 1) return labels
+  if (trace.resultMeta?.runtime_execution && !retried) return labels
   const totalText = maxAttempts && maxAttempts > 0 ? `/${Math.round(maxAttempts)}` : ''
-  return [`实际重试 ${Math.round(attempts)}${totalText} 次`]
+  labels.push(`实际重试 ${Math.round(attempts)}${totalText} 次`)
+  return labels
 }
 
 export function toolPolicySearchText(policy: Record<string, unknown> | null) {
