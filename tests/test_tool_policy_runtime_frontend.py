@@ -83,6 +83,9 @@ def test_runtime_execution_labels_show_actual_timeout_and_failure_state():
         "frontend/src/features/sessions/toolPolicyPresentation.ts"
     ).read_text(encoding="utf-8")
 
+    assert "function runtimeExecutionFromTrace(trace: ExecTraceItem)" in presentation
+    assert "const evidenceMeta = objectRecord(trace.evidence?.result_meta)" in presentation
+    assert "objectRecord(evidenceMeta?.runtime_execution)" in presentation
     assert "const finalStatus = recordValue(execution, 'final_status')" in presentation
     assert "const errorType = recordValue(execution, 'error_type')" in presentation
     assert "实际超时 ${secondsText(timeoutSeconds)}" in presentation

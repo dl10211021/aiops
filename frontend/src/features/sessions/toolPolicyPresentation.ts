@@ -167,9 +167,17 @@ export function runtimePolicyLabels(policy: Record<string, unknown> | null) {
   ].filter(Boolean)
 }
 
-export function runtimeExecutionLabels(trace: ExecTraceItem) {
-  const execution = objectRecord(trace.resultMeta?.runtime_execution)
+function runtimeExecutionFromTrace(trace: ExecTraceItem) {
+  const resultExecution = objectRecord(trace.resultMeta?.runtime_execution)
     || objectRecord(trace.resultMeta?.runtime_policy)
+  if (resultExecution) return resultExecution
+  const evidenceMeta = objectRecord(trace.evidence?.result_meta)
+  return objectRecord(evidenceMeta?.runtime_execution)
+    || objectRecord(evidenceMeta?.runtime_policy)
+}
+
+export function runtimeExecutionLabels(trace: ExecTraceItem) {
+  const execution = runtimeExecutionFromTrace(trace)
   const attempts = numberValue(execution, 'attempts')
   const maxAttempts = numberValue(execution, 'max_attempts')
   const retried = recordValue(execution, 'retried') === 'true'
