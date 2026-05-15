@@ -1,5 +1,6 @@
 import { streamChat } from '@/api/client'
 import type { ChatMessage } from '@/types'
+import { isRecord, responseErrorMessage } from '@/api/http'
 import { applyChatStreamEvent } from './chatStreamEvents'
 import { consumeChatStream } from './chatStreamReader'
 import { applyChatStreamingFailure } from './chatStreamingLifecycle'
@@ -23,6 +24,53 @@ type ScheduledFlush = ReturnType<typeof window.setTimeout> | number | null
 const STREAM_FLUSH_INTERVAL_MS = 48
 const LONG_STREAM_FLUSH_INTERVAL_MS = 96
 const HUGE_STREAM_FLUSH_INTERVAL_MS = 160
+
+function formatApprovalSource(label: string) {
+  if (label === 'runtime_policy') return '运行时门禁'
+  if (label === 'safety_policy') return '安全策略'
+  if (label === 'action_policy') return '动作策略'
+  return label
+}
+
+function formatApprovalSources(sources: unknown): string[] {
+  if (!Array.isArray(sources)) return []
+  return sources
+    .map((source) => (typeof source === 'string' ? formatApprovalSource(source) : ''))
+    .filter(Boolean)
+}
+
+function formatChatBackendApprovalMessage(errData: unknown, fallback: string) {
+  if (!isRecord(errData)) return responseErrorMessage(errData, fallback)
+  const detail = isRecord(errData.detail) ? errData.detail : errData
+  if (!isRecord(detail) || String(detail.code || '') !== 'approval_required') {
+    return responseErrorMessage(detail, fallback)
+  }
+
+  const base = responseErrorMessage(detail, fallback)
+  const lines = [base]
+  const approvalSources = formatApprovalSources(detail.approval_sources)
+  if (approvalSources.length > 0) {
+    lines.push(`门禁来源：${approvalSources.join(' / ')}`)
+  }
+
+  const safetyPolicy = isRecord(detail.safety_policy) ? detail.safety_policy : null
+  if (safetyPolicy?.required) {
+    const reason = String(safetyPolicy.reason || '').trim()
+    if (reason) {
+      lines.push(`安全策略：${reason}`)
+    }
+  }
+
+  const runtimePolicy = isRecord(detail.runtime_policy) ? detail.runtime_policy : null
+  if (runtimePolicy?.required) {
+    const reason = String(runtimePolicy.reason || '').trim()
+    if (reason) {
+      lines.push(`运行时门禁：${reason}`)
+    }
+  }
+
+  return lines.join('\n')
+}
 
 function streamString(value: unknown, fallback = '') {
   return typeof value === 'string' ? value : fallback
@@ -91,7 +139,10 @@ export async function runChatStream({
     )
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}))
-      throw new Error(errData.detail || `HTTP Error ${response.status}: ${response.statusText}`)
+      throw new Error(formatChatBackendApprovalMessage(
+        errData,
+        `HTTP Error ${response.status}: ${response.statusText}`,
+      ))
     }
     await consumeChatStream(response, (data) => {
       if (data.type === 'chunk') {
