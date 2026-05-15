@@ -95,6 +95,37 @@ class TestLegacyCommandService(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertEqual(dispatcher.executions, [])
 
+    def test_runtime_policy_approval_required_prevents_dispatcher_execution(self):
+        sessions = {"sid-linux": {"info": session_info("linux", "ssh")}}
+        dispatcher = FakeDispatcher()
+        with patch(
+            "core.legacy_command_service.tool_policy_metadata",
+            return_value={
+                "name": "linux_execute_command",
+                "operation_mode": "destructive",
+                "approval_policy": "always_required",
+                "destructive": True,
+                "concurrency_safe": False,
+                "timeout_policy": {"default_seconds": 1},
+                "retry_policy": {"max_attempts": 1, "retry_on": []},
+                "evidence_family": "host_cli",
+            },
+        ):
+            with self.assertRaises(LegacyCommandServiceError) as ctx:
+                asyncio.run(
+                    execute_legacy_command_record(
+                        sessions,
+                        FakeToolRegistry(),
+                        session_id="sid-linux",
+                        command="uptime",
+                        dispatcher=dispatcher,
+                    )
+                )
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertIn("需要后端审批", str(ctx.exception.detail))
+        self.assertEqual(dispatcher.executions, [])
+
     def test_non_json_dispatcher_result_returns_bad_request(self):
         sessions = {"sid-linux": {"info": session_info("linux", "ssh")}}
         dispatcher = FakeDispatcher(response="plain failure")

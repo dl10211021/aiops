@@ -13,7 +13,7 @@ from core.asset_protocols import (
     STORAGE_ASSET_TYPES,
     resolve_asset_identity,
 )
-from core.tool_execution_policy import execute_with_runtime_policy
+from core.tool_execution_policy import execute_with_runtime_policy, evaluate_tool_execution_gate
 from core.tool_registry import tool_policy_metadata
 
 
@@ -141,17 +141,24 @@ async def execute_legacy_command_record(
     tool_name, tool_args = map_legacy_execute_tool_call(identity, command, tool_registry)
     resolved_dispatcher = _resolve_dispatcher(dispatcher)
     needs_approval, approval_reason = resolved_dispatcher.check_approval_needed(tool_name, tool_args, context)
-    if needs_approval:
+    runtime_tool_policy = tool_policy_metadata(tool_name)
+    execution_gate = evaluate_tool_execution_gate(
+        tool_name,
+        safety_needs_approval=needs_approval,
+        safety_reason=approval_reason,
+        policy=runtime_tool_policy,
+    )
+    if execution_gate.approval_required:
         raise LegacyCommandServiceError(
             409,
-            f"该操作需要后端审批：{approval_reason}。请在聊天会话中执行，以便弹出审批确认。",
+            f"该操作需要后端审批：{execution_gate.reason}。请在聊天会话中执行，以便弹出审批确认。",
         )
 
     runtime_execution: dict[str, Any] = {}
     result_str = await execute_with_runtime_policy(
         tool_name,
         lambda: resolved_dispatcher.route_and_execute(tool_name, tool_args, context),
-        policy=tool_policy_metadata(tool_name),
+        policy=runtime_tool_policy,
         runtime_stats=runtime_execution,
     )
     try:
