@@ -50,22 +50,36 @@ def _write_store(items: list[dict[str, Any]]) -> None:
 
 
 def _safe_context(context: dict[str, Any]) -> dict[str, Any]:
+    allow_modifications = context.get("allow_modifications")
+    normalized_allow_modifications = None
+    if isinstance(allow_modifications, bool):
+        normalized_allow_modifications = allow_modifications
+    elif isinstance(allow_modifications, (int, float)):
+        normalized_allow_modifications = bool(allow_modifications)
+    elif isinstance(allow_modifications, str):
+        value = allow_modifications.strip().lower()
+        if value in {"true", "1", "yes", "on", "rw", "readwrite", "r+w", "write"}:
+            normalized_allow_modifications = True
+        elif value in {"false", "0", "no", "off", "ro", "readonly"}:
+            normalized_allow_modifications = False
+    safe_context = {
+        "session_id": context.get("session_id"),
+        "host": context.get("host"),
+        "port": context.get("port"),
+        "username": context.get("username"),
+        "asset_type": context.get("asset_type"),
+        "protocol": context.get("protocol"),
+        "remark": context.get("remark"),
+        "target_scope": context.get("target_scope"),
+        "scope_value": context.get("scope_value"),
+        "execution_mode": context.get("execution_mode"),
+        "trigger_source": context.get("trigger_source"),
+        "tags": context.get("tags") or [],
+    }
+    if normalized_allow_modifications is not None:
+        safe_context["allow_modifications"] = normalized_allow_modifications
     return redact_value(
-        {
-            "session_id": context.get("session_id"),
-            "host": context.get("host"),
-            "port": context.get("port"),
-            "username": context.get("username"),
-            "asset_type": context.get("asset_type"),
-            "protocol": context.get("protocol"),
-            "remark": context.get("remark"),
-            "allow_modifications": bool(context.get("allow_modifications", False)),
-            "target_scope": context.get("target_scope"),
-            "scope_value": context.get("scope_value"),
-            "execution_mode": context.get("execution_mode"),
-            "trigger_source": context.get("trigger_source"),
-            "tags": context.get("tags") or [],
-        }
+        safe_context
     )
 
 

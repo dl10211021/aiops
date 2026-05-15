@@ -68,6 +68,24 @@ class TestApprovalQueue(unittest.TestCase):
         self.assertEqual(source["label"], "运行策略")
         self.assertIn("destructive", source["detail"])
 
+    def test_record_approval_request_keeps_missing_allow_modifications_out_of_context(self):
+        from core import approval_queue
+
+        store_path = self._store_path("missing_allow_modifications")
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path):
+            approval_queue.record_approval_request(
+                tool_call_id="call-missing-mode",
+                session_id="sid-1",
+                tool_name="db_execute_query",
+                args={"sql": "SELECT 1"},
+                reason="数据库查询命令不应触发读写状态。 仅验证上下文清洗。",
+                context={"session_id": "sid-1", "asset_type": "mysql", "protocol": "mysql"},
+            )
+            pending = approval_queue.list_approval_requests(status="pending")
+
+        self.assertEqual(len(pending), 1)
+        self.assertNotIn("allow_modifications", pending[0]["context"])
+
     def test_evolve_skill_approval_records_summary_instead_of_full_content(self):
         from core import approval_queue
 
