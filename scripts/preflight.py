@@ -123,6 +123,7 @@ def main() -> int:
         ("python dependency check", [sys.executable, "-m", "pip", "check"], ROOT),
         ("frontend npm audit", npm_command("audit", "--audit-level=high"), ROOT / "frontend"),
         ("frontend build", npm_command("run", "build"), ROOT / "frontend"),
+        ("frontend bundle budget", [sys.executable, "scripts/check_frontend_bundle_budget.py"], ROOT),
     ]
     if args.check_git:
         command = [sys.executable, "scripts/worktree_audit.py", "--check-staged"]
