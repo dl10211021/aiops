@@ -1,9 +1,12 @@
 import asyncio
+import tempfile
 import unittest
 import warnings
 from unittest.mock import patch
 
 from fastapi import HTTPException
+from starlette.responses import FileResponse
+from pathlib import Path
 
 from api import knowledge_routes, routes
 from core.knowledge_base_service import KnowledgeBaseServiceError
@@ -48,6 +51,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertIn("/knowledge/vault/approve", paths)
         self.assertIn("/knowledge/vault/articles", paths)
         self.assertIn("/knowledge/vault/article", paths)
+        self.assertIn("/knowledge/memory/learning-candidates/{candidate_id}/artifact", paths)
         self.assertIn("/knowledge/{filename}", paths)
 
     def test_upload_knowledge_document_preserves_response_shape(self):
@@ -323,6 +327,44 @@ class TestKnowledgeRoutes(unittest.TestCase):
                 self.limit = limit
                 return [{"version_id": "v1", "operation": "created", "path": "sessions/sid-1/memory.md"}]
 
+            def list_candidate_entries(self, limit=50, review_statuses=None):
+                self.candidate_limit = limit
+                self.candidate_review_statuses = review_statuses
+                return [{"candidate_id": "memcand_1", "path": "sessions/sid-1/memory.md", "review_status": "pending"}]
+
+            def list_learning_candidates(self, limit=50, target_type=""):
+                self.learning_candidate_query = (limit, target_type)
+                return [{"id": "learncand_1", "target_type": "runbook", "status": "draft"}]
+
+            def update_learning_candidate_status(self, candidate_id, status, actor="user", reason=""):
+                self.learning_candidate_status = (candidate_id, status, actor, reason)
+                if not hasattr(self, "learning_candidate_statuses"):
+                    self.learning_candidate_statuses = []
+                self.learning_candidate_statuses.append(self.learning_candidate_status)
+                result = {"id": candidate_id, "status": status, "status_events": [{"to": status, "actor": actor, "reason": reason}]}
+                if status == "published":
+                    result["published_artifact"] = {
+                        "artifact_id": "publish_abc123456789",
+                        "target_type": "runbook",
+                        "file_path": "learning_candidate_publish_artifacts/runbook/publish_abc123456789.md",
+                        "status": "draft",
+                        "generated_by": actor,
+                        "generated_reason": reason,
+                        "generated_at": "2026-05-15 12:00:00",
+                        "content_preview": "发布草稿预览文本",
+                        "content_sha256": "deadbeef",
+                        "artifact_sha256": "deadbeef",
+                    }
+                return result
+
+            def update_learning_candidate_quality_checklist(self, candidate_id, checklist, actor="user", reason=""):
+                self.learning_candidate_quality = (candidate_id, checklist, actor, reason)
+                return {"id": candidate_id, "quality_checklist": checklist, "quality_events": [{"actor": actor, "reason": reason}]}
+
+            def resolve_candidate_entry(self, candidate_id, action):
+                self.candidate_resolved = (candidate_id, action)
+                return {"version_id": "candidate-v1", "operation": "modified"}
+
         class FakeMemoryDB:
             file_memory_store = FakeFileMemoryStore()
 
@@ -365,6 +407,57 @@ class TestKnowledgeRoutes(unittest.TestCase):
             )
             versions_response = asyncio.run(knowledge_routes.list_memory_versions(10))
             pending_response = asyncio.run(knowledge_routes.list_memory_pending_conflicts(20))
+            candidates_response = asyncio.run(
+                knowledge_routes.list_memory_candidates(20, "pending,runbook_candidate,invalid")
+            )
+            learning_candidates_response = asyncio.run(
+                knowledge_routes.list_memory_learning_candidates(12, "runbook")
+            )
+            learning_candidate_status_response = asyncio.run(
+                knowledge_routes.update_memory_learning_candidate_status(
+                    "learncand_1",
+                    knowledge_routes.MemoryLearningCandidateStatusRequest(
+                        status="reviewing",
+                        actor="tester",
+                        reason="准备评审",
+                    ),
+                )
+            )
+            learning_candidate_publish_response = asyncio.run(
+                knowledge_routes.update_memory_learning_candidate_status(
+                    "learncand_1",
+                    knowledge_routes.MemoryLearningCandidateStatusRequest(
+                        status="published",
+                        actor="tester",
+                        reason="发布草稿已生成",
+                    ),
+                )
+            )
+            learning_candidate_quality_response = asyncio.run(
+                knowledge_routes.update_memory_learning_candidate_quality_checklist(
+                    "learncand_1",
+                    knowledge_routes.MemoryLearningCandidateQualityRequest(
+                        checklist=[
+                            knowledge_routes.MemoryLearningCandidateQualityItem(
+                                key="scope",
+                                label="适用范围",
+                                ok=True,
+                                note="已限定 Linux 主机",
+                            )
+                        ],
+                        actor="tester",
+                        reason="补齐质量清单",
+                    ),
+                )
+            )
+            candidate_resolve_response = asyncio.run(
+                knowledge_routes.resolve_memory_candidate(
+                    knowledge_routes.MemoryCandidateResolveRequest(
+                        candidate_id="memcand_1",
+                        action="to_runbook",
+                    )
+                )
+            )
             review_response = asyncio.run(knowledge_routes.list_memory_review_items(180, 20))
             update_response = asyncio.run(
                 knowledge_routes.update_memory_item(
@@ -404,6 +497,23 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(fake_db.file_memory_store.searched, (["manual"], "SSH 高频登录", 3))
         self.assertEqual(versions_response.data, {"versions": [{"version_id": "v1", "operation": "created", "path": "sessions/sid-1/memory.md"}]})
         self.assertEqual(pending_response.data, {"items": [{"version_id": "v-pending", "path": "sessions/sid-1/memory.md"}]})
+        self.assertEqual(candidates_response.data, {"items": [{"candidate_id": "memcand_1", "path": "sessions/sid-1/memory.md", "review_status": "pending"}]})
+        self.assertEqual(fake_db.file_memory_store.candidate_limit, 20)
+        self.assertEqual(fake_db.file_memory_store.candidate_review_statuses, ["pending", "runbook_candidate"])
+        self.assertEqual(learning_candidates_response.data, {"items": [{"id": "learncand_1", "target_type": "runbook", "status": "draft"}]})
+        self.assertEqual(fake_db.file_memory_store.learning_candidate_query, (12, "runbook"))
+        self.assertEqual(learning_candidate_status_response.message, "发布候选状态已更新")
+        self.assertEqual(learning_candidate_publish_response.message, "发布候选状态已更新")
+        self.assertIn("published_artifact", learning_candidate_publish_response.data["item"])
+        self.assertEqual(fake_db.file_memory_store.learning_candidate_status, ("learncand_1", "published", "tester", "发布草稿已生成"))
+        self.assertIn(("learncand_1", "reviewing", "tester", "准备评审"), fake_db.file_memory_store.learning_candidate_statuses)
+        self.assertIn(("learncand_1", "published", "tester", "发布草稿已生成"), fake_db.file_memory_store.learning_candidate_statuses)
+        self.assertEqual(learning_candidate_quality_response.message, "发布质量清单已更新")
+        self.assertEqual(fake_db.file_memory_store.learning_candidate_quality[0], "learncand_1")
+        self.assertEqual(fake_db.file_memory_store.learning_candidate_quality[1][0]["key"], "scope")
+        self.assertEqual(fake_db.file_memory_store.learning_candidate_quality[1][0]["note"], "已限定 Linux 主机")
+        self.assertEqual(candidate_resolve_response.message, "候选记忆已处理")
+        self.assertEqual(fake_db.file_memory_store.candidate_resolved, ("memcand_1", "to_runbook"))
         self.assertEqual(review_response.data, {"items": [{"path": "sessions/sid-1/memory.md", "age_days": 181}]})
         self.assertEqual(update_response.message, "记忆已更新")
         self.assertEqual(restore_response.message, "记忆版本已恢复")
@@ -434,6 +544,77 @@ class TestKnowledgeRoutes(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertEqual(ctx.exception.detail, "知识库为空")
+
+    def test_read_learning_candidate_publish_artifact_route_returns_model(self):
+        class FakeFileMemoryStore:
+            def read_learning_candidate_publish_artifact(self, candidate_id):
+                return {
+                    "candidate_id": candidate_id,
+                    "artifact_id": "publish_abc123456789",
+                    "target_type": "runbook",
+                    "file_path": "learning_candidate_publish_artifacts/runbook/publish_abc123456789.md",
+                    "status": "draft",
+                    "generated_by": "tester",
+                    "generated_reason": "发布草稿已生成",
+                    "generated_at": "2026-05-15 12:34:56",
+                    "content_preview": "发布草稿预览",
+                    "artifact_sha256": "deadbeef",
+                    "content_sha256": "deadbeef",
+                    "content": "# 发布草稿\n内容正文",
+                }
+
+        class FakeMemoryDB:
+            file_memory_store = FakeFileMemoryStore()
+
+        with patch("core.memory.memory_db", FakeMemoryDB()):
+            response = asyncio.run(
+                knowledge_routes.read_learning_candidate_publish_artifact(
+                    "learncand_1",
+                    download=False,
+                )
+            )
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.message, "发布草稿读取成功")
+        self.assertEqual(response.data["artifact"]["candidate_id"], "learncand_1")
+        self.assertEqual(response.data["artifact"]["artifact_id"], "publish_abc123456789")
+
+    def test_download_learning_candidate_publish_artifact_route_returns_file(self):
+        with tempfile.TemporaryDirectory() as tempdir:
+            artifact_file = Path(tempdir) / "publish_abc123456789.md"
+            artifact_file.write_text("发布草稿内容", encoding="utf-8")
+            class FakeFileMemoryStore:
+                def read_learning_candidate_publish_artifact(self, candidate_id):
+                    return {
+                        "candidate_id": candidate_id,
+                        "artifact_id": "publish_abc123456789",
+                        "target_type": "runbook",
+                        "file_path": "learning_candidate_publish_artifacts/runbook/publish_abc123456789.md",
+                        "status": "draft",
+                        "generated_by": "tester",
+                        "generated_reason": "发布草稿已生成",
+                        "generated_at": "2026-05-15 12:34:56",
+                        "content_preview": "发布草稿预览",
+                        "artifact_sha256": "deadbeef",
+                        "content_sha256": "deadbeef",
+                    }
+
+                def resolve_learning_candidate_publish_artifact_path(self, file_path):
+                    return artifact_file
+
+            class FakeMemoryDB:
+                file_memory_store = FakeFileMemoryStore()
+
+            with patch("core.memory.memory_db", FakeMemoryDB()):
+                response = asyncio.run(
+                    knowledge_routes.read_learning_candidate_publish_artifact(
+                        "learncand_2",
+                        download=True,
+                    )
+                )
+
+        self.assertIsInstance(response, FileResponse)
+        self.assertEqual(response.filename, "publish_abc123456789.md")
 
 
 if __name__ == "__main__":

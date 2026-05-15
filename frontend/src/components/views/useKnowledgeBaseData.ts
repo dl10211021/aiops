@@ -16,6 +16,8 @@ import {
   listKnowledgeVaultArticles,
   listKnowledgeVaultCandidates,
   listKnowledgeVaultQueue,
+  listMemoryCandidates,
+  listMemoryLearningCandidates,
   listMemoryItems,
   listMemoryPendingConflicts,
   listMemoryReviewItems,
@@ -28,17 +30,44 @@ import {
   readKnowledgeVaultArticle,
   reindexKnowledgeDocument,
   restoreMemoryVersion,
+  resolveMemoryCandidate,
   resolveMemoryPendingConflict,
   searchKnowledgeVault,
   searchMemoryItems,
+  downloadLearningCandidatePublishArtifact,
+  readLearningCandidatePublishArtifact,
+  updateMemoryLearningCandidateQualityChecklist,
+  updateMemoryLearningCandidateStatus,
   updateMemoryItem,
   updateKnowledgeVaultCandidate,
   uploadKnowledgeDocument,
 } from '@/api/knowledge'
+import type { LearningCandidateStatus, MemoryCandidateAction } from '@/api/knowledge'
 import { isAbortError } from '@/api/http'
 import { getSessionMemoryActivity } from '@/api/sessionHistory'
 import { useStore } from '@/store'
-import type { KnowledgeCompileQueueItem, KnowledgeDocumentContent, KnowledgeFile, KnowledgeListPagination, KnowledgeListSummary, KnowledgeVaultGraph, KnowledgeVaultSearchResult, KnowledgeVectorStoreStatus, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
+import type {
+  KnowledgeCompileQueueItem,
+  KnowledgeDocumentContent,
+  KnowledgeFile,
+  KnowledgeListPagination,
+  KnowledgeListSummary,
+  KnowledgeVaultGraph,
+  KnowledgeVaultSearchResult,
+  KnowledgeVectorStoreStatus,
+  LearningCandidate,
+  LearningCandidatePublishedArtifactDetail,
+  MemoryCandidate,
+  MemoryDetail,
+  MemoryItem,
+  MemoryPendingConflict,
+  MemoryQualityReport,
+  MemoryReviewItem,
+  MemorySearchResult,
+  MemoryStoreInfo,
+  MemoryVersion,
+  SessionMemoryActivity,
+} from '@/types'
 import { isAcceptedKnowledgeFile } from './knowledgeBaseModel'
 
 export function useKnowledgeBaseData() {
@@ -71,6 +100,10 @@ export function useKnowledgeBaseData() {
   const [memoryStores, setMemoryStores] = useState<MemoryStoreInfo[]>([])
   const [memoryVersions, setMemoryVersions] = useState<MemoryVersion[]>([])
   const [memoryPendingConflicts, setMemoryPendingConflicts] = useState<MemoryPendingConflict[]>([])
+  const [memoryCandidates, setMemoryCandidates] = useState<MemoryCandidate[]>([])
+  const [learningCandidates, setLearningCandidates] = useState<LearningCandidate[]>([])
+  const [learningCandidateArtifact, setLearningCandidateArtifact] = useState<LearningCandidatePublishedArtifactDetail | null>(null)
+  const [readingLearningCandidateArtifact, setReadingLearningCandidateArtifact] = useState<string | null>(null)
   const [memoryReviewItems, setMemoryReviewItems] = useState<MemoryReviewItem[]>([])
   const [memoryQuality, setMemoryQuality] = useState<MemoryQualityReport | null>(null)
   const [sessionMemoryActivity, setSessionMemoryActivity] = useState<SessionMemoryActivity | null>(null)
@@ -95,6 +128,7 @@ export function useKnowledgeBaseData() {
   const [resolvingMemoryConflict, setResolvingMemoryConflict] = useState<string | null>(null)
   const [redactingMemoryVersion, setRedactingMemoryVersion] = useState<string | null>(null)
   const [reviewingMemoryPath, setReviewingMemoryPath] = useState<string | null>(null)
+  const [updatingLearningCandidate, setUpdatingLearningCandidate] = useState<string | null>(null)
   const [compilingSourceSession, setCompilingSourceSession] = useState<string | null>(null)
   const [approvingSourceSession, setApprovingSourceSession] = useState<string | null>(null)
   const [openingCandidate, setOpeningCandidate] = useState<string | null>(null)
@@ -159,10 +193,12 @@ export function useKnowledgeBaseData() {
     setMemoryLoading(true)
     setMemoryError('')
     try {
-      const [itemsRes, versionsRes, pendingRes, qualityRes] = await Promise.all([
+      const [itemsRes, versionsRes, pendingRes, candidatesRes, learningRes, qualityRes] = await Promise.all([
         listMemoryItems({ signal }),
         listMemoryVersions(30, { signal }),
         listMemoryPendingConflicts(50, { signal }),
+        listMemoryCandidates(80, ['pending', 'runbook_candidate', 'skill_candidate'], { signal }),
+        listMemoryLearningCandidates(80, '', { signal }),
         getMemoryQuality(180, 8, { signal }),
       ])
       const reviewRes = await listMemoryReviewItems(180, 50, { signal })
@@ -170,6 +206,8 @@ export function useKnowledgeBaseData() {
       setMemoryItems(itemsRes.data.items || [])
       setMemoryVersions(versionsRes.data.versions || [])
       setMemoryPendingConflicts(pendingRes.data.items || [])
+      setMemoryCandidates(candidatesRes.data.items || [])
+      setLearningCandidates(learningRes.data.items || [])
       setMemoryReviewItems(reviewRes.data.items || [])
       setMemoryQuality(qualityRes.data.quality || null)
       setSelectedMemory((current) => {
@@ -177,6 +215,12 @@ export function useKnowledgeBaseData() {
         const stillExists = (itemsRes.data.items || []).some((item) => item.path === current.path)
         return stillExists ? current : null
       })
+      if (
+        learningCandidateArtifact
+        && !(learningRes.data.items || []).some((item) => item.id === learningCandidateArtifact.candidate_id)
+      ) {
+        setLearningCandidateArtifact(null)
+      }
       void listMemoryStores({ signal }).then((storesRes) => {
         if (!signal?.aborted) setMemoryStores(storesRes.data.stores || [])
       }).catch((error) => {
@@ -187,6 +231,8 @@ export function useKnowledgeBaseData() {
       const message = e instanceof Error ? e.message : '加载 AI 记忆失败'
       setMemoryError(message === 'Not Found' ? 'AI 记忆服务暂未开启或当前服务需要重启。' : message)
       setMemoryQuality(null)
+      setMemoryCandidates([])
+      setLearningCandidates([])
     } finally {
       if (!signal?.aborted) setMemoryLoading(false)
     }
@@ -634,6 +680,152 @@ export function useKnowledgeBaseData() {
     }
   }
 
+  const handleConfirmMemoryCandidate = async (item: MemoryCandidate) => {
+    setReviewingMemoryPath(item.candidate_id)
+    try {
+      await resolveMemoryCandidate(item.candidate_id, 'confirm')
+      await loadMemories()
+      addToast('候选记忆已确认，后续可进入检索上下文', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '确认候选记忆失败', 'error')
+    } finally {
+      setReviewingMemoryPath(null)
+    }
+  }
+
+  const handleRejectMemoryCandidate = async (item: MemoryCandidate) => {
+    setReviewingMemoryPath(item.candidate_id)
+    try {
+      await resolveMemoryCandidate(item.candidate_id, 'reject')
+      await loadMemories()
+      addToast('候选记忆已拒绝，仅保留审计', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '拒绝候选记忆失败', 'error')
+    } finally {
+      setReviewingMemoryPath(null)
+    }
+  }
+
+  const handleConvertMemoryCandidate = async (item: MemoryCandidate, action: Extract<MemoryCandidateAction, 'to_runbook' | 'to_skill'>) => {
+    setReviewingMemoryPath(item.candidate_id)
+    try {
+      await resolveMemoryCandidate(item.candidate_id, action)
+      await loadMemories()
+      addToast(action === 'to_runbook' ? '候选已转为 Runbook 候选' : '候选已转为 Skill 候选', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '转换候选记忆失败', 'error')
+    } finally {
+      setReviewingMemoryPath(null)
+    }
+  }
+
+  const handleUpdateLearningCandidateStatus = async (
+    item: LearningCandidate,
+    status: LearningCandidateStatus,
+    reason: string,
+  ) => {
+    setUpdatingLearningCandidate(item.id)
+    try {
+      await updateMemoryLearningCandidateStatus(item.id, status, reason)
+      await loadMemories()
+      addToast('发布候选状态已更新', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '更新发布候选状态失败', 'error')
+    } finally {
+      setUpdatingLearningCandidate(null)
+    }
+  }
+
+  const handleUpdateLearningCandidateQualityChecklist = async (
+    item: LearningCandidate,
+    checklist: NonNullable<LearningCandidate['quality_checklist']>,
+    reason: string,
+  ) => {
+    setUpdatingLearningCandidate(item.id)
+    try {
+      await updateMemoryLearningCandidateQualityChecklist(item.id, checklist, reason)
+      await loadMemories()
+      addToast('发布质量清单已更新', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '保存发布质量清单失败', 'error')
+    } finally {
+      setUpdatingLearningCandidate(null)
+    }
+  }
+
+  const handleReadLearningCandidatePublishArtifact = async (item: LearningCandidate) => {
+    if (!item.published_artifact?.artifact_id) {
+      addToast('该候选尚未生成发布草稿', 'error')
+      return
+    }
+    setReadingLearningCandidateArtifact(item.id)
+    try {
+      const res = await readLearningCandidatePublishArtifact(item.id)
+      setLearningCandidateArtifact(res.data.artifact)
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '读取发布草稿失败', 'error')
+      setLearningCandidateArtifact(null)
+    } finally {
+      setReadingLearningCandidateArtifact(null)
+    }
+  }
+
+  const handleDownloadLearningCandidatePublishArtifact = async (item: LearningCandidate) => {
+    const artifactId = item.published_artifact?.artifact_id
+    if (!artifactId) {
+      addToast('该候选尚未生成发布草稿', 'error')
+      return
+    }
+    try {
+      const result = await downloadLearningCandidatePublishArtifact(item.id)
+      const url = URL.createObjectURL(result.blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = result.filename || `${artifactId}.md`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      addToast('发布草稿下载完成', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '下载发布草稿失败', 'error')
+    }
+  }
+
+  const handleDownloadLearningCandidatePublishArtifactById = async (candidateId: string) => {
+    try {
+      const result = await downloadLearningCandidatePublishArtifact(candidateId)
+      const url = URL.createObjectURL(result.blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = result.filename || `publish-${candidateId}.md`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      addToast('发布草稿下载完成', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '下载发布草稿失败', 'error')
+    }
+  }
+
+  const handleCopyLearningCandidateArtifact = async () => {
+    if (!learningCandidateArtifact?.content) {
+      addToast('发布草稿内容未加载', 'error')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(learningCandidateArtifact.content)
+      addToast('发布草稿内容已复制', 'success')
+    } catch {
+      addToast('当前环境不支持复制到剪贴板', 'error')
+    }
+  }
+
+  const handleCloseLearningCandidateArtifact = () => {
+    setLearningCandidateArtifact(null)
+  }
+
   const handleExportMemory = async () => {
     setExportingMemory(true)
     try {
@@ -704,6 +896,16 @@ export function useKnowledgeBaseData() {
     handleExportKnowledgeVault,
     handleImportKnowledgeVault,
     handleConfirmMemoryReview,
+    handleConfirmMemoryCandidate,
+    handleConvertMemoryCandidate,
+    handleUpdateLearningCandidateQualityChecklist,
+    handleUpdateLearningCandidateStatus,
+    handleRejectMemoryCandidate,
+    handleReadLearningCandidatePublishArtifact,
+    handleDownloadLearningCandidatePublishArtifact,
+    handleDownloadLearningCandidatePublishArtifactById,
+    handleCopyLearningCandidateArtifact,
+    handleCloseLearningCandidateArtifact,
     handleOpenMemory,
     handleRedactMemoryVersion,
     handleRestoreMemoryVersion,
@@ -723,7 +925,9 @@ export function useKnowledgeBaseData() {
     memoryCreateScope,
     memoryCreateSummary,
     memoryItems,
+    learningCandidates,
     memoryLoading,
+    memoryCandidates,
     memoryPendingConflicts,
     memoryQuality,
     memoryReviewItems,
@@ -763,5 +967,8 @@ export function useKnowledgeBaseData() {
     vaultSearchResults,
     vaultSearchScope,
     uploading,
+    updatingLearningCandidate,
+    learningCandidateArtifact,
+    readingLearningCandidateArtifact,
   }
 }

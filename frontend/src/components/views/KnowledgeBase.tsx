@@ -10,22 +10,67 @@ import {
   KnowledgeTabs,
   KnowledgeUploadButton,
   MemoryCreatePanel,
+  MemoryCandidateEvidenceDialog,
+  MemoryCandidatesPanel,
+  LearningCandidatePublishArtifactDialog,
   MemoryDeleteDialog,
   MemoryDetailPanel,
   MemoryItemCard,
+  MemoryPendingConflictsPanel,
+  MemoryQualityPanel,
+  MemoryReviewPanel,
   MemorySearchPanel,
   SessionMemoryActivityPanel,
   KnowledgeVaultSearchPanel,
   type KnowledgeTab,
+  type MemoryCandidateEvidenceDetail,
 } from './KnowledgeBaseParts'
 import { useKnowledgeBaseData } from './useKnowledgeBaseData'
+import { getSessionHistory, getSessionHistoryEvidenceTrace } from '@/api/sessionHistory'
+import { normalizeHistoryMessages } from '@/features/sessions/sessionHistory'
+import type { ChatMessage, ExecTraceItem, MemoryCandidate, MemoryCandidateRef } from '@/types'
+
+function traceMatchesCandidateRef(trace: ExecTraceItem, ref: MemoryCandidateRef) {
+  const refId = String(ref.id || '').trim()
+  const traceIds = [
+    trace.evidenceId,
+    trace.evidence?.evidence_id,
+    trace.toolCallId,
+  ].filter(Boolean).map((item) => String(item))
+  if (refId && traceIds.includes(refId)) return true
+  if (ref.tool && trace.tool === ref.tool) return true
+  return false
+}
+
+function findCandidateEvidenceTrace(messages: ChatMessage[], ref: MemoryCandidateRef) {
+  for (const message of messages) {
+    for (const trace of message.execTrace || []) {
+      if (traceMatchesCandidateRef(trace, ref)) return trace
+    }
+  }
+  return null
+}
+
+function candidateEvidenceQuery(ref: MemoryCandidateRef) {
+  const id = String(ref.id || '').trim()
+  return {
+    evidenceId: ref.type === 'tool_evidence' ? id : undefined,
+    toolCallId: ref.type === 'tool_call' ? id : undefined,
+    tool: ref.tool,
+    limit: 200,
+  }
+}
 
 export default function KnowledgeBase() {
   const setView = useStore((state) => state.setView)
+  const setCurrentSession = useStore((state) => state.setCurrentSession)
+  const sessions = useStore((state) => state.sessions)
+  const setSessionMessages = useStore((state) => state.setSessionMessages)
   const [activeTab, setActiveTab] = useState<KnowledgeTab>('documents')
   const [documentStep, setDocumentStep] = useState<'source' | 'discover'>('source')
-  const [memoryStep, setMemoryStep] = useState<'browse' | 'write' | 'feedback'>('browse')
+  const [memoryStep, setMemoryStep] = useState<'browse' | 'write' | 'feedback' | 'govern'>('browse')
   const [memoryFocusMessageId, setMemoryFocusMessageId] = useState<string | number | null>(null)
+  const [candidateEvidenceDetail, setCandidateEvidenceDetail] = useState<MemoryCandidateEvidenceDetail | null>(null)
   const {
     deleteTarget,
     documentExtension,
@@ -50,8 +95,20 @@ export default function KnowledgeBase() {
     handleCreateMemory,
     handleExportMemory,
     handleOpenMemory,
+    handleConfirmMemoryCandidate,
+    handleConvertMemoryCandidate,
+    handleUpdateLearningCandidateQualityChecklist,
+    handleUpdateLearningCandidateStatus,
+    handleRejectMemoryCandidate,
+    handleConfirmMemoryReview,
+    handleResolveMemoryConflict,
     handleOpenKnowledgeDocument,
     handleReindexKnowledgeDocument,
+    handleReadLearningCandidatePublishArtifact,
+    handleDownloadLearningCandidatePublishArtifact,
+    handleDownloadLearningCandidatePublishArtifactById,
+    handleCopyLearningCandidateArtifact,
+    handleCloseLearningCandidateArtifact,
     handleSaveMemory,
     handleSearchMemory,
     handleUpload,
@@ -67,8 +124,15 @@ export default function KnowledgeBase() {
     memoryError,
     memoryCreateScope,
     memoryCreateSummary,
+    memoryCandidates,
+    learningCandidates,
+    learningCandidateArtifact,
+    readingLearningCandidateArtifact,
     memoryItems,
     memoryLoading,
+    memoryPendingConflicts,
+    memoryQuality,
+    memoryReviewItems,
     sessionMemoryActivity,
     sessionMemoryActivityLoading,
     memorySearchQuery,
@@ -76,6 +140,9 @@ export default function KnowledgeBase() {
     memorySearchScopes,
     readingKnowledge,
     reindexingKnowledge,
+    resolvingMemoryConflict,
+    reviewingMemoryPath,
+    updatingLearningCandidate,
     savingMemory,
     selectedMemory,
     setDeleteTarget,
@@ -111,7 +178,7 @@ export default function KnowledgeBase() {
       }>).detail
       if (detail?.tab === 'memory') {
         setActiveTab('memory')
-        if (detail.step === 'browse' || detail.step === 'write' || detail.step === 'feedback') {
+        if (detail.step === 'browse' || detail.step === 'write' || detail.step === 'feedback' || detail.step === 'govern') {
           setMemoryStep(detail.step)
         } else {
           setMemoryStep(detail.messageId ? 'feedback' : 'browse')
@@ -167,7 +234,55 @@ export default function KnowledgeBase() {
       window.dispatchEvent(new CustomEvent('opscore:chat-focus-message', {
         detail: { messageId },
       }))
+      window.dispatchEvent(new CustomEvent('opscore:scroll-chat-message', {
+        detail: { messageId },
+      }))
     }, 90)
+  }
+
+  const handleFocusCandidateMessage = (item: { source_session_id?: string; feedback_target_message_id?: string | number }) => {
+    const messageId = item.feedback_target_message_id
+    if (messageId === undefined || messageId === null) return
+    if (item.source_session_id) setCurrentSession(item.source_session_id)
+    handleFocusChatMessage(messageId)
+  }
+
+  const handleOpenCandidateEvidence = async (item: MemoryCandidate, ref: MemoryCandidateRef) => {
+    const sourceSessionId = item.source_session_id || ''
+    const localMessages = sourceSessionId ? sessions[sourceSessionId]?.messages || [] : []
+    const localTrace = findCandidateEvidenceTrace(localMessages, ref)
+    setCandidateEvidenceDetail({ candidate: item, ref, trace: localTrace, loading: !localTrace && Boolean(sourceSessionId) })
+    if (localTrace || !sourceSessionId) return
+    try {
+      const evidenceResponse = await getSessionHistoryEvidenceTrace(sourceSessionId, candidateEvidenceQuery(ref))
+      setCandidateEvidenceDetail({
+        candidate: item,
+        ref,
+        trace: evidenceResponse.data.trace,
+      })
+      return
+    } catch {
+      setCandidateEvidenceDetail({ candidate: item, ref, trace: null, loading: true })
+    }
+    try {
+      const response = await getSessionHistory(sourceSessionId, 200)
+      const messages = normalizeHistoryMessages(sourceSessionId, response.data.messages || [])
+      setSessionMessages(sourceSessionId, messages)
+      const trace = findCandidateEvidenceTrace(messages, ref)
+      setCandidateEvidenceDetail({
+        candidate: item,
+        ref,
+        trace,
+        error: trace ? '' : '来源会话历史已加载，但没有找到匹配的工具执行轨迹。',
+      })
+    } catch (error: unknown) {
+      setCandidateEvidenceDetail({
+        candidate: item,
+        ref,
+        trace: null,
+        error: error instanceof Error ? error.message : '加载来源会话历史失败',
+      })
+    }
   }
 
   const visibleError = activeTab === 'documents' ? error : memoryError
@@ -431,11 +546,12 @@ export default function KnowledgeBase() {
         {activeTab === 'memory' && !memoryLoading && (
           <div className="space-y-4">
             <section className="rounded-lg border border-ops-surface0 bg-ops-panel/60 p-3">
-              <div className="grid gap-2 md:grid-cols-3">
+              <div className="grid gap-2 md:grid-cols-4">
                 {([
                   ['browse', '记忆列表', `${memoryItems.length} 条文件记忆`, '状态/经验/反馈'],
                   ['write', '新增/搜索', `${memorySearchResults.length} 条检索命中`, '写入当前 session'],
                   ['feedback', '反馈追踪', `${sessionMemoryActivity?.summary.promoted_count || 0}/${sessionMemoryActivity?.summary.rejected_count || 0}`, '本会话反馈'],
+                  ['govern', '学习候选', `${memoryCandidates.length} 个待确认`, '确认后才进上下文'],
                 ] as const).map(([id, label, count, desc]) => (
                   <button
                     key={id}
@@ -540,6 +656,49 @@ export default function KnowledgeBase() {
                 </aside>
               </div>
             )}
+
+            {memoryStep === 'govern' && (
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
+                <div className="space-y-4">
+                  <MemoryCandidatesPanel
+                    items={memoryCandidates}
+                    learningCandidates={learningCandidates}
+                    reviewingPath={reviewingMemoryPath}
+                    updatingLearningCandidate={updatingLearningCandidate}
+                    onOpen={handleOpenMemoryPath}
+                    onConfirm={(item) => void handleConfirmMemoryCandidate(item)}
+                    onConvert={(item, action) => void handleConvertMemoryCandidate(item, action)}
+                    onOpenEvidence={(item, ref) => void handleOpenCandidateEvidence(item, ref)}
+                    onFocusMessage={handleFocusCandidateMessage}
+                    onUpdateLearningQuality={(item, checklist, reason) => void handleUpdateLearningCandidateQualityChecklist(item, checklist, reason)}
+                    onUpdateLearningStatus={(item, status, reason) => void handleUpdateLearningCandidateStatus(item, status, reason)}
+                    onReject={(item) => void handleRejectMemoryCandidate(item)}
+                    onOpenLearningCandidateArtifact={(item) => void handleReadLearningCandidatePublishArtifact(item)}
+                    readingLearningCandidateArtifact={readingLearningCandidateArtifact}
+                  />
+                  <MemoryPendingConflictsPanel
+                    items={memoryPendingConflicts}
+                    resolvingKey={resolvingMemoryConflict}
+                    onOpen={handleOpenMemoryPath}
+                    onResolve={(item, action) => void handleResolveMemoryConflict(item, action)}
+                  />
+                </div>
+                <div className="space-y-4">
+                  <MemoryReviewPanel
+                    items={memoryReviewItems}
+                    reviewingPath={reviewingMemoryPath}
+                    onOpen={handleOpenMemoryPath}
+                    onReview={(item) => void handleConfirmMemoryReview(item)}
+                  />
+                  <MemoryQualityPanel
+                    report={memoryQuality}
+                    onGoGovern={() => setMemoryStep('govern')}
+                    onOpen={handleOpenMemoryPath}
+                    onRefresh={() => void loadMemories()}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -559,6 +718,17 @@ export default function KnowledgeBase() {
           onClose={handleCloseKnowledgePreview}
         />
       )}
+      <LearningCandidatePublishArtifactDialog
+        artifact={learningCandidateArtifact}
+        reading={Boolean(readingLearningCandidateArtifact)}
+        onCopy={handleCopyLearningCandidateArtifact}
+        onDownload={() => {
+          if (learningCandidateArtifact?.candidate_id) {
+            void handleDownloadLearningCandidatePublishArtifactById(learningCandidateArtifact.candidate_id)
+          }
+        }}
+        onClose={handleCloseLearningCandidateArtifact}
+      />
       {memoryDeleteTarget && (
         <MemoryDeleteDialog
           deleting={deletingMemory}
@@ -567,6 +737,10 @@ export default function KnowledgeBase() {
           onConfirm={() => void handleDeleteMemory()}
         />
       )}
+      <MemoryCandidateEvidenceDialog
+        detail={candidateEvidenceDetail}
+        onClose={() => setCandidateEvidenceDetail(null)}
+      />
     </div>
   )
 }

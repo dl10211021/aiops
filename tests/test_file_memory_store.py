@@ -100,6 +100,349 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertEqual(item["entry_kinds"]["audit_archive"], 1)
         self.assertEqual(detail["audit_entries"], 1)
 
+    def test_mark_reviewed_promotes_pending_candidate_entries(self):
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary="\n".join(
+                [
+                    "【记忆类型】用户认可回答",
+                    "【候选状态】待人工确认",
+                    "【保留方式】候选成功经验：确认前仅用于审计和学习中心展示，不进入模型检索上下文。",
+                    "【核心记忆】Oracle 巡检报告结构清晰。",
+                    "【使用提醒】人工确认后才可作为当前会话后续参考；使用前仍需结合当前资产实时工具结果验证。",
+                ]
+            ),
+            source_session_id="sid-1",
+            metadata={
+                "source": "answer_feedback_candidate",
+                "memory_kind": "success_experience",
+                "review_status": "pending",
+                "retrieval_enabled": False,
+            },
+        )
+
+        self.assertEqual(
+            self.store.search(scope_ids=["sid-1"], query="Oracle 巡检", limit=5),
+            [],
+        )
+
+        self.store.mark_reviewed("sessions/sid-1/memory.md")
+
+        detail = self.store.read_memory("sessions/sid-1/memory.md")
+        self.assertIn('"review_status": "confirmed"', detail["content"])
+        self.assertIn('"retrieval_enabled": true', detail["content"])
+        self.assertIn("【候选状态】已人工确认", detail["content"])
+        results = self.store.search(scope_ids=["sid-1"], query="Oracle 巡检", limit=5)
+        self.assertEqual(len(results), 1)
+        self.assertIn("Oracle 巡检报告结构清晰", results[0]["summary"])
+
+    def test_list_candidate_entries_returns_pending_review_items_only(self):
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary="【记忆类型】用户认可回答\n【候选状态】待人工确认\n【核心记忆】候选经验。",
+            source_session_id="sid-1",
+            metadata={
+                "source": "answer_feedback_candidate",
+                "memory_kind": "success_experience",
+                "review_status": "pending",
+                "candidate_type": "feedback_success_experience",
+                "retrieval_enabled": False,
+                "feedback_target_message_id": 7,
+                "evidence_refs": [
+                    {
+                        "type": "tool_evidence",
+                        "label": "工具证据",
+                        "id": "tev-sid-1-call-1",
+                        "tool": "linux_execute_command",
+                        "status": "done",
+                    }
+                ],
+            },
+        )
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary="【记忆类型】用户纠错反馈\n【核心记忆】纠错经验。",
+            source_session_id="sid-1",
+            metadata={"review_status": "confirmed"},
+        )
+
+        candidates = self.store.list_candidate_entries(limit=10)
+
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["path"], "sessions/sid-1/memory.md")
+        self.assertEqual(candidates[0]["candidate_type"], "feedback_success_experience")
+        self.assertEqual(candidates[0]["review_status"], "pending")
+        self.assertFalse(candidates[0]["retrieval_enabled"])
+        self.assertEqual(candidates[0]["feedback_target_message_id"], 7)
+        self.assertTrue(candidates[0]["candidate_id"].startswith("memcand_"))
+        self.assertIn({"type": "session", "label": "来源会话", "id": "sid-1"}, candidates[0]["source_refs"])
+        self.assertIn({"type": "message", "label": "反馈消息", "id": "7"}, candidates[0]["source_refs"])
+        self.assertIn({"type": "memory_file", "label": "记忆文件", "path": "sessions/sid-1/memory.md"}, candidates[0]["source_refs"])
+        self.assertEqual(candidates[0]["evidence_refs"][0]["id"], "tev-sid-1-call-1")
+        self.assertEqual(candidates[0]["evidence_refs"][0]["tool"], "linux_execute_command")
+
+    def test_resolve_candidate_entry_confirms_single_candidate(self):
+        for label in ("第一条候选", "第二条候选"):
+            self.store.append_memory(
+                scope_id="sid-1",
+                summary=f"【记忆类型】用户认可回答\n【候选状态】待人工确认\n【核心记忆】{label}。",
+                source_session_id="sid-1",
+                metadata={
+                    "source": "answer_feedback_candidate",
+                    "memory_kind": "success_experience",
+                    "review_status": "pending",
+                    "retrieval_enabled": False,
+                },
+            )
+        candidates = self.store.list_candidate_entries(limit=10)
+        target = next(item for item in candidates if "第一条候选" in item["summary"])
+
+        version = self.store.resolve_candidate_entry(target["candidate_id"], "confirm")
+
+        self.assertEqual(version["operation"], "modified")
+        remaining = self.store.list_candidate_entries(limit=10)
+        self.assertEqual(len(remaining), 1)
+        self.assertIn("第二条候选", remaining[0]["summary"])
+        detail = self.store.read_memory("sessions/sid-1/memory.md")
+        self.assertIn("第一条候选", detail["content"])
+        self.assertIn("【候选状态】已人工确认", detail["content"])
+        self.assertIn("第二条候选", detail["content"])
+        self.assertIn("【候选状态】待人工确认", detail["content"])
+
+    def test_resolve_candidate_entry_rejects_without_enabling_retrieval(self):
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary="【记忆类型】用户认可回答\n【候选状态】待人工确认\n【核心记忆】不应沉淀。",
+            source_session_id="sid-1",
+            metadata={
+                "source": "answer_feedback_candidate",
+                "memory_kind": "success_experience",
+                "review_status": "pending",
+                "retrieval_enabled": False,
+            },
+        )
+        candidate = self.store.list_candidate_entries(limit=10)[0]
+
+        self.store.resolve_candidate_entry(candidate["candidate_id"], "reject")
+
+        self.assertEqual(self.store.list_candidate_entries(limit=10), [])
+        detail = self.store.read_memory("sessions/sid-1/memory.md")
+        self.assertIn('"review_status": "rejected"', detail["content"])
+        self.assertIn('"retrieval_enabled": false', detail["content"])
+        self.assertIn("【候选状态】已拒绝", detail["content"])
+        self.assertEqual(
+            self.store.search(scope_ids=["sid-1"], query="不应沉淀", limit=5),
+            [],
+        )
+
+    def test_resolve_candidate_entry_converts_to_runbook_candidate_without_retrieval(self):
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary=(
+                "【记忆类型】用户认可回答\n"
+                "【候选状态】待人工确认\n"
+                "【保留方式】候选成功经验：确认前仅用于审计和学习中心展示，不进入模型检索上下文。\n"
+                "【核心记忆】可以整理成 Runbook。\n"
+                "【使用提醒】人工确认后才可作为当前会话后续参考；使用前仍需结合当前资产实时工具结果验证。"
+            ),
+            source_session_id="sid-1",
+            metadata={
+                "source": "answer_feedback_candidate",
+                "memory_kind": "success_experience",
+                "candidate_type": "feedback_success_experience",
+                "review_status": "pending",
+                "retrieval_enabled": False,
+            },
+        )
+        candidate = self.store.list_candidate_entries(limit=10)[0]
+
+        self.store.resolve_candidate_entry(candidate["candidate_id"], "to_runbook")
+
+        self.assertEqual(self.store.list_candidate_entries(limit=10), [])
+        learning_candidates = self.store.list_learning_candidates(limit=10)
+        self.assertEqual(len(learning_candidates), 1)
+        self.assertEqual(learning_candidates[0]["target_type"], "runbook")
+        self.assertEqual(learning_candidates[0]["status"], "draft")
+        self.assertEqual(learning_candidates[0]["source_candidate_id"], candidate["candidate_id"])
+        self.assertIn("Runbook 草稿", learning_candidates[0]["next_action"])
+        self.assertEqual(learning_candidates[0]["status_events"][0]["to"], "draft")
+        checklist = {row["key"]: row for row in learning_candidates[0]["quality_checklist"]}
+        self.assertIn("source_message", checklist)
+        self.assertIn("tool_evidence", checklist)
+        self.assertIn("steps", checklist)
+        self.assertIn("rollback", checklist)
+        updated_candidate = self.store.update_learning_candidate_status(
+            learning_candidates[0]["id"],
+            status="reviewing",
+            actor="tester",
+            reason="准备评审",
+        )
+        self.assertEqual(updated_candidate["status"], "reviewing")
+        self.assertEqual(updated_candidate["status_events"][-1]["from"], "draft")
+        self.assertEqual(updated_candidate["status_events"][-1]["reason"], "准备评审")
+        with self.assertRaisesRegex(ValueError, "质量清单未全部通过"):
+            self.store.update_learning_candidate_status(
+                learning_candidates[0]["id"],
+                status="approved",
+                actor="tester",
+                reason="尝试批准",
+            )
+        updated_quality = self.store.update_learning_candidate_quality_checklist(
+            learning_candidates[0]["id"],
+            checklist=[
+                {**row, "ok": True, "note": "已补齐"}
+                for row in learning_candidates[0]["quality_checklist"]
+            ],
+            actor="tester",
+            reason="补齐发布前检查项",
+        )
+        self.assertTrue(all(row["ok"] for row in updated_quality["quality_checklist"]))
+        self.assertEqual(updated_quality["quality_events"][-1]["passed"], len(updated_quality["quality_checklist"]))
+        self.assertEqual(updated_quality["quality_events"][-1]["reason"], "补齐发布前检查项")
+        approved_candidate = self.store.update_learning_candidate_status(
+            learning_candidates[0]["id"],
+            status="approved",
+            actor="tester",
+            reason="质量清单已通过",
+        )
+        self.assertEqual(approved_candidate["status"], "approved")
+        published_candidate = self.store.update_learning_candidate_status(
+            learning_candidates[0]["id"],
+            status="published",
+            actor="tester",
+            reason="已完成发布草稿生成",
+        )
+        self.assertEqual(published_candidate["status"], "published")
+        published_artifact = published_candidate["published_artifact"]
+        self.assertIsInstance(published_artifact, dict)
+        self.assertEqual(published_artifact.get("status"), "draft")
+        self.assertEqual(published_artifact.get("generated_by"), "tester")
+        self.assertEqual(published_artifact.get("generated_reason"), "已完成发布草稿生成")
+        self.assertIn("content_preview", published_artifact)
+        self.assertIn("content_sha256", published_artifact)
+        self.assertIn("artifact_sha256", published_artifact)
+        artifact_file = self.tmp_path / published_artifact["file_path"]
+        self.assertTrue(artifact_file.exists())
+        artifact_content = artifact_file.read_text(encoding="utf-8")
+        self.assertIn(str(published_candidate["id"]), artifact_content)
+        self.assertIn("发布草稿", artifact_content)
+        republish = self.store.update_learning_candidate_status(
+            learning_candidates[0]["id"],
+            status="published",
+            actor="tester",
+            reason="发布草稿内容更新",
+        )
+        self.assertEqual(republish["published_artifact"]["artifact_id"], published_artifact["artifact_id"])
+
+        runbook_candidates = self.store.list_candidate_entries(
+            limit=10,
+            review_statuses=["runbook_candidate"],
+        )
+        self.assertEqual(len(runbook_candidates), 1)
+        self.assertEqual(runbook_candidates[0]["review_status"], "runbook_candidate")
+        self.assertEqual(runbook_candidates[0]["candidate_type"], "runbook_candidate")
+        self.assertIn("Runbook", runbook_candidates[0]["recommended_action"])
+        detail = self.store.read_memory("sessions/sid-1/memory.md")
+        self.assertIn('"review_status": "runbook_candidate"', detail["content"])
+        self.assertIn('"candidate_type": "runbook_candidate"', detail["content"])
+        self.assertIn('"retrieval_enabled": false', detail["content"])
+        self.assertIn("【候选状态】已转 Runbook 候选", detail["content"])
+        self.assertEqual(
+            self.store.search(scope_ids=["sid-1"], query="可以整理成 Runbook", limit=5),
+            [],
+        )
+
+    def test_resolve_candidate_entry_converts_to_skill_candidate_without_retrieval(self):
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary=(
+                "【记忆类型】用户认可回答\n"
+                "【候选状态】待人工确认\n"
+                "【保留方式】候选成功经验：确认前仅用于审计和学习中心展示，不进入模型检索上下文。\n"
+                "【核心记忆】可以整理成 Skill。\n"
+                "【使用提醒】人工确认后才可作为当前会话后续参考；使用前仍需结合当前资产实时工具结果验证。"
+            ),
+            source_session_id="sid-1",
+            metadata={
+                "source": "answer_feedback_candidate",
+                "memory_kind": "success_experience",
+                "candidate_type": "feedback_success_experience",
+                "review_status": "pending",
+                "retrieval_enabled": False,
+            },
+        )
+        candidate = self.store.list_candidate_entries(limit=10)[0]
+
+        self.store.resolve_candidate_entry(candidate["candidate_id"], "to_skill")
+
+        self.assertEqual(self.store.list_candidate_entries(limit=10), [])
+        learning_candidates = self.store.list_learning_candidates(limit=10, target_type="skill")
+        self.assertEqual(len(learning_candidates), 1)
+        self.assertEqual(learning_candidates[0]["target_type"], "skill")
+        self.assertEqual(learning_candidates[0]["source_candidate_id"], candidate["candidate_id"])
+        self.assertIn("Skill 草稿", learning_candidates[0]["next_action"])
+        checklist = {row["key"]: row for row in learning_candidates[0]["quality_checklist"]}
+        self.assertIn("inputs", checklist)
+        self.assertIn("tests", checklist)
+        skill_candidates = self.store.list_candidate_entries(
+            limit=10,
+            review_statuses=["skill_candidate"],
+        )
+        self.assertEqual(len(skill_candidates), 1)
+        self.assertEqual(skill_candidates[0]["review_status"], "skill_candidate")
+        self.assertEqual(skill_candidates[0]["candidate_type"], "skill_candidate")
+        self.assertIn("Skill", skill_candidates[0]["recommended_action"])
+        detail = self.store.read_memory("sessions/sid-1/memory.md")
+        self.assertIn('"review_status": "skill_candidate"', detail["content"])
+        self.assertIn('"candidate_type": "skill_candidate"', detail["content"])
+        self.assertIn('"retrieval_enabled": false', detail["content"])
+        self.assertIn("【候选状态】已转 Skill 候选", detail["content"])
+        self.assertEqual(
+            self.store.search(scope_ids=["sid-1"], query="可以整理成 Skill", limit=5),
+            [],
+        )
+
+    def test_update_learning_candidate_status_validates_reason_and_id(self):
+        with self.assertRaises(FileNotFoundError):
+            self.store.update_learning_candidate_status(
+                "missing",
+                status="reviewing",
+                reason="准备评审",
+            )
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary="【记忆类型】用户认可回答\n【候选状态】待人工确认\n【核心记忆】可发布流程。",
+            source_session_id="sid-1",
+            metadata={
+                "source": "answer_feedback_candidate",
+                "memory_kind": "success_experience",
+                "review_status": "pending",
+                "retrieval_enabled": False,
+            },
+        )
+        candidate = self.store.list_candidate_entries(limit=10)[0]
+        self.store.resolve_candidate_entry(candidate["candidate_id"], "to_runbook")
+        learning_candidate = self.store.list_learning_candidates(limit=10)[0]
+
+        with self.assertRaises(ValueError):
+            self.store.update_learning_candidate_status(
+                learning_candidate["id"],
+                status="approved",
+                reason="",
+            )
+        with self.assertRaises(ValueError):
+            self.store.update_learning_candidate_status(
+                learning_candidate["id"],
+                status="bad",
+                reason="非法状态",
+            )
+        with self.assertRaises(ValueError):
+            self.store.update_learning_candidate_quality_checklist(
+                learning_candidate["id"],
+                checklist=[],
+                reason="",
+            )
+
     def test_list_read_delete_and_versions_support_management_ui(self):
         self.store.append_memory(
             scope_id="sid-8",
@@ -178,6 +521,86 @@ class FileMemoryStoreTests(unittest.TestCase):
             )
         with self.assertRaises(PermissionError):
             self.store.delete_memory(item["path"], actor="tester")
+
+    def test_read_learning_candidate_publish_artifact_returns_content_and_metadata(self):
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary=(
+                "【记忆类型】用户认可回答\n"
+                "【候选状态】待人工确认\n"
+                "【保留方式】候选成功经验：确认前仅用于审计和学习中心展示，不进入模型检索上下文。\n"
+                "【核心记忆】发布草稿内容。\n"
+                "【使用提醒】人工确认后才可作为当前会话后续参考；使用前仍需结合当前资产实时工具结果验证。"
+            ),
+            source_session_id="sid-1",
+            metadata={
+                "source": "answer_feedback_candidate",
+                "memory_kind": "success_experience",
+                "review_status": "pending",
+                "retrieval_enabled": False,
+                "candidate_type": "feedback_success_experience",
+            },
+        )
+        candidate = self.store.list_candidate_entries(limit=10)[0]
+        self.store.resolve_candidate_entry(candidate["candidate_id"], "to_runbook")
+        learning_candidate = self.store.list_learning_candidates(limit=10)[0]
+        updated_quality = self.store.update_learning_candidate_quality_checklist(
+            learning_candidate["id"],
+            checklist=[
+                {**row, "ok": True, "note": "已确认"}
+                for row in learning_candidate["quality_checklist"]
+            ],
+            actor="tester",
+            reason="发布前确认清单",
+        )
+        published = self.store.update_learning_candidate_status(
+            learning_candidate["id"],
+            status="published",
+            actor="tester",
+            reason="发布草稿已生成",
+        )
+
+        self.assertEqual(published["status"], "published")
+        artifact = self.store.read_learning_candidate_publish_artifact(published["id"])
+
+        self.assertEqual(artifact["candidate_id"], published["id"])
+        self.assertEqual(artifact["status"], "draft")
+        self.assertTrue(artifact["artifact_id"].startswith("publish_"))
+        self.assertTrue(artifact["file_path"].startswith("learning_candidate_publish_artifacts/"))
+        self.assertEqual(artifact["generated_by"], "tester")
+        self.assertEqual(artifact["generated_reason"], "发布草稿已生成")
+        self.assertIn("# Runbook 发布草稿", artifact["content"])
+        self.assertEqual(artifact["artifact_size"], len(artifact["content"].encode("utf-8")))
+        self.assertTrue(updated_quality["quality_events"][-1]["passed"] >= 1)
+
+    def test_read_learning_candidate_publish_artifact_missing_without_published_artifact(self):
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary=(
+                "【记忆类型】用户认可回答\n"
+                "【候选状态】待人工确认\n"
+                "【核心记忆】未发布前不应读取发布草稿。\n"
+                "【使用提醒】人工确认后才可作为当前会话后续参考；使用前仍需结合当前资产实时工具结果验证。"
+            ),
+            source_session_id="sid-1",
+            metadata={
+                "source": "answer_feedback_candidate",
+                "memory_kind": "success_experience",
+                "review_status": "pending",
+                "retrieval_enabled": False,
+                "candidate_type": "feedback_success_experience",
+            },
+        )
+        candidate = self.store.list_candidate_entries(limit=10)[0]
+        self.store.resolve_candidate_entry(candidate["candidate_id"], "to_runbook")
+        learning_candidate = self.store.list_learning_candidates(limit=10)[0]
+
+        with self.assertRaises(FileNotFoundError):
+            self.store.read_learning_candidate_publish_artifact(learning_candidate["id"])
+
+    def test_read_learning_candidate_publish_artifact_rejects_invalid_candidate_id(self):
+        with self.assertRaises(ValueError):
+            self.store.read_learning_candidate_publish_artifact("   ")
 
     def test_update_restore_export_and_store_registry(self):
         self.store.append_memory(

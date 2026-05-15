@@ -1,5 +1,30 @@
 import { useState, type ChangeEvent } from 'react'
-import type { KnowledgeCompileQueueItem, KnowledgeDocumentContent, KnowledgeFile, KnowledgeListPagination, KnowledgeListSummary, KnowledgeVaultGraph, KnowledgeVaultSearchResult, KnowledgeVectorStoreStatus, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion, SessionMemoryActivity } from '@/types'
+import type { LearningCandidateStatus, MemoryCandidateAction } from '@/api/knowledge'
+import type {
+  ExecTraceItem,
+  KnowledgeCompileQueueItem,
+  KnowledgeDocumentContent,
+  KnowledgeFile,
+  KnowledgeListPagination,
+  KnowledgeListSummary,
+  KnowledgeVaultGraph,
+  KnowledgeVaultSearchResult,
+  KnowledgeVectorStoreStatus,
+  LearningCandidate,
+  LearningCandidatePublishedArtifactDetail,
+  MemoryCandidate,
+  MemoryCandidateRef,
+  MemoryDetail,
+  MemoryItem,
+  MemoryPendingConflict,
+  MemoryQualityReport,
+  MemoryReviewItem,
+  MemorySearchResult,
+  MemoryStoreInfo,
+  MemoryVersion,
+  SessionMemoryActivity,
+} from '@/types'
+import ToolTraceList from '@/features/sessions/ToolTraceList'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
 export type KnowledgeTab = 'documents' | 'memory'
@@ -1726,7 +1751,723 @@ export function MemoryPendingConflictsPanel({
   )
 }
 
+function learningCandidateStatusActions(status: string): Array<{ status: LearningCandidateStatus; label: string; reason: string }> {
+  if (status === 'draft') {
+    return [{ status: 'reviewing', label: '提交评审', reason: '候选内容已整理，提交人工评审。' }]
+  }
+  if (status === 'reviewing') {
+    return [
+      { status: 'approved', label: '批准', reason: '人工评审通过，允许进入发布准备。' },
+      { status: 'rejected', label: '拒绝', reason: '人工评审未通过，退回候选池保留审计。' },
+    ]
+  }
+  if (status === 'approved') {
+    return [{ status: 'published', label: '标记发布', reason: '候选已完成发布或已接入对应 Runbook/Skill。' }]
+  }
+  return []
+}
+
+function latestLearningCandidateEvent(item: LearningCandidate) {
+  const events = item.status_events || []
+  return events.length > 0 ? events[events.length - 1] : null
+}
+
+type LearningCandidateChecklist = NonNullable<LearningCandidate['quality_checklist']>
+
+function learningCandidateChecklist(item: LearningCandidate) {
+  const fallback = [
+    { key: 'source_message', label: '来源消息', ok: Boolean(item.source_session_id && item.feedback_target_message_id !== undefined) },
+    { key: 'tool_evidence', label: '工具证据', ok: Boolean(item.evidence_refs?.length) },
+    { key: 'scope', label: '适用范围', ok: false },
+    { key: item.target_type === 'runbook' ? 'steps' : 'inputs', label: item.target_type === 'runbook' ? '执行步骤' : '输入参数', ok: false },
+    { key: 'risk_boundary', label: '风险边界', ok: false },
+    { key: item.target_type === 'runbook' ? 'verification' : 'tests', label: item.target_type === 'runbook' ? '验证项' : '测试项', ok: false },
+    { key: 'rollback', label: '回滚方案', ok: false },
+  ]
+  return item.quality_checklist?.length ? item.quality_checklist : fallback
+}
+
+function learningCandidateQualityReady(item: LearningCandidate) {
+  const checklist = learningCandidateChecklist(item)
+  return checklist.length > 0 && checklist.every((row) => row.ok)
+}
+
+function learningCandidateActionBlocked(item: LearningCandidate, status: LearningCandidateStatus) {
+  return (status === 'approved' || status === 'published') && !learningCandidateQualityReady(item)
+}
+
+export function MemoryCandidatesPanel({
+  items,
+  learningCandidates,
+  reviewingPath,
+  updatingLearningCandidate,
+  onOpen,
+  onConfirm,
+  onConvert,
+  onOpenEvidence,
+  onFocusMessage,
+  onUpdateLearningQuality,
+  onUpdateLearningStatus,
+  onReject,
+  onOpenLearningCandidateArtifact,
+  readingLearningCandidateArtifact,
+}: {
+  items: MemoryCandidate[]
+  learningCandidates: LearningCandidate[]
+  reviewingPath: string | null
+  updatingLearningCandidate: string | null
+  onOpen: (path: string) => void
+  onConfirm: (item: MemoryCandidate) => void
+  onConvert: (item: MemoryCandidate, action: Extract<MemoryCandidateAction, 'to_runbook' | 'to_skill'>) => void
+  onOpenEvidence: (item: MemoryCandidate, ref: MemoryCandidateRef) => void
+  onFocusMessage: (item: MemoryCandidate) => void
+  onUpdateLearningQuality: (item: LearningCandidate, checklist: LearningCandidateChecklist, reason: string) => void
+  onUpdateLearningStatus: (item: LearningCandidate, status: LearningCandidateStatus, reason: string) => void
+  onReject: (item: MemoryCandidate) => void
+  onOpenLearningCandidateArtifact: (item: LearningCandidate) => void
+  readingLearningCandidateArtifact?: string | null
+}) {
+  const [learningDetail, setLearningDetail] = useState<LearningCandidate | null>(null)
+  const groupedItems = [
+    {
+      key: 'pending',
+      title: '待确认候选',
+      hint: '可以确认沉淀、转 Runbook、转 Skill 或拒绝。',
+      items: items.filter((item) => (item.review_status || 'pending') === 'pending'),
+      tone: 'border-ops-success/30 bg-ops-success/5',
+      badge: 'border-ops-success/35 text-ops-success',
+    },
+    {
+      key: 'runbook_candidate',
+      title: 'Runbook 候选',
+      hint: '已从成功经验分流，等待人工整理成可复用运维流程。',
+      items: items.filter((item) => item.review_status === 'runbook_candidate'),
+      tone: 'border-ops-accent/25 bg-ops-accent/5',
+      badge: 'border-ops-accent/35 text-ops-accent',
+    },
+    {
+      key: 'skill_candidate',
+      title: 'Skill 候选',
+      hint: '已从成功经验分流，等待整理、校验并进入技能体系。',
+      items: items.filter((item) => item.review_status === 'skill_candidate'),
+      tone: 'border-sky-300/25 bg-sky-300/5',
+      badge: 'border-sky-300/35 text-sky-200',
+    },
+  ]
+  return (
+    <section className="rounded-lg border border-ops-success/30 bg-ops-success/5 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-ops-text">学习候选</div>
+          <p className="mt-1 text-xs text-ops-subtext">点赞、成功路径和后续 Runbook/Skill 候选先进入这里，确认后才进入可检索记忆。</p>
+        </div>
+        <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-xs text-ops-success">
+          {items.length}
+        </span>
+      </div>
+      <div className="mt-3 space-y-3">
+        {items.length > 0 ? groupedItems.map((group) => (
+          <div key={group.key} className={`rounded-lg border ${group.tone} p-3`}>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <div className="text-xs font-semibold text-ops-text">{group.title}</div>
+                <p className="mt-1 text-[11px] leading-5 text-ops-subtext">{group.hint}</p>
+              </div>
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] ${group.badge}`}>
+                {group.items.length}
+              </span>
+            </div>
+            <div className="mt-2 space-y-2">
+              {group.items.length > 0 ? group.items.map((item, index) => {
+                const busy = reviewingPath === item.candidate_id
+                const actionable = (item.review_status || 'pending') === 'pending'
+                return (
+            <article key={item.candidate_id || `${item.path}-${item.timestamp}-${index}`} className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="rounded-full border border-ops-success/35 px-2 py-0.5 text-ops-success">
+                  {item.memory_kind_label || '候选记忆'}
+                </span>
+                <span className="rounded-full border border-amber-300/35 px-2 py-0.5 text-amber-200">
+                  {item.review_status || 'pending'}
+                </span>
+                <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-overlay">
+                  {item.candidate_type || 'memory_candidate'}
+                </span>
+                <span className="font-mono text-ops-overlay">{item.timestamp || '-'}</span>
+                <span className="font-mono text-ops-overlay">{item.candidate_id}</span>
+                {item.feedback_target_message_id !== undefined && (
+                  <span className="font-mono text-ops-overlay">消息 {item.feedback_target_message_id}</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => onOpen(item.path)}
+                className="mt-2 block max-w-full truncate text-left text-xs font-semibold text-ops-accent hover:text-ops-text"
+                title={item.path}
+              >
+                {item.path}
+              </button>
+              <p className="mt-1 line-clamp-3 text-xs leading-5 text-ops-subtext">
+                {item.summary_preview || item.summary || '该候选暂无摘要'}
+              </p>
+              <p className="mt-2 text-[11px] leading-5 text-ops-overlay">
+                {item.recommended_action || '确认前不会进入模型检索上下文。'}
+              </p>
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                <div className="rounded border border-ops-surface0 bg-ops-dark/30 px-2 py-1.5">
+                  <div className="text-[11px] font-semibold text-ops-text">来源链</div>
+                  <div className="mt-1 space-y-1">
+                    {(item.source_refs || []).length > 0 ? item.source_refs?.slice(0, 4).map((ref, refIndex) => (
+                      <div key={`${item.candidate_id}-source-${refIndex}`} className="truncate font-mono text-[11px] text-ops-overlay" title={ref.path || ref.id || ref.tool || ''}>
+                        {ref.label || ref.type || 'source'}: {ref.id || ref.path || ref.tool || '-'}
+                      </div>
+                    )) : (
+                      <div className="text-[11px] text-ops-overlay">仅保留记忆文件路径</div>
+                    )}
+                  </div>
+                </div>
+                <div className="rounded border border-ops-surface0 bg-ops-dark/30 px-2 py-1.5">
+                  <div className="text-[11px] font-semibold text-ops-text">工具证据</div>
+                  <div className="mt-1 space-y-1">
+                    {(item.evidence_refs || []).length > 0 ? item.evidence_refs?.slice(0, 4).map((ref, refIndex) => (
+                      <button
+                        key={`${item.candidate_id}-evidence-${refIndex}`}
+                        type="button"
+                        onClick={() => onOpenEvidence(item, ref)}
+                        className="block max-w-full truncate text-left font-mono text-[11px] text-ops-accent hover:text-ops-text"
+                        title={ref.id || ref.tool || ''}
+                      >
+                        {ref.id || ref.tool || ref.type || '-'}{ref.status ? ` · ${ref.status}` : ''}
+                      </button>
+                    )) : (
+                      <div className="text-[11px] text-ops-overlay">暂无工具证据绑定</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {actionable && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onConfirm(item)}
+                      disabled={Boolean(reviewingPath)}
+                      className="rounded border border-ops-success/40 px-2 py-1 text-[11px] font-semibold text-ops-success hover:bg-ops-success/10 disabled:opacity-50"
+                    >
+                      {busy ? '确认中...' : '确认沉淀'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onConvert(item, 'to_runbook')}
+                      disabled={Boolean(reviewingPath)}
+                      className="rounded border border-ops-accent/35 px-2 py-1 text-[11px] font-semibold text-ops-accent hover:bg-ops-accent/10 disabled:opacity-50"
+                    >
+                      {busy ? '处理中...' : '转 Runbook'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onConvert(item, 'to_skill')}
+                      disabled={Boolean(reviewingPath)}
+                      className="rounded border border-sky-300/35 px-2 py-1 text-[11px] font-semibold text-sky-200 hover:bg-sky-300/10 disabled:opacity-50"
+                    >
+                      {busy ? '处理中...' : '转 Skill'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onReject(item)}
+                      disabled={Boolean(reviewingPath)}
+                      className="rounded border border-ops-alert/35 px-2 py-1 text-[11px] font-semibold text-ops-alert hover:bg-ops-alert/10 disabled:opacity-50"
+                    >
+                      {busy ? '处理中...' : '拒绝候选'}
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onOpen(item.path)}
+                  className="rounded border border-ops-surface0 px-2 py-1 text-[11px] text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
+                >
+                  打开记忆文件
+                </button>
+                {item.feedback_target_message_id !== undefined ? (
+                  <button
+                    type="button"
+                    onClick={() => onFocusMessage(item)}
+                    className="rounded border border-ops-surface0 px-2 py-1 text-[11px] text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
+                  >
+                    定位消息
+                  </button>
+                ) : null}
+              </div>
+            </article>
+                )
+              }) : (
+                <div className="rounded-md border border-ops-surface0 bg-ops-dark/25 px-3 py-3 text-center text-[11px] text-ops-overlay">
+                  暂无{group.title}
+                </div>
+              )}
+            </div>
+          </div>
+        )) : (
+          <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-4 text-center text-xs text-ops-overlay">
+            暂无待确认学习候选
+          </div>
+        )}
+      </div>
+      <div className="mt-3 rounded-lg border border-ops-surface0 bg-ops-dark/25 p-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <div className="text-xs font-semibold text-ops-text">发布候选池</div>
+            <p className="mt-1 text-[11px] leading-5 text-ops-subtext">
+              这里是已从记忆候选分流出来的 Runbook/Skill 生命周期对象，后续用于审批、发布和版本记录。
+            </p>
+          </div>
+          <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-overlay">
+            {learningCandidates.length}
+          </span>
+        </div>
+        <div className="mt-2 grid gap-2 xl:grid-cols-2">
+          {learningCandidates.length > 0 ? learningCandidates.slice(0, 8).map((item) => {
+            const latestEvent = latestLearningCandidateEvent(item)
+            const publishedArtifact = item.published_artifact
+            return (
+            <article key={item.id} className="rounded-md border border-ops-surface0 bg-ops-panel/45 px-3 py-2">
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                <span className={`rounded-full border px-2 py-0.5 ${item.target_type === 'runbook' ? 'border-ops-accent/35 text-ops-accent' : 'border-sky-300/35 text-sky-200'}`}>
+                  {item.target_type === 'runbook' ? 'Runbook' : 'Skill'}
+                </span>
+                <span className="rounded-full border border-amber-300/35 px-2 py-0.5 text-amber-200">
+                  {item.status || 'draft'}
+                </span>
+                <span className="font-mono text-ops-overlay">{item.created_at || '-'}</span>
+              </div>
+              <div className="mt-2 truncate font-mono text-[11px] text-ops-overlay" title={item.id}>
+                {item.id}
+              </div>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-ops-subtext">
+                {item.summary_preview || item.summary || '暂无摘要'}
+              </p>
+              {publishedArtifact ? (
+                <div className="mt-2 rounded-md border border-emerald-300/35 bg-emerald-300/8 px-2 py-2 text-[10px] text-ops-overlay">
+                  <div className="font-semibold text-emerald-200">发布草稿已生成</div>
+                  <div>草稿ID：{publishedArtifact.artifact_id}</div>
+                  <div>状态：{publishedArtifact.status}</div>
+                  <div>路径：{publishedArtifact.file_path}</div>
+                  <div>更新时间：{publishedArtifact.generated_at}</div>
+                  <p className="mt-1 whitespace-pre-wrap text-ops-overlay">{publishedArtifact.content_preview || '无内容预览'}</p>
+                </div>
+              ) : (
+                item.status === 'published'
+                  ? <div className="mt-2 text-[10px] text-ops-overlay">发布状态已更新，但草稿信息暂未生成。</div>
+                  : null
+              )}
+              <p className="mt-2 text-[11px] leading-5 text-ops-overlay">
+                {item.next_action || '等待人工整理和发布。'}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-ops-overlay">
+                {item.source_session_id && <span>会话 {item.source_session_id}</span>}
+                {item.evidence_refs?.length ? <span>证据 {item.evidence_refs.length}</span> : <span>无证据引用</span>}
+                <span className="truncate">来源 {item.source_path}</span>
+              </div>
+              {latestEvent && (
+                <div className="mt-2 truncate text-[10px] text-ops-overlay" title={latestEvent.reason || ''}>
+                  最近状态：{latestEvent.from || 'new'} → {latestEvent.to} · {latestEvent.actor}
+                </div>
+              )}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLearningDetail(item)}
+                  className="rounded border border-ops-surface0 px-2 py-1 text-[11px] font-semibold text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
+                >
+                  查看详情
+                </button>
+                {learningCandidateStatusActions(item.status || 'draft').map((action) => (
+                  <button
+                    key={`${item.id}-${action.status}`}
+                    type="button"
+                    onClick={() => onUpdateLearningStatus(item, action.status, action.reason)}
+                    disabled={updatingLearningCandidate === item.id || learningCandidateActionBlocked(item, action.status)}
+                    title={learningCandidateActionBlocked(item, action.status) ? '需先补齐并保存发布前质量清单' : action.reason}
+                    className="rounded border border-ops-accent/35 px-2 py-1 text-[11px] font-semibold text-ops-accent hover:bg-ops-accent/10 disabled:opacity-50"
+                  >
+                    {updatingLearningCandidate === item.id
+                      ? '更新中...'
+                      : learningCandidateActionBlocked(item, action.status)
+                        ? '需补齐清单'
+                        : action.label}
+                  </button>
+                ))}
+                {publishedArtifact ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenLearningCandidateArtifact(item)}
+                    disabled={Boolean(readingLearningCandidateArtifact)}
+                    className="rounded border border-emerald-300/35 px-2 py-1 text-[11px] font-semibold text-emerald-200 hover:bg-emerald-300/10 disabled:opacity-50"
+                  >
+                    {readingLearningCandidateArtifact === item.id ? '读取中...' : '打开发布草稿'}
+                  </button>
+                ) : null}
+              </div>
+            </article>
+          )}) : (
+            <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-4 text-center text-xs text-ops-overlay xl:col-span-2">
+              暂无发布候选。把学习候选转为 Runbook 或 Skill 后会进入这里。
+            </div>
+          )}
+        </div>
+      </div>
+      <LearningCandidateDetailDrawer
+        key={learningDetail?.id || 'none'}
+        item={learningDetail}
+        saving={Boolean(learningDetail && updatingLearningCandidate === learningDetail.id)}
+        onClose={() => setLearningDetail(null)}
+        onSave={onUpdateLearningQuality}
+      />
+    </section>
+  )
+}
+
+function LearningCandidateDetailDrawer({
+  item,
+  saving,
+  onClose,
+  onSave,
+}: {
+  item: LearningCandidate | null
+  saving: boolean
+  onClose: () => void
+  onSave: (item: LearningCandidate, checklist: LearningCandidateChecklist, reason: string) => void
+}) {
+  if (!item) return null
+  return (
+    <LearningCandidateDetailContent
+      item={item}
+      saving={saving}
+      onClose={onClose}
+      onSave={onSave}
+    />
+  )
+}
+
+function LearningCandidateDetailContent({
+  item,
+  saving,
+  onClose,
+  onSave,
+}: {
+  item: LearningCandidate
+  saving: boolean
+  onClose: () => void
+  onSave: (item: LearningCandidate, checklist: LearningCandidateChecklist, reason: string) => void
+}) {
+  const checklist = learningCandidateChecklist(item)
+  const [draftChecklist, setDraftChecklist] = useState<LearningCandidateChecklist>(checklist)
+  const [qualityReason, setQualityReason] = useState('补齐发布前质量清单。')
+  const passed = checklist.filter((row) => row.ok).length
+  const draftPassed = draftChecklist.filter((row) => row.ok).length
+  const updateChecklistRow = (key: string, patch: Partial<LearningCandidateChecklist[number]>) => {
+    setDraftChecklist((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onClose}>
+      <aside
+        className="h-full w-full max-w-2xl overflow-y-auto border-l border-ops-surface1 bg-ops-panel p-5 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-ops-text">发布候选详情</div>
+            <div className="mt-1 font-mono text-[11px] text-ops-overlay">{item.id}</div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-ops-surface0 px-3 py-1.5 text-xs text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
+          >
+            关闭
+          </button>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
+          <span className={`rounded-full border px-2 py-0.5 ${item.target_type === 'runbook' ? 'border-ops-accent/35 text-ops-accent' : 'border-sky-300/35 text-sky-200'}`}>
+            {item.target_type === 'runbook' ? 'Runbook' : 'Skill'}
+          </span>
+          <span className="rounded-full border border-amber-300/35 px-2 py-0.5 text-amber-200">{item.status || 'draft'}</span>
+          <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-overlay">{item.created_at}</span>
+        </div>
+        <section className="mt-4 rounded-lg border border-ops-surface0 bg-ops-dark/30 p-3">
+          <div className="text-xs font-semibold text-ops-text">候选摘要</div>
+          <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-ops-subtext">{item.summary || '暂无摘要'}</p>
+        </section>
+        <section className="mt-3 rounded-lg border border-ops-surface0 bg-ops-dark/30 p-3">
+          <div className="text-xs font-semibold text-ops-text">发布草稿</div>
+          {item.published_artifact ? (
+            <div className="mt-2 space-y-1 text-[11px] text-ops-subtext">
+              <CandidateEvidenceInfoLine label="草稿ID" value={item.published_artifact.artifact_id} />
+              <CandidateEvidenceInfoLine label="目标类型" value={item.published_artifact.target_type} />
+              <CandidateEvidenceInfoLine label="文件路径" value={item.published_artifact.file_path} />
+              <CandidateEvidenceInfoLine label="草稿状态" value={item.published_artifact.status} />
+              <CandidateEvidenceInfoLine label="生成时间" value={item.published_artifact.generated_at} />
+              <CandidateEvidenceInfoLine label="生成原因" value={item.published_artifact.generated_reason || '-'} />
+              <CandidateEvidenceInfoLine label="生成者" value={item.published_artifact.generated_by || '-'} />
+              {item.published_artifact.content_preview && (
+                <div className="rounded border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+                  <div className="text-[11px] text-ops-overlay">草稿预览</div>
+                  <div className="mt-1 whitespace-pre-wrap text-xs text-ops-subtext">
+                    {item.published_artifact.content_preview}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="mt-2 rounded border border-ops-surface0 bg-ops-dark/35 px-3 py-2 text-xs text-ops-overlay">尚未生成发布草稿。标记为 Published 后自动创建。</div>
+          )}
+        </section>
+        <section className="mt-3 rounded-lg border border-ops-surface0 bg-ops-dark/30 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs font-semibold text-ops-text">发布前质量清单</div>
+            <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-overlay">
+              {draftPassed}/{draftChecklist.length}
+            </span>
+          </div>
+          <div className="mt-2 space-y-2">
+            {draftChecklist.map((row) => (
+              <div key={row.key} className={`rounded border px-2 py-2 text-[11px] ${row.ok ? 'border-ops-success/35 bg-ops-success/5 text-ops-success' : 'border-amber-300/35 bg-amber-300/5 text-amber-200'}`}>
+                <label className="flex items-center gap-2 font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={row.ok}
+                    onChange={(event) => updateChecklistRow(row.key, { ok: event.target.checked })}
+                    className="h-3.5 w-3.5 accent-emerald-400"
+                  />
+                  <span>{row.ok ? '已具备' : '待补齐'} · {row.label}</span>
+                </label>
+                <input
+                  value={row.note || ''}
+                  onChange={(event) => updateChecklistRow(row.key, { note: event.target.value })}
+                  placeholder="补充依据、验证方法或待办说明"
+                  className="mt-2 w-full rounded border border-ops-surface0 bg-ops-dark/45 px-2 py-1.5 text-[11px] text-ops-subtext outline-none focus:border-ops-accent/60"
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-3">
+            <label className="text-[11px] font-semibold text-ops-text">保存理由</label>
+            <input
+              value={qualityReason}
+              onChange={(event) => setQualityReason(event.target.value)}
+              className="mt-1 w-full rounded border border-ops-surface0 bg-ops-dark/45 px-2 py-1.5 text-xs text-ops-subtext outline-none focus:border-ops-accent/60"
+            />
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[11px] text-ops-overlay">
+              原始完成度 {passed}/{checklist.length}，当前编辑 {draftPassed}/{draftChecklist.length}
+            </div>
+            <button
+              type="button"
+              onClick={() => onSave(item, draftChecklist, qualityReason.trim() || '更新发布前质量清单。')}
+              disabled={saving}
+              className="rounded border border-ops-accent/40 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10 disabled:opacity-50"
+            >
+              {saving ? '保存中...' : '保存质量清单'}
+            </button>
+          </div>
+        </section>
+        <section className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="rounded-lg border border-ops-surface0 bg-ops-dark/30 p-3">
+            <div className="text-xs font-semibold text-ops-text">来源链</div>
+            <div className="mt-2 space-y-1">
+              {(item.source_refs || []).length > 0 ? item.source_refs?.map((ref, index) => (
+                <div key={`${item.id}-source-${index}`} className="truncate font-mono text-[11px] text-ops-overlay" title={ref.path || ref.id || ref.tool || ''}>
+                  {ref.label || ref.type || 'source'}: {ref.id || ref.path || ref.tool || '-'}
+                </div>
+              )) : (
+                <div className="text-[11px] text-ops-overlay">暂无来源链</div>
+              )}
+            </div>
+          </div>
+          <div className="rounded-lg border border-ops-surface0 bg-ops-dark/30 p-3">
+            <div className="text-xs font-semibold text-ops-text">工具证据</div>
+            <div className="mt-2 space-y-1">
+              {(item.evidence_refs || []).length > 0 ? item.evidence_refs?.map((ref, index) => (
+                <div key={`${item.id}-evidence-${index}`} className="truncate font-mono text-[11px] text-ops-overlay" title={ref.id || ref.tool || ''}>
+                  {ref.id || ref.tool || ref.type || '-'}{ref.status ? ` · ${ref.status}` : ''}
+                </div>
+              )) : (
+                <div className="text-[11px] text-ops-overlay">暂无工具证据</div>
+              )}
+            </div>
+          </div>
+        </section>
+        <section className="mt-3 rounded-lg border border-ops-surface0 bg-ops-dark/30 p-3">
+          <div className="text-xs font-semibold text-ops-text">状态流</div>
+          <div className="mt-2 space-y-2">
+            {(item.status_events || []).length > 0 ? item.status_events?.map((event, index) => (
+              <div key={`${item.id}-event-${index}`} className="rounded border border-ops-surface0 bg-ops-panel/40 px-2 py-1.5 text-[11px] text-ops-subtext">
+                <div>{event.from || 'new'} → {event.to} · {event.actor} · {event.timestamp}</div>
+                <div className="mt-1 text-ops-overlay">{event.reason}</div>
+              </div>
+            )) : (
+              <div className="text-[11px] text-ops-overlay">暂无状态事件</div>
+            )}
+          </div>
+        </section>
+      </aside>
+    </div>
+  )
+}
+
+export function LearningCandidatePublishArtifactDialog({
+  artifact,
+  reading,
+  onCopy,
+  onDownload,
+  onClose,
+}: {
+  artifact: LearningCandidatePublishedArtifactDetail | null
+  reading: boolean
+  onCopy: () => void
+  onDownload: () => void
+  onClose: () => void
+}) {
+  if (!artifact) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+      <section className="flex h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-ops-surface1 bg-ops-panel shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-ops-surface0 px-4 py-3">
+          <div>
+            <div className="text-sm font-semibold text-ops-text">发布候选草稿</div>
+            <div className="mt-1 font-mono text-[11px] text-ops-overlay">
+              {artifact.candidate_id} / {artifact.artifact_id}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-ops-surface0 px-2 py-1 text-xs text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
+          >
+            关闭
+          </button>
+        </div>
+        <div className="max-h-[78vh] overflow-y-auto p-4">
+          {reading && (
+            <div className="mb-2 rounded border border-ops-accent/35 bg-ops-accent/10 px-3 py-2 text-xs text-ops-accent">
+              正在读取发布草稿...
+            </div>
+          )}
+          <div className="grid gap-2 md:grid-cols-2">
+            <CandidateEvidenceInfoLine label="草稿ID" value={artifact.artifact_id} />
+            <CandidateEvidenceInfoLine label="目标类型" value={artifact.target_type} />
+            <CandidateEvidenceInfoLine label="文件路径" value={artifact.file_path} />
+            <CandidateEvidenceInfoLine label="草稿状态" value={artifact.status} />
+            <CandidateEvidenceInfoLine label="生成时间" value={artifact.generated_at} />
+            <CandidateEvidenceInfoLine label="生成原因" value={artifact.generated_reason || '-'} />
+            <CandidateEvidenceInfoLine label="生成者" value={artifact.generated_by || '-'} />
+            <CandidateEvidenceInfoLine label="内容摘要" value={artifact.content_preview || '无内容预览'} />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onCopy}
+              className="rounded border border-ops-accent/35 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/10"
+            >
+              复制全部内容
+            </button>
+            <button
+              type="button"
+              onClick={onDownload}
+              className="rounded border border-emerald-300/35 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-300/10"
+            >
+              下载 Markdown
+            </button>
+          </div>
+          <pre className="mt-3 max-h-[52vh] overflow-auto rounded-md border border-ops-surface0 bg-ops-dark p-3 text-xs leading-6 whitespace-pre-wrap text-ops-subtext">
+            {artifact.content}
+          </pre>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+export interface MemoryCandidateEvidenceDetail {
+  candidate: MemoryCandidate
+  ref: MemoryCandidateRef
+  trace?: ExecTraceItem | null
+  loading?: boolean
+  error?: string
+}
+
+export function MemoryCandidateEvidenceDialog({
+  detail,
+  onClose,
+}: {
+  detail: MemoryCandidateEvidenceDetail | null
+  onClose: () => void
+}) {
+  if (!detail) return null
+  const trace = detail.trace || null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+      <section className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-xl border border-ops-surface1 bg-ops-panel shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-ops-surface0 px-4 py-3">
+          <div>
+            <div className="text-sm font-semibold text-ops-text">工具证据详情</div>
+            <div className="mt-1 font-mono text-[11px] text-ops-overlay">
+              {detail.ref.id || detail.ref.tool || detail.ref.type || '-'}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-ops-surface0 px-2 py-1 text-xs text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
+          >
+            关闭
+          </button>
+        </div>
+        <div className="max-h-[72vh] overflow-y-auto p-4">
+          <div className="grid gap-2 md:grid-cols-2">
+            <CandidateEvidenceInfoLine label="候选" value={detail.candidate.candidate_id} />
+            <CandidateEvidenceInfoLine label="来源会话" value={detail.candidate.source_session_id || '-'} />
+            <CandidateEvidenceInfoLine label="反馈消息" value={String(detail.candidate.feedback_target_message_id || '-')} />
+            <CandidateEvidenceInfoLine label="记忆文件" value={detail.candidate.path} />
+          </div>
+          {detail.loading && (
+            <div className="mt-3 rounded border border-ops-accent/30 bg-ops-accent/10 px-3 py-2 text-xs text-ops-accent">
+              正在加载来源会话执行轨迹...
+            </div>
+          )}
+          {detail.error && (
+            <div className="mt-3 rounded border border-ops-alert/35 bg-ops-alert/10 px-3 py-2 text-xs text-ops-alert">
+              {detail.error}
+            </div>
+          )}
+          {trace ? (
+            <div className="mt-3">
+              <ToolTraceList items={[trace]} />
+            </div>
+          ) : !detail.loading && !detail.error ? (
+            <div className="mt-3 rounded border border-ops-surface0 bg-ops-dark/35 px-3 py-3 text-xs text-ops-subtext">
+              暂未在来源会话历史中匹配到完整执行轨迹，仅保留当前候选上的证据引用。
+            </div>
+          ) : null}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function CandidateEvidenceInfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-ops-surface0 bg-ops-dark/35 px-3 py-2">
+      <div className="text-[11px] text-ops-overlay">{label}</div>
+      <div className="mt-1 truncate font-mono text-xs text-ops-subtext" title={value}>{value}</div>
+    </div>
+  )
+}
+
 function feedbackPolicyLabel(rating: string, policy?: string) {
+  if (rating === 'up' && policy === 'pending_review') return '待确认候选'
   if (rating === 'up') return policy === 'promote' ? '成功经验已沉淀' : '好评待沉淀'
   if (policy === 'do_not_promote_answer') return '纠错审计'
   return '负反馈'
@@ -1918,8 +2659,10 @@ export function SessionMemoryActivityPanel({
                       : 'border-ops-alert/25 bg-ops-alert/10 text-ops-alert'
                   }`}>
                     写入状态：{feedbackPolicyLabel(String(item.rating), item.memory_policy)}。
-                    {item.rating === 'up'
-                      ? ' 作为当前会话成功经验保存，本会话后续轮次可引用。'
+                    {item.rating === 'up' && item.memory_policy === 'pending_review'
+                      ? ' 已生成候选，人工确认前不会进入模型检索上下文。'
+                      : item.rating === 'up'
+                        ? ' 作为当前会话成功经验保存，本会话后续轮次可引用。'
                       : ' 已标记为不佳回答，不会作为成功经验注入本会话后续轮次。'}
                   </div>
                 </article>

@@ -168,6 +168,48 @@ def memory_pending_conflicts_response_kwargs(items: list[Any]) -> dict[str, Any]
     }
 
 
+def memory_candidates_response_kwargs(items: list[Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"items": items},
+    }
+
+
+def memory_learning_candidates_response_kwargs(items: list[Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"items": items},
+    }
+
+
+def memory_learning_candidate_updated_response_kwargs(
+    item: dict[str, Any],
+    *,
+    message: str = "发布候选状态已更新",
+) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": message,
+        "data": {"item": item},
+    }
+
+
+def memory_learning_candidate_publish_artifact_response_kwargs(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "发布草稿读取成功",
+        "data": {"artifact": item},
+    }
+
+
+def memory_candidate_resolved_response_kwargs(version: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "候选记忆已处理",
+        "data": {"version": version},
+    }
+
+
 def memory_pending_conflict_resolved_response_kwargs(version: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "success",

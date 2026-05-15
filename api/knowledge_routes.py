@@ -26,6 +26,11 @@ from api.response_mappers.knowledge import (
     memory_item_restored_response_kwargs,
     memory_item_updated_response_kwargs,
     memory_items_response_kwargs,
+    memory_candidate_resolved_response_kwargs,
+    memory_candidates_response_kwargs,
+    memory_learning_candidate_updated_response_kwargs,
+    memory_learning_candidate_publish_artifact_response_kwargs,
+    memory_learning_candidates_response_kwargs,
     memory_pending_conflict_resolved_response_kwargs,
     memory_pending_conflicts_response_kwargs,
     memory_quality_response_kwargs,
@@ -95,6 +100,30 @@ class MemoryConflictResolveRequest(BaseModel):
 
 class MemoryReviewConfirmRequest(BaseModel):
     path: str = Field(..., min_length=1)
+
+
+class MemoryCandidateResolveRequest(BaseModel):
+    candidate_id: str = Field(..., min_length=1)
+    action: str = Field(..., pattern="^(confirm|reject|to_runbook|to_skill)$")
+
+
+class MemoryLearningCandidateStatusRequest(BaseModel):
+    status: str = Field(..., pattern="^(draft|reviewing|approved|rejected|published)$")
+    reason: str = Field(..., min_length=1)
+    actor: str = Field("user", min_length=1)
+
+
+class MemoryLearningCandidateQualityItem(BaseModel):
+    key: str = Field(..., min_length=1, max_length=80)
+    label: str = Field(..., min_length=1, max_length=120)
+    ok: bool = False
+    note: str | None = Field(None, max_length=500)
+
+
+class MemoryLearningCandidateQualityRequest(BaseModel):
+    checklist: list[MemoryLearningCandidateQualityItem] = Field(..., min_length=1, max_length=20)
+    reason: str = Field(..., min_length=1)
+    actor: str = Field("user", min_length=1)
 
 
 class KnowledgeVaultCompileRequest(BaseModel):
@@ -213,6 +242,124 @@ async def list_memory_pending_conflicts(limit: int = Query(50, ge=1, le=200)):
 
     items = memory_db.list_pending_memory_conflicts(limit=limit)
     return ResponseModel(**memory_pending_conflicts_response_kwargs(items))
+
+
+@router.get("/knowledge/memory/candidates", response_model=ResponseModel)
+async def list_memory_candidates(
+    limit: int = Query(50, ge=1, le=200),
+    statuses: str = Query("pending", description="逗号分隔的候选状态，例如 pending,runbook_candidate,skill_candidate"),
+):
+    from core.memory import memory_db
+
+    review_statuses = [
+        item.strip()
+        for item in statuses.split(",")
+        if item.strip() in {"pending", "runbook_candidate", "skill_candidate"}
+    ]
+    items = memory_db.file_memory_store.list_candidate_entries(
+        limit=limit,
+        review_statuses=review_statuses or ["pending"],
+    )
+    return ResponseModel(**memory_candidates_response_kwargs(items))
+
+
+@router.get("/knowledge/memory/learning-candidates", response_model=ResponseModel)
+async def list_memory_learning_candidates(
+    limit: int = Query(50, ge=1, le=200),
+    target_type: str = Query("", pattern="^(|runbook|skill)$"),
+):
+    from core.memory import memory_db
+
+    items = memory_db.file_memory_store.list_learning_candidates(
+        limit=limit,
+        target_type=target_type,
+    )
+    return ResponseModel(**memory_learning_candidates_response_kwargs(items))
+
+
+@router.patch("/knowledge/memory/learning-candidates/{candidate_id}/status", response_model=ResponseModel)
+async def update_memory_learning_candidate_status(
+    candidate_id: str,
+    req: MemoryLearningCandidateStatusRequest,
+):
+    from core.memory import memory_db
+
+    try:
+        item = memory_db.file_memory_store.update_learning_candidate_status(
+            candidate_id,
+            status=req.status,
+            actor=req.actor,
+            reason=req.reason,
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="发布候选不存在")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "发布候选状态参数无效")
+    return ResponseModel(**memory_learning_candidate_updated_response_kwargs(item))
+
+
+@router.get("/knowledge/memory/learning-candidates/{candidate_id}/artifact")
+async def read_learning_candidate_publish_artifact(candidate_id: str, download: bool = Query(False)):
+    from core.memory import memory_db
+
+    try:
+        artifact = memory_db.file_memory_store.read_learning_candidate_publish_artifact(candidate_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="发布草稿不存在")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "发布草稿路径参数无效")
+
+    if download:
+        file_path = artifact.get("file_path")
+        if not isinstance(file_path, str) or not file_path.strip():
+            raise HTTPException(status_code=404, detail="发布草稿文件路径缺失")
+        try:
+            artifact_path = memory_db.file_memory_store.resolve_learning_candidate_publish_artifact_path(file_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc) or "发布草稿路径参数无效")
+        if not artifact_path.exists():
+            raise HTTPException(status_code=404, detail="发布草稿文件不存在")
+        filename = f"{artifact.get('artifact_id') or candidate_id}.md"
+        return FileResponse(artifact_path, media_type="text/markdown", filename=filename)
+    return ResponseModel(**memory_learning_candidate_publish_artifact_response_kwargs(artifact))
+
+
+@router.patch("/knowledge/memory/learning-candidates/{candidate_id}/quality-checklist", response_model=ResponseModel)
+async def update_memory_learning_candidate_quality_checklist(
+    candidate_id: str,
+    req: MemoryLearningCandidateQualityRequest,
+):
+    from core.memory import memory_db
+
+    try:
+        item = memory_db.file_memory_store.update_learning_candidate_quality_checklist(
+            candidate_id,
+            checklist=[row.model_dump(exclude_none=True) for row in req.checklist],
+            actor=req.actor,
+            reason=req.reason,
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="发布候选不存在")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "发布质量清单参数无效")
+    return ResponseModel(**memory_learning_candidate_updated_response_kwargs(item, message="发布质量清单已更新"))
+
+
+@router.post("/knowledge/memory/candidates/resolve", response_model=ResponseModel)
+async def resolve_memory_candidate(req: MemoryCandidateResolveRequest):
+    from core.memory import memory_db
+
+    try:
+        version = memory_db.file_memory_store.resolve_candidate_entry(req.candidate_id, req.action)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="候选记忆不存在")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="该记忆库为只读，不能处理")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc) or "候选记忆处理参数无效")
+    except RuntimeError:
+        raise HTTPException(status_code=409, detail="记忆已被其他操作修改，请刷新后重试")
+    return ResponseModel(**memory_candidate_resolved_response_kwargs(version))
 
 
 @router.get("/knowledge/memory/review", response_model=ResponseModel)
