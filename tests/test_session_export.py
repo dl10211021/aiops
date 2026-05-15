@@ -195,3 +195,34 @@ class TestSessionExport(unittest.TestCase):
         )
 
         self.assertIn("  - Runtime: 实际执行失败；实际重试 2/2 次", markdown)
+
+    def test_format_session_history_markdown_reads_runtime_from_evidence_metadata(self):
+        markdown = format_session_history_markdown(
+            [
+                {
+                    "role": "assistant",
+                    "content": "执行完成",
+                    "exec_trace": [
+                        {
+                            "tool": "monitoring_api_query",
+                            "status": "done",
+                            "args": "GET /api/status",
+                            "result": "ok",
+                            "evidence": {
+                                "result_meta": {
+                                    "runtime_execution": {
+                                        "attempts": 2,
+                                        "max_attempts": 3,
+                                        "retried": True,
+                                        "final_status": "success",
+                                    }
+                                }
+                            },
+                        }
+                    ],
+                }
+            ],
+            "elk-01",
+        )
+
+        self.assertIn("  - Runtime: 实际重试 2/3 次", markdown)

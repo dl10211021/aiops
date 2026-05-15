@@ -88,8 +88,13 @@ def _format_policy_line(policy: dict) -> str:
 def _format_runtime_line(item: dict) -> str:
     result_meta = item.get("resultMeta") or item.get("result_meta") or {}
     if not isinstance(result_meta, dict):
-        return ""
+        result_meta = {}
     runtime = result_meta.get("runtime_execution") or result_meta.get("runtime_policy")
+    if not isinstance(runtime, dict):
+        evidence = item.get("evidence")
+        evidence_meta = evidence.get("result_meta") if isinstance(evidence, dict) else None
+        if isinstance(evidence_meta, dict):
+            runtime = evidence_meta.get("runtime_execution") or evidence_meta.get("runtime_policy")
     if not isinstance(runtime, dict):
         return ""
     parts: list[str] = []
