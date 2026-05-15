@@ -227,13 +227,15 @@ async def run_headless_agent_loop(
         for tc in tool_calls:
             func_name, func_args = _parse_headless_tool_call(tc)
             tool_policy = tool_policy_metadata(func_name)
-            reason = _headless_approval_reason(
+            gate = _headless_execution_gate(
                 tool_name=func_name,
                 args=func_args,
                 context=context,
                 dispatcher=dispatcher,
                 tool_policy=tool_policy,
             )
+            reason = gate.reason
+            approval_sources = gate.approval_sources
 
             if reason:
                 blocked = record_headless_approval_block(
@@ -243,6 +245,7 @@ async def run_headless_agent_loop(
                     args=func_args,
                     reason=reason,
                     context=context,
+                    approval_sources=approval_sources,
                 )
                 event_logger.warning(
                     "Blocked unattended tool call requiring approval: session=%s tool=%s approval=%s",

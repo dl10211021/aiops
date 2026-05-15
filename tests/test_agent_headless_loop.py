@@ -3,6 +3,7 @@ import json
 import unittest
 from unittest.mock import patch
 
+from core.tool_execution_policy import ToolExecutionGate
 from core.agent_headless_loop import run_headless_agent_loop
 
 
@@ -233,6 +234,10 @@ class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(dispatcher.executed, [])
         record.assert_called_once()
         self.assertIn("工具执行策略要求审批", record.call_args.kwargs["reason"])
+        self.assertEqual(
+            tuple(record.call_args.kwargs["approval_sources"]),
+            ("runtime_policy",),
+        )
 
     async def test_headless_concurrency_safe_tools_run_in_parallel(self):
         messages = [{"role": "system", "content": "sys"}]
@@ -316,6 +321,62 @@ class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             [call[0] for call in dispatcher.executed],
             ["read_one", "read_two"],
+        )
+
+    async def test_headless_uses_gate_approval_sources(self):
+        messages = [{"role": "system", "content": "sys"}]
+        context = {"session_id": "sid", "execution_mode": "headless"}
+
+        class GateDispatcher(FakeDispatcher):
+            def check_execution_gate(self, tool_name, args, context, policy=None):
+                return ToolExecutionGate(
+                    approval_required=True,
+                    reason="测试自定义执行 Gate",
+                    policy={"name": tool_name},
+                    approval_sources=("safety_policy",),
+                )
+
+        dispatcher = GateDispatcher(approval_required=True)
+        with patch("core.agent_headless_loop.record_headless_approval_block") as record:
+            record.return_value = {"id": "call-gate"}
+            report = await run_headless_agent_loop(
+                model_name="model",
+                messages=messages,
+                tools=[],
+                context=context,
+                session_id="sid",
+                agent_profile="default",
+                host="host.local",
+                dispatcher=dispatcher,
+                event_logger=FakeLogger(),
+                stream_executor=stream_executor_factory(
+                    [
+                        [
+                            {"type": "content", "content": "准备执行"},
+                            {
+                                "type": "tool_calls",
+                                "tool_calls": [
+                                    {
+                                        "id": "call-gate",
+                                        "function": {
+                                            "name": "memory_delete",
+                                            "arguments": json.dumps({"key": "old"}),
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                        [{"type": "content", "content": "已阻断"}],
+                    ]
+                ),
+                max_steps=3,
+            )
+
+        self.assertEqual(report, "来自 default Agent (host.local) 的协同任务报告：\n已阻断")
+        record.assert_called_once()
+        self.assertEqual(
+            tuple(record.call_args.kwargs["approval_sources"]),
+            ("safety_policy",),
         )
 
 

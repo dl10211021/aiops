@@ -37,6 +37,7 @@ def record_headless_approval_block(
     args: dict,
     reason: str,
     context: dict,
+    approval_sources: tuple[str, ...] | list[str] | None = None,
 ) -> dict:
     """Audit and block approval-required tool calls from unattended runs."""
     approval_id = str(tool_call_id or "").strip() or f"headless-{uuid.uuid4().hex[:16]}"
@@ -46,6 +47,7 @@ def record_headless_approval_block(
         tool_name=tool_name,
         args=args,
         reason=reason,
+        approval_sources=approval_sources,
         context={**(context or {}), "execution_mode": "headless"},
     )
 
