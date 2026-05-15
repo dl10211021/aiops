@@ -13,6 +13,7 @@ def record_tool_approval_request(
     args: dict,
     reason: str,
     context: dict,
+    approval_sources: tuple[str, ...] | list[str] | None = None,
 ) -> dict:
     from core.approval_queue import record_approval_request
 
@@ -23,6 +24,7 @@ def record_tool_approval_request(
         args=args,
         reason=reason,
         context=context,
+        approval_sources=approval_sources,
         timeout_seconds=approval_timeout_seconds(),
     )
 

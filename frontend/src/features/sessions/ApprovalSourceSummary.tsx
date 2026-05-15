@@ -1,5 +1,6 @@
 interface ApprovalSourceSummaryProps {
   source?: Record<string, unknown> | null
+  sources?: Array<Record<string, unknown> | null> | null
   reason?: string
 }
 
@@ -17,19 +18,38 @@ function sourceTone(layer: string) {
   return 'border-ops-surface1/65 bg-ops-dark/35 text-ops-subtext'
 }
 
-export function ApprovalSourceSummary({ source, reason }: ApprovalSourceSummaryProps) {
-  if (!source && !reason) return null
-  const layer = sourceText(source, 'layer')
-  const label = sourceText(source, 'label') || '安全策略'
-  const detail = sourceText(source, 'detail')
-  const sourceReason = sourceText(source, 'reason') || reason || ''
+export function ApprovalSourceSummary({ source, sources, reason }: ApprovalSourceSummaryProps) {
+  const normalizedSources = (sources && sources.length > 0
+    ? sources
+    : source
+      ? [source]
+      : []
+  ).filter((item): item is Record<string, unknown> => Boolean(item))
+
+  if (normalizedSources.length === 0 && !reason) return null
+
   return (
-    <div className={`rounded-lg border px-3 py-2 text-xs leading-5 ${sourceTone(layer)}`}>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-semibold">策略来源：{label}</span>
-        {detail && <span className="font-mono text-[11px] opacity-80">{detail}</span>}
-      </div>
-      {sourceReason && <div className="mt-1 opacity-90">{sourceReason}</div>}
+    <div className="grid gap-2">
+      {normalizedSources.map((item, index) => {
+        const layer = sourceText(item, 'layer')
+        const label = sourceText(item, 'label') || '安全策略'
+        const detail = sourceText(item, 'detail')
+        const sourceReason = sourceText(item, 'reason')
+        return (
+          <div key={`${layer || 'source'}-${index}`} className={`rounded-lg border px-3 py-2 text-xs leading-5 ${sourceTone(layer)}`}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">策略来源：{label}</span>
+              {detail && <span className="font-mono text-[11px] opacity-80">{detail}</span>}
+            </div>
+            {sourceReason && <div className="mt-1 opacity-90">{sourceReason}</div>}
+          </div>
+        )
+      })}
+      {normalizedSources.length === 0 && reason && (
+        <div className={`rounded-lg border px-3 py-2 text-xs leading-5 ${sourceTone('')}`}>
+          <div className="mt-1 opacity-90">{reason}</div>
+        </div>
+      )}
     </div>
   )
 }

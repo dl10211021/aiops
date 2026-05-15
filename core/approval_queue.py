@@ -132,43 +132,103 @@ def _approval_source_metadata(
     reason: str,
     tool_policy: dict[str, Any] | None,
     policy: dict[str, Any],
-) -> dict[str, str]:
+    approval_sources: tuple[str, ...] | list[str] | None = None,
+) -> list[dict[str, str]]:
     policy = policy or {}
-    if isinstance(policy.get("primary_action"), dict):
-        action = policy["primary_action"]
-        return {
-            "layer": "action_policy",
-            "label": "动作策略",
-            "detail": str(action.get("label") or action.get("id") or "命中动作审批规则"),
-            "reason": str(reason or ""),
-        }
+    requested_layers = [
+        str(item)
+        for item in (approval_sources or [])
+        if str(item) in {"runtime_policy", "safety_policy", "action_policy"}
+    ]
+    requested_layers = list(dict.fromkeys(requested_layers))
 
-    tool_policy = tool_policy or {}
-    operation_mode = str(tool_policy.get("operation_mode") or "")
-    approval_policy = str(tool_policy.get("approval_policy") or "")
-    destructive = bool(tool_policy.get("destructive"))
-    if (
-        str(reason or "").startswith("工具执行策略要求审批")
-        or destructive
-        or approval_policy == "always_required"
-        or operation_mode == "external_effect"
-    ):
-        return {
-            "layer": "runtime_policy",
-            "label": "运行策略",
-            "detail": f"模式={operation_mode or 'unknown'}，审批={approval_policy or 'unknown'}",
-            "reason": str(reason or ""),
-        }
+    if not requested_layers:
+        if isinstance(policy.get("primary_action"), dict):
+            requested_layers.append("action_policy")
+        else:
+            tool_policy = tool_policy or {}
+            operation_mode = str(tool_policy.get("operation_mode") or "")
+            approval_policy = str(tool_policy.get("approval_policy") or "")
+            destructive = bool(tool_policy.get("destructive"))
+            if (
+                str(reason or "").startswith("工具执行策略要求审批")
+                or destructive
+                or approval_policy == "always_required"
+                or operation_mode == "external_effect"
+            ):
+                requested_layers.append("runtime_policy")
+            else:
+                requested_layers.append("safety_policy")
 
-    return {
-        "layer": "safety_policy",
-        "label": "安全策略",
-        "detail": "命中安全审批规则或只读边界",
-        "reason": str(reason or ""),
-    }
+    sources: list[dict[str, str]] = []
+
+    if "runtime_policy" in requested_layers:
+        tool_policy = tool_policy or {}
+        operation_mode = str(tool_policy.get("operation_mode") or "")
+        approval_policy = str(tool_policy.get("approval_policy") or "")
+        destructive = bool(tool_policy.get("destructive"))
+        runtime_detail = f"模式={operation_mode or 'unknown'}，审批={approval_policy or 'unknown'}"
+        if destructive:
+            runtime_detail = f"{runtime_detail}（含写操作/高危特征）"
+        sources.append(
+            {
+                "layer": "runtime_policy",
+                "label": "运行策略",
+                "detail": runtime_detail,
+                "reason": str(reason or ""),
+            }
+        )
+
+    if "safety_policy" in requested_layers:
+        sources.append(
+            {
+                "layer": "safety_policy",
+                "label": "安全策略",
+                "detail": "命中安全审批规则或只读边界",
+                "reason": str(reason or ""),
+            }
+        )
+
+    if "action_policy" in requested_layers:
+        action = policy.get("primary_action") if isinstance(policy, dict) else None
+        if isinstance(action, dict):
+            sources.append(
+                {
+                    "layer": "action_policy",
+                    "label": "动作策略",
+                    "detail": str(action.get("label") or action.get("id") or "命中动作审批规则"),
+                    "reason": str(reason or ""),
+                }
+            )
+        elif not any(item.get("layer") == "action_policy" for item in sources):
+            sources.append(
+                {
+                    "layer": "action_policy",
+                    "label": "动作策略",
+                    "detail": "命中动作审批规则",
+                    "reason": str(reason or ""),
+                }
+            )
+
+    if not sources:
+        sources.append(
+            {
+                "layer": "safety_policy",
+                "label": "安全策略",
+                "detail": "命中安全审批规则或只读边界",
+                "reason": str(reason or ""),
+            }
+        )
+    return sources
 
 
-def _approval_metadata(tool_name: str, args: dict[str, Any], context: dict[str, Any], reason: str) -> dict[str, Any]:
+def _approval_metadata(
+    tool_name: str,
+    args: dict[str, Any],
+    context: dict[str, Any],
+    reason: str,
+    approval_sources: tuple[str, ...] | list[str] | None = None,
+) -> dict[str, Any]:
     metadata: dict[str, Any] = {}
     tool_policy: dict[str, Any] | None = None
     try:
@@ -181,13 +241,15 @@ def _approval_metadata(tool_name: str, args: dict[str, Any], context: dict[str, 
     policy = _policy_metadata(tool_name, args, context)
     if policy:
         metadata["policy"] = policy
-    metadata["approval_source"] = redact_value(
+    metadata["approval_sources"] = redact_value(
         _approval_source_metadata(
             reason=reason,
             tool_policy=tool_policy,
             policy=policy,
+            approval_sources=approval_sources,
         )
     )
+    metadata["approval_source"] = metadata["approval_sources"][0] if metadata["approval_sources"] else None
     if tool_name == "evolve_skill":
         metadata["skill_change"] = _skill_change_metadata(args)
     elif tool_name == "rollback_skill":
@@ -301,6 +363,7 @@ def record_approval_request(
     args: dict[str, Any],
     reason: str,
     context: dict[str, Any],
+    approval_sources: tuple[str, ...] | list[str] | None = None,
     timeout_seconds: int = 300,
 ) -> dict[str, Any]:
     now = _now()
@@ -323,7 +386,13 @@ def record_approval_request(
             "tool_name": str(tool_name or ""),
             "args": _safe_args(str(tool_name or ""), args or {}),
             "reason": str(reason or ""),
-            "metadata": _approval_metadata(str(tool_name or ""), args or {}, context or {}, str(reason or "")),
+            "metadata": _approval_metadata(
+                str(tool_name or ""),
+                args or {},
+                context or {},
+                str(reason or ""),
+                approval_sources=approval_sources,
+            ),
             "context": _safe_context({**(context or {}), "session_id": session_id or context.get("session_id")}),
             "status": "pending",
             "decision": None,

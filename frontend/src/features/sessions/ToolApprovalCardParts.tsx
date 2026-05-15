@@ -72,7 +72,13 @@ export function ToolApprovalReason({ reason }: { reason?: string }) {
 }
 
 export function ToolApprovalSource({ approval }: { approval: ToolApproval }) {
-  return <ApprovalSourceSummary source={approval.approvalSource || null} reason={approval.reason} />
+  return (
+    <ApprovalSourceSummary
+      source={approval.approvalSource || null}
+      sources={approval.approvalSources || null}
+      reason={approval.reason}
+    />
+  )
 }
 
 export function ToolApprovalResolution({

@@ -40,7 +40,11 @@ export function ApprovalRow({
           <span className="text-xs text-ops-overlay">{approval.id}</span>
         </div>
         <div className="mt-3">
-          <ApprovalSourceSummary source={approval.metadata?.approval_source || null} reason={approval.reason} />
+          <ApprovalSourceSummary
+            source={approval.metadata?.approval_source || null}
+            sources={approval.metadata?.approval_sources || null}
+            reason={approval.reason}
+          />
         </div>
         {toolPolicy && (
           <div className="mt-3">

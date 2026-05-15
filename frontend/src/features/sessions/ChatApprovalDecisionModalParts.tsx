@@ -39,7 +39,11 @@ export function ChatApprovalContextPanel({ decision }: { decision: ChatApprovalD
   const approvalActions = decision.approval.actions || []
   return (
     <>
-      <ApprovalSourceSummary source={decision.approval.approvalSource || null} reason={decision.approval.reason} />
+      <ApprovalSourceSummary
+        source={decision.approval.approvalSource || null}
+        sources={decision.approval.approvalSources || null}
+        reason={decision.approval.reason}
+      />
       {approvalActions.length > 0 && (
         <div className="grid gap-2 md:grid-cols-2">
           {approvalActions.slice(0, 4).map((policyAction) => (

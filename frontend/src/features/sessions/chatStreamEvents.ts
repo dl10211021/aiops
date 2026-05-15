@@ -86,6 +86,9 @@ export function applyChatStreamEvent({
         toolName: streamString(data.tool_name, 'unknown'),
         args: streamArgs(data.args),
         reason: streamString(data.reason),
+        approvalSources: Array.isArray(data.approval_sources)
+          ? data.approval_sources.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+          : [],
         actions: Array.isArray(data.actions) ? data.actions : [],
         primaryAction: data.primary_action && typeof data.primary_action === 'object'
           ? data.primary_action as ToolApproval['primaryAction']

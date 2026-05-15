@@ -108,7 +108,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("asyncio.wait_for", side_effect=never_resolve), patch(
             "core.agent_tool_loop.record_tool_approval_request",
-            return_value={"metadata": {"policy": {}, "approval_source": {"layer": "action_policy", "label": "动作策略"}}},
+            return_value={"metadata": {"policy": {}, "approval_source": {"layer": "action_policy", "label": "动作策略"}, "approval_sources": [{"layer": "action_policy", "label": "动作策略"}]}},
         ), patch("core.approval_queue.mark_approval_timeout"):
             events = await collect_tool_events(
                 tool_calls=[
@@ -136,6 +136,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(approval["tool_policy"]["name"], "db_execute_query")
         self.assertEqual(approval["tool_policy"]["evidence_family"], "database")
         self.assertEqual(approval["approval_source"]["layer"], "action_policy")
+        self.assertEqual(approval["approval_sources"][0]["layer"], "action_policy")
 
     async def test_approval_request_sends_structured_redacted_args(self):
         memory_store = FakeMemoryStore()
@@ -148,7 +149,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("asyncio.wait_for", side_effect=never_resolve), patch(
             "core.agent_tool_loop.record_tool_approval_request",
-            return_value={"metadata": {"policy": {}, "approval_source": {"layer": "safety_policy", "label": "安全策略"}}},
+            return_value={"metadata": {"policy": {}, "approval_source": {"layer": "safety_policy", "label": "安全策略"}, "approval_sources": [{"layer": "safety_policy", "label": "安全策略"}]}},
         ), patch("core.approval_queue.mark_approval_timeout"):
             events = await collect_tool_events(
                 tool_calls=[
@@ -193,7 +194,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("asyncio.wait_for", side_effect=never_resolve), patch(
             "core.agent_tool_loop.record_tool_approval_request",
-            return_value={"metadata": {"policy": {}, "approval_source": {"layer": "runtime_policy", "label": "运行策略"}}},
+            return_value={"metadata": {"policy": {}, "approval_source": {"layer": "runtime_policy", "label": "运行策略"}, "approval_sources": [{"layer": "runtime_policy", "label": "运行策略", "detail": "运行策略"}]}},
         ), patch("core.approval_queue.mark_approval_timeout"):
             events = await collect_tool_events(
                 tool_calls=[
@@ -218,6 +219,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(approval["type"], "tool_ask_approval")
         self.assertEqual(approval["tool_policy"]["approval_policy"], "always_required")
         self.assertEqual(approval["approval_source"]["layer"], "runtime_policy")
+        self.assertEqual(approval["approval_sources"][0]["layer"], "runtime_policy")
         self.assertEqual(dispatcher.executed, [])
 
     async def test_runtime_policy_timeout_returns_tool_error(self):
@@ -432,7 +434,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
             side_effect=never_resolve,
         ), patch(
             "core.agent_tool_loop.record_tool_approval_request",
-            return_value={"metadata": {"policy": {}, "approval_source": {"layer": "runtime_policy", "label": "运行策略"}}},
+            return_value={"metadata": {"policy": {}, "approval_source": {"layer": "runtime_policy", "label": "运行策略"}, "approval_sources": [{"layer": "runtime_policy", "label": "运行策略"}]}},
         ), patch("core.approval_queue.mark_approval_timeout"):
             events = await collect_tool_events(
                 tool_calls=[

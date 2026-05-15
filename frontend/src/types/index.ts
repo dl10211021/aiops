@@ -289,6 +289,7 @@ export interface ToolApproval {
   toolName: string
   args: string
   reason?: string
+  approvalSources?: Array<Record<string, unknown> | null>
   actions?: SafetyPolicyAction[]
   primaryAction?: SafetyPolicyAction | null
   approvalSource?: Record<string, unknown> | null
@@ -1624,6 +1625,12 @@ export interface ApprovalRequest {
       actions?: SafetyPolicyAction[]
       primary_action?: SafetyPolicyAction | null
     }
+    approval_sources?: Array<{
+      layer?: string
+      label?: string
+      detail?: string
+      reason?: string
+    }>
     approval_source?: {
       layer?: string
       label?: string

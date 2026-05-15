@@ -41,6 +41,8 @@ class TestApprovalQueue(unittest.TestCase):
         self.assertEqual(pending[0]["metadata"]["tool_policy"]["name"], "db_execute_query")
         self.assertEqual(pending[0]["metadata"]["tool_policy"]["operation_mode"], "read_write")
         self.assertEqual(pending[0]["metadata"]["tool_policy"]["evidence_family"], "database")
+        self.assertEqual(pending[0]["metadata"]["approval_sources"][0]["layer"], "action_policy")
+        self.assertEqual(len(pending[0]["metadata"]["approval_sources"]), 1)
         self.assertEqual(pending[0]["metadata"]["approval_source"]["layer"], "action_policy")
         self.assertEqual(pending[0]["metadata"]["approval_source"]["label"], "动作策略")
         self.assertNotIn("asset-secret", str(pending[0]))
@@ -59,7 +61,9 @@ class TestApprovalQueue(unittest.TestCase):
                 context={"session_id": "sid-1", "asset_type": "virtual", "protocol": "virtual"},
             )
 
-        source = request["metadata"]["approval_source"]
+        sources = request["metadata"]["approval_sources"]
+        self.assertEqual(len(sources), 1)
+        source = sources[0]
         self.assertEqual(source["layer"], "runtime_policy")
         self.assertEqual(source["label"], "运行策略")
         self.assertIn("destructive", source["detail"])
