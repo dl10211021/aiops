@@ -168,16 +168,20 @@ export function runtimePolicyLabels(policy: Record<string, unknown> | null) {
 }
 
 function runtimeExecutionFromTrace(trace: ExecTraceItem) {
-  const resultExecution = objectRecord(trace.resultMeta?.runtime_execution)
-    || objectRecord(trace.resultMeta?.runtime_policy)
-  if (resultExecution) return resultExecution
+  const resultRuntimeExecution = objectRecord(trace.resultMeta?.runtime_execution)
+  if (resultRuntimeExecution) return { execution: resultRuntimeExecution, kind: 'runtime_execution' }
+  const resultRuntimePolicy = objectRecord(trace.resultMeta?.runtime_policy)
+  if (resultRuntimePolicy) return { execution: resultRuntimePolicy, kind: 'runtime_policy' }
   const evidenceMeta = objectRecord(trace.evidence?.result_meta)
-  return objectRecord(evidenceMeta?.runtime_execution)
-    || objectRecord(evidenceMeta?.runtime_policy)
+  const evidenceRuntimeExecution = objectRecord(evidenceMeta?.runtime_execution)
+  if (evidenceRuntimeExecution) return { execution: evidenceRuntimeExecution, kind: 'runtime_execution' }
+  const evidenceRuntimePolicy = objectRecord(evidenceMeta?.runtime_policy)
+  if (evidenceRuntimePolicy) return { execution: evidenceRuntimePolicy, kind: 'runtime_policy' }
+  return { execution: null, kind: '' }
 }
 
 export function runtimeExecutionLabels(trace: ExecTraceItem) {
-  const execution = runtimeExecutionFromTrace(trace)
+  const { execution, kind } = runtimeExecutionFromTrace(trace)
   const attempts = numberValue(execution, 'attempts')
   const maxAttempts = numberValue(execution, 'max_attempts')
   const retried = recordValue(execution, 'retried') === 'true'
@@ -189,7 +193,7 @@ export function runtimeExecutionLabels(trace: ExecTraceItem) {
     labels.push(errorType === 'tool_timeout' && timeoutSeconds ? `实际超时 ${secondsText(timeoutSeconds)}` : '实际执行失败')
   }
   if (!attempts || attempts <= 1) return labels
-  if (trace.resultMeta?.runtime_execution && !retried) return labels
+  if (kind === 'runtime_execution' && !retried) return labels
   const totalText = maxAttempts && maxAttempts > 0 ? `/${Math.round(maxAttempts)}` : ''
   labels.push(`实际重试 ${Math.round(attempts)}${totalText} 次`)
   return labels
