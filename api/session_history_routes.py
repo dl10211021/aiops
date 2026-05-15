@@ -1,8 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from api.errors import raise_http_error
 from api.response_mappers.session import (
     session_history_cleared_response_kwargs,
+    session_history_evidence_response_kwargs,
     session_history_export_response_kwargs,
     session_history_message_deleted_response_kwargs,
     session_history_message_feedback_response_kwargs,
@@ -18,6 +19,7 @@ from core.session_history_service import (
     clear_session_history_messages,
     delete_session_history_message_record,
     export_session_history_markdown_record,
+    find_session_history_evidence_trace,
     get_session_memory_activity_record,
     list_session_history_messages,
     update_session_history_message_feedback_record,
@@ -36,6 +38,28 @@ async def get_session_history(session_id: str, limit: int | None = None):
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_history_response_kwargs(messages))
+
+
+@router.get("/session/{session_id}/history/evidence", response_model=ResponseModel)
+async def get_session_history_evidence(
+    session_id: str,
+    evidence_id: str = "",
+    tool_call_id: str = "",
+    tool: str = "",
+    limit: int = Query(200, ge=1, le=500),
+):
+    """按证据 ID、工具调用 ID 或工具名定位会话中的单条执行轨迹。"""
+    try:
+        result = find_session_history_evidence_trace(
+            session_id,
+            evidence_id=evidence_id,
+            tool_call_id=tool_call_id,
+            tool=tool,
+            limit=limit,
+        )
+    except SessionHistoryServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**session_history_evidence_response_kwargs(result))
 
 
 @router.delete("/session/{session_id}/history", response_model=ResponseModel)

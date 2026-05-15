@@ -78,3 +78,7 @@ OpsCore 是一个基于 FastAPI 与大语言模型 (LLM) 深度整合的 AIOps �
 - 本地调试直接运行 `python main.py`，默认监听在 `http://localhost:8000`。
 - API 交互文档可见于 `http://localhost:8000/docs`。
 - `.env` 文件用于环境变量配置。
+
+## 6. 持续优化计划
+
+- `2026-05-15-hermes-opscore-continuous-improvement-plan.md`：对标 Hermes 的持续优化循环计划，规定每轮开发的任务选择、验证、回比和复盘方式。

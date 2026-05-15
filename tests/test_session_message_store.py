@@ -216,6 +216,29 @@ class SessionMessageStoreTest(unittest.TestCase):
         self.assertIn("用户反馈记忆", feedback_records[0]["content"])
         self.assertIn("禁止把该回答当事实、建议或成功经验沉淀", feedback_records[0]["content"])
 
+    def test_positive_message_feedback_marks_pending_review_candidate(self):
+        assistant_id = self._insert_message(
+            "sid-1",
+            {"role": "assistant", "content": "巡检报告结构清晰"},
+        )
+
+        updated = self.store.update_message_feedback("sid-1", assistant_id, "up")
+
+        self.assertEqual(updated["feedback"]["rating"], "up")
+        self.assertEqual(updated["feedback"]["memory_policy"], "pending_review")
+
+        conn = sqlite3.connect(str(self.db_path))
+        try:
+            row = conn.execute(
+                "SELECT message_json FROM memory WHERE session_id = ? AND id > ? ORDER BY id DESC LIMIT 1",
+                ("sid-1", assistant_id),
+            ).fetchone()
+        finally:
+            conn.close()
+        feedback_memory = json.loads(row[0])
+        self.assertIn("待确认记忆候选", feedback_memory["content"])
+        self.assertIn("人工确认前不得进入长期检索上下文", feedback_memory["content"])
+
     def test_update_message_feedback_rejects_user_messages(self):
         user_id = self._insert_message("sid-1", {"role": "user", "content": "hi"})
 

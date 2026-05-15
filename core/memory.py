@@ -249,6 +249,38 @@ def _memory_polarity(text: str) -> str | None:
     return None
 
 
+def _feedback_evidence_refs(message: dict) -> list[dict]:
+    refs: list[dict] = []
+    for item in message.get("exec_trace") or []:
+        if not isinstance(item, dict):
+            continue
+        evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+        result_meta = item.get("resultMeta") if isinstance(item.get("resultMeta"), dict) else {}
+        evidence_meta = evidence.get("result_meta") if isinstance(evidence.get("result_meta"), dict) else {}
+        tool_policy = result_meta.get("tool_policy") if isinstance(result_meta.get("tool_policy"), dict) else {}
+        if not tool_policy and isinstance(evidence_meta.get("tool_policy"), dict):
+            tool_policy = evidence_meta.get("tool_policy") or {}
+        evidence_id = (
+            item.get("evidenceId")
+            or item.get("evidence_id")
+            or evidence.get("evidence_id")
+            or ""
+        )
+        tool_name = item.get("tool") or evidence.get("tool_name") or tool_policy.get("name") or ""
+        ref = {
+            "type": "tool_evidence" if evidence_id else "tool_trace",
+            "label": "工具证据" if evidence_id else "执行轨迹",
+            "id": str(evidence_id or item.get("tool_call_id") or "").strip(),
+            "tool": str(tool_name or "").strip(),
+            "status": str(item.get("status") or evidence.get("result_status") or "").strip(),
+            "evidence_family": str(tool_policy.get("evidence_family") or "").strip(),
+        }
+        compact = {key: value for key, value in ref.items() if value}
+        if compact:
+            refs.append(compact)
+    return refs[:12]
+
+
 def build_ltm_compression_prompt(text_to_summarize: str) -> str:
     return f"""你是 OpsCore 的 Hermes-style 记忆整理器。请把下面 AIOps 会话轨迹压缩为一条“小而准”的当前会话记忆。
 
@@ -1033,17 +1065,18 @@ class MemoryDB:
         content = sanitize_ltm_summary(str(message.get("content") or ""), max_chars=1800)
         note_text = str(note or "").strip() or "-"
         if normalized_rating == "up":
-            source = "answer_feedback_immediate"
+            source = "answer_feedback_candidate"
             summary = "\n".join(
                 [
                     "【记忆类型】用户认可回答",
                     "【来源】用户点赞",
+                    "【候选状态】待人工确认",
                     "【可信度】高：用户明确点击大拇指认可该回答。",
                     "【适用范围】仅当前会话，不得自动提升到同资产、同主机或同类型资产。",
-                    "【保留方式】成功经验：可在当前会话后续轮次复用，但使用前必须结合实时工具结果验证。",
+                    "【保留方式】候选成功经验：确认前仅用于审计和学习中心展示，不进入模型检索上下文。",
                     "【核心记忆】",
                     content or "-",
-                    "【使用提醒】后续使用前仍需结合当前资产实时工具结果验证。",
+                    "【使用提醒】人工确认后才可作为当前会话后续参考；使用前仍需结合当前资产实时工具结果验证。",
                     f"【用户备注】{note_text}",
                 ]
             )
@@ -1063,6 +1096,11 @@ class MemoryDB:
                 ]
             )
         try:
+            source_refs = [
+                {"type": "session", "label": "来源会话", "id": session_id},
+                {"type": "message", "label": "反馈消息", "id": str(message_id)},
+            ]
+            evidence_refs = _feedback_evidence_refs(message)
             self.file_memory_store.append_memory(
                 scope_id=session_id,
                 summary=summary,
@@ -1074,6 +1112,11 @@ class MemoryDB:
                     "memory_kind": "success_experience" if normalized_rating == "up" else "error_feedback",
                     "retention_tier": "success_experience" if normalized_rating == "up" else "negative_learning",
                     "usage_role": "reuse_after_live_verification" if normalized_rating == "up" else "avoidance",
+                    "review_status": "pending" if normalized_rating == "up" else "confirmed",
+                    "candidate_type": "feedback_success_experience" if normalized_rating == "up" else "feedback_error_correction",
+                    "retrieval_enabled": normalized_rating != "up",
+                    "source_refs": source_refs,
+                    "evidence_refs": evidence_refs,
                 },
             )
         except Exception as exc:

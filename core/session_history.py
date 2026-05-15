@@ -26,6 +26,66 @@ def get_user_visible_session_history(
     return [msg for msg in messages if is_user_visible_history_message(msg)]
 
 
+def find_session_exec_trace(
+    memory_db,
+    session_id: str,
+    *,
+    evidence_id: str = "",
+    tool_call_id: str = "",
+    tool: str = "",
+    limit: int = 200,
+) -> dict | None:
+    evidence_id = str(evidence_id or "").strip()
+    tool_call_id = str(tool_call_id or "").strip()
+    tool = str(tool or "").strip()
+    if not any([evidence_id, tool_call_id, tool]):
+        raise ValueError("必须提供 evidence_id、tool_call_id 或 tool")
+
+    messages = get_user_visible_session_history(memory_db, session_id, limit=limit)
+    for message in messages:
+        traces = message.get("exec_trace") or message.get("execTrace") or []
+        if not isinstance(traces, list):
+            continue
+        for trace in traces:
+            if not isinstance(trace, dict):
+                continue
+            if _exec_trace_matches(trace, evidence_id=evidence_id, tool_call_id=tool_call_id, tool=tool):
+                return {
+                    "trace": trace,
+                    "message": {
+                        "id": message.get("_memory_id") or message.get("id"),
+                        "role": message.get("role"),
+                        "created_at": message.get("created_at") or message.get("timestamp"),
+                        "preview": _message_preview(message),
+                    },
+                }
+    return None
+
+
+def _exec_trace_matches(
+    trace: Mapping,
+    *,
+    evidence_id: str = "",
+    tool_call_id: str = "",
+    tool: str = "",
+) -> bool:
+    evidence = trace.get("evidence") if isinstance(trace.get("evidence"), Mapping) else {}
+    trace_evidence_ids = {
+        str(trace.get("evidenceId") or "").strip(),
+        str(trace.get("evidence_id") or "").strip(),
+        str(evidence.get("evidence_id") or "").strip(),
+    }
+    trace_tool_call_ids = {
+        str(trace.get("toolCallId") or "").strip(),
+        str(trace.get("tool_call_id") or "").strip(),
+    }
+    if evidence_id and evidence_id in trace_evidence_ids:
+        return True
+    if tool_call_id and tool_call_id in trace_tool_call_ids:
+        return True
+    return bool(tool and str(trace.get("tool") or "").strip() == tool)
+
+
 def is_user_visible_history_message(message: Mapping) -> bool:
     role = message.get("role")
     if role in USER_VISIBLE_ROLES:
@@ -213,7 +273,7 @@ def build_session_memory_activity(memory_db, session_id: str) -> dict:
         rating = feedback.get("rating") if isinstance(feedback, dict) else None
         if rating in {"up", "down"}:
             memory_policy = feedback.get("memory_policy") or (
-                "promote" if rating == "up" else "do_not_promote_answer"
+                "pending_review" if rating == "up" else "do_not_promote_answer"
             )
             feedback_rows.append(
                 {
@@ -265,7 +325,8 @@ def build_session_memory_activity(memory_db, session_id: str) -> dict:
         "summary": {
             "referenced_count": sum(len(row.get("refs") or []) for row in referenced),
             "referenced_messages": len(referenced),
-            "promoted_count": sum(1 for row in feedback_rows if row.get("rating") == "up"),
+            "promoted_count": sum(1 for row in feedback_rows if row.get("memory_policy") == "promote"),
+            "pending_candidate_count": sum(1 for row in feedback_rows if row.get("memory_policy") == "pending_review"),
             "rejected_count": sum(1 for row in feedback_rows if row.get("rating") == "down"),
             "pending_conflict_count": len(pending_conflicts),
         },

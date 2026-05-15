@@ -5,6 +5,7 @@ from core.session_history_service import (
     clear_session_history_messages,
     delete_session_history_message_record,
     export_session_history_markdown_record,
+    find_session_history_evidence_trace,
     get_session_memory_activity_record,
     list_session_history_messages,
     update_session_history_message_feedback_record,
@@ -98,6 +99,42 @@ class TestSessionHistoryService(unittest.TestCase):
             {"id": 8, "feedback": {"rating": "down", "note": "不准确"}},
         )
         self.assertEqual(memory_db.deleted, [("sid-1", 7)])
+
+    def test_find_session_history_evidence_trace_returns_single_trace(self):
+        memory_db = FakeMemoryDB(
+            [
+                {
+                    "id": 12,
+                    "role": "assistant",
+                    "content": "执行完成",
+                    "exec_trace": [
+                        {
+                            "tool": "linux_execute_command",
+                            "toolCallId": "call-linux-1",
+                            "evidence": {"evidence_id": "tev-sid-1-call-1"},
+                            "status": "done",
+                        }
+                    ],
+                }
+            ]
+        )
+
+        result = find_session_history_evidence_trace(
+            "sid-1",
+            evidence_id="tev-sid-1-call-1",
+            memory_db=memory_db,
+        )
+
+        self.assertEqual(result["trace"]["tool"], "linux_execute_command")
+        self.assertEqual(result["message"]["id"], 12)
+
+    def test_find_session_history_evidence_trace_maps_missing_to_404(self):
+        memory_db = FakeMemoryDB([])
+
+        with self.assertRaises(SessionHistoryServiceError) as ctx:
+            find_session_history_evidence_trace("sid-1", evidence_id="missing", memory_db=memory_db)
+
+        self.assertEqual(ctx.exception.status_code, 404)
 
     def test_value_errors_map_to_not_found(self):
         memory_db = FailingMemoryDB(ValueError("message not found"))

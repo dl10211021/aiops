@@ -6,6 +6,7 @@ from core.session_history import (
     build_session_history_markdown,
     clear_session_history,
     delete_session_message,
+    find_session_exec_trace,
     get_user_visible_session_history,
     is_user_visible_history_message,
     session_history_export_title,
@@ -79,6 +80,38 @@ class TestSessionHistory(unittest.TestCase):
 
         self.assertEqual(memory_db.limit, 1)
         self.assertEqual(messages, [{"role": "assistant", "content": "new"}])
+
+    def test_find_session_exec_trace_matches_evidence_and_message_preview(self):
+        memory_db = FakeMemoryDB()
+        memory_db.messages = [
+            {"role": "user", "content": "检查数据库"},
+            {
+                "id": 9,
+                "role": "assistant",
+                "content": "已经查询。",
+                "exec_trace": [
+                    {
+                        "tool": "db_execute_query",
+                        "toolCallId": "call-db-1",
+                        "evidenceId": "tev-sid-1-call-1",
+                        "status": "done",
+                    }
+                ],
+            },
+        ]
+
+        result = find_session_exec_trace(memory_db, "sid-1", evidence_id="tev-sid-1-call-1")
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["trace"]["tool"], "db_execute_query")
+        self.assertEqual(result["message"]["id"], 9)
+        self.assertEqual(result["message"]["preview"], "已经查询。")
+
+    def test_find_session_exec_trace_requires_lookup_key(self):
+        memory_db = FakeMemoryDB()
+
+        with self.assertRaises(ValueError):
+            find_session_exec_trace(memory_db, "sid-1")
 
     def test_manual_stop_system_message_is_user_visible_for_audit(self):
         memory_db = FakeMemoryDB()
@@ -350,7 +383,7 @@ class TestSessionHistory(unittest.TestCase):
                 "feedback": {
                     "rating": "up",
                     "created_at": "2026-05-04 08:00:00",
-                    "memory_policy": "promote",
+                    "memory_policy": "pending_review",
                 },
             },
             {
@@ -368,11 +401,12 @@ class TestSessionHistory(unittest.TestCase):
         activity = build_session_memory_activity(memory_db, "sid-1")
 
         self.assertEqual(activity["summary"]["referenced_count"], 1)
-        self.assertEqual(activity["summary"]["promoted_count"], 1)
+        self.assertEqual(activity["summary"]["promoted_count"], 0)
+        self.assertEqual(activity["summary"]["pending_candidate_count"], 1)
         self.assertEqual(activity["summary"]["rejected_count"], 1)
         self.assertEqual(activity["summary"]["pending_conflict_count"], 2)
         self.assertEqual(activity["referenced"][0]["message_id"], 7)
-        self.assertEqual(activity["feedback"][0]["memory_policy"], "promote")
+        self.assertEqual(activity["feedback"][0]["memory_policy"], "pending_review")
         self.assertEqual(activity["feedback"][1]["memory_policy"], "do_not_promote_answer")
         self.assertEqual(activity["pending_conflicts"][1]["operation"], "negative_feedback")
         self.assertEqual(activity["pending_conflicts"][1]["reason"], "风险误判")

@@ -208,6 +208,7 @@ export interface SessionMemoryActivity {
     referenced_count: number
     referenced_messages: number
     promoted_count: number
+    pending_candidate_count?: number
     rejected_count: number
     pending_conflict_count: number
   }
@@ -1237,6 +1238,94 @@ export interface MemoryPendingConflict {
   existing_preview?: string
   new_preview?: string
   source_session_id?: string
+}
+
+export interface MemoryCandidate {
+  candidate_id: string
+  path: string
+  scope_id: string
+  timestamp: string
+  source_session_id?: string
+  summary: string
+  summary_preview?: string
+  memory_kind?: string
+  memory_kind_label?: string
+  candidate_type?: string
+  review_status?: string
+  retrieval_enabled?: boolean
+  feedback_target_message_id?: number | string
+  source_refs?: MemoryCandidateRef[]
+  evidence_refs?: MemoryCandidateRef[]
+  recommended_action?: string
+}
+
+export interface MemoryCandidateRef {
+  type?: string
+  label?: string
+  id?: string
+  path?: string
+  tool?: string
+  status?: string
+  evidence_family?: string
+}
+
+export interface LearningCandidatePublishedArtifact {
+  artifact_id: string
+  target_type: 'runbook' | 'skill' | string
+  file_path: string
+  status: string
+  generated_by: string
+  generated_reason: string
+  generated_at: string
+  content_preview?: string
+  artifact_sha256?: string
+  content_sha256?: string
+  artifact_size?: number | string
+}
+
+export interface LearningCandidatePublishedArtifactDetail extends LearningCandidatePublishedArtifact {
+  candidate_id: string
+  content: string
+}
+
+export interface LearningCandidate {
+  id: string
+  target_type: 'runbook' | 'skill' | string
+  status: string
+  created_at: string
+  updated_at?: string
+  actor?: string
+  source_candidate_id: string
+  source_path: string
+  source_session_id?: string
+  feedback_target_message_id?: number | string
+  summary: string
+  summary_preview?: string
+  memory_kind?: string
+  source_refs?: MemoryCandidateRef[]
+  evidence_refs?: MemoryCandidateRef[]
+  next_action?: string
+  quality_checklist?: Array<{
+    key: string
+    label: string
+    ok: boolean
+    note?: string
+  }>
+  quality_events?: Array<{
+    actor: string
+    reason: string
+    timestamp: string
+    passed?: number
+    total?: number
+  }>
+  status_events?: Array<{
+    from?: string
+    to: string
+    actor: string
+    reason: string
+    timestamp: string
+  }>
+  published_artifact?: LearningCandidatePublishedArtifact
 }
 
 export interface MemoryReviewItem extends MemoryItem {

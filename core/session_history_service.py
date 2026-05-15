@@ -8,6 +8,7 @@ from core.session_history import (
     build_session_history_markdown,
     clear_session_history,
     delete_session_message,
+    find_session_exec_trace,
     get_user_visible_session_history,
     update_session_message_content,
     update_session_message_feedback,
@@ -38,6 +39,33 @@ def list_session_history_messages(
         )
     except Exception as exc:
         raise SessionHistoryServiceError(500, str(exc)) from exc
+
+
+def find_session_history_evidence_trace(
+    session_id: str,
+    *,
+    evidence_id: str = "",
+    tool_call_id: str = "",
+    tool: str = "",
+    limit: int = 200,
+    memory_db: Any | None = None,
+) -> dict:
+    try:
+        result = find_session_exec_trace(
+            _resolve_memory_db(memory_db),
+            session_id,
+            evidence_id=evidence_id,
+            tool_call_id=tool_call_id,
+            tool=tool,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise SessionHistoryServiceError(400, str(exc)) from exc
+    except Exception as exc:
+        raise SessionHistoryServiceError(500, str(exc)) from exc
+    if not result:
+        raise SessionHistoryServiceError(404, "未找到匹配的工具证据。")
+    return result
 
 
 def clear_session_history_messages(

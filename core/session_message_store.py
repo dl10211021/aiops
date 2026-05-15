@@ -141,7 +141,7 @@ class SessionMessageStore:
                 "rating": normalized_rating,
                 "note": str(note or "").strip(),
                 "created_at": now,
-                "memory_policy": "promote" if normalized_rating == "up" else "do_not_promote_answer",
+                "memory_policy": "pending_review" if normalized_rating == "up" else "do_not_promote_answer",
             }
             message["feedback"] = feedback
             cursor.execute(
@@ -150,7 +150,7 @@ class SessionMessageStore:
             )
             label = "好评" if normalized_rating == "up" else "差评"
             policy = (
-                "用户认为这条 AI 回答很好，可作为后续同类任务的表达和排查参考，但仍需基于实时工具结果验证。"
+                "用户认为这条 AI 回答很好，先生成待确认记忆候选；人工确认前不得进入长期检索上下文。"
                 if normalized_rating == "up"
                 else "用户认为这条 AI 回答较差或错误，禁止把该回答当事实、建议或成功经验沉淀；后续遇到同类问题要主动规避。"
             )

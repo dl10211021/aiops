@@ -38,6 +38,27 @@ export async function getSessionHistory(sessionId: string, limit?: number, optio
   )
 }
 
+export async function getSessionHistoryEvidenceTrace(
+  sessionId: string,
+  params: {
+    evidenceId?: string
+    toolCallId?: string
+    tool?: string
+    limit?: number
+  },
+  options?: RequestInit,
+) {
+  const search = new URLSearchParams()
+  if (params.evidenceId) search.set('evidence_id', params.evidenceId)
+  if (params.toolCallId) search.set('tool_call_id', params.toolCallId)
+  if (params.tool) search.set('tool', params.tool)
+  search.set('limit', String(params.limit || 200))
+  return request<{ trace: ExecTraceItem; message?: { id?: string | number; role?: string; created_at?: string | number; preview?: string } }>(
+    `/session/${sessionId}/history/evidence?${search.toString()}`,
+    options,
+  )
+}
+
 export async function updateSessionHistoryMessage(sessionId: string, messageId: number, content: string) {
   return request<{ message: { role: string; content: string; _memory_id?: number; feedback?: SessionHistoryApiMessage['feedback'] } }>(
     `/session/${sessionId}/history/${messageId}`,

@@ -67,6 +67,78 @@ def test_tool_policy_chips_are_session_mode_aware():
     assert "border-ops-alert/45 bg-ops-alert/10 text-ops-alert" in presentation
 
 
+def test_memory_candidate_source_navigation_can_focus_history_messages():
+    knowledge = Path("frontend/src/components/views/KnowledgeBase.tsx").read_text(encoding="utf-8")
+    knowledge_parts = Path("frontend/src/components/views/KnowledgeBaseParts.tsx").read_text(encoding="utf-8")
+    message_list = Path("frontend/src/components/chat/ChatMessageList.tsx").read_text(encoding="utf-8")
+
+    assert "handleFocusCandidateMessage" in knowledge
+    assert "setCurrentSession(item.source_session_id)" in knowledge
+    assert "opscore:scroll-chat-message" in knowledge
+    assert "定位消息" in knowledge_parts
+    assert "onFocusMessage(item)" in knowledge_parts
+    assert "function messageMatchesFocus" in message_list
+    assert "data-message-ids={messageDomIds(msg).join('|')}" in message_list
+    assert "`mem-${message.memoryId}`" in message_list
+
+
+def test_memory_candidate_evidence_dialog_reuses_session_exec_trace():
+    knowledge = Path("frontend/src/components/views/KnowledgeBase.tsx").read_text(encoding="utf-8")
+    knowledge_parts = Path("frontend/src/components/views/KnowledgeBaseParts.tsx").read_text(encoding="utf-8")
+    session_api = Path("frontend/src/api/sessionHistory.ts").read_text(encoding="utf-8")
+
+    assert "MemoryCandidateEvidenceDialog" in knowledge
+    assert "handleOpenCandidateEvidence" in knowledge
+    assert "findCandidateEvidenceTrace" in knowledge
+    assert "getSessionHistoryEvidenceTrace(sourceSessionId, candidateEvidenceQuery(ref))" in knowledge
+    assert "getSessionHistory(sourceSessionId, 200)" in knowledge
+    assert "normalizeHistoryMessages(sourceSessionId" in knowledge
+    assert "setSessionMessages(sourceSessionId, messages)" in knowledge
+    assert "/history/evidence?" in session_api
+    assert "onOpenEvidence={(item, ref) => void handleOpenCandidateEvidence(item, ref)}" in knowledge
+    assert "onOpenEvidence(item, ref)" in knowledge_parts
+    assert "ToolTraceList items={[trace]}" in knowledge_parts
+    assert "工具证据详情" in knowledge_parts
+
+
+def test_memory_candidates_panel_splits_runbook_and_skill_candidates():
+    knowledge_data = Path("frontend/src/components/views/useKnowledgeBaseData.ts").read_text(encoding="utf-8")
+    knowledge_api = Path("frontend/src/api/knowledge.ts").read_text(encoding="utf-8")
+    knowledge_parts = Path("frontend/src/components/views/KnowledgeBaseParts.tsx").read_text(encoding="utf-8")
+
+    assert "listMemoryCandidates(80, ['pending', 'runbook_candidate', 'skill_candidate']" in knowledge_data
+    assert "listMemoryLearningCandidates(80, '', { signal })" in knowledge_data
+    assert "updateMemoryLearningCandidateStatus(item.id, status, reason)" in knowledge_data
+    assert "updateMemoryLearningCandidateQualityChecklist(item.id, checklist, reason)" in knowledge_data
+    assert "statuses.join(',')" in knowledge_api
+    assert "/knowledge/memory/learning-candidates?" in knowledge_api
+    assert "/status" in knowledge_api
+    assert "/quality-checklist" in knowledge_api
+    assert "待确认候选" in knowledge_parts
+    assert "Runbook 候选" in knowledge_parts
+    assert "Skill 候选" in knowledge_parts
+    assert "发布候选池" in knowledge_parts
+    assert "learningCandidates.slice(0, 8).map" in knowledge_parts
+    assert "learningCandidateStatusActions" in knowledge_parts
+    assert "learningCandidateQualityReady" in knowledge_parts
+    assert "learningCandidateActionBlocked" in knowledge_parts
+    assert "需先补齐并保存发布前质量清单" in knowledge_parts
+    assert "需补齐清单" in knowledge_parts
+    assert "最近状态" in knowledge_parts
+    assert "onUpdateLearningStatus(item, action.status, action.reason)" in knowledge_parts
+    assert "LearningCandidateDetailDrawer" in knowledge_parts
+    assert "发布候选详情" in knowledge_parts
+    assert "发布前质量清单" in knowledge_parts
+    assert "learningCandidateChecklist" in knowledge_parts
+    assert "保存质量清单" in knowledge_parts
+    assert "onUpdateLearningQuality" in knowledge_parts
+    assert "quality_events" in Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
+    assert "查看详情" in knowledge_parts
+    assert "item.review_status === 'runbook_candidate'" in knowledge_parts
+    assert "item.review_status === 'skill_candidate'" in knowledge_parts
+    assert "const actionable = (item.review_status || 'pending') === 'pending'" in knowledge_parts
+
+
 def test_empty_tool_policy_is_not_rendered_as_unknown_chips():
     presentation = Path(
         "frontend/src/features/sessions/toolPolicyPresentation.ts"

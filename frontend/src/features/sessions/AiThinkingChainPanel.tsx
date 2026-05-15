@@ -633,7 +633,7 @@ function MemoryActivityPanel({
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2">
         <MemoryStat label="引用记忆" value={summary.referenced_count} />
-        <MemoryStat label="点赞沉淀" value={summary.promoted_count} />
+        <MemoryStat label="候选记忆" value={summary.pending_candidate_count || 0} />
         <MemoryStat label="点踩纠错" value={summary.rejected_count} warn />
         <MemoryStat label="待确认" value={summary.pending_conflict_count} warn />
       </div>
@@ -657,7 +657,7 @@ function MemoryActivityPanel({
           <article key={`${row.message_id || index}-feedback`} className="rounded-md border border-ops-surface0 bg-ops-dark/30 px-3 py-2">
             <div className="flex items-center justify-between gap-2 text-[11px]">
               <span className={row.rating === 'up' ? 'text-ops-accent' : 'text-amber-300'}>
-                {row.rating === 'up' ? '点赞保留记忆' : '点踩纠错，不保留'}
+                {row.rating === 'up' ? '点赞生成候选' : '点踩纠错，不保留'}
               </span>
               <span className="font-mono text-[10px] text-ops-overlay">{row.created_at || ''}</span>
             </div>

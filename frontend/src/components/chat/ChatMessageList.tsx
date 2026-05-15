@@ -10,6 +10,27 @@ const messageVisibilityStyle: CSSProperties = {
   containIntrinsicSize: '160px',
 }
 
+function messageMatchesFocus(message: ChatMessage, targetMessageId: string) {
+  if (!targetMessageId) return false
+  return (
+    message.id === targetMessageId
+    || String(message.memoryId || '') === targetMessageId
+    || String(message._memory_id || '') === targetMessageId
+    || (message.memoryId !== undefined && `mem-${message.memoryId}` === targetMessageId)
+    || (message._memory_id !== undefined && `mem-${message._memory_id}` === targetMessageId)
+  )
+}
+
+function messageDomIds(message: ChatMessage) {
+  return [
+    message.id,
+    message.memoryId !== undefined ? String(message.memoryId) : '',
+    message._memory_id !== undefined ? String(message._memory_id) : '',
+    message.memoryId !== undefined ? `mem-${message.memoryId}` : '',
+    message._memory_id !== undefined ? `mem-${message._memory_id}` : '',
+  ].filter(Boolean)
+}
+
 interface ChatMessageListProps {
   containerRef: RefObject<HTMLDivElement | null>
   isStreaming: boolean
@@ -60,16 +81,16 @@ function ChatMessageList({
     const container = containerRef.current
     if (!container) return
     const onScrollToMessage = (event: Event) => {
-      const messageId = (event as CustomEvent<{ messageId?: string }>).detail?.messageId
+      const messageId = String((event as CustomEvent<{ messageId?: string | number }>).detail?.messageId || '')
       if (!messageId) return
-      const targetIndex = messages.findIndex((item) => item.id === messageId)
+      const targetIndex = messages.findIndex((item) => messageMatchesFocus(item, messageId))
       if (targetIndex >= 0 && targetIndex < hiddenMessageCount) {
         pendingScrollMessageRef.current = messageId
         setVisibleMessageCount((current) => Math.max(current, messages.length - targetIndex))
         return
       }
       const target = Array.from(container.querySelectorAll<HTMLElement>('[data-message-id]'))
-        .find((item) => item.dataset.messageId === messageId)
+        .find((item) => (item.dataset.messageIds || item.dataset.messageId || '').split('|').includes(messageId))
       if (!target) return
       target.scrollIntoView({ behavior: 'smooth', block: 'center' })
       setHighlightedMessageId(messageId)
@@ -84,7 +105,7 @@ function ChatMessageList({
     const container = containerRef.current
     if (!messageId || !container) return
     const target = Array.from(container.querySelectorAll<HTMLElement>('[data-message-id]'))
-      .find((item) => item.dataset.messageId === messageId)
+      .find((item) => (item.dataset.messageIds || item.dataset.messageId || '').split('|').includes(messageId))
     if (!target) return
     pendingScrollMessageRef.current = null
     target.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -115,6 +136,7 @@ function ChatMessageList({
           <div
             key={msg.id}
             data-message-id={msg.id}
+            data-message-ids={messageDomIds(msg).join('|')}
             data-message-role={msg.role}
             data-message-time={msg.timestamp}
             className={`rounded-2xl transition-[box-shadow,background-color] duration-300 ${

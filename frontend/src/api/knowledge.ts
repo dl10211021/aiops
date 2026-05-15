@@ -1,4 +1,26 @@
-import type { ApiResponse, KnowledgeCompileQueueItem, KnowledgeDocumentContent, KnowledgeFile, KnowledgeListPagination, KnowledgeListSummary, KnowledgeReindexResult, KnowledgeVaultGraph, KnowledgeVaultSearchResult, KnowledgeVectorStoreStatus, MemoryDetail, MemoryItem, MemoryPendingConflict, MemoryQualityReport, MemoryReviewItem, MemorySearchResult, MemoryStoreInfo, MemoryVersion } from '@/types'
+import type {
+  ApiResponse,
+  KnowledgeCompileQueueItem,
+  KnowledgeDocumentContent,
+  KnowledgeFile,
+  KnowledgeListPagination,
+  KnowledgeListSummary,
+  KnowledgeReindexResult,
+  KnowledgeVaultGraph,
+  KnowledgeVaultSearchResult,
+  KnowledgeVectorStoreStatus,
+  LearningCandidate,
+  LearningCandidatePublishedArtifactDetail,
+  MemoryCandidate,
+  MemoryDetail,
+  MemoryItem,
+  MemoryPendingConflict,
+  MemoryQualityReport,
+  MemoryReviewItem,
+  MemorySearchResult,
+  MemoryStoreInfo,
+  MemoryVersion,
+} from '@/types'
 import { apiUrl, authHeaders, request } from './http'
 
 export async function listKnowledgeDocuments(params?: {
@@ -196,6 +218,83 @@ export async function redactMemoryVersion(versionId: string) {
 
 export async function listMemoryPendingConflicts(limit = 50, options?: RequestInit) {
   return request<{ items: MemoryPendingConflict[] }>(`/knowledge/memory/pending?limit=${limit}`, options)
+}
+
+export async function listMemoryCandidates(limit = 50, statuses = ['pending'], options?: RequestInit) {
+  const search = new URLSearchParams()
+  search.set('limit', String(limit))
+  search.set('statuses', statuses.join(','))
+  return request<{ items: MemoryCandidate[] }>(`/knowledge/memory/candidates?${search.toString()}`, options)
+}
+
+export async function listMemoryLearningCandidates(limit = 50, targetType = '', options?: RequestInit) {
+  const search = new URLSearchParams()
+  search.set('limit', String(limit))
+  if (targetType) search.set('target_type', targetType)
+  return request<{ items: LearningCandidate[] }>(`/knowledge/memory/learning-candidates?${search.toString()}`, options)
+}
+
+export type LearningCandidateStatus = 'draft' | 'reviewing' | 'approved' | 'rejected' | 'published'
+
+export async function updateMemoryLearningCandidateStatus(
+  candidateId: string,
+  status: LearningCandidateStatus,
+  reason: string,
+  actor = 'user',
+) {
+  return request<{ item: LearningCandidate }>(
+    `/knowledge/memory/learning-candidates/${encodeURIComponent(candidateId)}/status`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ status, reason, actor }),
+    },
+  )
+}
+
+export async function readLearningCandidatePublishArtifact(candidateId: string) {
+  return request<{ artifact: LearningCandidatePublishedArtifactDetail }>(
+    `/knowledge/memory/learning-candidates/${encodeURIComponent(candidateId)}/artifact`,
+  )
+}
+
+export async function downloadLearningCandidatePublishArtifact(candidateId: string) {
+  const res = await fetch(
+    apiUrl(`/knowledge/memory/learning-candidates/${encodeURIComponent(candidateId)}/artifact?download=true`),
+    { headers: authHeaders() },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error((err && typeof err === 'object' && (err as { detail?: string }).detail) || res.statusText)
+  }
+  const cd = res.headers.get('content-disposition') || ''
+  const filenameMatch = cd.match(/filename="?([^"]+)"?/)
+  const filename = filenameMatch ? filenameMatch[1] : `${candidateId}.md`
+  const blob = await res.blob()
+  return { blob, filename }
+}
+
+export async function updateMemoryLearningCandidateQualityChecklist(
+  candidateId: string,
+  checklist: NonNullable<LearningCandidate['quality_checklist']>,
+  reason: string,
+  actor = 'user',
+) {
+  return request<{ item: LearningCandidate }>(
+    `/knowledge/memory/learning-candidates/${encodeURIComponent(candidateId)}/quality-checklist`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ checklist, reason, actor }),
+    },
+  )
+}
+
+export type MemoryCandidateAction = 'confirm' | 'reject' | 'to_runbook' | 'to_skill'
+
+export async function resolveMemoryCandidate(candidateId: string, action: MemoryCandidateAction) {
+  return request<{ version: MemoryVersion }>('/knowledge/memory/candidates/resolve', {
+    method: 'POST',
+    body: JSON.stringify({ candidate_id: candidateId, action }),
+  })
 }
 
 export async function listMemoryReviewItems(staleDays = 180, limit = 50, options?: RequestInit) {

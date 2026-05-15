@@ -354,13 +354,21 @@ class MemoryPolicyTests(unittest.TestCase):
         self.assertEqual(db.file_memory_store.appended[0]["metadata"]["source"], "asset_profile")
         self.assertIn("【记忆类型】资产画像", db.file_memory_store.appended[0]["summary"])
 
-    def test_positive_feedback_is_promoted_to_file_memory_immediately(self):
+    def test_positive_feedback_is_persisted_as_pending_candidate_memory(self):
         class FakeSessionStore:
             def update_message_feedback(self, session_id, message_id, rating, note=None):
                 return {
                     "role": "assistant",
                     "content": "这条巡检回答被用户认可。",
                     "feedback": {"rating": rating, "note": note or ""},
+                    "exec_trace": [
+                        {
+                            "tool": "linux_execute_command",
+                            "status": "done",
+                            "evidenceId": "tev-sid-1-call-1",
+                            "resultMeta": {"tool_policy": {"evidence_family": "host_cli"}},
+                        }
+                    ],
                 }
 
         db = MemoryDB.__new__(MemoryDB)
@@ -374,10 +382,22 @@ class MemoryPolicyTests(unittest.TestCase):
         self.assertEqual(db.file_memory_store.appended[0]["scope_id"], "sid-1")
         self.assertEqual(
             db.file_memory_store.appended[0]["metadata"]["source"],
-            "answer_feedback_immediate",
+            "answer_feedback_candidate",
         )
         self.assertEqual(db.file_memory_store.appended[0]["metadata"]["memory_kind"], "success_experience")
-        self.assertIn("【保留方式】成功经验", db.file_memory_store.appended[0]["summary"])
+        self.assertEqual(db.file_memory_store.appended[0]["metadata"]["review_status"], "pending")
+        self.assertFalse(db.file_memory_store.appended[0]["metadata"]["retrieval_enabled"])
+        self.assertEqual(
+            db.file_memory_store.appended[0]["metadata"]["source_refs"],
+            [
+                {"type": "session", "label": "来源会话", "id": "sid-1"},
+                {"type": "message", "label": "反馈消息", "id": "7"},
+            ],
+        )
+        self.assertEqual(db.file_memory_store.appended[0]["metadata"]["evidence_refs"][0]["id"], "tev-sid-1-call-1")
+        self.assertEqual(db.file_memory_store.appended[0]["metadata"]["evidence_refs"][0]["tool"], "linux_execute_command")
+        self.assertIn("【候选状态】待人工确认", db.file_memory_store.appended[0]["summary"])
+        self.assertIn("确认前仅用于审计和学习中心展示", db.file_memory_store.appended[0]["summary"])
 
     def test_negative_feedback_is_persisted_as_correction_memory_only(self):
         class FakeSessionStore:
