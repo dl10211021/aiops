@@ -124,7 +124,43 @@ class TestLegacyCommandService(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertIn("需要后端审批", str(ctx.exception.detail))
+        self.assertEqual(ctx.exception.detail["code"], "approval_required")
+        self.assertEqual(ctx.exception.detail["tool"], "linux_execute_command")
+        self.assertIn("runtime_policy", ctx.exception.detail["approval_sources"])
         self.assertEqual(dispatcher.executions, [])
+
+    def test_runtime_and_safety_policy_reasons_both_reported_in_detail(self):
+        sessions = {"sid-linux": {"info": session_info("linux", "ssh")}}
+        dispatcher = FakeDispatcher(requires_approval=True)
+        with patch(
+            "core.legacy_command_service.tool_policy_metadata",
+            return_value={
+                "name": "linux_execute_command",
+                "operation_mode": "destructive",
+                "approval_policy": "always_required",
+                "destructive": True,
+                "concurrency_safe": False,
+                "timeout_policy": {"default_seconds": 1},
+                "retry_policy": {"max_attempts": 1, "retry_on": []},
+                "evidence_family": "host_cli",
+            },
+        ):
+            with self.assertRaises(LegacyCommandServiceError) as ctx:
+                asyncio.run(
+                    execute_legacy_command_record(
+                        sessions,
+                        FakeToolRegistry(),
+                        session_id="sid-linux",
+                        command="uptime",
+                        dispatcher=dispatcher,
+                    )
+                )
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail["approval_sources"], ["runtime_policy", "safety_policy"])
+        self.assertTrue(ctx.exception.detail["safety_policy"]["required"])
+        self.assertTrue(ctx.exception.detail["runtime_policy"]["required"])
+        self.assertEqual(ctx.exception.detail["safety_policy"]["reason"], "risk")
 
     def test_non_json_dispatcher_result_returns_bad_request(self):
         sessions = {"sid-linux": {"info": session_info("linux", "ssh")}}

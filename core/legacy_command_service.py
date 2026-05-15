@@ -142,6 +142,13 @@ async def execute_legacy_command_record(
     resolved_dispatcher = _resolve_dispatcher(dispatcher)
     needs_approval, approval_reason = resolved_dispatcher.check_approval_needed(tool_name, tool_args, context)
     runtime_tool_policy = tool_policy_metadata(tool_name)
+    operation_mode = str(runtime_tool_policy.get("operation_mode") or "")
+    approval_policy = str(runtime_tool_policy.get("approval_policy") or "")
+    runtime_policy_required = bool(
+        runtime_tool_policy.get("destructive")
+        or approval_policy == "always_required"
+        or operation_mode == "external_effect"
+    )
     execution_gate = evaluate_tool_execution_gate(
         tool_name,
         safety_needs_approval=needs_approval,
@@ -149,9 +156,30 @@ async def execute_legacy_command_record(
         policy=runtime_tool_policy,
     )
     if execution_gate.approval_required:
+        approval_sources: list[str] = []
+        if runtime_policy_required:
+            approval_sources.append("runtime_policy")
+        if needs_approval:
+            approval_sources.append("safety_policy")
         raise LegacyCommandServiceError(
             409,
-            f"该操作需要后端审批：{execution_gate.reason}。请在聊天会话中执行，以便弹出审批确认。",
+            {
+                "message": f"该操作需要后端审批：{execution_gate.reason}。请在聊天会话中执行，以便弹出审批确认。",
+                "code": "approval_required",
+                "tool": tool_name,
+                "approval_sources": approval_sources,
+                "safety_policy": {
+                    "required": needs_approval,
+                    "reason": approval_reason,
+                },
+                "runtime_policy": {
+                    "required": runtime_policy_required,
+                    "reason": execution_gate.reason if runtime_policy_required else "",
+                    "operation_mode": operation_mode,
+                    "approval_policy": approval_policy,
+                },
+                "policy": runtime_tool_policy,
+            },
         )
 
     runtime_execution: dict[str, Any] = {}
