@@ -22,6 +22,7 @@ interface ChatMessageListProps {
   onInteraction: (requestId: string, value: string, label?: string) => void
   onTraceActionRule: (action: SafetyPolicyAction, decision: SafetyPolicyDecision) => void
   policyRuleBusy: string | null
+  sessionMode?: 'readonly' | 'readwrite'
   showInlineTrace?: boolean
 }
 
@@ -37,6 +38,7 @@ function ChatMessageList({
   onInteraction,
   onTraceActionRule,
   policyRuleBusy,
+  sessionMode,
 }: ChatMessageListProps) {
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
   const [visibleMessageCount, setVisibleMessageCount] = useState(DEFAULT_VISIBLE_MESSAGE_COUNT)
@@ -129,6 +131,7 @@ function ChatMessageList({
               onInteraction={onInteraction}
               onTraceActionRule={onTraceActionRule}
               policyRuleBusy={policyRuleBusy}
+              sessionMode={sessionMode}
               onEdit={onEdit}
               onDelete={onDelete}
               onFeedback={onFeedback}
@@ -146,6 +149,7 @@ export default memo(ChatMessageList, (prev, next) => (
   && prev.sessionId === next.sessionId
   && prev.isStreaming === next.isStreaming
   && prev.policyRuleBusy === next.policyRuleBusy
+  && prev.sessionMode === next.sessionMode
   && prev.containerRef === next.containerRef
   && prev.showInlineTrace === next.showInlineTrace
 ))

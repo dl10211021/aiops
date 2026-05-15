@@ -77,6 +77,24 @@ export function approvalToneClass(policy: string) {
   }[policy] || 'border-ops-surface1/65 bg-ops-dark/35 text-ops-subtext'
 }
 
+export function sessionModePolicyToneClass(operationMode: string, approvalPolicy: string, sessionMode?: 'readonly' | 'readwrite') {
+  const writeCapable = ['write', 'read_write', 'destructive', 'external_effect'].includes(operationMode)
+  if (sessionMode === 'readonly' && writeCapable) {
+    return 'border-ops-alert/45 bg-ops-alert/10 text-ops-alert'
+  }
+  if (approvalPolicy === 'guarded_write' || writeCapable) {
+    return 'border-amber-400/40 bg-amber-400/10 text-amber-100'
+  }
+  return approvalToneClass(approvalPolicy)
+}
+
+export function sessionModePolicyLabel(operationMode: string, approvalPolicy: string, sessionMode?: 'readonly' | 'readwrite') {
+  const writeCapable = ['write', 'read_write', 'destructive', 'external_effect'].includes(operationMode)
+  if (sessionMode === 'readonly' && writeCapable) return '只读限制'
+  if (sessionMode === 'readwrite' && (approvalPolicy === 'guarded_write' || writeCapable)) return '读写受控'
+  return approvalLabel(approvalPolicy)
+}
+
 export function evidenceToneClass(family: string) {
   return {
     database: 'border-sky-400/35 bg-sky-400/10 text-sky-100',

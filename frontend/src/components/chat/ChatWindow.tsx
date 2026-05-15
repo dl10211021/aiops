@@ -88,6 +88,7 @@ export default function ChatWindow() {
 
   const messages = session?.messages || []
   const isStreaming = session?.isStreaming || false
+  const sessionMode: 'readonly' | 'readwrite' = session?.isReadWriteMode ? 'readwrite' : 'readonly'
   const input = inputDrafts.input
   const {
     availableModels,
@@ -398,6 +399,7 @@ export default function ChatWindow() {
             onInteraction={userInteractionResponse.respond}
             onTraceActionRule={safetyPolicyActionRule.saveActionRule}
             policyRuleBusy={safetyPolicyActionRule.busyKey}
+            sessionMode={sessionMode}
             onEdit={messageHistoryActions.startEditMessage}
             onDelete={messageHistoryActions.deleteMessage}
             onFeedback={messageHistoryActions.feedbackMessage}
@@ -557,6 +559,7 @@ export default function ChatWindow() {
                   fixedTab={rightPanelTab === 'memory' ? 'memory' : 'trace'}
                   sessionId={currentSessionId}
                   messages={messages}
+                  sessionMode={sessionMode}
                   traceLabel={orchestrationMode === 'fast' ? '执行链路' : '思维链'}
                 />
               </Suspense>

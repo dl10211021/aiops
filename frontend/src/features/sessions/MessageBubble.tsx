@@ -18,6 +18,7 @@ interface MessageBubbleProps {
   onInteraction: (requestId: string, value: string, label?: string) => void
   onTraceActionRule?: (action: SafetyPolicyAction, decision: SafetyPolicyDecision) => void
   policyRuleBusy?: string | null
+  sessionMode?: 'readonly' | 'readwrite'
   onEdit?: (message: ChatMessage) => void
   onDelete?: (message: ChatMessage) => void
   onFeedback?: (message: ChatMessage, rating: 'up' | 'down', note?: string) => void
@@ -31,6 +32,7 @@ function MessageBubble({
   onInteraction,
   onTraceActionRule,
   policyRuleBusy,
+  sessionMode,
   onEdit,
   onDelete,
   onFeedback,
@@ -76,6 +78,7 @@ function MessageBubble({
                 items={message.execTrace!}
                 onTraceActionRule={onTraceActionRule}
                 policyRuleBusy={policyRuleBusy}
+                sessionMode={sessionMode}
               />
             )}
           </div>

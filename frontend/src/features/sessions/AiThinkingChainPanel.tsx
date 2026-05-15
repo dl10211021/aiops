@@ -7,8 +7,6 @@ import { toolLabel } from '@/utils/assetDisplay'
 import { parseJsonRecord } from './jsonRecords'
 import { resultReason, traceExecutionText, traceTargetLabel } from './traceUtils'
 import {
-  approvalLabel,
-  approvalToneClass,
   evidenceLabel,
   evidenceToneClass,
   operationLabel,
@@ -16,6 +14,8 @@ import {
   recordValue,
   runtimeExecutionLabels,
   runtimePolicyLabels,
+  sessionModePolicyLabel,
+  sessionModePolicyToneClass,
   toolPolicyFromTrace,
   toolPolicySearchText,
 } from './toolPolicyPresentation'
@@ -25,6 +25,7 @@ interface AiThinkingChainPanelProps {
   messages: ChatMessage[]
   defaultTab?: 'trace' | 'memory'
   fixedTab?: 'trace' | 'memory'
+  sessionMode?: 'readonly' | 'readwrite'
   traceLabel?: string
 }
 
@@ -266,6 +267,7 @@ export default function AiThinkingChainPanel({
   fixedTab,
   sessionId,
   messages,
+  sessionMode,
   traceLabel = '思维链',
 }: AiThinkingChainPanelProps) {
   const [query, setQuery] = useState('')
@@ -491,7 +493,7 @@ export default function AiThinkingChainPanel({
                         const operation = operationLabel(operationMode)
                         const evidence = evidenceLabel(evidenceFamily)
                         const approval = recordValue(toolPolicy, 'approval_policy')
-                        const approvalText = approvalLabel(approval)
+                        const approvalText = sessionModePolicyLabel(operationMode, approval, sessionMode)
                         const runtimeLabels = runtimePolicyLabels(toolPolicy)
                         const executionLabels = runtimeExecutionLabels(trace)
                         return (
@@ -526,7 +528,7 @@ export default function AiThinkingChainPanel({
                                 )}
                                 {approvalText && approval !== 'none' && (
                                   <span
-                                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${approvalToneClass(approval)}`}
+                                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${sessionModePolicyToneClass(operationMode, approval, sessionMode)}`}
                                     title="当前执行门禁：是否可直接运行，还是写入/高危动作需要审批。"
                                   >
                                     门禁：{approvalText}

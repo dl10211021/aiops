@@ -14,8 +14,6 @@ import {
   traceExecutionText,
 } from './traceUtils'
 import {
-  approvalLabel,
-  approvalToneClass,
   evidenceLabel,
   evidenceToneClass,
   operationLabel,
@@ -23,6 +21,8 @@ import {
   recordValue,
   runtimeExecutionLabels,
   runtimePolicyLabels,
+  sessionModePolicyLabel,
+  sessionModePolicyToneClass,
   toolPolicyFromTrace,
 } from './toolPolicyPresentation'
 
@@ -30,9 +30,10 @@ interface ToolTraceListProps {
   items: ExecTraceItem[]
   onTraceActionRule?: (action: SafetyPolicyAction, decision: SafetyPolicyDecision) => void
   policyRuleBusy?: string | null
+  sessionMode?: 'readonly' | 'readwrite'
 }
 
-export default function ToolTraceList({ items, onTraceActionRule, policyRuleBusy }: ToolTraceListProps) {
+export default function ToolTraceList({ items, onTraceActionRule, policyRuleBusy, sessionMode }: ToolTraceListProps) {
   return (
     <div className="mt-2 space-y-2">
       {items.map((item, index) => (
@@ -41,6 +42,7 @@ export default function ToolTraceList({ items, onTraceActionRule, policyRuleBusy
           item={item}
           onTraceActionRule={onTraceActionRule}
           policyRuleBusy={policyRuleBusy}
+          sessionMode={sessionMode}
         />
       ))}
     </div>
@@ -51,6 +53,7 @@ function ToolTraceCard({
   item,
   onTraceActionRule,
   policyRuleBusy,
+  sessionMode,
 }: Omit<ToolTraceListProps, 'items'> & { item: ExecTraceItem }) {
   const status = item.status || (item.type === 'tool_start' ? 'running' : 'done')
   const parsedResult = item.resultMeta || parseJsonRecord(item.result || '')
@@ -58,6 +61,7 @@ function ToolTraceCard({
   const operationMode = recordValue(toolPolicy, 'operation_mode')
   const approvalPolicy = recordValue(toolPolicy, 'approval_policy')
   const evidenceFamily = recordValue(toolPolicy, 'evidence_family')
+  const gateLabel = sessionModePolicyLabel(operationMode, approvalPolicy, sessionMode)
   const runtimeLabels = runtimePolicyLabels(toolPolicy)
   const executionLabels = runtimeExecutionLabels(item)
   const primaryAction = extractPrimaryAction(parsedResult)
@@ -112,10 +116,10 @@ function ToolTraceCard({
               模式：{operationLabel(operationMode)}
             </span>
             <span
-              className={`rounded border px-2 py-0.5 font-semibold ${approvalToneClass(approvalPolicy)}`}
+              className={`rounded border px-2 py-0.5 font-semibold ${sessionModePolicyToneClass(operationMode, approvalPolicy, sessionMode)}`}
               title="当前执行门禁：是否可直接运行，还是写入/高危动作需要审批。"
             >
-              门禁：{approvalLabel(approvalPolicy)}
+              门禁：{gateLabel}
             </span>
             <span
               className={`rounded border px-2 py-0.5 font-semibold ${evidenceToneClass(evidenceFamily)}`}
