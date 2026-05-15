@@ -42,8 +42,8 @@ export function toolPolicyFromTrace(trace: ExecTraceItem): Record<string, unknow
 export function operationLabel(mode: string) {
   return {
     read: '只读',
-    write: '写入',
-    read_write: '读写受控',
+    write: '写入能力',
+    read_write: '可读写',
     destructive: '破坏性',
     external_effect: '外发',
     interactive: '人工交互',
@@ -53,9 +53,47 @@ export function operationLabel(mode: string) {
 export function approvalLabel(policy: string) {
   return {
     none: '无需审批',
-    guarded_write: '写入受控',
+    guarded_write: '写入需审批',
     always_required: '强制审批',
   }[policy] || policy || '未知'
+}
+
+export function operationToneClass(mode: string) {
+  return {
+    read: 'border-emerald-400/35 bg-emerald-400/10 text-emerald-100',
+    write: 'border-amber-400/35 bg-amber-400/10 text-amber-100',
+    read_write: 'border-cyan-400/35 bg-cyan-400/10 text-cyan-100',
+    destructive: 'border-ops-alert/40 bg-ops-alert/10 text-ops-alert',
+    external_effect: 'border-fuchsia-400/35 bg-fuchsia-400/10 text-fuchsia-100',
+    interactive: 'border-sky-400/35 bg-sky-400/10 text-sky-100',
+  }[mode] || 'border-ops-surface1/65 bg-ops-dark/35 text-ops-subtext'
+}
+
+export function approvalToneClass(policy: string) {
+  return {
+    none: 'border-emerald-400/35 bg-emerald-400/10 text-emerald-100',
+    guarded_write: 'border-amber-400/40 bg-amber-400/10 text-amber-100',
+    always_required: 'border-ops-alert/45 bg-ops-alert/10 text-ops-alert',
+  }[policy] || 'border-ops-surface1/65 bg-ops-dark/35 text-ops-subtext'
+}
+
+export function evidenceToneClass(family: string) {
+  return {
+    database: 'border-sky-400/35 bg-sky-400/10 text-sky-100',
+    host_cli: 'border-lime-400/35 bg-lime-400/10 text-lime-100',
+    http_api: 'border-indigo-300/35 bg-indigo-400/10 text-indigo-100',
+    observability: 'border-teal-300/35 bg-teal-400/10 text-teal-100',
+    network: 'border-cyan-300/35 bg-cyan-400/10 text-cyan-100',
+    storage: 'border-violet-300/35 bg-violet-400/10 text-violet-100',
+    virtualization: 'border-purple-300/35 bg-purple-400/10 text-purple-100',
+    container: 'border-blue-300/35 bg-blue-400/10 text-blue-100',
+    knowledge: 'border-stone-300/35 bg-stone-400/10 text-stone-100',
+    notification: 'border-fuchsia-300/35 bg-fuchsia-400/10 text-fuchsia-100',
+    memory: 'border-orange-300/35 bg-orange-400/10 text-orange-100',
+    human_interaction: 'border-sky-300/35 bg-sky-400/10 text-sky-100',
+    local_runtime: 'border-zinc-300/35 bg-zinc-400/10 text-zinc-100',
+    platform: 'border-slate-300/35 bg-slate-400/10 text-slate-100',
+  }[family] || 'border-ops-surface1/65 bg-ops-dark/35 text-ops-subtext'
 }
 
 export function evidenceLabel(family: string) {

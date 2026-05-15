@@ -8,8 +8,11 @@ import { parseJsonRecord } from './jsonRecords'
 import { resultReason, traceExecutionText, traceTargetLabel } from './traceUtils'
 import {
   approvalLabel,
+  approvalToneClass,
   evidenceLabel,
+  evidenceToneClass,
   operationLabel,
+  operationToneClass,
   recordValue,
   runtimeExecutionLabels,
   runtimePolicyLabels,
@@ -483,8 +486,10 @@ export default function AiThinkingChainPanel({
                         </div>
                       ) : group.traces.map((trace, index) => {
                         const toolPolicy = toolPolicyFromTrace(trace)
-                        const operation = operationLabel(recordValue(toolPolicy, 'operation_mode'))
-                        const evidence = evidenceLabel(recordValue(toolPolicy, 'evidence_family'))
+                        const operationMode = recordValue(toolPolicy, 'operation_mode')
+                        const evidenceFamily = recordValue(toolPolicy, 'evidence_family')
+                        const operation = operationLabel(operationMode)
+                        const evidence = evidenceLabel(evidenceFamily)
                         const approval = recordValue(toolPolicy, 'approval_policy')
                         const approvalText = approvalLabel(approval)
                         const runtimeLabels = runtimePolicyLabels(toolPolicy)
@@ -512,18 +517,27 @@ export default function AiThinkingChainPanel({
                             {(trace.evidence?.tool_family || traceEvidenceId(trace) || toolPolicy) && (
                               <div className="mt-2 flex flex-wrap gap-1.5">
                                 {operation && (
-                                  <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-subtext">
-                                    {operation}
-                                  </span>
-                                )}
-                                {evidence && (
-                                  <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-subtext">
-                                    {evidence}
+                                  <span
+                                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${operationToneClass(operationMode)}`}
+                                    title="工具自身能力边界：只读、可读写、外发或破坏性。"
+                                  >
+                                    模式：{operation}
                                   </span>
                                 )}
                                 {approvalText && approval !== 'none' && (
-                                  <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-[10px] text-ops-accent">
-                                    {approvalText}
+                                  <span
+                                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${approvalToneClass(approval)}`}
+                                    title="当前执行门禁：是否可直接运行，还是写入/高危动作需要审批。"
+                                  >
+                                    门禁：{approvalText}
+                                  </span>
+                                )}
+                                {evidence && (
+                                  <span
+                                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${evidenceToneClass(evidenceFamily)}`}
+                                    title="结果会归档到哪类证据链，用于审计、报告和追踪。"
+                                  >
+                                    证据：{evidence}
                                   </span>
                                 )}
                                 {trace.evidence?.tool_family && (

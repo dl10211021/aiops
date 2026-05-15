@@ -15,8 +15,11 @@ import {
 } from './traceUtils'
 import {
   approvalLabel,
+  approvalToneClass,
   evidenceLabel,
+  evidenceToneClass,
   operationLabel,
+  operationToneClass,
   recordValue,
   runtimeExecutionLabels,
   runtimePolicyLabels,
@@ -52,6 +55,9 @@ function ToolTraceCard({
   const status = item.status || (item.type === 'tool_start' ? 'running' : 'done')
   const parsedResult = item.resultMeta || parseJsonRecord(item.result || '')
   const toolPolicy = toolPolicyFromTrace(item)
+  const operationMode = recordValue(toolPolicy, 'operation_mode')
+  const approvalPolicy = recordValue(toolPolicy, 'approval_policy')
+  const evidenceFamily = recordValue(toolPolicy, 'evidence_family')
   const runtimeLabels = runtimePolicyLabels(toolPolicy)
   const executionLabels = runtimeExecutionLabels(item)
   const primaryAction = extractPrimaryAction(parsedResult)
@@ -99,14 +105,23 @@ function ToolTraceCard({
         <div className="border-t border-ops-surface0/80 px-3 py-2">
           <div className="mb-1 text-[11px] text-ops-overlay">工具策略</div>
           <div className="flex flex-wrap gap-1.5 text-[11px]">
-            <span className="rounded border border-ops-surface1/65 bg-ops-dark/35 px-2 py-0.5 font-semibold text-ops-subtext">
-              {operationLabel(recordValue(toolPolicy, 'operation_mode'))}
+            <span
+              className={`rounded border px-2 py-0.5 font-semibold ${operationToneClass(operationMode)}`}
+              title="工具自身能力边界：只读、可读写、外发或破坏性。"
+            >
+              模式：{operationLabel(operationMode)}
             </span>
-            <span className="rounded border border-ops-surface1/65 bg-ops-dark/35 px-2 py-0.5 font-semibold text-ops-subtext">
-              {approvalLabel(recordValue(toolPolicy, 'approval_policy'))}
+            <span
+              className={`rounded border px-2 py-0.5 font-semibold ${approvalToneClass(approvalPolicy)}`}
+              title="当前执行门禁：是否可直接运行，还是写入/高危动作需要审批。"
+            >
+              门禁：{approvalLabel(approvalPolicy)}
             </span>
-            <span className="rounded border border-ops-surface1/65 bg-ops-dark/35 px-2 py-0.5 font-semibold text-ops-subtext">
-              {evidenceLabel(recordValue(toolPolicy, 'evidence_family'))}
+            <span
+              className={`rounded border px-2 py-0.5 font-semibold ${evidenceToneClass(evidenceFamily)}`}
+              title="结果会归档到哪类证据链，用于审计、报告和追踪。"
+            >
+              证据：{evidenceLabel(evidenceFamily)}
             </span>
             {recordValue(toolPolicy, 'destructive') === 'true' && (
               <span className="rounded border border-ops-alert/35 bg-ops-alert/10 px-2 py-0.5 font-semibold text-ops-alert">
