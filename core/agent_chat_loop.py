@@ -999,9 +999,10 @@ def build_successful_execution_memory(
         args = str(item.get("args") or "").strip()
         result = str(item.get("result") or "").strip()
         policy = trace_policy_summary(item)
+        runtime = trace_runtime_summary(item)
         evidence = trace_evidence_id(item)
         steps.append(
-            f"{index}. 工具={tool}; 策略={policy or '-'}; 证据={evidence or '-'}; "
+            f"{index}. 工具={tool}; 策略={policy or '-'}; 运行={runtime or '-'}; 证据={evidence or '-'}; "
             f"执行={args[:500] or '-'}; 成功结果={result[:700] or '-'}"
         )
     content = f"""

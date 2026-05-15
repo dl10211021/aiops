@@ -242,9 +242,42 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("只可作为当前会话后续轮次", memory["content"])
         self.assertIn("工具=Linux/Unix 命令 (`linux_execute_command`)", memory["content"])
         self.assertIn("策略=read_write/guarded_write/host_cli", memory["content"])
+        self.assertIn("运行=-", memory["content"])
         self.assertIn("证据=tev-sid-1-call-1", memory["content"])
         self.assertNotIn("工具=linux_execute_command;", memory["content"])
         self.assertNotIn("同类资产排查", memory["content"])
+
+    def test_successful_execution_memory_keeps_retry_runtime_context(self):
+        memory = build_successful_execution_memory(
+            session_id="sid-1",
+            context={
+                "asset_type": "monitor",
+                "protocol": "http_api",
+                "host": "elk.local",
+                "port": 5601,
+                "allow_modifications": False,
+            },
+            exec_trace=[
+                {
+                    "tool": "monitoring_api_query",
+                    "args": "GET /api/status",
+                    "result": '{"status":"OK"}',
+                    "status": "done",
+                    "resultMeta": {
+                        "runtime_execution": {
+                            "attempts": 2,
+                            "max_attempts": 2,
+                            "retried": True,
+                            "final_status": "success",
+                        }
+                    },
+                }
+            ],
+            assistant_content="Kibana 状态正常。",
+        )
+
+        self.assertIsNotNone(memory)
+        self.assertIn("运行=retry:2/2", memory["content"])
 
     def test_trace_review_prompt_localizes_tool_names_for_audit(self):
         prompt = _build_trace_review_prompt(
