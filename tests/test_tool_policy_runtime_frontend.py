@@ -91,3 +91,12 @@ def test_runtime_execution_labels_show_actual_timeout_and_failure_state():
     assert "实际超时 ${secondsText(timeoutSeconds)}" in presentation
     assert "实际执行失败" in presentation
     assert "labels.push(`实际重试 ${Math.round(attempts)}${totalText} 次`)" in presentation
+
+
+def test_thinking_chain_search_includes_runtime_execution_labels():
+    source = Path(
+        "frontend/src/features/sessions/AiThinkingChainPanel.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert "...runtimeExecutionLabels(trace)" in source
+    assert "toolPolicySearchText(toolPolicyFromTrace(trace))" in source

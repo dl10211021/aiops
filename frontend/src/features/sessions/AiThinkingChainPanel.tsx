@@ -192,7 +192,10 @@ function traceEvidenceId(trace: ExecTraceItem) {
 }
 
 function tracePolicySearchText(trace: ExecTraceItem) {
-  return toolPolicySearchText(toolPolicyFromTrace(trace))
+  return [
+    toolPolicySearchText(toolPolicyFromTrace(trace)),
+    ...runtimeExecutionLabels(trace),
+  ].filter(Boolean).join(' ')
 }
 
 function recordResultLabel(record: Record<string, unknown>) {
