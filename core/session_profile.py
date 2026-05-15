@@ -135,16 +135,42 @@ def _history_trace_lines(message: dict[str, Any]) -> list[str]:
         tool = str(trace.get("tool") or "unknown")
         status = str(trace.get("status") or "done")
         policy = trace_policy_summary(trace)
+        runtime = _trace_runtime_summary(trace)
         evidence_id = trace_evidence_id(trace)
         args = str(trace.get("args") or "").strip()
         result = str(trace.get("result") or "").strip()
         lines.append(
             "[工具轨迹] "
             f"tool={tool}; status={status}; policy={policy or '-'}; "
-            f"evidence={evidence_id or '-'}; execute={args[:260] or '-'}; "
+            f"runtime={runtime or '-'}; evidence={evidence_id or '-'}; execute={args[:260] or '-'}; "
             f"result={result[:320] or '-'}"
         )
     return lines
+
+
+def _trace_runtime_summary(trace: dict[str, Any]) -> str:
+    result_meta = trace.get("resultMeta") or trace.get("result_meta") or {}
+    if not isinstance(result_meta, dict):
+        return ""
+    runtime = result_meta.get("runtime_execution") or result_meta.get("runtime_policy")
+    if not isinstance(runtime, dict):
+        return ""
+    parts: list[str] = []
+    final_status = str(runtime.get("final_status") or "")
+    error_type = str(runtime.get("error_type") or "")
+    timeout_seconds = runtime.get("timeout_seconds")
+    if final_status == "error":
+        parts.append(
+            f"timeout:{timeout_seconds}s"
+            if error_type == "tool_timeout" and timeout_seconds
+            else f"error:{error_type or 'tool_execution_failed'}"
+        )
+    if runtime.get("retried") is True:
+        attempts = runtime.get("attempts")
+        max_attempts = runtime.get("max_attempts")
+        total = f"/{max_attempts}" if max_attempts else ""
+        parts.append(f"retry:{attempts}{total}")
+    return ",".join(parts)
 
 
 def _history_excerpt(session_id: str, limit: int = 7000) -> str:

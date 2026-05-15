@@ -241,6 +241,43 @@ def test_history_excerpt_includes_tool_policy_and_evidence_for_profile_generatio
     assert "execute=select 1 from dual" in excerpt
 
 
+def test_history_excerpt_includes_runtime_execution_for_profile_generation(monkeypatch):
+    class FakeMemory:
+        def get_messages(self, session_id: str, for_ui: bool = True):
+            assert session_id == "sid-1"
+            assert for_ui is True
+            return [
+                {
+                    "role": "assistant",
+                    "content": "Kibana 查询失败。",
+                    "exec_trace": [
+                        {
+                            "tool": "monitoring_api_query",
+                            "status": "error",
+                            "args": "GET /api/status",
+                            "result": "timeout",
+                            "resultMeta": {
+                                "runtime_policy": {
+                                    "attempts": 2,
+                                    "max_attempts": 2,
+                                    "retried": True,
+                                    "final_status": "error",
+                                    "error_type": "tool_timeout",
+                                    "timeout_seconds": 30,
+                                }
+                            },
+                        }
+                    ],
+                },
+            ]
+
+    monkeypatch.setattr("core.session_profile.memory_db", FakeMemory())
+
+    excerpt = _history_excerpt("sid-1")
+
+    assert "runtime=timeout:30s,retry:2/2" in excerpt
+
+
 def test_profile_to_system_prompt_synthesizes_from_structured_profile_when_prompt_missing():
     prompt = profile_to_system_prompt(
         {
