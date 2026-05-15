@@ -34,6 +34,9 @@ def test_tool_trace_policy_chips_separate_mode_gate_and_evidence():
     assert "模式：{operation}" in thinking_panel
     assert "门禁：{approvalText}" in thinking_panel
     assert "证据：{evidence}" in thinking_panel
+    assert "operationMode ? operationLabel(operationMode) : ''" in thinking_panel
+    assert "evidenceFamily ? evidenceLabel(evidenceFamily) : ''" in thinking_panel
+    assert "approval ? sessionModePolicyLabel(operationMode, approval, sessionMode) : ''" in thinking_panel
     assert "sessionModePolicyToneClass(operationMode, approval, sessionMode)" in thinking_panel
     assert "read_write: '可读写'" in presentation
     assert "guarded_write: '写入需审批'" in presentation
@@ -56,3 +59,14 @@ def test_tool_policy_chips_are_session_mode_aware():
     assert "return '只读限制'" in presentation
     assert "return '读写受控'" in presentation
     assert "border-ops-alert/45 bg-ops-alert/10 text-ops-alert" in presentation
+
+
+def test_empty_tool_policy_is_not_rendered_as_unknown_chips():
+    presentation = Path(
+        "frontend/src/features/sessions/toolPolicyPresentation.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "meaningfulToolPolicy(objectRecord(result?.tool_policy))" in presentation
+    assert "meaningfulToolPolicy(metaPolicy)" in presentation
+    assert "meaningfulToolPolicy(evidencePolicy)" in presentation
+    assert "['operation_mode', 'approval_policy', 'evidence_family']" in presentation

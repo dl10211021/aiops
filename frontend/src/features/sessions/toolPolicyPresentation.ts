@@ -26,17 +26,24 @@ function secondsText(value: number) {
 }
 
 export function toolPolicyFromResult(result: Record<string, unknown> | null) {
-  return objectRecord(result?.tool_policy)
+  return meaningfulToolPolicy(objectRecord(result?.tool_policy))
 }
 
 export function toolPolicyFromTrace(trace: ExecTraceItem): Record<string, unknown> | null {
   const metaPolicy = objectRecord(trace.resultMeta?.tool_policy)
-  if (metaPolicy) return metaPolicy
+  if (meaningfulToolPolicy(metaPolicy)) return metaPolicy
   const evidenceMeta = objectRecord(trace.evidence?.result_meta)
   const evidencePolicy = objectRecord(evidenceMeta?.tool_policy)
-  if (evidencePolicy) return evidencePolicy
+  if (meaningfulToolPolicy(evidencePolicy)) return evidencePolicy
   const parsed = parseJsonRecord(trace.result || '')
   return toolPolicyFromResult(parsed)
+}
+
+export function meaningfulToolPolicy(policy: Record<string, unknown> | null) {
+  if (!policy) return null
+  return ['operation_mode', 'approval_policy', 'evidence_family'].some((key) => recordValue(policy, key))
+    ? policy
+    : null
 }
 
 export function operationLabel(mode: string) {

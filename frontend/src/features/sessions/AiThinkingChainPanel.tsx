@@ -490,10 +490,10 @@ export default function AiThinkingChainPanel({
                         const toolPolicy = toolPolicyFromTrace(trace)
                         const operationMode = recordValue(toolPolicy, 'operation_mode')
                         const evidenceFamily = recordValue(toolPolicy, 'evidence_family')
-                        const operation = operationLabel(operationMode)
-                        const evidence = evidenceLabel(evidenceFamily)
+                        const operation = operationMode ? operationLabel(operationMode) : ''
+                        const evidence = evidenceFamily ? evidenceLabel(evidenceFamily) : ''
                         const approval = recordValue(toolPolicy, 'approval_policy')
-                        const approvalText = sessionModePolicyLabel(operationMode, approval, sessionMode)
+                        const approvalText = approval ? sessionModePolicyLabel(operationMode, approval, sessionMode) : ''
                         const runtimeLabels = runtimePolicyLabels(toolPolicy)
                         const executionLabels = runtimeExecutionLabels(trace)
                         return (
