@@ -23,5 +23,25 @@ export default defineConfig({
   build: {
     outDir: '../static_react',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
+            return 'vendor-react'
+          }
+          if (id.includes('marked') || id.includes('dompurify')) {
+            return 'vendor-markdown'
+          }
+          if (id.includes('@xterm')) {
+            return 'vendor-terminal'
+          }
+          if (id.includes('zustand')) {
+            return 'vendor-state'
+          }
+          return 'vendor'
+        },
+      },
+    },
   },
 })

@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, useTransition } from 'react'
 import SessionGroupList from './SessionGroupList'
 import SessionGroupManager from './SessionGroupManager'
 import SessionEditModal from './SessionEditModal'
-import SessionTerminalModal from './SessionTerminalModal'
 import { useSessionSidebarModel } from './useSessionSidebarModel'
+
+const SessionTerminalModal = lazy(() => import('./SessionTerminalModal'))
 
 export default function SessionSidebar() {
   const model = useSessionSidebarModel()
@@ -87,14 +88,16 @@ export default function SessionSidebar() {
       )}
 
       {model.terminalSession && !model.terminalMinimized && (
-        <SessionTerminalModal
-          sessions={model.terminalSessions}
-          activeSessionId={model.activeTerminalSessionId || model.terminalSession.id}
-          onSelectSession={model.handleSelectTerminal}
-          onCloseSession={model.handleCloseTerminalTab}
-          onClose={model.closeTerminal}
-          onMinimize={model.minimizeTerminal}
-        />
+        <Suspense fallback={<TerminalModalFallback />}>
+          <SessionTerminalModal
+            sessions={model.terminalSessions}
+            activeSessionId={model.activeTerminalSessionId || model.terminalSession.id}
+            onSelectSession={model.handleSelectTerminal}
+            onCloseSession={model.handleCloseTerminalTab}
+            onClose={model.closeTerminal}
+            onMinimize={model.minimizeTerminal}
+          />
+        </Suspense>
       )}
 
       {model.terminalSession && model.terminalMinimized && (
@@ -123,6 +126,16 @@ export default function SessionSidebar() {
         </div>
       )}
     </aside>
+  )
+}
+
+function TerminalModalFallback() {
+  return (
+    <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/55 text-sm text-ops-subtext">
+      <div className="rounded-xl border border-ops-surface1/80 bg-ops-panel/95 px-4 py-3 shadow-[0_16px_50px_rgba(0,0,0,0.45)]">
+        正在加载终端...
+      </div>
+    </div>
   )
 }
 
