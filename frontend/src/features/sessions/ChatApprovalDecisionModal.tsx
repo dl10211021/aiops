@@ -22,10 +22,9 @@ export default function ChatApprovalDecisionModal({
   onSubmit,
 }: ChatApprovalDecisionModalProps) {
   const action = decision.approved ? '批准' : '拒绝'
+  const disabledReason = approvalDecisionDisabledReason(decision)
   const disabled = decision.busy
-    || !decision.operator.trim()
-    || (decision.approved && !decision.note.trim())
-    || (decision.autoAll && !isAutoApproveConfirmationValid(decision.confirmation))
+    || Boolean(disabledReason)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onClick={onClose}>
@@ -39,10 +38,20 @@ export default function ChatApprovalDecisionModal({
           action={action}
           decision={decision}
           disabled={disabled}
+          disabledReason={disabledReason}
           onClose={onClose}
           onSubmit={onSubmit}
         />
       </section>
     </div>
   )
+}
+
+function approvalDecisionDisabledReason(decision: ChatApprovalDecision) {
+  if (!decision.operator.trim()) return '请填写操作人'
+  if (decision.approved && !decision.note.trim()) return '请填写批准原因'
+  if (decision.autoAll && !isAutoApproveConfirmationValid(decision.confirmation)) {
+    return '请输入“全部批准”确认本会话自动放行'
+  }
+  return ''
 }

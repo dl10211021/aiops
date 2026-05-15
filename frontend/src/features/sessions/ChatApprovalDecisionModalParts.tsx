@@ -125,29 +125,39 @@ export function ChatApprovalDecisionFooter({
   action,
   decision,
   disabled,
+  disabledReason,
   onClose,
   onSubmit,
 }: {
   action: string
   decision: ChatApprovalDecision
   disabled: boolean
+  disabledReason: string
   onClose: () => void
   onSubmit: () => void
 }) {
   return (
-    <div className="flex justify-end gap-2 border-t border-ops-surface0 px-5 py-4">
-      <button onClick={onClose} disabled={decision.busy} className="px-4 py-2 text-sm text-ops-subtext hover:text-ops-text disabled:opacity-50">
-        取消
-      </button>
-      <button
-        onClick={onSubmit}
-        disabled={disabled}
-        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-opacity disabled:opacity-50 ${
-          decision.approved ? 'bg-ops-success text-ops-dark' : 'bg-ops-alert text-white'
-        }`}
-      >
-        {decision.busy ? '提交中...' : decision.autoAll ? '确认全部批准' : `确认${action}`}
-      </button>
+    <div className="border-t border-ops-surface0 px-5 py-4">
+      {disabledReason && !decision.busy && (
+        <div className="mb-3 rounded-md border border-ops-alert/30 bg-ops-alert/10 px-3 py-2 text-xs text-ops-alert">
+          {disabledReason}
+        </div>
+      )}
+      <div className="flex justify-end gap-2">
+        <button onClick={onClose} disabled={decision.busy} className="px-4 py-2 text-sm text-ops-subtext hover:text-ops-text disabled:opacity-50">
+          取消
+        </button>
+        <button
+          onClick={onSubmit}
+          disabled={disabled}
+          title={disabledReason || undefined}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition-opacity disabled:opacity-50 ${
+            decision.approved ? 'bg-ops-success text-ops-dark' : 'bg-ops-alert text-white'
+          }`}
+        >
+          {decision.busy ? '提交中...' : decision.autoAll ? '确认全部批准' : `确认${action}`}
+        </button>
+      </div>
     </div>
   )
 }

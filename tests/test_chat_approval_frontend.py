@@ -18,6 +18,8 @@ def test_auto_approve_confirmation_uses_explicit_all_approval_phrase():
     assert "AUTO_APPROVE_CONFIRMATION_TEXT = '全部批准'" in confirmation
     assert "value.trim() === AUTO_APPROVE_CONFIRMATION_TEXT" in confirmation
     assert "!isAutoApproveConfirmationValid(decision.confirmation)" in modal
+    assert "approvalDecisionDisabledReason(decision)" in modal
     assert "!isAutoApproveConfirmationValid(confirmation)" in hook
     assert "确认全部批准" in parts
     assert "请输入“{AUTO_APPROVE_CONFIRMATION_TEXT}”" in parts
+    assert "{disabledReason}" in parts
