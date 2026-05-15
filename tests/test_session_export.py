@@ -134,3 +134,64 @@ class TestSessionExport(unittest.TestCase):
         )
 
         self.assertIn("  - Runtime: 实际重试 2/2 次", markdown)
+
+    def test_format_session_history_markdown_includes_runtime_timeout_metadata(self):
+        markdown = format_session_history_markdown(
+            [
+                {
+                    "role": "assistant",
+                    "content": "执行失败",
+                    "exec_trace": [
+                        {
+                            "tool": "monitoring_api_query",
+                            "status": "error",
+                            "args": "GET /api/status",
+                            "result": "timeout",
+                            "resultMeta": {
+                                "runtime_policy": {
+                                    "attempts": 1,
+                                    "max_attempts": 1,
+                                    "retried": False,
+                                    "final_status": "error",
+                                    "error_type": "tool_timeout",
+                                    "timeout_seconds": 30,
+                                }
+                            },
+                        }
+                    ],
+                }
+            ],
+            "elk-01",
+        )
+
+        self.assertIn("  - Runtime: 实际超时 30s", markdown)
+
+    def test_format_session_history_markdown_includes_runtime_failure_metadata(self):
+        markdown = format_session_history_markdown(
+            [
+                {
+                    "role": "assistant",
+                    "content": "执行失败",
+                    "exec_trace": [
+                        {
+                            "tool": "monitoring_api_query",
+                            "status": "error",
+                            "args": "GET /api/status",
+                            "result": "connection failed",
+                            "resultMeta": {
+                                "runtime_policy": {
+                                    "attempts": 2,
+                                    "max_attempts": 2,
+                                    "retried": True,
+                                    "final_status": "error",
+                                    "error_type": "tool_connection_error",
+                                }
+                            },
+                        }
+                    ],
+                }
+            ],
+            "elk-01",
+        )
+
+        self.assertIn("  - Runtime: 实际执行失败；实际重试 2/2 次", markdown)

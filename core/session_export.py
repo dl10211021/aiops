@@ -92,14 +92,24 @@ def _format_runtime_line(item: dict) -> str:
     runtime = result_meta.get("runtime_execution") or result_meta.get("runtime_policy")
     if not isinstance(runtime, dict):
         return ""
+    parts: list[str] = []
+    final_status = _record_value(runtime, "final_status")
+    error_type = _record_value(runtime, "error_type")
+    timeout_seconds = _record_value(runtime, "timeout_seconds")
+    if final_status == "error":
+        if error_type == "tool_timeout" and timeout_seconds:
+            parts.append(f"实际超时 {timeout_seconds}s")
+        else:
+            parts.append("实际执行失败")
     if _record_value(runtime, "retried").lower() != "true":
-        return ""
+        return "；".join(parts)
     attempts = _record_value(runtime, "attempts")
     max_attempts = _record_value(runtime, "max_attempts")
     if not attempts:
-        return ""
+        return "；".join(parts)
     total = f"/{max_attempts}" if max_attempts else ""
-    return f"实际重试 {attempts}{total} 次"
+    parts.append(f"实际重试 {attempts}{total} 次")
+    return "；".join(parts)
 
 
 def format_exec_trace_lines(exec_trace: list[dict]) -> list[str]:
