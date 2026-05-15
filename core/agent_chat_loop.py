@@ -22,7 +22,7 @@ from core.assistant_model_config import (
 from core.chat_execution_intent import ExecutionIntent, classify_execution_intent
 from core.tool_display import tool_label
 from core.tool_trace import make_tool_trace_collector
-from core.tool_trace_policy import trace_evidence_id, trace_policy_summary
+from core.tool_trace_policy import trace_evidence_id, trace_policy_summary, trace_runtime_summary
 
 
 NATIVE_ASSET_TOOL_NAMES = {
@@ -574,6 +574,7 @@ def _build_trace_review_prompt(
     for index, item in enumerate(exec_trace[-12:], start=1):
         tool = _display_tool_name(item.get("tool"))
         policy = trace_policy_summary(item)
+        runtime = trace_runtime_summary(item)
         evidence = trace_evidence_id(item)
         trace_lines.append(
             "\n".join(
@@ -581,6 +582,7 @@ def _build_trace_review_prompt(
                     f"{index}. 工具：{tool}",
                     f"状态：{item.get('status') or '-'}",
                     f"策略：{policy or '-'}",
+                    f"运行：{runtime or '-'}",
                     f"证据：{evidence or '-'}",
                     f"执行：{str(item.get('args') or '-')[:900]}",
                     f"结果：{str(item.get('result') or '-')[:1400]}",

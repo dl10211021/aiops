@@ -266,7 +266,15 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
                             "operation_mode": "read_write",
                             "approval_policy": "guarded_write",
                             "evidence_family": "database",
-                        }
+                        },
+                        "runtime_policy": {
+                            "attempts": 2,
+                            "max_attempts": 2,
+                            "retried": True,
+                            "final_status": "error",
+                            "error_type": "tool_timeout",
+                            "timeout_seconds": 30,
+                        },
                     },
                     "evidenceId": "tev-sid-1-call-1",
                 }
@@ -278,6 +286,7 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("工具：数据库 SQL 执行 (`db_execute_query`)", prompt)
         self.assertIn("策略：read_write/guarded_write/database", prompt)
+        self.assertIn("运行：timeout:30s,retry:2/2", prompt)
         self.assertIn("证据：tev-sid-1-call-1", prompt)
         self.assertNotIn("工具：db_execute_query\n", prompt)
         self.assertIn("【思维链审查】", prompt)
