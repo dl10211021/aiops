@@ -12,6 +12,12 @@ def test_tool_policy_runtime_summary_exposes_operational_context():
     assert "调度边界" in source
     assert "超时与重试" in source
     assert "不会被自动并发放大风险" in source
+    assert "模式：{operation}" in source
+    assert "门禁：{approval}" in source
+    assert "证据：{evidence}" in source
+    assert "operationToneClass(operationMode)" in source
+    assert "sessionModePolicyToneClass(operationMode, approvalPolicy)" in source
+    assert "evidenceToneClass(evidenceFamily)" in source
 
 
 def test_tool_trace_policy_chips_separate_mode_gate_and_evidence():

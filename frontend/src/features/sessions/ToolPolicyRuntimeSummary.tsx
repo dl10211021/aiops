@@ -1,10 +1,14 @@
 import {
   approvalLabel,
+  evidenceToneClass,
   evidenceLabel,
   operationLabel,
+  operationToneClass,
   recordValue,
   retryPolicyLabel,
   runtimePolicyLabels,
+  sessionModePolicyLabel,
+  sessionModePolicyToneClass,
   timeoutPolicyLabel,
 } from './toolPolicyPresentation'
 
@@ -62,9 +66,12 @@ export function ToolPolicyRuntimeGrid({
 }: ToolPolicyRuntimeSummaryProps) {
   if (!policy) return null
   const tone = policyTone(policy)
-  const operation = operationLabel(recordValue(policy, 'operation_mode'))
-  const approval = approvalLabel(recordValue(policy, 'approval_policy'))
-  const evidence = evidenceLabel(recordValue(policy, 'evidence_family'))
+  const operationMode = recordValue(policy, 'operation_mode')
+  const approvalPolicy = recordValue(policy, 'approval_policy')
+  const evidenceFamily = recordValue(policy, 'evidence_family')
+  const operation = operationLabel(operationMode)
+  const approval = sessionModePolicyLabel(operationMode, approvalPolicy)
+  const evidence = evidenceLabel(evidenceFamily)
   const timeout = timeoutPolicyLabel(policy) || '未设置超时'
   const retry = retryPolicyLabel(policy) || '不自动重试'
   return (
@@ -74,14 +81,14 @@ export function ToolPolicyRuntimeGrid({
           <span className={`h-1.5 w-1.5 rounded-full ${tone.dotClassName}`} />
           {tone.label}
         </span>
-        <span className="rounded-full border border-ops-surface1/65 px-2.5 py-1 text-[11px] text-ops-text">
-          {operation}
+        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${operationToneClass(operationMode)}`}>
+          模式：{operation}
         </span>
-        <span className="rounded-full border border-ops-surface1/65 px-2.5 py-1 text-[11px] text-ops-subtext">
-          {approval}
+        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${sessionModePolicyToneClass(operationMode, approvalPolicy)}`}>
+          门禁：{approval}
         </span>
-        <span className="rounded-full border border-ops-surface1/65 px-2.5 py-1 text-[11px] text-ops-subtext">
-          {evidence}
+        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${evidenceToneClass(evidenceFamily)}`}>
+          证据：{evidence}
         </span>
       </div>
       <div className={`grid gap-2 ${columns}`}>
@@ -117,20 +124,27 @@ export function ToolPolicyRuntimeGrid({
 export function ToolPolicyRuntimeChips({ policy }: ToolPolicyRuntimeSummaryProps) {
   if (!policy) return null
   const tone = policyTone(policy)
-  const chips = [
-    tone.label,
-    operationLabel(recordValue(policy, 'operation_mode')),
-    approvalLabel(recordValue(policy, 'approval_policy')),
-    evidenceLabel(recordValue(policy, 'evidence_family')),
+  const operationMode = recordValue(policy, 'operation_mode')
+  const approvalPolicy = recordValue(policy, 'approval_policy')
+  const evidenceFamily = recordValue(policy, 'evidence_family')
+  const runtimeChips = [
     ...runtimePolicyLabels(policy),
     recordValue(policy, 'destructive') === 'true' ? '破坏性' : '',
   ].filter(Boolean)
   return (
     <>
-      {chips.map((label) => (
-        <span key={label} className="rounded-full border border-ops-surface1/65 px-2 py-0.5 text-[11px] text-ops-subtext">
-          {label}
-        </span>
+      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tone.className}`}>{tone.label}</span>
+      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${operationToneClass(operationMode)}`}>
+        模式：{operationLabel(operationMode)}
+      </span>
+      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${sessionModePolicyToneClass(operationMode, approvalPolicy)}`}>
+        门禁：{sessionModePolicyLabel(operationMode, approvalPolicy)}
+      </span>
+      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${evidenceToneClass(evidenceFamily)}`}>
+        证据：{evidenceLabel(evidenceFamily)}
+      </span>
+      {runtimeChips.map((label) => (
+        <span key={label} className="rounded-full border border-ops-surface1/65 px-2 py-0.5 text-[11px] text-ops-subtext">{label}</span>
       ))}
     </>
   )
