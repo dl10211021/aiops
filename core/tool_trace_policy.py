@@ -67,6 +67,10 @@ def trace_runtime_summary(trace: dict[str, Any]) -> str:
     result_meta = trace_result_meta(trace)
     runtime = result_meta.get("runtime_execution") or result_meta.get("runtime_policy")
     if not isinstance(runtime, dict):
+        evidence_meta = trace_evidence(trace).get("result_meta")
+        if isinstance(evidence_meta, dict):
+            runtime = evidence_meta.get("runtime_execution") or evidence_meta.get("runtime_policy")
+    if not isinstance(runtime, dict):
         return ""
     parts: list[str] = []
     final_status = str(runtime.get("final_status") or "")

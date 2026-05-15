@@ -77,6 +77,22 @@ class ToolTracePolicyTests(unittest.TestCase):
 
         self.assertEqual(trace_runtime_summary(trace), "timeout:30s,retry:2/2")
 
+    def test_trace_runtime_summary_falls_back_to_evidence_metadata(self):
+        trace = {
+            "evidence": {
+                "result_meta": {
+                    "runtime_execution": {
+                        "attempts": 2,
+                        "max_attempts": 3,
+                        "retried": True,
+                        "final_status": "success",
+                    }
+                }
+            }
+        }
+
+        self.assertEqual(trace_runtime_summary(trace), "retry:2/3")
+
 
 if __name__ == "__main__":
     unittest.main()
