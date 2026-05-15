@@ -131,9 +131,57 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         payloads = [decode_sse(event) for event in events]
         approval = payloads[0]
         self.assertEqual(approval["type"], "tool_ask_approval")
+        self.assertEqual(json.loads(approval["args"]), {"sql": "delete from t"})
+        self.assertEqual(approval["cmd"], "delete from t")
         self.assertEqual(approval["tool_policy"]["name"], "db_execute_query")
         self.assertEqual(approval["tool_policy"]["evidence_family"], "database")
         self.assertEqual(approval["approval_source"]["layer"], "action_policy")
+
+    async def test_approval_request_sends_structured_redacted_args(self):
+        memory_store = FakeMemoryStore()
+        dispatcher = FakeDispatcher()
+        dispatcher.check_approval_needed = lambda tool_name, args, context: (True, "需要审批")
+        messages = []
+
+        async def never_resolve(_future, timeout):
+            raise TimeoutError()
+
+        with patch("asyncio.wait_for", side_effect=never_resolve), patch(
+            "core.agent_tool_loop.record_tool_approval_request",
+            return_value={"metadata": {"policy": {}, "approval_source": {"layer": "safety_policy", "label": "安全策略"}}},
+        ), patch("core.approval_queue.mark_approval_timeout"):
+            events = await collect_tool_events(
+                tool_calls=[
+                    {
+                        "id": "call-http-approval",
+                        "function": {
+                            "name": "monitoring_api_query",
+                            "arguments": json.dumps(
+                                {
+                                    "method": "POST",
+                                    "path": "/api/status",
+                                    "headers": {"Authorization": "Basic secret-token"},
+                                    "body": {"restart": True},
+                                }
+                            ),
+                        },
+                    }
+                ],
+                session_id="sid-tool",
+                messages=messages,
+                memory_store=memory_store,
+                dispatcher=dispatcher,
+                context={"session_id": "sid-tool"},
+                iteration=0,
+            )
+
+        approval = decode_sse(events[0])
+        approval_args = json.loads(approval["args"])
+        self.assertEqual(approval_args["method"], "POST")
+        self.assertEqual(approval_args["path"], "/api/status")
+        self.assertEqual(approval_args["body"], {"restart": True})
+        self.assertNotIn("secret-token", approval["args"])
+        self.assertEqual(approval["cmd"], "POST /api/status")
 
     async def test_runtime_policy_can_require_approval_even_without_safety_hit(self):
         memory_store = FakeMemoryStore()

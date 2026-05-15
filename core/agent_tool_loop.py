@@ -18,6 +18,7 @@ from core.agent_tool_events import (
     invalid_tool_arguments_result,
     prepare_tool_call,
 )
+from core.redaction import redact_value
 from core.safety_policy import approval_timeout_seconds
 from core.tool_execution_policy import (
     evaluate_tool_execution_gate,
@@ -172,6 +173,7 @@ async def process_chat_tool_calls(
 
         if needs_approval:
             approval_required = True
+            approval_args = _approval_args_payload(func_args)
             approval_record = record_tool_approval_request(
                 tool_call_id=tc_id,
                 session_id=session_id,
@@ -187,7 +189,7 @@ async def process_chat_tool_calls(
                     "type": "tool_ask_approval",
                     "tool_call_id": tc_id,
                     "tool_name": func_name,
-                    "args": display_cmd,
+                    "args": approval_args,
                     "reason": reason,
                     "actions": policy_metadata.get("actions") or [],
                     "primary_action": policy_metadata.get("primary_action"),
@@ -343,6 +345,10 @@ async def process_chat_tool_calls(
     )
     yield sse_raw(msg_loop)
     await sleep(0.05)
+
+
+def _approval_args_payload(args: dict[str, Any]) -> str:
+    return json.dumps(redact_value(args or {}), ensure_ascii=False, default=str)
 
 
 def _build_concurrent_plan(
