@@ -160,6 +160,30 @@ class TestDispatcherSecurity(unittest.TestCase):
         self.assertEqual(payload["tool_policy"]["approval_policy"], "guarded_write")
         self.assertEqual(payload["tool_policy"]["evidence_family"], "database")
 
+    def test_execution_gate_uses_runtime_sources_when_runtime_policy_requires_approval(self):
+        dispatcher = SkillDispatcher.__new__(SkillDispatcher)
+        with (
+            patch("core.dispatcher.tool_policy_metadata", return_value={
+                "name": "memory_delete",
+                "label": "删除记忆",
+                "operation_mode": "destructive",
+                "approval_policy": "always_required",
+                "destructive": True,
+                "approval_required": True,
+                "evidence_family": "memory",
+            }),
+            patch("core.dispatcher.policy_check_approval_needed", return_value=(True, "数据清理规则命中")),
+            patch("core.dispatcher.check_hard_block", return_value=(False, "")),
+            patch("core.dispatcher.check_readonly_block", return_value=(False, "")),
+            patch("connections.ssh_manager.ssh_manager.active_sessions", {}),
+        ):
+            gate = dispatcher.check_execution_gate("memory_delete", {"key": "old"}, {})
+
+        self.assertTrue(gate.approval_required)
+        self.assertEqual(gate.approval_sources, ("runtime_policy",))
+        self.assertNotIn("数据清理规则命中", gate.reason)
+        self.assertIn("工具执行策略要求审批", gate.reason)
+
 
 if __name__ == "__main__":
     unittest.main()

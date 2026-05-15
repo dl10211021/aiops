@@ -142,28 +142,34 @@ async def execute_legacy_command_record(
     resolved_dispatcher = _resolve_dispatcher(dispatcher)
     needs_approval, approval_reason = resolved_dispatcher.check_approval_needed(tool_name, tool_args, context)
     runtime_tool_policy = tool_policy_metadata(tool_name)
-    execution_gate = evaluate_tool_execution_gate(
-        tool_name,
-        safety_needs_approval=needs_approval,
-        safety_reason=approval_reason,
-        policy=runtime_tool_policy,
-    )
+    execution_gate_checker = getattr(resolved_dispatcher, "check_execution_gate", None)
+    if callable(execution_gate_checker):
+        execution_gate = execution_gate_checker(
+            tool_name,
+            tool_args,
+            context,
+            policy=runtime_tool_policy,
+        )
+    else:
+        execution_gate = evaluate_tool_execution_gate(
+            tool_name,
+            safety_needs_approval=needs_approval,
+            safety_reason=approval_reason,
+            policy=runtime_tool_policy,
+        )
     if execution_gate.approval_required:
-        approval_sources: list[str] = []
-        if "runtime_policy" in execution_gate.approval_sources:
-            approval_sources.append("runtime_policy")
-        if needs_approval:
-            approval_sources.append("safety_policy")
-        if "safety_policy" in execution_gate.approval_sources and "safety_policy" not in approval_sources:
-            approval_sources.append("safety_policy")
+        approval_sources = [
+            source
+            for source in ("runtime_policy", "safety_policy", "action_policy")
+            if source in execution_gate.approval_sources
+        ]
         raise LegacyCommandServiceError(
             409,
             _build_legacy_approval_error_payload(
                 tool_name,
                 execution_gate,
-                needs_approval,
-                approval_reason,
                 runtime_tool_policy,
+                approval_reason,
                 approval_sources,
             )
         )
@@ -208,9 +214,8 @@ async def execute_legacy_command_record(
 def _build_legacy_approval_error_payload(
     tool_name: str,
     execution_gate,
-    needs_approval: bool,
-    approval_reason: str,
     runtime_tool_policy: dict[str, Any],
+    approval_reason: str,
     approval_sources: list[str],
 ) -> dict[str, Any]:
     operation_mode = str(runtime_tool_policy.get("operation_mode") or "")
@@ -222,8 +227,8 @@ def _build_legacy_approval_error_payload(
         "tool": tool_name,
         "approval_sources": approval_sources,
         "safety_policy": {
-            "required": needs_approval,
-            "reason": approval_reason,
+            "required": "safety_policy" in execution_gate.approval_sources,
+            "reason": approval_reason if "safety_policy" in execution_gate.approval_sources else "",
         },
         "runtime_policy": {
             "required": runtime_policy_required,

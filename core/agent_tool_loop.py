@@ -27,6 +27,34 @@ from core.tool_execution_policy import (
 from core.tool_registry import tool_policy_metadata
 
 
+def _resolve_execution_gate(
+    dispatcher: Any,
+    tool_name: str,
+    args: dict[str, Any],
+    context: dict,
+    *,
+    default_policy: dict[str, Any] | None = None,
+) -> Any:
+    policy = default_policy or tool_policy_metadata(tool_name)
+    checker = getattr(dispatcher, "check_execution_gate", None)
+    if callable(checker):
+        try:
+            return checker(tool_name, args, context, policy=policy)
+        except TypeError:
+            return checker(tool_name, args, context)
+    needs_approval, reason = dispatcher.check_approval_needed(
+        tool_name,
+        args,
+        context,
+    )
+    return evaluate_tool_execution_gate(
+        tool_name,
+        safety_needs_approval=needs_approval,
+        safety_reason=reason,
+        policy=policy,
+    )
+
+
 class ChatMemoryStore(Protocol):
     def append_message(self, session_id: str, message: dict) -> None:
         ...
@@ -155,19 +183,15 @@ async def process_chat_tool_calls(
             )
             continue
 
-        needs_approval, reason = dispatcher.check_approval_needed(
+        execution_gate = _resolve_execution_gate(
+            dispatcher,
             func_name,
             func_args,
             context,
+            default_policy=tool_policy_metadata(func_name),
         )
         approval_required = False
-        tool_policy = tool_policy_metadata(func_name)
-        execution_gate = evaluate_tool_execution_gate(
-            func_name,
-            safety_needs_approval=needs_approval,
-            safety_reason=reason,
-            policy=tool_policy,
-        )
+        tool_policy = execution_gate.policy
         needs_approval = execution_gate.approval_required
         reason = execution_gate.reason
 
@@ -371,16 +395,12 @@ def _build_concurrent_plan(
         tool_policy = tool_policy_metadata(prepared_call.name)
         if not tool_policy.get("concurrency_safe"):
             break
-        needs_approval, reason = dispatcher.check_approval_needed(
+        gate = _resolve_execution_gate(
+            dispatcher,
             prepared_call.name,
             prepared_call.args,
             context,
-        )
-        gate = evaluate_tool_execution_gate(
-            prepared_call.name,
-            safety_needs_approval=needs_approval,
-            safety_reason=reason,
-            policy=tool_policy,
+            default_policy=tool_policy,
         )
         if gate.approval_required:
             break

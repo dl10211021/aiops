@@ -24,7 +24,7 @@ from core.safety_policy import (
 )
 from core.skill_lifecycle import validate_skill_frontmatter
 from core.skill_registry_service import SkillRegistryService
-from core.tool_execution_policy import evaluate_tool_execution_gate
+from core.tool_execution_policy import ToolExecutionGate, evaluate_tool_execution_gate
 from core.tool_policy_response import blocked_tool_response
 from core.tool_registry import tool_policy_metadata, tool_registry
 
@@ -152,26 +152,43 @@ class SkillDispatcher:
 
     def check_approval_needed(self, tool_call_name: str, args: dict, context: dict) -> tuple[bool, str]:
         """【安全层】检查当前大模型执行的指令是否需要人类审批。"""
+        gate = self.check_execution_gate(tool_call_name, args, context)
+        return gate.approval_required, gate.reason
+
+    def check_execution_gate(
+        self,
+        tool_call_name: str,
+        args: dict,
+        context: dict,
+        *,
+        policy: dict[str, Any] | None = None,
+    ) -> ToolExecutionGate:
+        """返回统一的执行闸门，包含审批来源、原因和策略。"""
         from connections.ssh_manager import ssh_manager
-        
+
         session_id = context.get("session_id")
         hard_blocked, _ = check_hard_block(tool_call_name, args, context)
         if hard_blocked:
-            return False, ""
+            return ToolExecutionGate(approval_required=False, reason="", policy=tool_policy_metadata(tool_call_name), approval_sources=())
         readonly_blocked, _ = check_readonly_block(tool_call_name, args, context)
         if readonly_blocked:
-            return False, ""
+            return ToolExecutionGate(approval_required=False, reason="", policy=tool_policy_metadata(tool_call_name), approval_sources=())
 
         runtime_gate = evaluate_tool_execution_gate(
             tool_call_name,
-            policy=tool_policy_metadata(tool_call_name),
+            policy=policy or tool_policy_metadata(tool_call_name),
         )
         if runtime_gate.approval_required:
-            return True, runtime_gate.reason
+            return runtime_gate
 
         if session_id and session_id in ssh_manager.active_sessions:
             if ssh_manager.active_sessions[session_id]["info"].get("auto_approve_all", False):
-                return False, ""
+                return ToolExecutionGate(
+                    False,
+                    "",
+                    runtime_gate.policy,
+                    tuple(runtime_gate.approval_sources),
+                )
 
         needs_approval, reason = policy_check_approval_needed(tool_call_name, args, context)
         gate = evaluate_tool_execution_gate(
@@ -180,7 +197,7 @@ class SkillDispatcher:
             safety_reason=reason,
             policy=runtime_gate.policy,
         )
-        return gate.approval_required, gate.reason
+        return gate
 
     def get_available_tools(
 

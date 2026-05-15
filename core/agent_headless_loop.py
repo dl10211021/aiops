@@ -11,6 +11,7 @@ from core.agent_runtime_config import agent_max_steps
 from core.agent_tool_events import parse_tool_arguments
 from core.safety_policy import explain_policy_decision
 from core.tool_execution_policy import (
+    ToolExecutionGate,
     evaluate_tool_execution_gate,
     execute_with_runtime_policy,
 )
@@ -44,6 +45,46 @@ def _headless_high_risk_action_reason(tool_name: str, args: dict, context: dict)
     return f"后台无人值守任务不自动执行高风险动作：{label}"
 
 
+def _headless_execution_gate(
+    *,
+    tool_name: str,
+    args: dict,
+    context: dict,
+    dispatcher: Any,
+    tool_policy: dict[str, Any],
+) -> ToolExecutionGate:
+    check_gate = getattr(dispatcher, "check_execution_gate", None)
+    if callable(check_gate):
+        try:
+            gate = check_gate(tool_name, args, context, policy=tool_policy)
+        except TypeError:
+            gate = check_gate(tool_name, args, context)
+    else:
+        needs_approval, reason = dispatcher.check_approval_needed(
+            tool_name,
+            args,
+            context,
+        )
+        gate = evaluate_tool_execution_gate(
+            tool_name,
+            safety_needs_approval=needs_approval,
+            safety_reason=reason,
+            policy=tool_policy,
+        )
+    if gate.approval_required:
+        return gate
+
+    high_risk_reason = _headless_high_risk_action_reason(tool_name, args, context)
+    if not high_risk_reason:
+        return gate
+    return ToolExecutionGate(
+        True,
+        high_risk_reason,
+        gate.policy,
+        ("safety_policy",),
+    )
+
+
 def _headless_approval_reason(
     *,
     tool_name: str,
@@ -52,20 +93,13 @@ def _headless_approval_reason(
     dispatcher: Any,
     tool_policy: dict[str, Any],
 ) -> str:
-    needs_approval, reason = dispatcher.check_approval_needed(
-        tool_name,
-        args,
-        context,
-    )
-    execution_gate = evaluate_tool_execution_gate(
-        tool_name,
-        safety_needs_approval=needs_approval,
-        safety_reason=reason,
-        policy=tool_policy,
-    )
-    if execution_gate.approval_required:
-        return execution_gate.reason
-    return _headless_high_risk_action_reason(tool_name, args, context)
+    return _headless_execution_gate(
+        tool_name=tool_name,
+        args=args,
+        context=context,
+        dispatcher=dispatcher,
+        tool_policy=tool_policy,
+    ).reason
 
 
 def _build_headless_concurrent_plan(
@@ -83,13 +117,13 @@ def _build_headless_concurrent_plan(
         tool_policy = tool_policy_metadata(func_name)
         if not tool_policy.get("concurrency_safe"):
             return None
-        if _headless_approval_reason(
+        if _headless_execution_gate(
             tool_name=func_name,
             args=func_args,
             context=context,
             dispatcher=dispatcher,
             tool_policy=tool_policy,
-        ):
+        ).approval_required:
             return None
         plan.append(
             {
