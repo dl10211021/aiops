@@ -61,3 +61,26 @@ def trace_policy_summary(
             fallback_to_registry=fallback_to_registry,
         )
     )
+
+
+def trace_runtime_summary(trace: dict[str, Any]) -> str:
+    result_meta = trace_result_meta(trace)
+    runtime = result_meta.get("runtime_execution") or result_meta.get("runtime_policy")
+    if not isinstance(runtime, dict):
+        return ""
+    parts: list[str] = []
+    final_status = str(runtime.get("final_status") or "")
+    error_type = str(runtime.get("error_type") or "")
+    timeout_seconds = runtime.get("timeout_seconds")
+    if final_status == "error":
+        parts.append(
+            f"timeout:{timeout_seconds}s"
+            if error_type == "tool_timeout" and timeout_seconds
+            else f"error:{error_type or 'tool_execution_failed'}"
+        )
+    if runtime.get("retried") is True:
+        attempts = runtime.get("attempts")
+        max_attempts = runtime.get("max_attempts")
+        total = f"/{max_attempts}" if max_attempts else ""
+        parts.append(f"retry:{attempts}{total}")
+    return ",".join(parts)

@@ -166,6 +166,45 @@ class AgentStepSummaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("evidence=tev-sid-1-call-1", audit)
         self.assertIn("execute=select 1 from dual", audit)
 
+    async def test_summary_audit_context_includes_runtime_execution_state(self):
+        seen_messages = []
+
+        async def executor(model_name, messages, thinking_mode, tools=None):
+            seen_messages.extend(messages)
+            yield {"type": "content", "content": "ok"}
+
+        memory_store = FakeMemoryStore()
+        async for _ in stream_step_limit_summary(
+            model_name="model-a",
+            messages=[{"role": "assistant", "content": "工具执行中"}],
+            session_id="sid-1",
+            max_steps=2,
+            memory_store=memory_store,
+            exec_trace=[
+                {
+                    "tool": "monitoring_api_query",
+                    "status": "error",
+                    "args": "GET /api/status",
+                    "result": "timeout",
+                    "resultMeta": {
+                        "runtime_policy": {
+                            "attempts": 2,
+                            "max_attempts": 2,
+                            "retried": True,
+                            "final_status": "error",
+                            "error_type": "tool_timeout",
+                            "timeout_seconds": 30,
+                        }
+                    },
+                }
+            ],
+            stream_executor=executor,
+        ):
+            pass
+
+        audit = seen_messages[-2]["content"]
+        self.assertIn("runtime=timeout:30s,retry:2/2", audit)
+
 
 if __name__ == "__main__":
     unittest.main()

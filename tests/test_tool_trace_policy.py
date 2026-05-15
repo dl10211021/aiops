@@ -4,6 +4,7 @@ from core.tool_trace_policy import (
     policy_summary,
     trace_evidence_id,
     trace_policy_summary,
+    trace_runtime_summary,
     trace_tool_policy,
 )
 
@@ -59,6 +60,22 @@ class ToolTracePolicyTests(unittest.TestCase):
             {},
         )
         self.assertEqual(policy_summary({}), "")
+
+    def test_trace_runtime_summary_reports_timeout_and_retry(self):
+        trace = {
+            "resultMeta": {
+                "runtime_policy": {
+                    "attempts": 2,
+                    "max_attempts": 2,
+                    "retried": True,
+                    "final_status": "error",
+                    "error_type": "tool_timeout",
+                    "timeout_seconds": 30,
+                }
+            }
+        }
+
+        self.assertEqual(trace_runtime_summary(trace), "timeout:30s,retry:2/2")
 
 
 if __name__ == "__main__":

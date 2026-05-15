@@ -5,7 +5,7 @@ from typing import Protocol
 
 from core.agent_runtime_config import agent_step_limit_instruction
 from core.agent_sse import sse_event
-from core.tool_trace_policy import trace_evidence_id, trace_policy_summary
+from core.tool_trace_policy import trace_evidence_id, trace_policy_summary, trace_runtime_summary
 
 
 class StepSummaryMemoryStore(Protocol):
@@ -42,6 +42,7 @@ def _step_summary_audit_message(exec_trace: list[dict] | None) -> dict | None:
             f"{index}. tool={trace.get('tool') or 'unknown'}; "
             f"status={trace.get('status') or 'done'}; "
             f"policy={trace_policy_summary(trace) or '-'}; "
+            f"runtime={trace_runtime_summary(trace) or '-'}; "
             f"evidence={trace_evidence_id(trace) or '-'}; "
             f"execute={str(trace.get('args') or '-')[:500]}; "
             f"result={str(trace.get('result') or '-')[:900]}"
