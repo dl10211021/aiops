@@ -41,6 +41,25 @@ class ToolExecutionPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(gate.approval_required)
         self.assertEqual(gate.reason, "命中 sudo 变更策略")
 
+    def test_runtime_and_safety_policy_require_approval_with_both_sources(self):
+        gate = evaluate_tool_execution_gate(
+            "memory_delete",
+            safety_needs_approval=True,
+            safety_reason="命中数据删除策略",
+            policy={
+                "name": "memory_delete",
+                "label": "删除记忆",
+                "operation_mode": "destructive",
+                "approval_policy": "always_required",
+                "destructive": True,
+            },
+        )
+
+        self.assertTrue(gate.approval_required)
+        self.assertEqual(gate.approval_sources, ("runtime_policy", "safety_policy"))
+        self.assertIn("工具执行策略要求审批", gate.reason)
+        self.assertIn("命中数据删除策略", gate.reason)
+
     async def test_runtime_policy_times_out_and_returns_structured_error(self):
         async def slow_tool():
             await asyncio.sleep(0.05)

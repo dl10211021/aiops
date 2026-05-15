@@ -142,13 +142,6 @@ async def execute_legacy_command_record(
     resolved_dispatcher = _resolve_dispatcher(dispatcher)
     needs_approval, approval_reason = resolved_dispatcher.check_approval_needed(tool_name, tool_args, context)
     runtime_tool_policy = tool_policy_metadata(tool_name)
-    operation_mode = str(runtime_tool_policy.get("operation_mode") or "")
-    approval_policy = str(runtime_tool_policy.get("approval_policy") or "")
-    runtime_policy_required = bool(
-        runtime_tool_policy.get("destructive")
-        or approval_policy == "always_required"
-        or operation_mode == "external_effect"
-    )
     execution_gate = evaluate_tool_execution_gate(
         tool_name,
         safety_needs_approval=needs_approval,
@@ -157,29 +150,22 @@ async def execute_legacy_command_record(
     )
     if execution_gate.approval_required:
         approval_sources: list[str] = []
-        if runtime_policy_required:
+        if "runtime_policy" in execution_gate.approval_sources:
             approval_sources.append("runtime_policy")
         if needs_approval:
             approval_sources.append("safety_policy")
+        if "safety_policy" in execution_gate.approval_sources and "safety_policy" not in approval_sources:
+            approval_sources.append("safety_policy")
         raise LegacyCommandServiceError(
             409,
-            {
-                "message": f"该操作需要后端审批：{execution_gate.reason}。请在聊天会话中执行，以便弹出审批确认。",
-                "code": "approval_required",
-                "tool": tool_name,
-                "approval_sources": approval_sources,
-                "safety_policy": {
-                    "required": needs_approval,
-                    "reason": approval_reason,
-                },
-                "runtime_policy": {
-                    "required": runtime_policy_required,
-                    "reason": execution_gate.reason if runtime_policy_required else "",
-                    "operation_mode": operation_mode,
-                    "approval_policy": approval_policy,
-                },
-                "policy": runtime_tool_policy,
-            },
+            _build_legacy_approval_error_payload(
+                tool_name,
+                execution_gate,
+                needs_approval,
+                approval_reason,
+                runtime_tool_policy,
+                approval_sources,
+            )
         )
 
     runtime_execution: dict[str, Any] = {}
@@ -217,3 +203,34 @@ async def execute_legacy_command_record(
     if runtime_execution:
         response["runtime_execution"] = runtime_execution
     return response
+
+
+def _build_legacy_approval_error_payload(
+    tool_name: str,
+    execution_gate,
+    needs_approval: bool,
+    approval_reason: str,
+    runtime_tool_policy: dict[str, Any],
+    approval_sources: list[str],
+) -> dict[str, Any]:
+    operation_mode = str(runtime_tool_policy.get("operation_mode") or "")
+    approval_policy = str(runtime_tool_policy.get("approval_policy") or "")
+    runtime_policy_required = "runtime_policy" in execution_gate.approval_sources
+    return {
+        "message": f"该操作需要后端审批：{execution_gate.reason}。请在聊天会话中执行，以便弹出审批确认。",
+        "code": "approval_required",
+        "tool": tool_name,
+        "approval_sources": approval_sources,
+        "safety_policy": {
+            "required": needs_approval,
+            "reason": approval_reason,
+        },
+        "runtime_policy": {
+            "required": runtime_policy_required,
+            "reason": execution_gate.reason if runtime_policy_required else "",
+            "operation_mode": operation_mode,
+            "approval_policy": approval_policy,
+            "sources": list(execution_gate.approval_sources),
+        },
+        "policy": runtime_tool_policy,
+    }

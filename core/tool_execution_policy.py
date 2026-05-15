@@ -17,6 +17,7 @@ class ToolExecutionGate:
     approval_required: bool
     reason: str
     policy: dict[str, Any]
+    approval_sources: tuple[str, ...] = ()
 
 
 def evaluate_tool_execution_gate(
@@ -32,18 +33,55 @@ def evaluate_tool_execution_gate(
     approval_policy = str(effective_policy.get("approval_policy") or "")
     destructive = bool(effective_policy.get("destructive"))
 
-    if destructive or approval_policy == "always_required":
-        reason = safety_reason or _policy_gate_reason(effective_policy, "强制审批")
-        return ToolExecutionGate(True, reason, effective_policy)
+    sources: list[str] = []
+    reason_parts: list[str] = []
 
-    if operation_mode == "external_effect":
-        reason = safety_reason or _policy_gate_reason(effective_policy, "外发动作需要人工确认")
-        return ToolExecutionGate(True, reason, effective_policy)
+    requires_runtime_approval = destructive or approval_policy == "always_required"
+    requires_external_approval = operation_mode == "external_effect"
+    if requires_runtime_approval:
+        reason_parts.append(_policy_gate_reason(effective_policy, "强制审批"))
+        sources.append("runtime_policy")
+
+    if requires_external_approval:
+        reason_parts.append(
+            _policy_gate_reason(effective_policy, "外发动作需要人工确认")
+        )
+        sources.append("runtime_policy")
+
+    if requires_runtime_approval or requires_external_approval:
+        if safety_needs_approval:
+            if safety_reason:
+                if safety_reason not in reason_parts:
+                    reason_parts.append(safety_reason)
+            else:
+                reason_parts.append("命中安全策略，需要审批")
+            if "safety_policy" not in sources:
+                sources.append("safety_policy")
+        return ToolExecutionGate(
+            True,
+            _compose_gate_reason(reason_parts),
+            effective_policy,
+            tuple(dict.fromkeys(sources)),
+        )
 
     if safety_needs_approval:
-        return ToolExecutionGate(True, safety_reason or "命中安全策略，需要审批", effective_policy)
+        reason_parts.append(safety_reason or "命中安全策略，需要审批")
+        sources.append("safety_policy")
+        return ToolExecutionGate(
+            True,
+            _compose_gate_reason(reason_parts),
+            effective_policy,
+            tuple(dict.fromkeys(sources)),
+        )
 
-    return ToolExecutionGate(False, "", effective_policy)
+    return ToolExecutionGate(False, "", effective_policy, tuple())
+
+
+def _compose_gate_reason(parts: list[str]) -> str:
+    text = "；".join(part for part in (parts or []) if part)
+    if text:
+        return text
+    return "命中执行策略，需要审批"
 
 
 async def execute_with_runtime_policy(
