@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { approveToolCall } from '@/api/client'
 import { useStore } from '@/store'
 import type { ChatMessage, ToolApproval } from '@/types'
+import { isAutoApproveConfirmationValid } from './approvalConfirmation'
 import type { ChatApprovalDecision } from './approvalTypes'
 import { findApprovalMessageId } from './chatAttention'
 
@@ -39,7 +40,7 @@ export function useToolApprovalDecision(currentSessionId: string | null, message
       addToast('操作人不能为空', 'error')
       return
     }
-    if (autoAll && confirmation !== '全部批准') {
+    if (autoAll && !isAutoApproveConfirmationValid(confirmation)) {
       addToast('请输入“全部批准”确认本会话自动放行', 'error')
       return
     }

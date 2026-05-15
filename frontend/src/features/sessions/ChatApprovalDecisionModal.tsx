@@ -5,6 +5,7 @@ import {
   ChatApprovalDecisionForm,
   ChatApprovalDecisionHeader,
 } from './ChatApprovalDecisionModalParts'
+import { isAutoApproveConfirmationValid } from './approvalConfirmation'
 import type { ChatApprovalDecision } from './approvalTypes'
 
 interface ChatApprovalDecisionModalProps {
@@ -24,7 +25,7 @@ export default function ChatApprovalDecisionModal({
   const disabled = decision.busy
     || !decision.operator.trim()
     || (decision.approved && !decision.note.trim())
-    || (decision.autoAll && decision.confirmation !== '全部批准')
+    || (decision.autoAll && !isAutoApproveConfirmationValid(decision.confirmation))
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onClick={onClose}>

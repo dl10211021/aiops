@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { toolLabel } from '@/utils/assetDisplay'
 import { ApprovalSourceSummary } from './ApprovalSourceSummary'
+import { AUTO_APPROVE_CONFIRMATION_TEXT } from './approvalConfirmation'
 import { approvalArgumentRows } from './approvalRows'
 import type { ChatApprovalDecision } from './approvalTypes'
 import { policyActionTone } from './policyTones'
@@ -106,13 +107,13 @@ export function ChatApprovalDecisionForm({
 
       {decision.autoAll && (
         <div>
-          <label className="text-xs text-ops-subtext">确认文本</label>
+          <label className="text-xs text-ops-subtext">确认文本：请输入“{AUTO_APPROVE_CONFIRMATION_TEXT}”</label>
           <input
             value={decision.confirmation}
             disabled={decision.busy}
             onChange={(event) => onChange((current) => current ? { ...current, confirmation: event.target.value } : current)}
             className="mt-1 w-full rounded-lg border border-ops-alert/40 bg-ops-dark px-3 py-2 text-sm text-ops-text outline-none focus:border-ops-alert disabled:opacity-60"
-            placeholder="请输入：全部批准"
+            placeholder={`请输入：${AUTO_APPROVE_CONFIRMATION_TEXT}`}
           />
         </div>
       )}
@@ -145,7 +146,7 @@ export function ChatApprovalDecisionFooter({
           decision.approved ? 'bg-ops-success text-ops-dark' : 'bg-ops-alert text-white'
         }`}
       >
-        {decision.busy ? '提交中...' : `确认${action}`}
+        {decision.busy ? '提交中...' : decision.autoAll ? '确认全部批准' : `确认${action}`}
       </button>
     </div>
   )
