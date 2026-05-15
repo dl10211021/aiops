@@ -14,6 +14,9 @@ def test_auto_approve_confirmation_uses_explicit_all_approval_phrase():
     parts = Path(
         "frontend/src/features/sessions/ChatApprovalDecisionModalParts.tsx"
     ).read_text(encoding="utf-8")
+    approval_card_parts = Path(
+        "frontend/src/features/sessions/ToolApprovalCardParts.tsx"
+    ).read_text(encoding="utf-8")
 
     assert "AUTO_APPROVE_CONFIRMATION_TEXT = '全部批准'" in confirmation
     assert "value.trim() === AUTO_APPROVE_CONFIRMATION_TEXT" in confirmation
@@ -23,3 +26,6 @@ def test_auto_approve_confirmation_uses_explicit_all_approval_phrase():
     assert "确认全部批准" in parts
     assert "请输入“{AUTO_APPROVE_CONFIRMATION_TEXT}”" in parts
     assert "{disabledReason}" in parts
+    assert "本会话全部批准" in approval_card_parts
+    assert "已全部批准，本会话后续审批将自动放行" in approval_card_parts
+    assert "批准本次，并让本会话后续需要审批的工具调用自动放行" in approval_card_parts

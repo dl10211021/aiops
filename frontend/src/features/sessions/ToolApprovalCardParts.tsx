@@ -21,7 +21,7 @@ export function getToolApprovalDisplay(approval: ToolApproval) {
     ? 'text-ops-success'
     : rejected || timedOut ? 'text-ops-alert' : 'text-yellow-200'
   const decisionLabel = approved
-    ? approval.autoAll ? '已批准，本会话自动放行' : '已批准，继续执行'
+    ? approval.autoAll ? '已全部批准，本会话后续审批将自动放行' : '已批准，继续执行'
     : timedOut ? '审批超时，已取消执行' : rejected ? '已拒绝，已拦截执行' : '等待人工审批'
   const decisionText = approval.decidedAt
     ? new Date(approval.decidedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
@@ -172,9 +172,10 @@ export function ToolApprovalDecisionActions({
       </button>
       <button
         onClick={() => onApproval(approval, true, true)}
+        title="批准本次，并让本会话后续需要审批的工具调用自动放行"
         className="rounded-md border border-ops-surface1 px-3 py-1.5 text-xs text-ops-subtext transition-colors hover:text-ops-text"
       >
-        本会话自动批准
+        本会话全部批准
       </button>
     </div>
   )
