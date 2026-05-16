@@ -539,6 +539,26 @@ class FileMemoryStoreTests(unittest.TestCase):
                 "review_status": "pending",
                 "retrieval_enabled": False,
                 "candidate_type": "feedback_success_experience",
+                "evidence_refs": [
+                    {
+                        "type": "tool_evidence",
+                        "label": "工具证据",
+                        "id": "tev-sid-1-call-1",
+                        "tool": "db_execute_query",
+                        "status": "done",
+                        "evidence_family": "database",
+                        "sql_action": "写入/DDL (UPDATE)",
+                    },
+                    {
+                        "type": "tool_evidence",
+                        "label": "工具证据",
+                        "id": "tev-sid-1-call-2",
+                        "tool": "monitoring_api_query",
+                        "status": "done",
+                        "evidence_family": "observability",
+                        "http_action": "只读请求 (GET)",
+                    },
+                ],
             },
         )
         candidate = self.store.list_candidate_entries(limit=10)[0]
@@ -570,6 +590,12 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertEqual(artifact["generated_by"], "tester")
         self.assertEqual(artifact["generated_reason"], "发布草稿已生成")
         self.assertIn("# Runbook 发布草稿", artifact["content"])
+        self.assertIn("- evidence_refs: 2", artifact["content"])
+        self.assertIn("tev-sid-1-call-1", artifact["content"])
+        self.assertIn("  - tool: db_execute_query", artifact["content"])
+        self.assertIn("  - action: 写入/DDL (UPDATE)", artifact["content"])
+        self.assertIn("  - evidence_family: database", artifact["content"])
+        self.assertIn("  - action: 只读请求 (GET)", artifact["content"])
         self.assertEqual(artifact["artifact_size"], len(artifact["content"].encode("utf-8")))
         self.assertTrue(updated_quality["quality_events"][-1]["passed"] >= 1)
 

@@ -661,7 +661,8 @@ class FileMemoryStore:
         checklist = item.get("quality_checklist")
         if not isinstance(checklist, list):
             checklist = []
-        evidence_count = len(item.get("evidence_refs") or [])
+        evidence_refs = item.get("evidence_refs") if isinstance(item.get("evidence_refs"), list) else []
+        evidence_count = len(evidence_refs)
         lines = [
             f"# {label} 发布草稿",
             "",
@@ -695,6 +696,9 @@ class FileMemoryStore:
             "",
             f"## 证据与引用",
             f"- evidence_refs: {evidence_count}",
+        ])
+        lines.extend(self._render_publish_evidence_refs(evidence_refs))
+        lines.extend([
             "",
             "## 草稿说明",
             "- 已通过运行时质量门禁并标记为已发布。",
@@ -702,6 +706,29 @@ class FileMemoryStore:
             "",
         ])
         return "\n".join(lines).rstrip() + "\n"
+
+    def _render_publish_evidence_refs(self, refs: list[dict[str, Any]]) -> list[str]:
+        lines: list[str] = []
+        for index, ref in enumerate(refs[:12], start=1):
+            if not isinstance(ref, dict):
+                continue
+            identity = str(ref.get("id") or ref.get("tool") or ref.get("type") or "-").strip()
+            tool = str(ref.get("tool") or "-").strip()
+            status = str(ref.get("status") or "-").strip()
+            family = str(ref.get("evidence_family") or "-").strip()
+            action = str(
+                ref.get("command_action")
+                or ref.get("sql_action")
+                or ref.get("http_action")
+                or ref.get("action_label")
+                or "-"
+            ).strip()
+            lines.append(f"- [{index}] {identity}")
+            lines.append(f"  - tool: {tool}")
+            lines.append(f"  - status: {status}")
+            lines.append(f"  - action: {action}")
+            lines.append(f"  - evidence_family: {family}")
+        return lines
 
     def _learning_candidate_publish_artifact_path(self, *, artifact_id: str, target_type: str) -> Path:
         safe_target_type = safe_memory_segment(target_type or "runbook")
