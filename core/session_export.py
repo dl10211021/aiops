@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from core.tool_display import tool_label
 from core.tool_trace_policy import (
+    trace_command_action_summary,
     trace_evidence_id,
     trace_http_action_summary,
     trace_sql_action_summary,
@@ -143,6 +144,9 @@ def format_exec_trace_lines(exec_trace: list[dict]) -> list[str]:
         http_action = trace_http_action_summary(item)
         if http_action:
             lines.append(f"  - HTTP Action: {http_action}")
+        command_action = trace_command_action_summary(item)
+        if command_action:
+            lines.append(f"  - Command Action: {command_action}")
         runtime_line = _format_runtime_line(item)
         if runtime_line:
             lines.append(f"  - Runtime: {runtime_line}")

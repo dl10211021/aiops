@@ -164,6 +164,42 @@ class TestSessionExport(unittest.TestCase):
 
         self.assertIn("  - HTTP Action: 只读请求 (GET)", markdown)
 
+    def test_format_session_history_markdown_includes_command_action_metadata(self):
+        markdown = format_session_history_markdown(
+            [
+                {
+                    "role": "assistant",
+                    "content": "服务操作完成",
+                    "exec_trace": [
+                        {
+                            "tool": "linux_execute_command",
+                            "status": "done",
+                            "args": "systemctl restart sshd",
+                            "result": '{"success": true}',
+                            "resultMeta": {
+                                "primary_action": {
+                                    "id": "linux.service.change",
+                                    "label": "变更服务状态",
+                                    "severity": "high",
+                                },
+                                "tool_policy": {
+                                    "operation_mode": "read_write",
+                                    "approval_policy": "guarded_write",
+                                    "evidence_family": "host_cli",
+                                },
+                            },
+                        }
+                    ],
+                }
+            ],
+            "linux-01",
+        )
+
+        self.assertIn(
+            "  - Command Action: 变更服务状态 (linux.service.change)",
+            markdown,
+        )
+
     def test_format_session_history_markdown_includes_runtime_timeout_metadata(self):
         markdown = format_session_history_markdown(
             [

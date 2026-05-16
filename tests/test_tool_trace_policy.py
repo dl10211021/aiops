@@ -2,6 +2,7 @@ import unittest
 
 from core.tool_trace_policy import (
     policy_summary,
+    trace_command_action_summary,
     trace_evidence_id,
     trace_http_action_summary,
     trace_policy_summary,
@@ -143,6 +144,35 @@ class ToolTracePolicyTests(unittest.TestCase):
         }
 
         self.assertEqual(trace_http_action_summary(trace), "写入/变更 (POST)")
+
+    def test_trace_command_action_summary_prefers_result_metadata(self):
+        trace = {
+            "tool": "linux_execute_command",
+            "resultMeta": {
+                "primary_action": {
+                    "id": "linux.service.change",
+                    "label": "变更服务状态",
+                    "severity": "high",
+                },
+            },
+            "args": "uptime",
+        }
+
+        self.assertEqual(
+            trace_command_action_summary(trace),
+            "变更服务状态 (linux.service.change)",
+        )
+
+    def test_trace_command_action_summary_falls_back_to_command_args(self):
+        trace = {
+            "tool": "redis_execute_command",
+            "args": "SET app:key value",
+        }
+
+        self.assertEqual(
+            trace_command_action_summary(trace),
+            "Redis 写入 Key (redis.key_write)",
+        )
 
 
 if __name__ == "__main__":

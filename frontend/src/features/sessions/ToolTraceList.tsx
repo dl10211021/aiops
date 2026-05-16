@@ -14,6 +14,7 @@ import {
   traceExecutionText,
 } from './traceUtils'
 import {
+  commandActionFromTrace,
   evidenceLabel,
   evidenceToneClass,
   httpActionFromTrace,
@@ -103,6 +104,7 @@ function ToolTraceCard({
   const executionLabels = runtimeExecutionLabels(item)
   const sqlAction = sqlActionFromTrace(item)
   const httpAction = httpActionFromTrace(item)
+  const commandAction = commandActionFromTrace(item)
   const primaryAction = extractPrimaryAction(parsedResult)
   const isPolicyBlocked = isPolicyBlockedResult(parsedResult)
   const isToolError = !isPolicyBlocked && isToolErrorResult(parsedResult)
@@ -168,6 +170,14 @@ function ToolTraceCard({
                 title="本次 HTTP/API 请求的实际方法，和工具自身可读写能力分开显示。"
               >
                 {httpAction.label}
+              </span>
+            )}
+            {commandAction && (
+              <span
+                className={`rounded border px-2 py-0.5 font-semibold ${commandAction.className}`}
+                title="本次命令的实际动作，和工具自身可读写能力分开显示。"
+              >
+                {commandAction.label}
               </span>
             )}
             <span

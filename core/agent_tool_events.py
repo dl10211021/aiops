@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from core.redaction import redact_json_text, redact_text
 from core.tool_evidence import build_tool_evidence
 from core.tool_registry import tool_policy_metadata
+from core.tool_trace_policy import trace_command_actions, trace_command_primary_action
 
 
 @dataclass(frozen=True)
@@ -103,6 +104,25 @@ def _result_metadata_with_tool_policy(tool_name: str, metadata: dict) -> dict:
     return enriched
 
 
+def _result_metadata_with_command_action(
+    tool_name: str,
+    metadata: dict,
+    input_summary: str,
+) -> dict:
+    if metadata.get("primary_action") or not input_summary:
+        return metadata
+    trace = {"tool": tool_name, "args": input_summary, "resultMeta": metadata}
+    primary_action = trace_command_primary_action(trace)
+    if not primary_action:
+        return metadata
+    enriched = dict(metadata)
+    enriched["primary_action"] = primary_action
+    actions = trace_command_actions(trace)
+    if actions:
+        enriched["actions"] = actions
+    return enriched
+
+
 def _session_mode_from_context(context: dict | None) -> str | None:
     if not isinstance(context, dict):
         return None
@@ -142,6 +162,11 @@ def build_tool_end_event(
     result_meta = _result_metadata_with_tool_policy(
         tool_name,
         result_summary["metadata"],
+    )
+    result_meta = _result_metadata_with_command_action(
+        tool_name,
+        result_meta,
+        input_summary,
     )
     context_mode = _session_mode_from_context(context)
     if context_mode:

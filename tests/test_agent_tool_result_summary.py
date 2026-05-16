@@ -161,6 +161,7 @@ def test_build_tool_end_event_attaches_tool_policy_metadata_to_success_result():
         "call-1",
         "linux_execute_command",
         {"success": True, "stdout": "ok"},
+        input_summary="systemctl restart sshd",
     )
 
     payload = json.loads(message)
@@ -171,6 +172,9 @@ def test_build_tool_end_event_attaches_tool_policy_metadata_to_success_result():
     assert payload["result_meta"]["tool_policy"]["operation_mode"] == "read_write"
     assert payload["result_meta"]["tool_policy"]["approval_policy"] == "guarded_write"
     assert payload["result_meta"]["tool_policy"]["evidence_family"] == "host_cli"
+    assert payload["result_meta"]["primary_action"]["id"] == "linux.service.change"
+    assert payload["result_meta"]["primary_action"]["label"] == "变更服务状态"
+    assert payload["result_meta"]["actions"][0]["id"] == "linux.service.change"
     assert "ok" in safe_text
 
 

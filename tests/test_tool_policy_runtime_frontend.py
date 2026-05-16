@@ -211,3 +211,25 @@ def test_frontend_shows_actual_http_action_separately_from_tool_policy():
     assert "{httpAction && (" in trace_list
     assert "const httpAction = httpActionFromTrace(trace)" in thinking_panel
     assert "httpAction?.searchText" in thinking_panel
+
+
+def test_frontend_shows_actual_command_action_separately_from_tool_policy():
+    presentation = Path(
+        "frontend/src/features/sessions/toolPolicyPresentation.ts"
+    ).read_text(encoding="utf-8")
+    trace_list = Path("frontend/src/features/sessions/ToolTraceList.tsx").read_text(
+        encoding="utf-8"
+    )
+    thinking_panel = Path(
+        "frontend/src/features/sessions/AiThinkingChainPanel.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert "export function commandActionFromTrace(trace: ExecTraceItem)" in presentation
+    assert "label: `命令：${label} (${actionId})`" in presentation
+    assert "'linux.service.change': '变更服务状态'" in presentation
+    assert "command write change ${actionId}" in presentation
+    assert "command read readonly ${actionId}" in presentation
+    assert "const commandAction = commandActionFromTrace(item)" in trace_list
+    assert "{commandAction && (" in trace_list
+    assert "const commandAction = commandActionFromTrace(trace)" in thinking_panel
+    assert "commandAction?.searchText" in thinking_panel

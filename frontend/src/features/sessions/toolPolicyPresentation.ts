@@ -286,6 +286,40 @@ const sqlWriteTypes = new Set([
 
 const httpReadMethods = new Set(['GET', 'HEAD', 'OPTIONS'])
 const httpWriteMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+const commandReadActions = new Set([
+  'linux.read.resource',
+  'linux.read.service',
+  'linux.read.network',
+  'linux.read.filesystem',
+  'linux.read.logs',
+  'linux.read.file',
+  'windows.read.info',
+  'windows.read.service',
+  'windows.read.eventlog',
+  'windows.read.process',
+  'windows.read.network',
+  'network.read.status',
+  'network.read.config',
+  'redis.read',
+  'memcached.read',
+  'mongodb.find',
+  'mongodb.aggregate',
+])
+const commandActionLabels: Record<string, string> = {
+  'linux.read.resource': '读取资源状态',
+  'linux.read.service': '查看服务状态',
+  'linux.service.change': '变更服务状态',
+  'windows.read.service': '查看 Windows 服务',
+  'windows.service.change': '变更 Windows 服务',
+  'network.read.status': '查看网络设备状态',
+  'network.interface.change': '变更网络接口',
+  'redis.read': 'Redis 读取',
+  'redis.key_write': 'Redis 写入 Key',
+  'memcached.read': 'Memcached 读取',
+  'memcached.key_write': 'Memcached 写入 Key',
+  'mongodb.find': 'MongoDB 查询',
+  'mongodb.write': 'MongoDB 写入',
+}
 
 function sqlStatementTypeFromTrace(trace: ExecTraceItem) {
   const resultMeta = objectRecord(trace.resultMeta)
@@ -372,6 +406,78 @@ export function httpActionFromTrace(trace: ExecTraceItem) {
     className: 'border-amber-300/45 bg-amber-300/10 text-amber-100',
     searchText: `http unknown ${method.toLowerCase()} 待识别`,
   }
+}
+
+export function commandActionFromTrace(trace: ExecTraceItem) {
+  const action = commandPrimaryAction(trace)
+  const actionId = recordValue(action, 'id')
+  const label = recordValue(action, 'label')
+  if (!actionId || !label) return null
+  const isRead = commandReadActions.has(actionId)
+  return {
+    label: `命令：${label} (${actionId})`,
+    className: isRead
+      ? 'border-emerald-400/35 bg-emerald-400/10 text-emerald-100'
+      : 'border-ops-alert/40 bg-ops-alert/10 text-ops-alert',
+    searchText: isRead
+      ? `command read readonly ${actionId} ${label} 只读`
+      : `command write change ${actionId} ${label} 写入 变更`,
+  }
+}
+
+function commandPrimaryAction(trace: ExecTraceItem) {
+  const resultMeta = objectRecord(trace.resultMeta)
+  const evidenceMeta = objectRecord(trace.evidence?.result_meta)
+  const parsed = parseJsonRecord(trace.result || '')
+  const action = objectRecord(resultMeta?.primary_action)
+    || objectRecord(evidenceMeta?.primary_action)
+    || objectRecord(parsed?.primary_action)
+  if (action && recordValue(action, 'id') && recordValue(action, 'label')) return action
+  const actionId = commandActionIdFromTrace(trace)
+  if (!actionId) return null
+  return {
+    id: actionId,
+    label: commandActionLabels[actionId] || actionId,
+  }
+}
+
+function commandActionIdFromTrace(trace: ExecTraceItem) {
+  const tool = trace.tool || ''
+  if (tool === 'db_execute_query' || httpActionFromTrace(trace)) return ''
+  const text = [
+    commandTextFromRecord(parseJsonRecord(trace.args || '')),
+    trace.args,
+    trace.evidence?.input_summary,
+    trace.evidence?.redacted_input,
+  ].find((item): item is string => typeof item === 'string' && item.trim().length > 0)?.trim().toLowerCase() || ''
+  if (!text) return ''
+  if ((tool === 'linux_execute_command' || tool === 'local_execute_script' || tool === 'execute_on_scope')) {
+    if (/\bsystemctl\s+(start|stop|restart|reload|enable|disable|mask|unmask|daemon-reload)\b/.test(text)) return 'linux.service.change'
+    if (/\bsystemctl\s+(status|show|cat|list-units|list-unit-files|is-active|is-enabled|is-failed)\b/.test(text)) return 'linux.read.service'
+    if (/^(sudo\s+)?(free|df|du|lscpu|lsmem|uptime|top|vmstat|iostat|mpstat|sar|uname|hostname|date|id|whoami|who)\b/.test(text)) return 'linux.read.resource'
+  }
+  if (tool === 'winrm_execute_command') {
+    if (/\b(start-service|stop-service|restart-service|set-service|new-service|remove-service)\b|\bsc(?:\.exe)?\s+(start|stop|delete|config)\b/.test(text)) return 'windows.service.change'
+    if (/\b(get-service)\b|\bsc(?:\.exe)?\s+query\b/.test(text)) return 'windows.read.service'
+  }
+  if (tool === 'network_cli_execute_command') {
+    if (/^(show|display|dis)\b/.test(text)) return 'network.read.status'
+    if (/\b(interface|shutdown|undo shutdown|vlan|switchport)\b/.test(text)) return 'network.interface.change'
+  }
+  if (tool === 'redis_execute_command') {
+    if (/^(get|mget|hget|hgetall|lrange|info|dbsize|scan|ttl|exists|type|keys)\b/.test(text)) return 'redis.read'
+    if (/^(set|setex|mset|hset|hmset|lpush|rpush|sadd|zadd|del|unlink)\b/.test(text)) return 'redis.key_write'
+  }
+  if (tool === 'memcached_execute_command') {
+    if (/^(version|stats|get|gets)\b/.test(text)) return 'memcached.read'
+    if (/^(set|add|replace|append|prepend|cas|delete)\b/.test(text)) return 'memcached.key_write'
+  }
+  if (tool === 'mongodb_find') return 'mongodb.find'
+  return ''
+}
+
+function commandTextFromRecord(record: Record<string, unknown> | null) {
+  return recordValue(record, 'command') || recordValue(record, 'operation')
 }
 
 export function toolPolicySearchText(policy: Record<string, unknown> | null) {

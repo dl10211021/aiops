@@ -263,6 +263,43 @@ class TestSessionRetention(unittest.TestCase):
         self.assertEqual(audit[0], old_id)
         self.assertIn("http_action=写入/变更 (POST)", audit[1])
 
+    def test_retention_audit_summary_keeps_command_action(self):
+        conn = self.make_memory_conn()
+        old_id = insert_message(
+            conn,
+            message={
+                "role": "assistant",
+                "content": "旧命令执行",
+                "exec_trace": [
+                    {
+                        "tool": "linux_execute_command",
+                        "args": "systemctl restart sshd",
+                        "resultMeta": {
+                            "tool_policy": {
+                                "operation_mode": "read_write",
+                                "approval_policy": "guarded_write",
+                                "evidence_family": "host_cli",
+                            }
+                        },
+                    }
+                ],
+            },
+            timestamp="2025-01-01 00:00:00",
+            is_compressed=1,
+        )
+
+        apply_session_retention(
+            conn,
+            policy=SessionRetentionPolicy(raw_result_days=30, compressed_history_days=180),
+            now=dt.datetime(2026, 5, 10, 0, 0, 0),
+        )
+
+        audit = conn.execute(
+            "SELECT message_id, summary FROM session_retention_audit"
+        ).fetchone()
+        self.assertEqual(audit[0], old_id)
+        self.assertIn("command_action=变更服务状态 (linux.service.change)", audit[1])
+
     def test_apply_session_retention_expires_old_audit_metadata(self):
         conn = self.make_memory_conn()
         apply_session_retention(

@@ -7,6 +7,7 @@ import { toolLabel } from '@/utils/assetDisplay'
 import { parseJsonRecord } from './jsonRecords'
 import { resultReason, traceExecutionText, traceTargetLabel } from './traceUtils'
 import {
+  commandActionFromTrace,
   evidenceLabel,
   evidenceToneClass,
   httpActionFromTrace,
@@ -195,11 +196,13 @@ function traceEvidenceId(trace: ExecTraceItem) {
 
 function tracePolicySearchText(trace: ExecTraceItem) {
   const httpAction = httpActionFromTrace(trace)
+  const commandAction = commandActionFromTrace(trace)
   return [
     toolPolicySearchText(toolPolicyFromTrace(trace)),
     ...runtimeExecutionLabels(trace),
     sqlActionFromTrace(trace)?.searchText || '',
     httpAction?.searchText || '',
+    commandAction?.searchText || '',
   ].filter(Boolean).join(' ')
 }
 
@@ -507,6 +510,7 @@ export default function AiThinkingChainPanel({
                         const executionLabels = runtimeExecutionLabels(trace)
                         const sqlAction = sqlActionFromTrace(trace)
                         const httpAction = httpActionFromTrace(trace)
+                        const commandAction = commandActionFromTrace(trace)
                         return (
                           <div
                             key={`${trace.tool}-${index}-${trace.startedAt || trace.completedAt || ''}`}
@@ -551,6 +555,14 @@ export default function AiThinkingChainPanel({
                                     title="本次 HTTP/API 请求的实际方法，和工具自身可读写能力分开显示。"
                                   >
                                     {httpAction.label}
+                                  </span>
+                                )}
+                                {commandAction && (
+                                  <span
+                                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${commandAction.className}`}
+                                    title="本次命令的实际动作，和工具自身可读写能力分开显示。"
+                                  >
+                                    {commandAction.label}
                                   </span>
                                 )}
                                 {approvalText && approval !== 'none' && (
