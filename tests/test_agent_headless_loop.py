@@ -109,7 +109,11 @@ class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(messages[1]["role"], "assistant")
         self.assertEqual(messages[1]["reasoning_content"], "分析")
         self.assertEqual(messages[2]["role"], "tool")
-        self.assertEqual(messages[2]["content"], "{'status': 'OK'}")
+        tool_payload = json.loads(messages[2]["content"])
+        self.assertEqual(tool_payload["status"], "OK")
+        self.assertEqual(tool_payload["tool"], "linux_execute_command")
+        self.assertEqual(tool_payload["runtime_policy"]["attempts"], 1)
+        self.assertEqual(tool_payload["tool_policy"]["name"], "linux_execute_command")
 
     async def test_returns_step_limit_report_when_tools_never_finish(self):
         tool_call = {
@@ -322,6 +326,88 @@ class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
             [call[0] for call in dispatcher.executed],
             ["read_one", "read_two"],
         )
+        first_result = json.loads(messages[2]["content"])
+        self.assertEqual(first_result["tool"], "read_one")
+        self.assertEqual(first_result["runtime_policy"]["final_status"], "success")
+        self.assertTrue(first_result["runtime_policy"]["concurrent"])
+
+    async def test_headless_success_retry_metadata_is_visible_to_next_iteration(self):
+        messages = [{"role": "system", "content": "sys"}]
+        dispatcher = FakeDispatcher()
+        attempts = 0
+
+        async def flaky_execute(tool_name, args, context):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise ConnectionError("temporary connection issue")
+            return {"status": "OK", "attempts": attempts}
+
+        def retry_policy(name):
+            return {
+                "name": name,
+                "operation_mode": "read",
+                "approval_policy": "none",
+                "destructive": False,
+                "concurrency_safe": False,
+                "timeout_policy": {"default_seconds": 1},
+                "retry_policy": {
+                    "max_attempts": 2,
+                    "retry_on": ["connection_error"],
+                    "delay_seconds": 0,
+                },
+                "evidence_family": "platform",
+            }
+
+        dispatcher.route_and_execute = flaky_execute
+        with patch(
+            "core.agent_headless_loop.tool_policy_metadata",
+            side_effect=retry_policy,
+        ):
+            await run_headless_agent_loop(
+                model_name="model",
+                messages=messages,
+                tools=[],
+                context={
+                    "session_id": "sid",
+                    "execution_mode": "headless",
+                    "allow_modifications": False,
+                },
+                session_id="sid",
+                agent_profile="default",
+                host="host.local",
+                dispatcher=dispatcher,
+                event_logger=FakeLogger(),
+                stream_executor=stream_executor_factory(
+                    [
+                        [
+                            {"type": "content", "content": "准备读取"},
+                            {
+                                "type": "tool_calls",
+                                "tool_calls": [
+                                    {
+                                        "id": "read-flaky",
+                                        "function": {
+                                            "name": "read_flaky",
+                                            "arguments": json.dumps({}),
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                        [{"type": "content", "content": "读取完成"}],
+                    ]
+                ),
+                max_steps=3,
+            )
+
+        result = json.loads(messages[2]["content"])
+        self.assertEqual(result["status"], "OK")
+        self.assertEqual(result["runtime_policy"]["attempts"], 2)
+        self.assertTrue(result["runtime_policy"]["retried"])
+        self.assertEqual(result["runtime_policy"]["final_status"], "success")
+        self.assertEqual(result["tool_policy"]["name"], "read_flaky")
+        self.assertEqual(result["session_mode"], "readonly")
 
     async def test_headless_uses_gate_approval_sources(self):
         messages = [{"role": "system", "content": "sys"}]

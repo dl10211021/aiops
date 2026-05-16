@@ -8,7 +8,7 @@ from typing import Any
 
 from core.agent_approval import record_headless_approval_block
 from core.agent_runtime_config import agent_max_steps
-from core.agent_tool_events import parse_tool_arguments
+from core.agent_tool_events import _session_mode_from_context, parse_tool_arguments
 from core.safety_policy import explain_policy_decision
 from core.tool_execution_policy import (
     ToolExecutionGate,
@@ -143,8 +143,9 @@ async def _run_headless_concurrent_plan(
     dispatcher: Any,
     context: dict,
 ) -> None:
-    async def run_tool(item: dict[str, Any]) -> Any:
-        return await execute_with_runtime_policy(
+    async def run_tool(item: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+        runtime_execution: dict[str, Any] = {}
+        tool_res = await execute_with_runtime_policy(
             item["name"],
             lambda: dispatcher.route_and_execute(
                 item["name"],
@@ -152,18 +153,56 @@ async def _run_headless_concurrent_plan(
                 context,
             ),
             policy=item["policy"],
+            runtime_stats=runtime_execution,
         )
+        runtime_execution["concurrent"] = True
+        return tool_res, runtime_execution
 
     results = await asyncio.gather(*(run_tool(item) for item in plan))
-    for item, tool_res in zip(plan, results):
+    for item, result in zip(plan, results):
+        tool_res, runtime_execution = result
         messages.append(
             {
                 "tool_call_id": item["id"],
                 "role": "tool",
                 "name": item["name"],
-                "content": str(tool_res),
+                "content": _headless_tool_message_content(
+                    tool_res,
+                    item["name"],
+                    item["policy"],
+                    runtime_execution,
+                    context,
+                ),
             }
         )
+
+
+def _headless_tool_message_content(
+    tool_res: Any,
+    tool_name: str,
+    tool_policy: dict[str, Any],
+    runtime_execution: dict[str, Any] | None,
+    context: dict,
+) -> str:
+    if isinstance(tool_res, dict):
+        payload = dict(tool_res)
+    elif isinstance(tool_res, str):
+        try:
+            parsed = json.loads(tool_res)
+        except Exception:
+            parsed = None
+        payload = parsed if isinstance(parsed, dict) else {"result": tool_res}
+    else:
+        payload = {"result": tool_res}
+
+    payload.setdefault("tool", tool_name)
+    payload.setdefault("tool_policy", tool_policy)
+    if runtime_execution:
+        payload.setdefault("runtime_policy", runtime_execution)
+    session_mode = _session_mode_from_context(context)
+    if session_mode:
+        payload.setdefault("session_mode", session_mode)
+    return json.dumps(payload, ensure_ascii=False, default=str)
 
 
 async def run_headless_agent_loop(
@@ -262,6 +301,7 @@ async def run_headless_agent_loop(
                     ensure_ascii=False,
                 )
             else:
+                runtime_execution = {}
                 tool_res = await execute_with_runtime_policy(
                     func_name,
                     lambda: dispatcher.route_and_execute(
@@ -270,13 +310,20 @@ async def run_headless_agent_loop(
                         context,
                     ),
                     policy=tool_policy,
+                    runtime_stats=runtime_execution,
                 )
 
             tool_msg = {
                 "tool_call_id": tc.get("id", ""),
                 "role": "tool",
                 "name": func_name,
-                "content": str(tool_res),
+                "content": _headless_tool_message_content(
+                    tool_res,
+                    func_name,
+                    tool_policy,
+                    runtime_execution if not reason else {},
+                    context,
+                ),
             }
             messages.append(tool_msg)
     else:
