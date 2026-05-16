@@ -1272,6 +1272,11 @@ export interface MemoryCandidateRef {
   tool?: string
   status?: string
   evidence_family?: string
+  sql_action?: string
+  http_action?: string
+  command_action?: string
+  action_id?: string
+  action_label?: string
 }
 
 export interface LearningCandidatePublishedArtifact {

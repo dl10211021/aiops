@@ -115,6 +115,21 @@ def test_memory_candidate_evidence_dialog_reuses_session_exec_trace():
     assert "工具证据详情" in knowledge_parts
 
 
+def test_memory_candidate_evidence_refs_show_actual_actions():
+    knowledge_parts = Path("frontend/src/components/views/KnowledgeBaseParts.tsx").read_text(encoding="utf-8")
+    types = Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
+
+    assert "sql_action?: string" in types
+    assert "http_action?: string" in types
+    assert "command_action?: string" in types
+    assert "action_label?: string" in types
+    assert "function candidateEvidenceActionText(ref: MemoryCandidateRef)" in knowledge_parts
+    assert "ref.command_action || ref.sql_action || ref.http_action || ref.action_label" in knowledge_parts
+    assert "candidateEvidenceActionText(ref) ? ` · ${candidateEvidenceActionText(ref)}` : ''" in knowledge_parts
+    assert '<CandidateEvidenceInfoLine label="实际动作" value={candidateEvidenceActionText(detail.ref) || \'-\'} />' in knowledge_parts
+    assert '<CandidateEvidenceInfoLine label="证据类型" value={detail.ref.evidence_family || \'-\'} />' in knowledge_parts
+
+
 def test_memory_candidates_panel_splits_runbook_and_skill_candidates():
     knowledge_data = Path("frontend/src/components/views/useKnowledgeBaseData.ts").read_text(encoding="utf-8")
     knowledge_api = Path("frontend/src/api/knowledge.ts").read_text(encoding="utf-8")

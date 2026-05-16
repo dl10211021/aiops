@@ -77,6 +77,10 @@ function ragDisplayPath(path?: string) {
     .replace(/^raw\/uploads\//, '原文/')
 }
 
+function candidateEvidenceActionText(ref: MemoryCandidateRef) {
+  return ref.command_action || ref.sql_action || ref.http_action || ref.action_label || ''
+}
+
 function formatMemorySize(size: number) {
   if (!Number.isFinite(size) || size <= 0) return '0 B'
   if (size < 1024) return `${size} B`
@@ -1935,9 +1939,10 @@ export function MemoryCandidatesPanel({
                         type="button"
                         onClick={() => onOpenEvidence(item, ref)}
                         className="block max-w-full truncate text-left font-mono text-[11px] text-ops-accent hover:text-ops-text"
-                        title={ref.id || ref.tool || ''}
+                        title={[ref.id || ref.tool || '', candidateEvidenceActionText(ref)].filter(Boolean).join(' · ')}
                       >
                         {ref.id || ref.tool || ref.type || '-'}{ref.status ? ` · ${ref.status}` : ''}
+                        {candidateEvidenceActionText(ref) ? ` · ${candidateEvidenceActionText(ref)}` : ''}
                       </button>
                     )) : (
                       <div className="text-[11px] text-ops-overlay">暂无工具证据绑定</div>
@@ -2290,8 +2295,13 @@ function LearningCandidateDetailContent({
             <div className="text-xs font-semibold text-ops-text">工具证据</div>
             <div className="mt-2 space-y-1">
               {(item.evidence_refs || []).length > 0 ? item.evidence_refs?.map((ref, index) => (
-                <div key={`${item.id}-evidence-${index}`} className="truncate font-mono text-[11px] text-ops-overlay" title={ref.id || ref.tool || ''}>
+                <div
+                  key={`${item.id}-evidence-${index}`}
+                  className="truncate font-mono text-[11px] text-ops-overlay"
+                  title={[ref.id || ref.tool || '', candidateEvidenceActionText(ref)].filter(Boolean).join(' · ')}
+                >
                   {ref.id || ref.tool || ref.type || '-'}{ref.status ? ` · ${ref.status}` : ''}
+                  {candidateEvidenceActionText(ref) ? ` · ${candidateEvidenceActionText(ref)}` : ''}
                 </div>
               )) : (
                 <div className="text-[11px] text-ops-overlay">暂无工具证据</div>
@@ -2434,6 +2444,8 @@ export function MemoryCandidateEvidenceDialog({
             <CandidateEvidenceInfoLine label="来源会话" value={detail.candidate.source_session_id || '-'} />
             <CandidateEvidenceInfoLine label="反馈消息" value={String(detail.candidate.feedback_target_message_id || '-')} />
             <CandidateEvidenceInfoLine label="记忆文件" value={detail.candidate.path} />
+            <CandidateEvidenceInfoLine label="实际动作" value={candidateEvidenceActionText(detail.ref) || '-'} />
+            <CandidateEvidenceInfoLine label="证据类型" value={detail.ref.evidence_family || '-'} />
           </div>
           {detail.loading && (
             <div className="mt-3 rounded border border-ops-accent/30 bg-ops-accent/10 px-3 py-2 text-xs text-ops-accent">
