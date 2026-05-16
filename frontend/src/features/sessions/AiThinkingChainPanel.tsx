@@ -16,6 +16,7 @@ import {
   runtimePolicyLabels,
   sessionModePolicyLabel,
   sessionModePolicyToneClass,
+  sqlActionFromTrace,
   toolPolicyFromTrace,
   toolPolicySearchText,
 } from './toolPolicyPresentation'
@@ -195,6 +196,7 @@ function tracePolicySearchText(trace: ExecTraceItem) {
   return [
     toolPolicySearchText(toolPolicyFromTrace(trace)),
     ...runtimeExecutionLabels(trace),
+    sqlActionFromTrace(trace)?.searchText || '',
   ].filter(Boolean).join(' ')
 }
 
@@ -500,6 +502,7 @@ export default function AiThinkingChainPanel({
                         const approvalText = approval ? sessionModePolicyLabel(operationMode, approval, sessionMode) : ''
                         const runtimeLabels = runtimePolicyLabels(toolPolicy)
                         const executionLabels = runtimeExecutionLabels(trace)
+                        const sqlAction = sqlActionFromTrace(trace)
                         return (
                           <div
                             key={`${trace.tool}-${index}-${trace.startedAt || trace.completedAt || ''}`}
@@ -528,6 +531,14 @@ export default function AiThinkingChainPanel({
                                     title="工具自身能力边界：只读、可读写、外发或破坏性。"
                                   >
                                     模式：{operation}
+                                  </span>
+                                )}
+                                {sqlAction && (
+                                  <span
+                                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${sqlAction.className}`}
+                                    title="本次 SQL 的实际动作类型，和工具自身可读写能力分开显示。"
+                                  >
+                                    {sqlAction.label}
                                   </span>
                                 )}
                                 {approvalText && approval !== 'none' && (

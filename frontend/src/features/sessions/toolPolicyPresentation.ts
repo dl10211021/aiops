@@ -267,6 +267,64 @@ export function runtimeExecutionLabels(trace: ExecTraceItem) {
   return labels
 }
 
+const sqlReadTypes = new Set(['select', 'show', 'describe', 'desc', 'explain', 'with'])
+const sqlWriteTypes = new Set([
+  'alter',
+  'analyze',
+  'call',
+  'create',
+  'delete',
+  'drop',
+  'grant',
+  'insert',
+  'merge',
+  'replace',
+  'revoke',
+  'truncate',
+  'update',
+])
+
+function sqlStatementTypeFromTrace(trace: ExecTraceItem) {
+  const resultMeta = objectRecord(trace.resultMeta)
+  const evidenceMeta = objectRecord(trace.evidence?.result_meta)
+  const parsed = parseJsonRecord(trace.result || '')
+  const fromMeta = recordValue(resultMeta, 'statement_type') || recordValue(evidenceMeta, 'statement_type') || recordValue(parsed, 'statement_type')
+  if (fromMeta) return fromMeta.trim().toLowerCase()
+  const text = [trace.args, trace.evidence?.input_summary, trace.evidence?.redacted_input]
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .join('\n')
+  const firstToken = text
+    .replace(/^\s*(--.*\n|\/\*[\s\S]*?\*\/\s*)+/g, '')
+    .trim()
+    .match(/^[a-zA-Z_]+/)
+  return firstToken?.[0]?.toLowerCase() || ''
+}
+
+export function sqlActionFromTrace(trace: ExecTraceItem) {
+  if (trace.tool !== 'db_execute_query') return null
+  const statementType = sqlStatementTypeFromTrace(trace)
+  if (!statementType) return null
+  if (sqlReadTypes.has(statementType)) {
+    return {
+      label: `SQL：只读查询 (${statementType.toUpperCase()})`,
+      className: 'border-emerald-400/35 bg-emerald-400/10 text-emerald-100',
+      searchText: `sql readonly read ${statementType} 只读查询`,
+    }
+  }
+  if (sqlWriteTypes.has(statementType)) {
+    return {
+      label: `SQL：写入/DDL (${statementType.toUpperCase()})`,
+      className: 'border-ops-alert/40 bg-ops-alert/10 text-ops-alert',
+      searchText: `sql write ddl ${statementType} 写入 变更`,
+    }
+  }
+  return {
+    label: `SQL：待识别 (${statementType.toUpperCase()})`,
+    className: 'border-amber-300/45 bg-amber-300/10 text-amber-100',
+    searchText: `sql unknown ${statementType} 待识别`,
+  }
+}
+
 export function toolPolicySearchText(policy: Record<string, unknown> | null) {
   if (!policy) return ''
   const operation = recordValue(policy, 'operation_mode')

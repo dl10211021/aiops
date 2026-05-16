@@ -41,6 +41,8 @@ def test_tool_trace_policy_chips_separate_mode_gate_and_evidence():
     assert "operationToneClass(operationMode)" in source
     assert "sessionModePolicyToneClass(" in source
     assert "sessionModeSource" in source
+    assert "sqlActionFromTrace(item)" in source
+    assert "本次 SQL 的实际动作类型" in source
     assert "evidenceToneClass(evidenceFamily)" in source
     assert "模式：{operation}" in thinking_panel
     assert "门禁：{approvalText}" in thinking_panel
@@ -50,9 +52,14 @@ def test_tool_trace_policy_chips_separate_mode_gate_and_evidence():
     assert "approval ? sessionModePolicyLabel(operationMode, approval, sessionMode) : ''" in thinking_panel
     assert "sessionModePolicyToneClass(" in thinking_panel
     assert "traceSource" in thinking_panel
+    assert "sqlActionFromTrace(trace)" in thinking_panel
+    assert "sqlActionFromTrace(trace)?.searchText" in thinking_panel
     assert "read_write: '可读写'" in presentation
     assert "guarded_write: '写入需审批'" in presentation
     assert "guarded_write: 'border-amber-400/40" in presentation
+    assert "SQL：只读查询" in presentation
+    assert "SQL：写入/DDL" in presentation
+    assert "trace.tool !== 'db_execute_query'" in presentation
 
 
 def test_tool_policy_chips_are_session_mode_aware():

@@ -24,6 +24,7 @@ import {
   parseSessionMode,
   sessionModePolicyLabel,
   sessionModePolicyToneClass,
+  sqlActionFromTrace,
   toolPolicyFromTrace,
 } from './toolPolicyPresentation'
 
@@ -99,6 +100,7 @@ function ToolTraceCard({
   const gateLabel = sessionModePolicyLabel(operationMode, approvalPolicy, sessionMode)
   const runtimeLabels = runtimePolicyLabels(toolPolicy)
   const executionLabels = runtimeExecutionLabels(item)
+  const sqlAction = sqlActionFromTrace(item)
   const primaryAction = extractPrimaryAction(parsedResult)
   const isPolicyBlocked = isPolicyBlockedResult(parsedResult)
   const isToolError = !isPolicyBlocked && isToolErrorResult(parsedResult)
@@ -150,6 +152,14 @@ function ToolTraceCard({
             >
               模式：{operationLabel(operationMode)}
             </span>
+            {sqlAction && (
+              <span
+                className={`rounded border px-2 py-0.5 font-semibold ${sqlAction.className}`}
+                title="本次 SQL 的实际动作类型，和工具自身可读写能力分开显示。"
+              >
+                {sqlAction.label}
+              </span>
+            )}
             <span
               className={`rounded border px-2 py-0.5 font-semibold ${sessionModePolicyToneClass(
                 operationMode,
