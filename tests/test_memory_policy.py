@@ -366,7 +366,13 @@ class MemoryPolicyTests(unittest.TestCase):
                             "tool": "linux_execute_command",
                             "status": "done",
                             "evidenceId": "tev-sid-1-call-1",
-                            "resultMeta": {"tool_policy": {"evidence_family": "host_cli"}},
+                            "resultMeta": {
+                                "tool_policy": {"evidence_family": "host_cli"},
+                                "primary_action": {
+                                    "id": "linux.read.resource",
+                                    "label": "读取系统资源",
+                                },
+                            },
                         }
                     ],
                 }
@@ -396,6 +402,10 @@ class MemoryPolicyTests(unittest.TestCase):
         )
         self.assertEqual(db.file_memory_store.appended[0]["metadata"]["evidence_refs"][0]["id"], "tev-sid-1-call-1")
         self.assertEqual(db.file_memory_store.appended[0]["metadata"]["evidence_refs"][0]["tool"], "linux_execute_command")
+        self.assertEqual(
+            db.file_memory_store.appended[0]["metadata"]["evidence_refs"][0]["command_action"],
+            "读取系统资源 (linux.read.resource)",
+        )
         self.assertIn("【候选状态】待人工确认", db.file_memory_store.appended[0]["summary"])
         self.assertIn("确认前仅用于审计和学习中心展示", db.file_memory_store.appended[0]["summary"])
 

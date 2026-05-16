@@ -18,6 +18,7 @@ from core.file_memory_store import FileMemoryStore, memory_scope_path
 from core.lancedb_utils import ensure_lancedb_table, lancedb_table_names
 from core.session_message_store import SessionMessageStore, is_protocol_retry_noise
 from core.slash_command_store import SlashCommandStore, slash_command_row
+from core.tool_trace_policy import trace_command_action_summary, trace_command_primary_action
 from core.webhook_delivery_store import WebhookDeliveryStore
 
 logger = logging.getLogger(__name__)
@@ -267,6 +268,7 @@ def _feedback_evidence_refs(message: dict) -> list[dict]:
             or ""
         )
         tool_name = item.get("tool") or evidence.get("tool_name") or tool_policy.get("name") or ""
+        primary_action = trace_command_primary_action(item)
         ref = {
             "type": "tool_evidence" if evidence_id else "tool_trace",
             "label": "工具证据" if evidence_id else "执行轨迹",
@@ -274,6 +276,9 @@ def _feedback_evidence_refs(message: dict) -> list[dict]:
             "tool": str(tool_name or "").strip(),
             "status": str(item.get("status") or evidence.get("result_status") or "").strip(),
             "evidence_family": str(tool_policy.get("evidence_family") or "").strip(),
+            "action_id": str(primary_action.get("id") or "").strip(),
+            "action_label": str(primary_action.get("label") or "").strip(),
+            "command_action": trace_command_action_summary(item),
         }
         compact = {key: value for key, value in ref.items() if value}
         if compact:
