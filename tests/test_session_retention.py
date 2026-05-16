@@ -226,6 +226,43 @@ class TestSessionRetention(unittest.TestCase):
         message = json.loads(conn.execute("SELECT message_json FROM memory").fetchone()[0])
         self.assertNotIn("retention_compacted", message)
 
+    def test_retention_audit_summary_keeps_http_action(self):
+        conn = self.make_memory_conn()
+        old_id = insert_message(
+            conn,
+            message={
+                "role": "assistant",
+                "content": "旧 HTTP 查询",
+                "exec_trace": [
+                    {
+                        "tool": "monitoring_api_query",
+                        "args": "POST /api/maintenance",
+                        "resultMeta": {
+                            "tool_policy": {
+                                "operation_mode": "read_write",
+                                "approval_policy": "guarded_write",
+                                "evidence_family": "observability",
+                            }
+                        },
+                    }
+                ],
+            },
+            timestamp="2025-01-01 00:00:00",
+            is_compressed=1,
+        )
+
+        apply_session_retention(
+            conn,
+            policy=SessionRetentionPolicy(raw_result_days=30, compressed_history_days=180),
+            now=dt.datetime(2026, 5, 10, 0, 0, 0),
+        )
+
+        audit = conn.execute(
+            "SELECT message_id, summary FROM session_retention_audit"
+        ).fetchone()
+        self.assertEqual(audit[0], old_id)
+        self.assertIn("http_action=写入/变更 (POST)", audit[1])
+
     def test_apply_session_retention_expires_old_audit_metadata(self):
         conn = self.make_memory_conn()
         apply_session_retention(

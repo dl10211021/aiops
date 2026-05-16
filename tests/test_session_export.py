@@ -136,6 +136,34 @@ class TestSessionExport(unittest.TestCase):
 
         self.assertIn("  - Runtime: 实际重试 2/2 次", markdown)
 
+    def test_format_session_history_markdown_includes_http_action_metadata(self):
+        markdown = format_session_history_markdown(
+            [
+                {
+                    "role": "assistant",
+                    "content": "状态查询完成",
+                    "exec_trace": [
+                        {
+                            "tool": "monitoring_api_query",
+                            "status": "done",
+                            "args": "GET /api/status",
+                            "result": '{"success": true}',
+                            "resultMeta": {
+                                "tool_policy": {
+                                    "operation_mode": "read_write",
+                                    "approval_policy": "guarded_write",
+                                    "evidence_family": "observability",
+                                }
+                            },
+                        }
+                    ],
+                }
+            ],
+            "elk-01",
+        )
+
+        self.assertIn("  - HTTP Action: 只读请求 (GET)", markdown)
+
     def test_format_session_history_markdown_includes_runtime_timeout_metadata(self):
         markdown = format_session_history_markdown(
             [

@@ -12,6 +12,7 @@ from typing import Any, Mapping
 from core.tool_trace_policy import (
     policy_summary,
     trace_evidence_id,
+    trace_http_action_summary,
     trace_sql_action_summary,
     trace_tool_policy,
 )
@@ -497,6 +498,7 @@ def _message_audit_summary(message: dict[str, Any], max_chars: int) -> str:
     evidence_ids = []
     policy_bits = []
     sql_actions = []
+    http_actions = []
     if isinstance(traces, list):
         for trace in traces:
             if not isinstance(trace, dict):
@@ -511,12 +513,16 @@ def _message_audit_summary(message: dict[str, Any], max_chars: int) -> str:
             sql_action = trace_sql_action_summary(trace)
             if sql_action:
                 sql_actions.append(sql_action)
+            http_action = trace_http_action_summary(trace)
+            if http_action:
+                http_actions.append(http_action)
     parts = [
         f"role={message.get('role') or ''}",
         f"tools={','.join([name for name in tool_names if name]) or '-'}",
         f"evidence={','.join(evidence_ids) or '-'}",
         f"policy={';'.join(policy_bits) or '-'}",
         f"sql_action={';'.join(sql_actions) or '-'}",
+        f"http_action={';'.join(http_actions) or '-'}",
         f"content={_truncate(content, max_chars)}",
     ]
     return "\n".join(parts)

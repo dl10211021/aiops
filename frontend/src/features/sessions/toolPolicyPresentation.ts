@@ -284,6 +284,9 @@ const sqlWriteTypes = new Set([
   'update',
 ])
 
+const httpReadMethods = new Set(['GET', 'HEAD', 'OPTIONS'])
+const httpWriteMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
 function sqlStatementTypeFromTrace(trace: ExecTraceItem) {
   const resultMeta = objectRecord(trace.resultMeta)
   const evidenceMeta = objectRecord(trace.evidence?.result_meta)
@@ -322,6 +325,52 @@ export function sqlActionFromTrace(trace: ExecTraceItem) {
     label: `SQL：待识别 (${statementType.toUpperCase()})`,
     className: 'border-amber-300/45 bg-amber-300/10 text-amber-100',
     searchText: `sql unknown ${statementType} 待识别`,
+  }
+}
+
+function httpMethodFromTrace(trace: ExecTraceItem) {
+  const resultMeta = objectRecord(trace.resultMeta)
+  const evidenceMeta = objectRecord(trace.evidence?.result_meta)
+  const parsed = parseJsonRecord(trace.result || '')
+  const fromMeta = recordValue(resultMeta, 'method') || recordValue(evidenceMeta, 'method') || recordValue(parsed, 'method')
+  if (fromMeta) return fromMeta.trim().toUpperCase()
+  const text = [trace.args, trace.evidence?.input_summary, trace.evidence?.redacted_input]
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .join('\n')
+  const firstToken = text.trim().match(/^(GET|HEAD|OPTIONS|POST|PUT|PATCH|DELETE)\b/i)
+  return firstToken?.[0]?.toUpperCase() || ''
+}
+
+export function httpActionFromTrace(trace: ExecTraceItem) {
+  const tool = trace.tool || ''
+  const policy = toolPolicyFromTrace(trace)
+  const evidenceFamily = recordValue(policy, 'evidence_family')
+  const isHttpTool = evidenceFamily === 'http_api'
+    || evidenceFamily === 'observability'
+    || tool.includes('_api_')
+    || tool.endsWith('_request')
+    || tool.endsWith('_query')
+  if (!isHttpTool || tool === 'db_execute_query') return null
+  const method = httpMethodFromTrace(trace)
+  if (!method) return null
+  if (httpReadMethods.has(method)) {
+    return {
+      label: `HTTP/API：只读请求 (${method})`,
+      className: 'border-emerald-400/35 bg-emerald-400/10 text-emerald-100',
+      searchText: `http readonly read ${method.toLowerCase()} 只读请求`,
+    }
+  }
+  if (httpWriteMethods.has(method)) {
+    return {
+      label: `HTTP/API：写入/变更 (${method})`,
+      className: 'border-ops-alert/40 bg-ops-alert/10 text-ops-alert',
+      searchText: `http write change ${method.toLowerCase()} 写入 变更`,
+    }
+  }
+  return {
+    label: `HTTP/API：待识别 (${method})`,
+    className: 'border-amber-300/45 bg-amber-300/10 text-amber-100',
+    searchText: `http unknown ${method.toLowerCase()} 待识别`,
   }
 }
 

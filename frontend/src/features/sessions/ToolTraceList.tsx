@@ -16,6 +16,7 @@ import {
 import {
   evidenceLabel,
   evidenceToneClass,
+  httpActionFromTrace,
   operationLabel,
   operationToneClass,
   recordValue,
@@ -101,6 +102,7 @@ function ToolTraceCard({
   const runtimeLabels = runtimePolicyLabels(toolPolicy)
   const executionLabels = runtimeExecutionLabels(item)
   const sqlAction = sqlActionFromTrace(item)
+  const httpAction = httpActionFromTrace(item)
   const primaryAction = extractPrimaryAction(parsedResult)
   const isPolicyBlocked = isPolicyBlockedResult(parsedResult)
   const isToolError = !isPolicyBlocked && isToolErrorResult(parsedResult)
@@ -158,6 +160,14 @@ function ToolTraceCard({
                 title="本次 SQL 的实际动作类型，和工具自身可读写能力分开显示。"
               >
                 {sqlAction.label}
+              </span>
+            )}
+            {httpAction && (
+              <span
+                className={`rounded border px-2 py-0.5 font-semibold ${httpAction.className}`}
+                title="本次 HTTP/API 请求的实际方法，和工具自身可读写能力分开显示。"
+              >
+                {httpAction.label}
               </span>
             )}
             <span

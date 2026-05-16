@@ -23,6 +23,8 @@ _SQL_WRITE_ACTIONS = {
     "truncate",
     "update",
 }
+_HTTP_READ_METHODS = {"GET", "HEAD", "OPTIONS"}
+_HTTP_WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
 def trace_result_meta(trace: dict[str, Any]) -> dict[str, Any]:
@@ -95,6 +97,68 @@ def trace_sql_action_summary(trace: dict[str, Any]) -> str:
     if action in _SQL_WRITE_ACTIONS:
         return f"写入/DDL ({action.upper()})"
     return f"待识别 ({action.upper()})"
+
+
+def trace_http_action_summary(trace: dict[str, Any]) -> str:
+    if not _is_http_trace(trace):
+        return ""
+    method = _trace_http_method(trace)
+    if not method:
+        return ""
+    if method in _HTTP_READ_METHODS:
+        return f"只读请求 ({method})"
+    if method in _HTTP_WRITE_METHODS:
+        return f"写入/变更 ({method})"
+    return f"待识别 ({method})"
+
+
+def _is_http_trace(trace: dict[str, Any]) -> bool:
+    tool = str(trace.get("tool") or "")
+    if tool == "db_execute_query":
+        return False
+    policy = trace_tool_policy(trace, fallback_to_registry=False)
+    evidence_family = str(policy.get("evidence_family") or "")
+    return (
+        evidence_family in {"http_api", "observability"}
+        or "_api_" in tool
+        or tool.endswith("_request")
+        or tool.endswith("_query")
+    )
+
+
+def _trace_http_method(trace: dict[str, Any]) -> str:
+    for payload in (
+        trace_result_meta(trace),
+        _evidence_result_meta(trace),
+        _parsed_result_payload(trace),
+    ):
+        value = payload.get("method") if isinstance(payload, dict) else None
+        if value:
+            return _normalize_http_method(value)
+
+    for value in (
+        trace.get("args"),
+        trace_evidence(trace).get("input_summary"),
+        trace_evidence(trace).get("redacted_input"),
+    ):
+        method = _http_method_from_text(value)
+        if method:
+            return method
+    return ""
+
+
+def _normalize_http_method(value: Any) -> str:
+    text = str(value or "").strip().upper()
+    return re.sub(r"[^A-Z].*$", "", text)
+
+
+def _http_method_from_text(value: Any) -> str:
+    match = re.match(
+        r"\s*(GET|HEAD|OPTIONS|POST|PUT|PATCH|DELETE)\b",
+        str(value or ""),
+        flags=re.IGNORECASE,
+    )
+    return _normalize_http_method(match.group(1)) if match else ""
 
 
 def _trace_statement_type(trace: dict[str, Any]) -> str:

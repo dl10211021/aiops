@@ -3,6 +3,7 @@ import unittest
 from core.tool_trace_policy import (
     policy_summary,
     trace_evidence_id,
+    trace_http_action_summary,
     trace_policy_summary,
     trace_runtime_summary,
     trace_sql_action_summary,
@@ -119,6 +120,29 @@ class ToolTracePolicyTests(unittest.TestCase):
         }
 
         self.assertEqual(trace_sql_action_summary(trace), "只读查询 (EXPLAIN)")
+
+    def test_trace_http_action_summary_classifies_get_as_read(self):
+        trace = {
+            "tool": "monitoring_api_query",
+            "resultMeta": {
+                "tool_policy": {"evidence_family": "observability"},
+            },
+            "args": "GET /api/status",
+        }
+
+        self.assertEqual(trace_http_action_summary(trace), "只读请求 (GET)")
+
+    def test_trace_http_action_summary_classifies_post_as_write(self):
+        trace = {
+            "tool": "http_api_request",
+            "resultMeta": {
+                "method": "post",
+                "tool_policy": {"evidence_family": "http_api"},
+            },
+            "args": "GET /status",
+        }
+
+        self.assertEqual(trace_http_action_summary(trace), "写入/变更 (POST)")
 
 
 if __name__ == "__main__":

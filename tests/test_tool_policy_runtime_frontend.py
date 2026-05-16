@@ -189,3 +189,25 @@ def test_thinking_chain_search_includes_runtime_execution_labels():
 
     assert "...runtimeExecutionLabels(trace)" in source
     assert "toolPolicySearchText(toolPolicyFromTrace(trace))" in source
+
+
+def test_frontend_shows_actual_http_action_separately_from_tool_policy():
+    presentation = Path(
+        "frontend/src/features/sessions/toolPolicyPresentation.ts"
+    ).read_text(encoding="utf-8")
+    trace_list = Path("frontend/src/features/sessions/ToolTraceList.tsx").read_text(
+        encoding="utf-8"
+    )
+    thinking_panel = Path(
+        "frontend/src/features/sessions/AiThinkingChainPanel.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert "export function httpActionFromTrace(trace: ExecTraceItem)" in presentation
+    assert "HTTP/API：只读请求" in presentation
+    assert "HTTP/API：写入/变更" in presentation
+    assert "http readonly read" in presentation
+    assert "http write change" in presentation
+    assert "const httpAction = httpActionFromTrace(item)" in trace_list
+    assert "{httpAction && (" in trace_list
+    assert "const httpAction = httpActionFromTrace(trace)" in thinking_panel
+    assert "httpAction?.searchText" in thinking_panel
