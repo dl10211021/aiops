@@ -205,6 +205,42 @@ class AgentStepSummaryTests(unittest.IsolatedAsyncioTestCase):
         audit = seen_messages[-2]["content"]
         self.assertIn("runtime=timeout:30s,retry:2/2", audit)
 
+    async def test_summary_audit_context_includes_command_action(self):
+        seen_messages = []
+
+        async def executor(model_name, messages, thinking_mode, tools=None):
+            seen_messages.extend(messages)
+            yield {"type": "content", "content": "ok"}
+
+        memory_store = FakeMemoryStore()
+        async for _ in stream_step_limit_summary(
+            model_name="model-a",
+            messages=[{"role": "assistant", "content": "工具执行中"}],
+            session_id="sid-1",
+            max_steps=2,
+            memory_store=memory_store,
+            exec_trace=[
+                {
+                    "tool": "linux_execute_command",
+                    "status": "done",
+                    "args": "systemctl restart sshd",
+                    "result": '{"success": true}',
+                    "resultMeta": {
+                        "primary_action": {
+                            "id": "linux.service.change",
+                            "label": "变更服务状态",
+                            "severity": "high",
+                        },
+                    },
+                }
+            ],
+            stream_executor=executor,
+        ):
+            pass
+
+        audit = seen_messages[-2]["content"]
+        self.assertIn("command_action=变更服务状态 (linux.service.change)", audit)
+
 
 if __name__ == "__main__":
     unittest.main()
