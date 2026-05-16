@@ -5,6 +5,7 @@ from collections.abc import Mapping
 
 from core.session_export import format_session_history_markdown
 from core.tool_registry import tool_policy_metadata
+from core.tool_trace_policy import trace_command_actions, trace_command_primary_action
 
 
 USER_VISIBLE_ROLES = {"user", "assistant"}
@@ -145,7 +146,7 @@ def _legacy_exec_traces_for_message(
         args = function.get("arguments") if function else call.get("arguments")
         result_message = tool_results.get(call_id)
         result = str((result_message or {}).get("content") or "")
-        result_meta = _legacy_result_meta(result, tool_name)
+        result_meta = _legacy_result_meta(result, tool_name, args)
         traces.append(
             {
                 "type": "tool_end",
@@ -159,7 +160,7 @@ def _legacy_exec_traces_for_message(
     return traces
 
 
-def _legacy_result_meta(result: str, tool_name: str = "") -> dict:
+def _legacy_result_meta(result: str, tool_name: str = "", args: object = "") -> dict:
     try:
         parsed = json.loads(result)
     except Exception:
@@ -168,6 +169,13 @@ def _legacy_result_meta(result: str, tool_name: str = "") -> dict:
         parsed = {}
     if tool_name and not parsed.get("tool_policy"):
         parsed = {**parsed, "tool_policy": tool_policy_metadata(tool_name)}
+    trace = {"tool": tool_name, "args": args, "resultMeta": parsed}
+    primary_action = trace_command_primary_action(trace)
+    if primary_action and not parsed.get("primary_action"):
+        parsed = {**parsed, "primary_action": primary_action}
+    actions = trace_command_actions(trace)
+    if actions and not parsed.get("actions"):
+        parsed = {**parsed, "actions": actions}
     return parsed
 
 

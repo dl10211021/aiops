@@ -226,6 +226,37 @@ class TestSessionHistory(unittest.TestCase):
             ["host_cli", "database", "network", "host_cli"],
         )
 
+    def test_attach_legacy_exec_traces_rebuilds_command_action_metadata(self):
+        messages = [
+            {
+                "role": "assistant",
+                "content": "执行服务变更。",
+                "tool_calls": [
+                    {
+                        "id": "call-linux",
+                        "type": "function",
+                        "function": {
+                            "name": "linux_execute_command",
+                            "arguments": '{"command": "systemctl restart sshd"}',
+                        },
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call-linux",
+                "name": "linux_execute_command",
+                "content": '{"success": true, "output": "ok"}',
+            },
+        ]
+
+        hydrated = attach_legacy_exec_traces(messages)
+
+        result_meta = hydrated[0]["exec_trace"][0]["resultMeta"]
+        self.assertEqual(result_meta["primary_action"]["id"], "linux.service.change")
+        self.assertEqual(result_meta["primary_action"]["label"], "变更服务状态")
+        self.assertEqual(result_meta["actions"][0]["id"], "linux.service.change")
+
     def test_attach_legacy_exec_traces_marks_blocked_or_failed_results(self):
         messages = [
             {
