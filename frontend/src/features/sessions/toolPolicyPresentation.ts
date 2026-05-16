@@ -1,6 +1,38 @@
 import type { ExecTraceItem } from '@/types'
 import { parseJsonRecord } from './jsonRecords'
 
+export type SessionMode = 'readonly' | 'readwrite'
+export type SessionModeSource = 'context' | 'session_snapshot' | 'inferred_unknown'
+
+export interface SessionModeResolution {
+  mode?: SessionMode
+  source: SessionModeSource
+}
+
+export function parseSessionMode(value: unknown): SessionMode | undefined {
+  if (typeof value === 'boolean') return value ? 'readwrite' : 'readonly'
+  if (typeof value === 'number') {
+    if (value === 1) return 'readwrite'
+    if (value === 0) return 'readonly'
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (['1', 'true', 'yes', 'on', 'rw', 'readwrite', 'r+w', 'write'].includes(normalized)) {
+      return 'readwrite'
+    }
+    if (['0', 'false', 'no', 'off', 'ro', 'readonly'].includes(normalized)) {
+      return 'readonly'
+    }
+    if (normalized.startsWith('read_only') || normalized.startsWith('read-only')) {
+      return 'readonly'
+    }
+    if (normalized.includes('read') && normalized.includes('write')) {
+      return 'readwrite'
+    }
+  }
+  return undefined
+}
+
 export function recordValue(record: Record<string, unknown> | null, key: string) {
   const value = record?.[key]
   return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
@@ -84,22 +116,58 @@ export function approvalToneClass(policy: string) {
   }[policy] || 'border-ops-surface1/65 bg-ops-dark/35 text-ops-subtext'
 }
 
-export function sessionModePolicyToneClass(operationMode: string, approvalPolicy: string, sessionMode?: 'readonly' | 'readwrite') {
+export function sessionModePolicyToneClass(
+  operationMode: string,
+  approvalPolicy: string,
+  sessionMode?: SessionMode,
+  sessionModeSource: SessionModeSource = 'inferred_unknown',
+) {
   const writeCapable = ['write', 'read_write', 'destructive', 'external_effect'].includes(operationMode)
-  if (sessionMode === 'readonly' && writeCapable) {
+  const requiresWriteGate = approvalPolicy === 'guarded_write' || writeCapable
+  if (!sessionMode && requiresWriteGate) {
+    return 'border-amber-300/45 bg-amber-300/10 text-amber-100'
+  }
+  if (sessionMode === 'readonly' && requiresWriteGate) {
     return 'border-ops-alert/45 bg-ops-alert/10 text-ops-alert'
   }
-  if (approvalPolicy === 'guarded_write' || writeCapable) {
-    return 'border-amber-400/40 bg-amber-400/10 text-amber-100'
+  if (sessionMode === 'readwrite' && requiresWriteGate) {
+    return 'border-emerald-300/45 bg-emerald-300/10 text-emerald-100'
   }
   return approvalToneClass(approvalPolicy)
 }
 
-export function sessionModePolicyLabel(operationMode: string, approvalPolicy: string, sessionMode?: 'readonly' | 'readwrite') {
+export function sessionModePolicyLabel(operationMode: string, approvalPolicy: string, sessionMode?: SessionMode) {
   const writeCapable = ['write', 'read_write', 'destructive', 'external_effect'].includes(operationMode)
-  if (sessionMode === 'readonly' && writeCapable) return '只读限制'
-  if (sessionMode === 'readwrite' && (approvalPolicy === 'guarded_write' || writeCapable)) return '读写受控'
+  const requiresWriteGate = approvalPolicy === 'guarded_write' || writeCapable
+  if (sessionMode === 'readonly' && requiresWriteGate) return '只读限制'
+  if (sessionMode === 'readwrite' && requiresWriteGate) return '读写通过'
+  if (requiresWriteGate) return '待识别会话'
   return approvalLabel(approvalPolicy)
+}
+
+export function resolveSessionModeWithSource(
+  contextMode: unknown,
+  sessionMode: SessionMode | boolean | undefined | null,
+): SessionModeResolution {
+  const mode = parseSessionMode(contextMode)
+  if (mode) return { mode, source: 'context' }
+  const normalizedMode = parseSessionMode(sessionMode)
+  if (normalizedMode) return { mode: normalizedMode, source: 'session_snapshot' }
+  return { mode: undefined, source: 'inferred_unknown' }
+}
+
+export function sessionModeLabel(mode?: SessionMode) {
+  if (mode === 'readonly') return '会话模式：只读'
+  if (mode === 'readwrite') return '会话模式：读写'
+  return '会话模式：未识别'
+}
+
+export function sessionModeSourceLabel(source: SessionModeSource) {
+  return {
+    context: '来源：会话上下文',
+    session_snapshot: '来源：会话快照',
+    inferred_unknown: '来源：未识别',
+  }[source]
 }
 
 export function evidenceToneClass(family: string) {

@@ -27,6 +27,29 @@ from core.tool_execution_policy import (
 from core.tool_registry import tool_policy_metadata
 
 
+def _trace_runtime_mode_payload(context: dict, base_policy: dict[str, Any], concurrent: bool = False) -> dict[str, Any]:
+    mode = context.get("session_mode")
+    if not isinstance(mode, str) or not mode.strip():
+        allow_modifications = context.get("allow_modifications")
+        if isinstance(allow_modifications, str):
+            normalized = allow_modifications.strip().lower()
+            if normalized in {"true", "1", "yes", "on", "rw", "readwrite", "r+w", "write"}:
+                mode = "readwrite"
+            elif normalized in {"false", "0", "no", "off", "ro", "readonly"}:
+                mode = "readonly"
+            else:
+                mode = "readwrite" if bool(allow_modifications) else "readonly"
+        else:
+            mode = "readwrite" if bool(allow_modifications) else "readonly"
+    runtime_meta = {
+        "tool_policy": base_policy,
+        "session_mode": mode.strip() if isinstance(mode, str) else mode,
+    }
+    if concurrent:
+        runtime_meta["concurrent"] = True
+    return runtime_meta
+
+
 def _resolve_execution_gate(
     dispatcher: Any,
     tool_name: str,
@@ -225,6 +248,10 @@ async def process_chat_tool_calls(
                     "id": tc_id,
                     "tool": func_name,
                     "cmd": display_cmd,
+                    "allow_modifications": context.get("allow_modifications"),
+                    "execution_mode": context.get("execution_mode"),
+                    "session_mode": context.get("session_mode"),
+                    "context_mode": context.get("mode"),
                 }
             )
             yield sse_raw(msg_ask)
@@ -304,7 +331,7 @@ async def process_chat_tool_calls(
                 "tool": func_name,
                 "args": display_cmd,
                 "cmd": display_cmd,
-                "result_meta": {"tool_policy": tool_policy},
+                "result_meta": _trace_runtime_mode_payload(context, tool_policy),
                 "started_at": started_at,
             }
         )
@@ -315,7 +342,7 @@ async def process_chat_tool_calls(
                     "toolCallId": tc_id,
                     "tool": func_name,
                     "args": display_cmd,
-                    "resultMeta": {"tool_policy": tool_policy},
+                    "resultMeta": _trace_runtime_mode_payload(context, tool_policy),
                     "startedAt": started_at,
                 }
             )
@@ -435,7 +462,7 @@ async def _process_concurrent_tool_calls(
                 "tool": prepared_call.name,
                 "args": prepared_call.display_cmd,
                 "cmd": prepared_call.display_cmd,
-                "result_meta": {"tool_policy": tool_policy, "concurrent": True},
+                "result_meta": _trace_runtime_mode_payload(context, tool_policy, concurrent=True),
                 "started_at": started_at,
             }
         )
@@ -446,7 +473,7 @@ async def _process_concurrent_tool_calls(
                     "toolCallId": prepared_call.id,
                     "tool": prepared_call.name,
                     "args": prepared_call.display_cmd,
-                    "resultMeta": {"tool_policy": tool_policy, "concurrent": True},
+                    "resultMeta": _trace_runtime_mode_payload(context, tool_policy, concurrent=True),
                     "startedAt": started_at,
                 }
             )

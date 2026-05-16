@@ -103,6 +103,28 @@ def _result_metadata_with_tool_policy(tool_name: str, metadata: dict) -> dict:
     return enriched
 
 
+def _session_mode_from_context(context: dict | None) -> str | None:
+    if not isinstance(context, dict):
+        return None
+    session_mode = context.get("session_mode")
+    if isinstance(session_mode, str):
+        normalized = session_mode.strip().lower()
+        if normalized:
+            return normalized
+    if isinstance(session_mode, bool):
+        return "readwrite" if session_mode else "readonly"
+    allow_modifications = context.get("allow_modifications")
+    if isinstance(allow_modifications, bool):
+        return "readwrite" if allow_modifications else "readonly"
+    if isinstance(allow_modifications, str):
+        normalized_allow = allow_modifications.strip().lower()
+        if normalized_allow in {"true", "1", "yes", "on", "rw", "readwrite", "r+w", "write"}:
+            return "readwrite"
+        if normalized_allow in {"false", "0", "no", "off", "ro", "readonly"}:
+            return "readonly"
+    return None
+
+
 def build_tool_end_event(
     tool_call_id: str,
     tool_name: str,
@@ -121,6 +143,9 @@ def build_tool_end_event(
         tool_name,
         result_summary["metadata"],
     )
+    context_mode = _session_mode_from_context(context)
+    if context_mode:
+        result_meta["session_mode"] = context_mode
     if extra_result_meta:
         result_meta.update(extra_result_meta)
     payload = {

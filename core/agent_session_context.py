@@ -42,6 +42,7 @@ class AgentSessionContext:
             "session_id": self.session_id,
             "os_type": "linux",
             "allow_modifications": self.allow_modifications,
+            "session_mode": "readwrite" if self.allow_modifications else "readonly",
             "active_skills": self.active_skills,
             "active_skill_paths": (
                 self.active_skill_paths if self.local_skill_scripts_allowed else []

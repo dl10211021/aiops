@@ -2394,6 +2394,7 @@ export interface MemoryCandidateEvidenceDetail {
   candidate: MemoryCandidate
   ref: MemoryCandidateRef
   trace?: ExecTraceItem | null
+  sessionMode?: 'readonly' | 'readwrite'
   loading?: boolean
   error?: string
 }
@@ -2401,9 +2402,11 @@ export interface MemoryCandidateEvidenceDetail {
 export function MemoryCandidateEvidenceDialog({
   detail,
   onClose,
+  sessionMode,
 }: {
   detail: MemoryCandidateEvidenceDetail | null
   onClose: () => void
+  sessionMode?: 'readonly' | 'readwrite'
 }) {
   if (!detail) return null
   const trace = detail.trace || null
@@ -2444,7 +2447,7 @@ export function MemoryCandidateEvidenceDialog({
           )}
           {trace ? (
             <div className="mt-3">
-              <ToolTraceList items={[trace]} />
+              <ToolTraceList items={[trace]} sessionMode={sessionMode} />
             </div>
           ) : !detail.loading && !detail.error ? (
             <div className="mt-3 rounded border border-ops-surface0 bg-ops-dark/35 px-3 py-3 text-xs text-ops-subtext">

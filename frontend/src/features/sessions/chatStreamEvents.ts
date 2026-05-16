@@ -1,6 +1,7 @@
 import type { ChatMessage, ExecTraceItem, MemoryReference, ToolApproval, UserInteractionRequest } from '@/types'
 import { resolveApprovalFromToolEnd } from './chatAttention'
 import { completeLastTrace } from './traceUtils'
+import { resolveSessionModeWithSource } from './toolPolicyPresentation'
 
 interface ApplyChatStreamEventArgs {
   sessionId: string
@@ -81,10 +82,21 @@ export function applyChatStreamEvent({
       return { done: false, accumulatedMarkdown }
 
     case 'tool_ask_approval': {
+      const contextMode = [
+        data.session_mode,
+        data.context_mode,
+        data.allow_modifications,
+        data.execution_mode,
+      ].find((value) => value !== undefined && value !== null)
+      const sessionModeResolution = resolveSessionModeWithSource(contextMode, undefined)
       const approval: ToolApproval = {
         toolCallId: streamString(data.tool_call_id),
         toolName: streamString(data.tool_name, 'unknown'),
         args: streamArgs(data.args),
+        sessionMode: sessionModeResolution.mode,
+        sessionModeSource: sessionModeResolution.source,
+        allowModifications: typeof data.allow_modifications === 'boolean' ? data.allow_modifications : undefined,
+        executionMode: streamString(data.execution_mode),
         reason: streamString(data.reason),
         approvalSources: Array.isArray(data.approval_sources)
           ? data.approval_sources.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))

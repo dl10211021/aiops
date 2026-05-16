@@ -1,4 +1,12 @@
+import { useCallback } from 'react'
 import PageHeader from '@/components/layout/PageHeader'
+import {
+  resolveSessionModeWithSource,
+  type SessionModeResolution,
+  type SessionModeSource,
+} from '@/features/sessions/toolPolicyPresentation'
+import type { ApprovalRequest } from '@/types'
+import { useStore } from '@/store'
 import { ApprovalDecisionModal } from './ApprovalDecisionModal'
 import {
   ApprovalEmptyState,
@@ -9,6 +17,7 @@ import {
 import { useApprovalCenterData } from './useApprovalCenterData'
 
 export default function ApprovalCenter() {
+  const sessions = useStore((state) => state.sessions)
   const {
     approvals,
     busyId,
@@ -28,6 +37,22 @@ export default function ApprovalCenter() {
     status,
     submitDecision,
   } = useApprovalCenterData()
+
+  const resolveSessionModeWithSourceForList = useCallback((approval: ApprovalRequest): SessionModeResolution => {
+    const context = approval.context as Record<string, unknown>
+    const contextMode = [context.session_mode, context.mode, context.allow_modifications, context.execution_mode]
+      .find((value) => value !== undefined && value !== null)
+    const sourceSession = approval.session_id ? sessions[approval.session_id] : null
+    return resolveSessionModeWithSource(contextMode, sourceSession ? Boolean(sourceSession.isReadWriteMode) : undefined)
+  }, [sessions])
+
+  const sourceLabelByMode = useCallback((source: SessionModeSource) => {
+    return {
+      context: '来源：会话上下文',
+      session_snapshot: '来源：会话快照',
+      inferred_unknown: '来源：未识别',
+    }[source]
+  }, [])
 
   return (
     <div className="ops-page">
@@ -66,6 +91,8 @@ export default function ApprovalCenter() {
             approvals={approvals}
             loading={loading}
             busyId={busyId}
+            resolveSessionMode={resolveSessionModeWithSourceForList}
+            resolveSessionModeSourceLabel={sourceLabelByMode}
             onApprove={(approval) => openDecision(approval, true)}
             onReject={(approval) => openDecision(approval, false)}
             onExecute={(approval) => void handleExecute(approval)}
@@ -82,6 +109,10 @@ export default function ApprovalCenter() {
           <ApprovalDecisionModal
             approval={decisionTarget.approval}
             approved={decisionTarget.approved}
+            sessionModeResolution={resolveSessionModeWithSourceForList(decisionTarget.approval)}
+            sessionModeSourceLabel={
+              sourceLabelByMode(resolveSessionModeWithSourceForList(decisionTarget.approval).source)
+            }
             operator={operator}
             note={decisionNote}
             busy={busyId === decisionTarget.approval.id}

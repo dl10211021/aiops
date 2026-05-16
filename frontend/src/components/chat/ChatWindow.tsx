@@ -421,6 +421,7 @@ export default function ChatWindow() {
             visiblePolicyBlock={visiblePolicyBlock}
             visibleSlashCommands={visibleSlashCommands}
             selectedSlashCommandIndex={selectedSlashCommandIndex}
+            sessionMode={sessionMode}
             onApproval={toolApprovalDecision.openDecision}
             onApplySlashCommand={inputDrafts.applySlashCommand}
             onSlashCommandIndexChange={setSelectedSlashCommandIndex}

@@ -34,10 +34,14 @@ export function ToolApprovalCardHeader({
   approval,
   decisionLabel,
   statusTone,
+  sessionMode,
+  sessionModeSource,
 }: {
   approval: ToolApproval
   decisionLabel: string
   statusTone: string
+  sessionMode?: 'readonly' | 'readwrite'
+  sessionModeSource?: 'context' | 'session_snapshot' | 'inferred_unknown'
 }) {
   return (
     <div className="flex items-start justify-between gap-3 border-b border-ops-surface0/70 px-4 py-3">
@@ -50,7 +54,11 @@ export function ToolApprovalCardHeader({
           <span className="rounded-full border border-yellow-300/25 px-2 py-0.5 text-[11px] text-yellow-100">
             {approval.primaryAction?.label || '敏感操作'}
           </span>
-          <ToolPolicyRuntimeChips policy={approval.toolPolicy} />
+          <ToolPolicyRuntimeChips
+            policy={approval.toolPolicy}
+            sessionMode={sessionMode}
+            sessionModeSource={sessionModeSource}
+          />
         </div>
       </div>
       <span className="font-mono text-[11px] text-ops-overlay">{approval.toolCallId}</span>
@@ -58,8 +66,23 @@ export function ToolApprovalCardHeader({
   )
 }
 
-export function ToolApprovalPolicySummary({ approval }: { approval: ToolApproval }) {
-  return <ToolPolicyRuntimeGrid policy={approval.toolPolicy} columns="md:grid-cols-4" />
+export function ToolApprovalPolicySummary({
+  approval,
+  sessionMode,
+  sessionModeSource,
+}: {
+  approval: ToolApproval
+  sessionMode?: 'readonly' | 'readwrite'
+  sessionModeSource?: 'context' | 'session_snapshot' | 'inferred_unknown'
+}) {
+  return (
+    <ToolPolicyRuntimeGrid
+      policy={approval.toolPolicy}
+      columns="md:grid-cols-4"
+      sessionMode={sessionMode}
+      sessionModeSource={sessionModeSource}
+    />
+  )
 }
 
 export function ToolApprovalReason({ reason }: { reason?: string }) {

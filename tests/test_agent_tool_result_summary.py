@@ -211,6 +211,35 @@ def test_build_tool_end_event_can_attach_standard_tool_evidence():
     assert payload["evidence"]["finished_at"] == 150
 
 
+def test_build_tool_end_event_records_session_mode_variants_from_context():
+    message_readwrite, _safe_text_rw = build_tool_end_event(
+        "call-1",
+        "db_execute_query",
+        {"success": True},
+        context={"allow_modifications": True},
+    )
+    payload_readwrite = json.loads(message_readwrite)
+    assert payload_readwrite["result_meta"]["session_mode"] == "readwrite"
+
+    message_readonly, _safe_text_ro = build_tool_end_event(
+        "call-2",
+        "db_execute_query",
+        {"success": True},
+        context={"session_mode": "readonly"},
+    )
+    payload_readonly = json.loads(message_readonly)
+    assert payload_readonly["result_meta"]["session_mode"] == "readonly"
+
+    message_contextless, _safe_text_unknown = build_tool_end_event(
+        "call-3",
+        "db_execute_query",
+        {"success": True},
+        context={"allow_modifications": False},
+    )
+    payload_contextless = json.loads(message_contextless)
+    assert payload_contextless["result_meta"]["session_mode"] == "readonly"
+
+
 def test_agent_max_steps_defaults_and_bounds(monkeypatch):
     monkeypatch.delenv("OPSCORE_AGENT_MAX_STEPS", raising=False)
     monkeypatch.delenv("OPSCORE_HEADLESS_AGENT_MAX_STEPS", raising=False)

@@ -51,6 +51,7 @@ def _write_store(items: list[dict[str, Any]]) -> None:
 
 def _safe_context(context: dict[str, Any]) -> dict[str, Any]:
     allow_modifications = context.get("allow_modifications")
+    session_mode = context.get("session_mode")
     normalized_allow_modifications = None
     if isinstance(allow_modifications, bool):
         normalized_allow_modifications = allow_modifications
@@ -76,6 +77,13 @@ def _safe_context(context: dict[str, Any]) -> dict[str, Any]:
         "trigger_source": context.get("trigger_source"),
         "tags": context.get("tags") or [],
     }
+    if session_mode is not None:
+        if isinstance(session_mode, bool):
+            safe_context["session_mode"] = "readwrite" if session_mode else "readonly"
+        elif isinstance(session_mode, str) and session_mode.strip():
+            safe_context["session_mode"] = session_mode.strip().lower()
+    elif normalized_allow_modifications is not None:
+        safe_context["session_mode"] = "readwrite" if normalized_allow_modifications else "readonly"
     if normalized_allow_modifications is not None:
         safe_context["allow_modifications"] = normalized_allow_modifications
     return redact_value(

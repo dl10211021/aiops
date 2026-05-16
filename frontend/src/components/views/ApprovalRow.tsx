@@ -2,6 +2,7 @@ import { assetTypeLabel, protocolLabel, toolLabel } from '@/utils/assetDisplay'
 import type { ApprovalRequest } from '@/types'
 import { ApprovalSourceSummary } from '@/features/sessions/ApprovalSourceSummary'
 import { ToolPolicyRuntimeGrid } from '@/features/sessions/ToolPolicyRuntimeSummary'
+import { sessionModeLabel, type SessionModeSource } from '@/features/sessions/toolPolicyPresentation'
 import { approvalPolicyActionTone } from './approvalDisplay'
 import { ApprovalInfo, ApprovalStatusBadge } from './ApprovalCenterShared'
 
@@ -11,12 +12,19 @@ export function ApprovalRow({
   onApprove,
   onReject,
   onExecute,
+  sessionModeResolution,
+  sessionModeSourceLabel,
 }: {
   approval: ApprovalRequest
   busy: boolean
   onApprove: () => void
   onReject: () => void
   onExecute: () => void
+  sessionModeResolution?: {
+    mode?: 'readonly' | 'readwrite'
+    source: SessionModeSource
+  }
+  sessionModeSourceLabel?: string
 }) {
   const argsText = JSON.stringify(approval.args || {}, null, 2)
   const context = approval.context || {}
@@ -26,6 +34,9 @@ export function ApprovalRow({
   const policyActions = approval.metadata?.policy?.actions || []
   const primaryAction = approval.metadata?.policy?.primary_action
   const canExecuteRollback = approval.status === 'approved' && approval.tool_name === 'rollback_skill' && !approval.execution
+  const sessionMode = sessionModeResolution?.mode
+  const sessionModeSource = sessionModeResolution?.source ?? 'inferred_unknown'
+  const sessionModeText = sessionModeLabel(sessionMode)
   return (
     <article className="grid gap-4 px-5 py-4 xl:grid-cols-[1fr_340px]">
       <div className="min-w-0">
@@ -48,7 +59,11 @@ export function ApprovalRow({
         </div>
         {toolPolicy && (
           <div className="mt-3">
-            <ToolPolicyRuntimeGrid policy={toolPolicy} />
+            <ToolPolicyRuntimeGrid
+              policy={toolPolicy}
+              sessionMode={sessionMode}
+              sessionModeSource={sessionModeSource}
+            />
           </div>
         )}
         {policyActions.length > 0 && (
@@ -133,6 +148,8 @@ export function ApprovalRow({
         <div className="space-y-2 text-xs text-ops-subtext">
           <ApprovalInfo label="资产" value={context.remark || context.host || '-'} />
           <ApprovalInfo label="协议" value={`${assetTypeLabel(String(context.asset_type || ''))} / ${protocolLabel(String(context.protocol || ''))}`} />
+          <ApprovalInfo label="会话权限" value={sessionModeText} />
+          <ApprovalInfo label="来源" value={sessionModeSourceLabel || ''} />
           <ApprovalInfo label="会话" value={approval.session_id || '-'} />
           <ApprovalInfo label="申请时间" value={approval.requested_at || '-'} />
           <ApprovalInfo label="处理人" value={approval.operator || '-'} />

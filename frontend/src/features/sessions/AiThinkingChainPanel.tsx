@@ -273,6 +273,7 @@ export default function AiThinkingChainPanel({
   sessionMode,
   traceLabel = '思维链',
 }: AiThinkingChainPanelProps) {
+  const traceSource = sessionMode ? 'session_snapshot' : 'inferred_unknown'
   const [query, setQuery] = useState('')
   const [selectedGroupId, setSelectedGroupId] = useState('all')
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
@@ -531,7 +532,12 @@ export default function AiThinkingChainPanel({
                                 )}
                                 {approvalText && approval !== 'none' && (
                                   <span
-                                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${sessionModePolicyToneClass(operationMode, approval, sessionMode)}`}
+                                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${sessionModePolicyToneClass(
+                                      operationMode,
+                                      approval,
+                                      sessionMode,
+                                      traceSource,
+                                    )}`}
                                     title="当前执行门禁：是否可直接运行，还是写入/高危动作需要审批。"
                                   >
                                     门禁：{approvalText}

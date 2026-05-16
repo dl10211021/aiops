@@ -7,6 +7,7 @@ import {
   recordValue,
   retryPolicyLabel,
   runtimePolicyLabels,
+  sessionModeSourceLabel,
   sessionModePolicyLabel,
   sessionModePolicyToneClass,
   timeoutPolicyLabel,
@@ -15,12 +16,37 @@ import {
 interface ToolPolicyRuntimeSummaryProps {
   policy?: Record<string, unknown> | null
   columns?: string
+  sessionMode?: 'readonly' | 'readwrite'
+  sessionModeSource?: 'context' | 'session_snapshot' | 'inferred_unknown'
 }
 
-function policyTone(policy: Record<string, unknown>) {
+function requiresWriteGate(operation: string, approval: string) {
+  return (
+    approval === 'guarded_write'
+    || ['write', 'read_write', 'destructive', 'external_effect'].includes(operation)
+  )
+}
+
+function policyTone(policy: Record<string, unknown>, sessionMode?: 'readonly' | 'readwrite') {
   const operation = recordValue(policy, 'operation_mode')
   const approval = recordValue(policy, 'approval_policy')
   const destructive = recordValue(policy, 'destructive') === 'true'
+  if (requiresWriteGate(operation, approval)) {
+    if (sessionMode === 'readonly') {
+      return {
+        label: '只读限制',
+        className: 'border-ops-alert/35 bg-ops-alert/10 text-ops-alert',
+        dotClassName: 'bg-ops-alert',
+      }
+    }
+    if (sessionMode === 'readwrite') {
+      return {
+        label: destructive || approval === 'always_required' || operation === 'destructive' ? '读写强审批' : '读写已开启',
+        className: 'border-ops-success/35 bg-ops-success/8 text-ops-success',
+        dotClassName: 'bg-ops-success',
+      }
+    }
+  }
   if (destructive || approval === 'always_required' || operation === 'destructive') {
     return {
       label: '强审批',
@@ -63,14 +89,16 @@ function policyRows(policy: Record<string, unknown>) {
 export function ToolPolicyRuntimeGrid({
   policy,
   columns = 'md:grid-cols-4',
+  sessionMode,
+  sessionModeSource,
 }: ToolPolicyRuntimeSummaryProps) {
   if (!policy) return null
-  const tone = policyTone(policy)
+  const tone = policyTone(policy, sessionMode)
   const operationMode = recordValue(policy, 'operation_mode')
   const approvalPolicy = recordValue(policy, 'approval_policy')
   const evidenceFamily = recordValue(policy, 'evidence_family')
   const operation = operationLabel(operationMode)
-  const approval = sessionModePolicyLabel(operationMode, approvalPolicy)
+  const approval = sessionModePolicyLabel(operationMode, approvalPolicy, sessionMode)
   const evidence = evidenceLabel(evidenceFamily)
   const timeout = timeoutPolicyLabel(policy) || '未设置超时'
   const retry = retryPolicyLabel(policy) || '不自动重试'
@@ -84,8 +112,16 @@ export function ToolPolicyRuntimeGrid({
         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${operationToneClass(operationMode)}`}>
           模式：{operation}
         </span>
-        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${sessionModePolicyToneClass(operationMode, approvalPolicy)}`}>
+        <span
+          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${sessionModePolicyToneClass(
+            operationMode,
+            approvalPolicy,
+            sessionMode,
+            sessionModeSource,
+          )}`}
+        >
           门禁：{approval}
+          {sessionModeSource ? ` (${sessionModeSource === 'context' ? '上下文' : sessionModeSource === 'session_snapshot' ? '快照' : '待识别'})` : ''}
         </span>
         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${evidenceToneClass(evidenceFamily)}`}>
           证据：{evidence}
@@ -121,9 +157,9 @@ export function ToolPolicyRuntimeGrid({
   )
 }
 
-export function ToolPolicyRuntimeChips({ policy }: ToolPolicyRuntimeSummaryProps) {
+export function ToolPolicyRuntimeChips({ policy, sessionMode, sessionModeSource }: ToolPolicyRuntimeSummaryProps) {
   if (!policy) return null
-  const tone = policyTone(policy)
+  const tone = policyTone(policy, sessionMode)
   const operationMode = recordValue(policy, 'operation_mode')
   const approvalPolicy = recordValue(policy, 'approval_policy')
   const evidenceFamily = recordValue(policy, 'evidence_family')
@@ -137,9 +173,17 @@ export function ToolPolicyRuntimeChips({ policy }: ToolPolicyRuntimeSummaryProps
       <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${operationToneClass(operationMode)}`}>
         模式：{operationLabel(operationMode)}
       </span>
-      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${sessionModePolicyToneClass(operationMode, approvalPolicy)}`}>
-        门禁：{sessionModePolicyLabel(operationMode, approvalPolicy)}
-      </span>
+      <span
+        className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${sessionModePolicyToneClass(
+            operationMode,
+            approvalPolicy,
+            sessionMode,
+            sessionModeSource,
+          )}`}
+        >
+          门禁：{sessionModePolicyLabel(operationMode, approvalPolicy, sessionMode)}
+          {sessionModeSource ? ` (${sessionModeSourceLabel(sessionModeSource)})` : ''}
+        </span>
       <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${evidenceToneClass(evidenceFamily)}`}>
         证据：{evidenceLabel(evidenceFamily)}
       </span>

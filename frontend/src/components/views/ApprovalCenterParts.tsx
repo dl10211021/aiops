@@ -1,4 +1,8 @@
 import type { ApprovalRequest } from '@/types'
+import type {
+  SessionModeResolution,
+  SessionModeSource,
+} from '@/features/sessions/toolPolicyPresentation'
 import {
   type ApprovalMetricTone,
   type ApprovalStatusFilter,
@@ -69,6 +73,8 @@ export function ApprovalList({
   onApprove,
   onReject,
   onExecute,
+  resolveSessionMode,
+  resolveSessionModeSourceLabel,
 }: {
   approvals: ApprovalRequest[]
   loading: boolean
@@ -76,6 +82,8 @@ export function ApprovalList({
   onApprove: (approval: ApprovalRequest) => void
   onReject: (approval: ApprovalRequest) => void
   onExecute: (approval: ApprovalRequest) => void
+  resolveSessionMode: (approval: ApprovalRequest) => SessionModeResolution
+  resolveSessionModeSourceLabel: (source: SessionModeSource) => string
 }) {
   return (
     <section className="ops-data-panel overflow-hidden">
@@ -97,6 +105,8 @@ export function ApprovalList({
             key={approval.id}
             approval={approval}
             busy={busyId === approval.id}
+            sessionModeResolution={resolveSessionMode(approval)}
+            sessionModeSourceLabel={resolveSessionModeSourceLabel(resolveSessionMode(approval).source)}
             onApprove={() => onApprove(approval)}
             onReject={() => onReject(approval)}
             onExecute={() => onExecute(approval)}

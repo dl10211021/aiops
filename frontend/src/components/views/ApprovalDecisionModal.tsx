@@ -2,11 +2,14 @@ import type { ApprovalRequest } from '@/types'
 import { assetTypeLabel, protocolLabel, toolLabel } from '@/utils/assetDisplay'
 import { ApprovalSourceSummary } from '@/features/sessions/ApprovalSourceSummary'
 import { ToolPolicyRuntimeGrid } from '@/features/sessions/ToolPolicyRuntimeSummary'
+import { sessionModeLabel } from '@/features/sessions/toolPolicyPresentation'
 import { ApprovalInfo } from './ApprovalCenterShared'
 
 export function ApprovalDecisionModal({
   approval,
   approved,
+  sessionModeResolution,
+  sessionModeSourceLabel,
   operator,
   note,
   busy,
@@ -17,6 +20,11 @@ export function ApprovalDecisionModal({
 }: {
   approval: ApprovalRequest
   approved: boolean
+  sessionModeResolution?: {
+    mode?: 'readonly' | 'readwrite'
+    source: 'context' | 'session_snapshot' | 'inferred_unknown'
+  }
+  sessionModeSourceLabel?: string
   operator: string
   note: string
   busy: boolean
@@ -47,9 +55,19 @@ export function ApprovalDecisionModal({
               <ApprovalInfo label="资产" value={approval.context?.remark || approval.context?.host || '-'} />
               <ApprovalInfo label="协议" value={`${assetTypeLabel(String(approval.context?.asset_type || ''))} / ${protocolLabel(String(approval.context?.protocol || ''))}`} />
               <ApprovalInfo label="会话" value={approval.session_id || '-'} />
+              <ApprovalInfo label="会话权限" value={sessionModeLabel(sessionModeResolution?.mode)} />
+              <ApprovalInfo label="来源" value={sessionModeSourceLabel || ''} />
             </div>
           </div>
-          {toolPolicy && <ToolPolicyRuntimeGrid policy={toolPolicy} columns="sm:grid-cols-2" />}
+
+          {toolPolicy && (
+            <ToolPolicyRuntimeGrid
+              policy={toolPolicy}
+              columns="sm:grid-cols-2"
+              sessionMode={sessionModeResolution?.mode}
+              sessionModeSource={sessionModeResolution?.source}
+            />
+          )}
           <div>
             <label className="text-xs text-ops-subtext">操作人</label>
             <input

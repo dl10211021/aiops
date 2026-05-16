@@ -28,6 +28,7 @@ interface ChatComposerAreaProps {
   visiblePolicyBlock: LatestPolicyBlock | null
   visibleSlashCommands: SlashCommand[]
   selectedSlashCommandIndex: number
+  sessionMode?: 'readonly' | 'readwrite'
   onApproval: (approval: ToolApproval, approved: boolean, autoAll?: boolean) => void
   onApplySlashCommand: (prompt: string) => void
   onSlashCommandIndexChange: (index: number) => void
@@ -64,6 +65,7 @@ export default function ChatComposerArea({
   visiblePolicyBlock,
   visibleSlashCommands,
   selectedSlashCommandIndex,
+  sessionMode,
   onApproval,
   onApplySlashCommand,
   onSlashCommandIndexChange,
@@ -112,6 +114,7 @@ export default function ChatComposerArea({
           item={pendingAttention}
           onApproval={onApproval}
           onInteraction={onInteraction}
+          sessionMode={sessionMode}
         />
       )}
       {visiblePolicyBlock && (

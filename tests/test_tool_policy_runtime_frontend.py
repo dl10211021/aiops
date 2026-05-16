@@ -9,6 +9,9 @@ def test_tool_policy_runtime_summary_exposes_operational_context():
     assert "强审批" in source
     assert "受控执行" in source
     assert "只读安全" in source
+    assert "只读限制" in source
+    assert "读写已开启" in source
+    assert "requiresWriteGate(operation, approval)" in source
     assert "调度边界" in source
     assert "超时与重试" in source
     assert "不会被自动并发放大风险" in source
@@ -16,7 +19,8 @@ def test_tool_policy_runtime_summary_exposes_operational_context():
     assert "门禁：{approval}" in source
     assert "证据：{evidence}" in source
     assert "operationToneClass(operationMode)" in source
-    assert "sessionModePolicyToneClass(operationMode, approvalPolicy)" in source
+    assert "sessionModePolicyToneClass(" in source
+    assert "sessionModeSource" in source
     assert "evidenceToneClass(evidenceFamily)" in source
 
 
@@ -35,7 +39,8 @@ def test_tool_trace_policy_chips_separate_mode_gate_and_evidence():
     assert "门禁：{gateLabel}" in source
     assert "证据：{evidenceLabel(evidenceFamily)}" in source
     assert "operationToneClass(operationMode)" in source
-    assert "sessionModePolicyToneClass(operationMode, approvalPolicy, sessionMode)" in source
+    assert "sessionModePolicyToneClass(" in source
+    assert "sessionModeSource" in source
     assert "evidenceToneClass(evidenceFamily)" in source
     assert "模式：{operation}" in thinking_panel
     assert "门禁：{approvalText}" in thinking_panel
@@ -43,7 +48,8 @@ def test_tool_trace_policy_chips_separate_mode_gate_and_evidence():
     assert "operationMode ? operationLabel(operationMode) : ''" in thinking_panel
     assert "evidenceFamily ? evidenceLabel(evidenceFamily) : ''" in thinking_panel
     assert "approval ? sessionModePolicyLabel(operationMode, approval, sessionMode) : ''" in thinking_panel
-    assert "sessionModePolicyToneClass(operationMode, approval, sessionMode)" in thinking_panel
+    assert "sessionModePolicyToneClass(" in thinking_panel
+    assert "traceSource" in thinking_panel
     assert "read_write: '可读写'" in presentation
     assert "guarded_write: '写入需审批'" in presentation
     assert "guarded_write: 'border-amber-400/40" in presentation
@@ -61,9 +67,10 @@ def test_tool_policy_chips_are_session_mode_aware():
     assert "sessionMode={sessionMode}" in chat_window
     assert "sessionMode?: 'readonly' | 'readwrite'" in message_list
     assert "sessionMode?: 'readonly' | 'readwrite'" in message_bubble
-    assert "sessionMode === 'readonly' && writeCapable" in presentation
+    assert "requiresWriteGate" in presentation
+    assert "sessionMode === 'readonly' && requiresWriteGate" in presentation
     assert "return '只读限制'" in presentation
-    assert "return '读写受控'" in presentation
+    assert "return '读写通过'" in presentation
     assert "border-ops-alert/45 bg-ops-alert/10 text-ops-alert" in presentation
 
 

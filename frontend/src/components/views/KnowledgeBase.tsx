@@ -250,8 +250,17 @@ export default function KnowledgeBase() {
   const handleOpenCandidateEvidence = async (item: MemoryCandidate, ref: MemoryCandidateRef) => {
     const sourceSessionId = item.source_session_id || ''
     const localMessages = sourceSessionId ? sessions[sourceSessionId]?.messages || [] : []
+    const sourceSessionMode = sourceSessionId && sessions[sourceSessionId]
+      ? sessions[sourceSessionId].isReadWriteMode ? 'readwrite' : 'readonly'
+      : undefined
     const localTrace = findCandidateEvidenceTrace(localMessages, ref)
-    setCandidateEvidenceDetail({ candidate: item, ref, trace: localTrace, loading: !localTrace && Boolean(sourceSessionId) })
+    setCandidateEvidenceDetail({
+      candidate: item,
+      ref,
+      trace: localTrace,
+      sessionMode: sourceSessionMode,
+      loading: !localTrace && Boolean(sourceSessionId),
+    })
     if (localTrace || !sourceSessionId) return
     try {
       const evidenceResponse = await getSessionHistoryEvidenceTrace(sourceSessionId, candidateEvidenceQuery(ref))
@@ -259,10 +268,17 @@ export default function KnowledgeBase() {
         candidate: item,
         ref,
         trace: evidenceResponse.data.trace,
+        sessionMode: sourceSessionMode,
       })
       return
     } catch {
-      setCandidateEvidenceDetail({ candidate: item, ref, trace: null, loading: true })
+      setCandidateEvidenceDetail({
+        candidate: item,
+        ref,
+        trace: null,
+        sessionMode: sourceSessionMode,
+        loading: true,
+      })
     }
     try {
       const response = await getSessionHistory(sourceSessionId, 200)
@@ -274,12 +290,14 @@ export default function KnowledgeBase() {
         ref,
         trace,
         error: trace ? '' : '来源会话历史已加载，但没有找到匹配的工具执行轨迹。',
+        sessionMode: sourceSessionMode,
       })
     } catch (error: unknown) {
       setCandidateEvidenceDetail({
         candidate: item,
         ref,
         trace: null,
+        sessionMode: sourceSessionMode,
         error: error instanceof Error ? error.message : '加载来源会话历史失败',
       })
     }
@@ -739,6 +757,7 @@ export default function KnowledgeBase() {
       )}
       <MemoryCandidateEvidenceDialog
         detail={candidateEvidenceDetail}
+        sessionMode={candidateEvidenceDetail?.sessionMode}
         onClose={() => setCandidateEvidenceDetail(null)}
       />
     </div>

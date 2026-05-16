@@ -54,6 +54,12 @@ function MessageBubble({
   const approval = message.toolApproval
   const approvalRows = approval ? approvalArgumentRows(approval) : []
   const approvalActions = approval?.actions || []
+  const approvalSessionMode = approval?.sessionMode ?? sessionMode
+  const approvalSessionModeSource = approval?.sessionMode
+    ? (approval.sessionModeSource || 'context')
+    : sessionMode
+      ? 'session_snapshot'
+      : 'inferred_unknown'
   const interaction = message.userInteraction
   const hasContent = message.content.trim().length > 0
   const shouldShowEmptyBubble = isPending && !hasContent && !hasTrace && !approval && !interaction
@@ -64,7 +70,7 @@ function MessageBubble({
   return (
     <div className="group flex w-full justify-start">
       <div className="w-full space-y-2">
-        {hasTrace && showInlineTrace && (
+      {hasTrace && showInlineTrace && (
           <div className="text-xs">
             <button
               onClick={() => setTraceOpen(!traceOpen)}
@@ -78,7 +84,8 @@ function MessageBubble({
                 items={message.execTrace!}
                 onTraceActionRule={onTraceActionRule}
                 policyRuleBusy={policyRuleBusy}
-                sessionMode={sessionMode}
+                sessionMode={approvalSessionMode}
+                sessionModeSource={approvalSessionModeSource}
               />
             )}
           </div>
@@ -90,6 +97,8 @@ function MessageBubble({
             approvalRows={approvalRows}
             approvalActions={approvalActions}
             onApproval={onApproval}
+            sessionMode={approvalSessionMode}
+            sessionModeSource={approvalSessionModeSource}
           />
         )}
 

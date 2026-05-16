@@ -16,6 +16,8 @@ interface ToolApprovalCardProps {
   approvalRows: Array<{ label: string; value: string; wide?: boolean }>
   approvalActions: NonNullable<ToolApproval['actions']>
   onApproval: (approval: ToolApproval, approved: boolean, autoAll?: boolean) => void
+  sessionMode?: 'readonly' | 'readwrite'
+  sessionModeSource?: 'context' | 'session_snapshot' | 'inferred_unknown'
 }
 
 export default function ToolApprovalCard({
@@ -23,6 +25,8 @@ export default function ToolApprovalCard({
   approvalRows,
   approvalActions,
   onApproval,
+  sessionMode,
+  sessionModeSource,
 }: ToolApprovalCardProps) {
   const { decisionLabel, decisionText, resolvedTone, statusTone } = getToolApprovalDisplay(approval)
 
@@ -32,11 +36,17 @@ export default function ToolApprovalCard({
         approval={approval}
         decisionLabel={decisionLabel}
         statusTone={statusTone}
+        sessionMode={sessionMode}
+        sessionModeSource={sessionModeSource}
       />
 
       <div className="space-y-3 px-4 py-3 text-xs text-ops-subtext">
         <ToolApprovalSource approval={approval} />
-        <ToolApprovalPolicySummary approval={approval} />
+        <ToolApprovalPolicySummary
+          approval={approval}
+          sessionMode={sessionMode}
+          sessionModeSource={sessionModeSource}
+        />
         {!approval.approvalSource && <ToolApprovalReason reason={approval.reason} />}
         <ToolApprovalResolution
           approval={approval}

@@ -15,9 +15,11 @@ interface PendingActionDockProps {
   item: PendingAttention
   onApproval: (approval: ToolApproval, approved: boolean, autoAll?: boolean) => void
   onInteraction: (requestId: string, value: string, label?: string) => void
+  sessionMode?: 'readonly' | 'readwrite'
 }
 
-export function PendingActionDock({ item, onApproval, onInteraction }: PendingActionDockProps) {
+export function PendingActionDock({ item, onApproval, onInteraction, sessionMode }: PendingActionDockProps) {
+  const source = sessionMode ? 'session_snapshot' : 'inferred_unknown'
   return (
     <div className="mb-3 rounded-lg border border-ops-accent/35 bg-ops-dark/80 p-3">
       <div className="mb-2 flex items-center justify-between gap-3">
@@ -35,6 +37,8 @@ export function PendingActionDock({ item, onApproval, onInteraction }: PendingAc
           approvalRows={approvalArgumentRows(item.approval)}
           approvalActions={item.approval.actions || []}
           onApproval={onApproval}
+          sessionMode={sessionMode}
+          sessionModeSource={source}
         />
       ) : (
         <UserInteractionCard interaction={item.interaction} onSubmit={onInteraction} />

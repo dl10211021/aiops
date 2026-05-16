@@ -288,6 +288,10 @@ export interface ToolApproval {
   toolCallId: string
   toolName: string
   args: string
+  sessionMode?: 'readonly' | 'readwrite'
+  sessionModeSource?: 'context' | 'session_snapshot' | 'inferred_unknown'
+  allowModifications?: boolean
+  executionMode?: string
   reason?: string
   approvalSources?: Array<Record<string, unknown> | null>
   actions?: SafetyPolicyAction[]

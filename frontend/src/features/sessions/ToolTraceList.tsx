@@ -21,6 +21,7 @@ import {
   recordValue,
   runtimeExecutionLabels,
   runtimePolicyLabels,
+  parseSessionMode,
   sessionModePolicyLabel,
   sessionModePolicyToneClass,
   toolPolicyFromTrace,
@@ -31,22 +32,55 @@ interface ToolTraceListProps {
   onTraceActionRule?: (action: SafetyPolicyAction, decision: SafetyPolicyDecision) => void
   policyRuleBusy?: string | null
   sessionMode?: 'readonly' | 'readwrite'
+  sessionModeSource?: 'context' | 'session_snapshot' | 'inferred_unknown'
 }
 
-export default function ToolTraceList({ items, onTraceActionRule, policyRuleBusy, sessionMode }: ToolTraceListProps) {
+export default function ToolTraceList({
+  items,
+  onTraceActionRule,
+  policyRuleBusy,
+  sessionMode,
+  sessionModeSource,
+}: ToolTraceListProps) {
+  const traceSource = sessionModeSource || (sessionMode ? 'session_snapshot' : 'inferred_unknown')
   return (
     <div className="mt-2 space-y-2">
-      {items.map((item, index) => (
+      {items.map((item, index) => {
+        const traceSession = resolveTraceSessionMode(item, sessionMode, traceSource)
+        return (
         <ToolTraceCard
           key={index}
           item={item}
           onTraceActionRule={onTraceActionRule}
           policyRuleBusy={policyRuleBusy}
-          sessionMode={sessionMode}
+          sessionMode={traceSession.mode ?? sessionMode}
+          sessionModeSource={traceSession.source}
         />
-      ))}
+        )
+      })}
     </div>
   )
+}
+
+type SessionModeResolution = {
+  mode?: 'readonly' | 'readwrite'
+  source: 'context' | 'session_snapshot' | 'inferred_unknown'
+}
+
+function resolveTraceSessionMode(
+  item: ExecTraceItem,
+  fallbackMode?: 'readonly' | 'readwrite',
+  fallbackSource: 'context' | 'session_snapshot' | 'inferred_unknown' = 'inferred_unknown',
+): SessionModeResolution {
+  const meta = item.resultMeta || {}
+  const modeInMeta = parseSessionMode(meta?.session_mode)
+  if (modeInMeta) {
+    return { mode: modeInMeta, source: 'context' }
+  }
+  const metaContext = parseSessionMode(meta?.context_mode)
+  if (metaContext) return { mode: metaContext, source: 'context' }
+  if (fallbackMode) return { mode: fallbackMode, source: fallbackSource }
+  return { mode: undefined, source: fallbackSource }
 }
 
 function ToolTraceCard({
@@ -54,6 +88,7 @@ function ToolTraceCard({
   onTraceActionRule,
   policyRuleBusy,
   sessionMode,
+  sessionModeSource,
 }: Omit<ToolTraceListProps, 'items'> & { item: ExecTraceItem }) {
   const status = item.status || (item.type === 'tool_start' ? 'running' : 'done')
   const parsedResult = item.resultMeta || parseJsonRecord(item.result || '')
@@ -116,7 +151,12 @@ function ToolTraceCard({
               模式：{operationLabel(operationMode)}
             </span>
             <span
-              className={`rounded border px-2 py-0.5 font-semibold ${sessionModePolicyToneClass(operationMode, approvalPolicy, sessionMode)}`}
+              className={`rounded border px-2 py-0.5 font-semibold ${sessionModePolicyToneClass(
+                operationMode,
+                approvalPolicy,
+                sessionMode,
+                sessionModeSource,
+              )}`}
               title="当前执行门禁：是否可直接运行，还是写入/高危动作需要审批。"
             >
               门禁：{gateLabel}
