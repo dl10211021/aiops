@@ -16,6 +16,7 @@ from core.tool_execution_policy import (
     execute_with_runtime_policy,
 )
 from core.tool_registry import tool_policy_metadata
+from core.tool_trace_policy import trace_command_actions, trace_command_primary_action
 
 
 StreamExecutor = Callable[[str, list[dict], str, Any], AsyncIterator[dict]]
@@ -169,6 +170,7 @@ async def _run_headless_concurrent_plan(
                 "content": _headless_tool_message_content(
                     tool_res,
                     item["name"],
+                    item["args"],
                     item["policy"],
                     runtime_execution,
                     context,
@@ -180,6 +182,7 @@ async def _run_headless_concurrent_plan(
 def _headless_tool_message_content(
     tool_res: Any,
     tool_name: str,
+    tool_args: dict[str, Any],
     tool_policy: dict[str, Any],
     runtime_execution: dict[str, Any] | None,
     context: dict,
@@ -197,6 +200,13 @@ def _headless_tool_message_content(
 
     payload.setdefault("tool", tool_name)
     payload.setdefault("tool_policy", tool_policy)
+    trace = {"tool": tool_name, "args": tool_args, "resultMeta": payload}
+    primary_action = trace_command_primary_action(trace)
+    if primary_action:
+        payload.setdefault("primary_action", primary_action)
+        actions = trace_command_actions(trace)
+        if actions:
+            payload.setdefault("actions", actions)
     if runtime_execution:
         payload.setdefault("runtime_policy", runtime_execution)
     session_mode = _session_mode_from_context(context)
@@ -320,6 +330,7 @@ async def run_headless_agent_loop(
                 "content": _headless_tool_message_content(
                     tool_res,
                     func_name,
+                    func_args,
                     tool_policy,
                     runtime_execution if not reason else {},
                     context,

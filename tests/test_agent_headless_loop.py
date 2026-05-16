@@ -114,6 +114,8 @@ class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tool_payload["tool"], "linux_execute_command")
         self.assertEqual(tool_payload["runtime_policy"]["attempts"], 1)
         self.assertEqual(tool_payload["tool_policy"]["name"], "linux_execute_command")
+        self.assertEqual(tool_payload["primary_action"]["id"], "linux.read.resource")
+        self.assertEqual(tool_payload["actions"][0]["id"], "linux.read.resource")
 
     async def test_returns_step_limit_report_when_tools_never_finish(self):
         tool_call = {
@@ -194,6 +196,9 @@ class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(dispatcher.executed, [])
         record.assert_called_once()
         self.assertIn("高风险动作", record.call_args.kwargs["reason"])
+        blocked_payload = json.loads(messages[2]["content"])
+        self.assertEqual(blocked_payload["primary_action"]["id"], "linux.service.change")
+        self.assertEqual(blocked_payload["actions"][0]["id"], "linux.service.change")
 
     async def test_headless_blocks_runtime_policy_approval_gate(self):
         messages = [{"role": "system", "content": "sys"}]
