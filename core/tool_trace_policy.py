@@ -1,8 +1,28 @@
 from __future__ import annotations
 
+import json
+import re
 from typing import Any
 
 from core.tool_registry import tool_policy_metadata
+
+
+_SQL_READ_ACTIONS = {"select", "show", "describe", "desc", "explain", "with"}
+_SQL_WRITE_ACTIONS = {
+    "alter",
+    "analyze",
+    "call",
+    "create",
+    "delete",
+    "drop",
+    "grant",
+    "insert",
+    "merge",
+    "replace",
+    "revoke",
+    "truncate",
+    "update",
+}
 
 
 def trace_result_meta(trace: dict[str, Any]) -> dict[str, Any]:
@@ -61,6 +81,73 @@ def trace_policy_summary(
             fallback_to_registry=fallback_to_registry,
         )
     )
+
+
+def trace_sql_action_summary(trace: dict[str, Any]) -> str:
+    if str(trace.get("tool") or "") != "db_execute_query":
+        return ""
+    statement_type = _trace_statement_type(trace)
+    if not statement_type:
+        return ""
+    action = statement_type.lower()
+    if action in _SQL_READ_ACTIONS:
+        return f"只读查询 ({action.upper()})"
+    if action in _SQL_WRITE_ACTIONS:
+        return f"写入/DDL ({action.upper()})"
+    return f"待识别 ({action.upper()})"
+
+
+def _trace_statement_type(trace: dict[str, Any]) -> str:
+    for payload in (
+        trace_result_meta(trace),
+        _evidence_result_meta(trace),
+        _parsed_result_payload(trace),
+    ):
+        value = payload.get("statement_type") if isinstance(payload, dict) else None
+        if value:
+            return _normalize_statement_type(value)
+
+    for value in (
+        trace.get("args"),
+        trace_evidence(trace).get("input_summary"),
+        trace_evidence(trace).get("redacted_input"),
+    ):
+        statement_type = _statement_type_from_sql(value)
+        if statement_type:
+            return statement_type
+    return ""
+
+
+def _evidence_result_meta(trace: dict[str, Any]) -> dict[str, Any]:
+    evidence_meta = trace_evidence(trace).get("result_meta")
+    return evidence_meta if isinstance(evidence_meta, dict) else {}
+
+
+def _parsed_result_payload(trace: dict[str, Any]) -> dict[str, Any]:
+    raw = trace.get("result")
+    if isinstance(raw, dict):
+        return raw
+    if not isinstance(raw, str) or not raw.strip():
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _normalize_statement_type(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    return re.sub(r"[^a-z_].*$", "", text)
+
+
+def _statement_type_from_sql(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"^(/\*.*?\*/|--[^\n]*(\n|$))", "", text, flags=re.DOTALL).strip()
+    match = re.match(r"([a-zA-Z_]+)", text)
+    return _normalize_statement_type(match.group(1)) if match else ""
 
 
 def trace_runtime_summary(trace: dict[str, Any]) -> str:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from core.tool_display import tool_label
-from core.tool_trace_policy import trace_evidence_id, trace_tool_policy
+from core.tool_trace_policy import trace_evidence_id, trace_sql_action_summary, trace_tool_policy
 
 
 def chat_history_messages(messages: list[dict]) -> list[dict]:
@@ -132,6 +132,9 @@ def format_exec_trace_lines(exec_trace: list[dict]) -> list[str]:
         policy_line = _format_policy_line(trace_tool_policy(item, str(tool)))
         if policy_line:
             lines.append(f"  - Policy: {policy_line}")
+        sql_action = trace_sql_action_summary(item)
+        if sql_action:
+            lines.append(f"  - SQL Action: {sql_action}")
         runtime_line = _format_runtime_line(item)
         if runtime_line:
             lines.append(f"  - Runtime: {runtime_line}")

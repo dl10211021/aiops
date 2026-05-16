@@ -9,7 +9,12 @@ import sqlite3
 from dataclasses import asdict, dataclass
 from typing import Any, Mapping
 
-from core.tool_trace_policy import policy_summary, trace_evidence_id, trace_tool_policy
+from core.tool_trace_policy import (
+    policy_summary,
+    trace_evidence_id,
+    trace_sql_action_summary,
+    trace_tool_policy,
+)
 
 
 DEFAULT_RETENTION_INTERVAL_SECONDS = 24 * 60 * 60
@@ -491,6 +496,7 @@ def _message_audit_summary(message: dict[str, Any], max_chars: int) -> str:
     tool_names = []
     evidence_ids = []
     policy_bits = []
+    sql_actions = []
     if isinstance(traces, list):
         for trace in traces:
             if not isinstance(trace, dict):
@@ -502,11 +508,15 @@ def _message_audit_summary(message: dict[str, Any], max_chars: int) -> str:
             policy = trace_tool_policy(trace, fallback_to_registry=False)
             if policy:
                 policy_bits.append(policy_summary(policy))
+            sql_action = trace_sql_action_summary(trace)
+            if sql_action:
+                sql_actions.append(sql_action)
     parts = [
         f"role={message.get('role') or ''}",
         f"tools={','.join([name for name in tool_names if name]) or '-'}",
         f"evidence={','.join(evidence_ids) or '-'}",
         f"policy={';'.join(policy_bits) or '-'}",
+        f"sql_action={';'.join(sql_actions) or '-'}",
         f"content={_truncate(content, max_chars)}",
     ]
     return "\n".join(parts)

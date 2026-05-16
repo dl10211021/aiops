@@ -105,6 +105,7 @@ class TestSessionExport(unittest.TestCase):
         )
 
         self.assertIn("  - Policy: 读写受控；写入受控；数据库证据", markdown)
+        self.assertIn("  - SQL Action: 只读查询 (SELECT)", markdown)
         self.assertIn("  - Evidence: tev-db-1-call-1", markdown)
 
     def test_format_session_history_markdown_includes_runtime_retry_metadata(self):

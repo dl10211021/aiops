@@ -5,6 +5,7 @@ from core.tool_trace_policy import (
     trace_evidence_id,
     trace_policy_summary,
     trace_runtime_summary,
+    trace_sql_action_summary,
     trace_tool_policy,
 )
 
@@ -92,6 +93,32 @@ class ToolTracePolicyTests(unittest.TestCase):
         }
 
         self.assertEqual(trace_runtime_summary(trace), "retry:2/3")
+
+    def test_trace_sql_action_summary_prefers_result_metadata(self):
+        trace = {
+            "tool": "db_execute_query",
+            "resultMeta": {"statement_type": "select"},
+            "args": "delete from audit_log",
+        }
+
+        self.assertEqual(trace_sql_action_summary(trace), "只读查询 (SELECT)")
+
+    def test_trace_sql_action_summary_reads_evidence_metadata(self):
+        trace = {
+            "tool": "db_execute_query",
+            "evidence": {"result_meta": {"statement_type": "alter"}},
+            "args": "select * from v$database",
+        }
+
+        self.assertEqual(trace_sql_action_summary(trace), "写入/DDL (ALTER)")
+
+    def test_trace_sql_action_summary_falls_back_to_sql_args(self):
+        trace = {
+            "tool": "db_execute_query",
+            "args": "\n  explain plan for select * from dba_tables",
+        }
+
+        self.assertEqual(trace_sql_action_summary(trace), "只读查询 (EXPLAIN)")
 
 
 if __name__ == "__main__":

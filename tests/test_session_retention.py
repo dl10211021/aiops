@@ -162,13 +162,15 @@ class TestSessionRetention(unittest.TestCase):
                 "content": "旧内容",
                 "exec_trace": [
                     {
-                        "tool": "linux_execute_command",
+                        "tool": "db_execute_query",
+                        "args": "alter system checkpoint",
                         "evidenceId": "tev-sid-1-call-1",
                         "resultMeta": {
+                            "statement_type": "alter",
                             "tool_policy": {
                                 "operation_mode": "read_write",
                                 "approval_policy": "guarded_write",
-                                "evidence_family": "host_cli",
+                                "evidence_family": "database",
                             }
                         },
                     }
@@ -200,9 +202,10 @@ class TestSessionRetention(unittest.TestCase):
         ).fetchone()
         self.assertEqual(audit[0], old_compressed_id)
         self.assertEqual(audit[1], "delete_compressed_history")
-        self.assertIn("linux_execute_command", audit[2])
+        self.assertIn("db_execute_query", audit[2])
         self.assertIn("tev-sid-1-call-1", audit[2])
-        self.assertIn("read_write/guarded_write/host_cli", audit[2])
+        self.assertIn("read_write/guarded_write/database", audit[2])
+        self.assertIn("sql_action=写入/DDL (ALTER)", audit[2])
 
     def test_dry_run_reports_without_mutating(self):
         conn = self.make_memory_conn()
