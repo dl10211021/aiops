@@ -18,7 +18,12 @@ from core.file_memory_store import FileMemoryStore, memory_scope_path
 from core.lancedb_utils import ensure_lancedb_table, lancedb_table_names
 from core.session_message_store import SessionMessageStore, is_protocol_retry_noise
 from core.slash_command_store import SlashCommandStore, slash_command_row
-from core.tool_trace_policy import trace_command_action_summary, trace_command_primary_action
+from core.tool_trace_policy import (
+    trace_command_action_summary,
+    trace_command_primary_action,
+    trace_http_action_summary,
+    trace_sql_action_summary,
+)
 from core.webhook_delivery_store import WebhookDeliveryStore
 
 logger = logging.getLogger(__name__)
@@ -276,6 +281,8 @@ def _feedback_evidence_refs(message: dict) -> list[dict]:
             "tool": str(tool_name or "").strip(),
             "status": str(item.get("status") or evidence.get("result_status") or "").strip(),
             "evidence_family": str(tool_policy.get("evidence_family") or "").strip(),
+            "sql_action": trace_sql_action_summary(item),
+            "http_action": trace_http_action_summary(item),
             "action_id": str(primary_action.get("id") or "").strip(),
             "action_label": str(primary_action.get("label") or "").strip(),
             "command_action": trace_command_action_summary(item),

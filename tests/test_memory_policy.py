@@ -373,7 +373,25 @@ class MemoryPolicyTests(unittest.TestCase):
                                     "label": "读取系统资源",
                                 },
                             },
-                        }
+                        },
+                        {
+                            "tool": "db_execute_query",
+                            "status": "done",
+                            "evidenceId": "tev-sid-1-call-2",
+                            "resultMeta": {
+                                "tool_policy": {"evidence_family": "database"},
+                                "statement_type": "update",
+                            },
+                        },
+                        {
+                            "tool": "monitoring_api_query",
+                            "status": "done",
+                            "evidenceId": "tev-sid-1-call-3",
+                            "resultMeta": {
+                                "tool_policy": {"evidence_family": "observability"},
+                                "method": "GET",
+                            },
+                        },
                     ],
                 }
 
@@ -405,6 +423,14 @@ class MemoryPolicyTests(unittest.TestCase):
         self.assertEqual(
             db.file_memory_store.appended[0]["metadata"]["evidence_refs"][0]["command_action"],
             "读取系统资源 (linux.read.resource)",
+        )
+        self.assertEqual(
+            db.file_memory_store.appended[0]["metadata"]["evidence_refs"][1]["sql_action"],
+            "写入/DDL (UPDATE)",
+        )
+        self.assertEqual(
+            db.file_memory_store.appended[0]["metadata"]["evidence_refs"][2]["http_action"],
+            "只读请求 (GET)",
         )
         self.assertIn("【候选状态】待人工确认", db.file_memory_store.appended[0]["summary"])
         self.assertIn("确认前仅用于审计和学习中心展示", db.file_memory_store.appended[0]["summary"])
