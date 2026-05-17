@@ -686,3 +686,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：不新增前端、不新增配置项、不改变 prompt 文本、不改变工具执行、不改变 LTM/RAG/画像读取策略、不影响资产、告警、巡检或审批。
 - 遗留风险：当前 ContextEngine 只覆盖 chat 主路径；headless/cron/可观测若需要统一上下文，可后续逐条接入，不能一次性重构。
 - 下一轮建议：功能满足先收手。后续可做 ContextEngine 的上下文来源审计元数据，或转向知识/记忆候选治理的下一处缺口。
+
+### 2026-05-17 Round 41：ContextEngine 来源审计元数据
+
+- 完成：`ChatContextBundle` 增加 `source_audit`，记录 `system_prompt / long_term_memory / knowledge_base / asset_profile` 的启用状态、是否命中、引用数量和读取状态；chat 运行上下文增加 `context_sources`，Run Hook 白名单同步带出。
+- 验证：`python -m pytest tests/test_context_engine.py tests/test_agent_chat_setup.py tests/test_agent_chat_loop.py -q` 通过，29 passed。
+- Hermes 差距变化：上下文不再只是最终拼进 prompt 的文本，运行记录能看到“本轮到底用了哪些上下文来源”，更接近 Hermes 式 context trace 和可复盘能力。
+- OpsCore 主线影响：只记录来源级元数据，不保存 prompt 正文、RAG 正文、LTM 正文或资产画像正文；不改变工具执行、模型调用、审批、资产、告警或巡检。
+- 遗留风险：当前只记录来源命中和引用数量，还没有统一展示页；按“功能满足即可收手”，本轮先把后端审计数据打通到 Run Hook。
+- 下一轮建议：停止继续打磨 ContextEngine 元数据，转向知识/记忆候选治理，或做 Run Trace 前端轻量展示。

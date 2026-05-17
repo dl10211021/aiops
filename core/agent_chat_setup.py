@@ -136,7 +136,11 @@ async def prepare_chat_agent_run(
         has_ltm_context=context_bundle.has_ltm_context,
         analysis_only=analysis_only,
     )
-    context = {**session_context.tool_context(), "prompt_modules": prompt_modules}
+    context = {
+        **session_context.tool_context(),
+        "prompt_modules": prompt_modules,
+        "context_sources": context_bundle.source_audit,
+    }
     if analysis_only:
         context = {**context, "analysis_only": True}
         tools = []

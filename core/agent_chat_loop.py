@@ -162,6 +162,7 @@ def _run_hook_context(context: dict) -> dict[str, Any]:
         "allow_modifications",
         "memory_scope_ids",
         "prompt_modules",
+        "context_sources",
     )
     return {key: context.get(key) for key in keys if key in context}
 

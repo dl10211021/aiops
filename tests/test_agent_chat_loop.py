@@ -79,6 +79,9 @@ async def collect_chat_loop_events(**overrides):
             "session_id": "sid-1",
             "memory_scope_ids": ["sid-1"],
             "prompt_modules": {"version": 1, "modules": ["evidence_contract"]},
+            "context_sources": [
+                {"source": "long_term_memory", "hit": True, "reference_count": 1}
+            ],
         },
         "tools": [{"name": "tool"}],
         "memory_store": memory_store,
@@ -431,6 +434,10 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([event_type for event_type, _payload in hook_events], ["run:start", "agent:step", "run:end"])
         self.assertEqual(hook_events[0][1]["session_id"], "sid-1")
         self.assertEqual(hook_events[0][1]["context"]["prompt_modules"]["version"], 1)
+        self.assertEqual(
+            hook_events[0][1]["context"]["context_sources"][0]["source"],
+            "long_term_memory",
+        )
         self.assertEqual(hook_events[1][1]["iteration"], 0)
         self.assertEqual(hook_events[2][1]["status"], "completed")
 

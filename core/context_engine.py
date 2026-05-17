@@ -91,6 +91,7 @@ class ChatContextBundle:
     rag_context: str
     asset_profile_prompt: str
     references: list[dict[str, Any]]
+    source_audit: list[dict[str, Any]]
 
     @property
     def has_ltm_context(self) -> bool:
@@ -134,11 +135,13 @@ async def build_chat_context_bundle(
 
     rag_context = ""
     rag_references: list[dict[str, Any]] = []
+    rag_status = "ok"
     try:
         rag_result = build_vault_rag_context_for_prompt(user_message, limit=4)
         rag_context = str(rag_result.get("context") or "")
         rag_references = list(rag_result.get("references") or [])
     except Exception as exc:
+        rag_status = "error"
         event_logger.error(f"RAG retrieve error: {exc}")
 
     asset_profile = _load_asset_profile_for_prompt(memory_store, session_id)
@@ -161,5 +164,35 @@ async def build_chat_context_bundle(
                 *rag_references,
             ]
             if ref
+        ],
+        source_audit=[
+            {
+                "source": "system_prompt",
+                "enabled": True,
+                "hit": base_prompt_ref is not None,
+                "reference_count": 1 if base_prompt_ref else 0,
+                "status": "ok",
+            },
+            {
+                "source": "long_term_memory",
+                "enabled": True,
+                "hit": bool(str(ltm_result.context or "").strip()),
+                "reference_count": len(ltm_result.references or []),
+                "status": "ok",
+            },
+            {
+                "source": "knowledge_base",
+                "enabled": True,
+                "hit": bool(str(rag_context or "").strip()),
+                "reference_count": len(rag_references),
+                "status": rag_status,
+            },
+            {
+                "source": "asset_profile",
+                "enabled": assistant_task_enabled("asset_profile_prompt"),
+                "hit": asset_profile_ref is not None,
+                "reference_count": 1 if asset_profile_ref else 0,
+                "status": "ok",
+            },
         ],
     )

@@ -100,6 +100,17 @@ class ContextEngineTests(unittest.IsolatedAsyncioTestCase):
             [ref["source_type"] for ref in bundle.references],
             ["system_prompt", "asset_profile", "ltm", "rag"],
         )
+        self.assertEqual(
+            [source["source"] for source in bundle.source_audit],
+            ["system_prompt", "long_term_memory", "knowledge_base", "asset_profile"],
+        )
+        self.assertEqual(
+            [(source["hit"], source["reference_count"], source["status"]) for source in bundle.source_audit],
+            [(True, 1, "ok"), (True, 1, "ok"), (True, 1, "ok"), (True, 1, "ok")],
+        )
+        self.assertNotIn("BASE-PROMPT", str(bundle.source_audit))
+        self.assertNotIn("RAG-CONTEXT", str(bundle.source_audit))
+        self.assertNotIn("资产画像：生产主机", str(bundle.source_audit))
 
     async def test_build_chat_context_bundle_logs_rag_failure_and_keeps_ltm(self):
         logger = FakeLogger()
@@ -124,6 +135,12 @@ class ContextEngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bundle.rag_context, "")
         self.assertFalse(bundle.has_rag_context)
         self.assertEqual(logger.errors, ["RAG retrieve error: rag down"])
+        knowledge_source = next(
+            source for source in bundle.source_audit if source["source"] == "knowledge_base"
+        )
+        self.assertEqual(knowledge_source["status"], "error")
+        self.assertFalse(knowledge_source["hit"])
+        self.assertEqual(knowledge_source["reference_count"], 0)
 
 
 if __name__ == "__main__":

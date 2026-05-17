@@ -180,6 +180,12 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(run.context["prompt_modules"]["enabled"]["skill_instructions"])
         self.assertTrue(run.context["prompt_modules"]["enabled"]["rag_context"])
         self.assertTrue(run.context["prompt_modules"]["enabled"]["ltm_context"])
+        self.assertEqual(
+            [source["source"] for source in run.context["context_sources"]],
+            ["system_prompt", "long_term_memory", "knowledge_base", "asset_profile"],
+        )
+        self.assertEqual(run.context["context_sources"][2]["reference_count"], 1)
+        self.assertTrue(run.context["context_sources"][2]["hit"])
         self.assertEqual(dispatcher.tool_contexts, [run.context])
 
     async def test_uses_explicit_model_without_default_resolver(self):
