@@ -515,3 +515,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：持久化落在现有 session message store 内，不引入新数据库表和复杂配置；payload 写入前经过脱敏，且 `visible_to_user=false`。
 - 遗留风险：当前 run trace 仍是隐藏消息过滤查询，还没有聚合 run_id、耗时统计、前端进度视图和 retention 压缩策略。
 - 下一轮建议：给 run trace 增加 run_id 聚合和状态摘要，再做一个简约前端抽屉显示最近运行步骤。
+
+### 2026-05-17 Round 22：右侧链路面板显示 Run Trace
+
+- 完成：前端 `sessionHistory` API 增加 `getSessionRunTrace`；右侧「链路」面板顶部显示 AIOps Run Trace 最近事件，展示 run、step、tool 生命周期摘要、时间和状态，不新增复杂配置或独立页面。
+- 验证：`cd frontend && npm run build` 通过；Playwright 打开 `http://127.0.0.1:4173/` 无页面错误，应用正常渲染。
+- Hermes 差距变化：Run Trace 从后端审计数据推进到用户可见的简约运行进度视图，接近 Hermes 的运行日志/Trace 可观察体验。
+- OpsCore 主线影响：只读展示现有隐藏审计消息，不改变会话消息、工具调用、审批、巡检或告警逻辑。
+- 遗留风险：当前只显示最近事件列表，还没有按 run_id 折叠、耗时统计、失败原因聚合和点击定位工具证据。
+- 下一轮建议：给 run trace 事件补 run_id 聚合，并在前端按一次运行折叠显示开始、步骤、工具和结束状态。

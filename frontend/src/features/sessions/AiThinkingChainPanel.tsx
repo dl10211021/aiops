@@ -1,8 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { ChatMessage, ChatRuntimeEvent, ExecTraceItem, SessionMemoryActivity } from '@/types'
+import type { ChatMessage, ChatRuntimeEvent, ExecTraceItem, RunTraceEvent, SessionMemoryActivity } from '@/types'
 import { isAbortError } from '@/api/http'
-import { getSessionMemoryActivity } from '@/api/sessionHistory'
+import { getSessionMemoryActivity, getSessionRunTrace } from '@/api/sessionHistory'
 import { toolLabel } from '@/utils/assetDisplay'
 import { parseJsonRecord } from './jsonRecords'
 import { resultReason, traceExecutionText, traceTargetLabel } from './traceUtils'
@@ -236,6 +236,37 @@ function formatTimelineTime(timestamp: number) {
   })
 }
 
+function formatRunTraceTime(event: RunTraceEvent) {
+  const raw = event.event_ts
+    ? event.event_ts * 1000
+    : event.created_at
+      ? new Date(event.created_at).getTime()
+      : Date.now()
+  return formatTimelineTime(Number.isFinite(raw) ? raw : Date.now())
+}
+
+function runTraceStatus(event: RunTraceEvent) {
+  const payload = event.payload || {}
+  const status = String(payload.status || '').toLowerCase()
+  if (event.event_type === 'run:end') {
+    if (status === 'failed') return '失败'
+    if (status === 'cancelled') return '取消'
+    return '完成'
+  }
+  if (event.event_type === 'run:start') return '开始'
+  if (event.event_type === 'agent:step') return `第 ${Number(payload.iteration ?? 0) + 1} 步`
+  if (event.event_type === 'tool:before') return '工具开始'
+  if (event.event_type === 'tool:after') return status === 'error' ? '工具失败' : '工具结束'
+  return event.event_type
+}
+
+function runTraceTone(event: RunTraceEvent) {
+  const status = String((event.payload || {}).status || '').toLowerCase()
+  if (status === 'failed' || status === 'error' || status === 'blocked') return 'bg-ops-alert'
+  if (event.event_type === 'run:end') return 'bg-ops-success'
+  return 'bg-ops-accent'
+}
+
 function formatTimelineDate(timestamp: number) {
   return new Date(timestamp).toLocaleDateString('zh-CN', {
     year: 'numeric',
@@ -288,6 +319,8 @@ export default function AiThinkingChainPanel({
   const [activeTab, setActiveTab] = useState<'trace' | 'memory'>(defaultTab)
   const [memoryActivity, setMemoryActivity] = useState<SessionMemoryActivity | null>(null)
   const [memoryLoading, setMemoryLoading] = useState(false)
+  const [runTraceEvents, setRunTraceEvents] = useState<RunTraceEvent[]>([])
+  const [runTraceLoading, setRunTraceLoading] = useState(false)
   const deferredMessages = useDeferredValue(messages)
   const displayTab = fixedTab || activeTab
   const traceGroups = useMemo(() => buildThinkingGroups(deferredMessages), [deferredMessages])
@@ -344,6 +377,36 @@ export default function AiThinkingChainPanel({
     }
   }, [sessionId, deferredMessages.length, displayTab])
 
+  useEffect(() => {
+    if (displayTab !== 'trace') {
+      setRunTraceLoading(false)
+      return
+    }
+    if (!sessionId) {
+      setRunTraceEvents([])
+      setRunTraceLoading(false)
+      return
+    }
+    let cancelled = false
+    const controller = new AbortController()
+    setRunTraceLoading(true)
+    getSessionRunTrace(sessionId, 120, { signal: controller.signal })
+      .then((response) => {
+        if (!cancelled) setRunTraceEvents(response.data.events || [])
+      })
+      .catch((error) => {
+        if (isAbortError(error)) return
+        if (!cancelled) setRunTraceEvents([])
+      })
+      .finally(() => {
+        if (!cancelled) setRunTraceLoading(false)
+      })
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [sessionId, deferredMessages.length, displayTab])
+
   const selectGroup = (groupId: string) => {
     setSelectedGroupId(groupId)
     if (groupId === 'all') return
@@ -388,7 +451,7 @@ export default function AiThinkingChainPanel({
           )}
           <span className="font-mono text-[10px] font-normal text-ops-overlay">
             {displayTab === 'trace'
-              ? (sessionId ? `${traceGroups.length} 轮` : '未绑定')
+              ? (sessionId ? `${traceGroups.length} 轮 / ${runTraceEvents.length} 事件` : '未绑定')
               : (sessionId ? `${memoryActivity?.summary.referenced_count || 0} 引用` : '未绑定')}
           </span>
         </div>
@@ -423,17 +486,18 @@ export default function AiThinkingChainPanel({
       <div className="min-h-0 flex-1 overflow-y-auto bg-transparent px-3 py-3">
         {displayTab === 'memory' ? (
           <MemoryActivityPanel activity={memoryActivity} loading={memoryLoading} />
-        ) : traceGroups.length === 0 ? (
-          <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
-            暂无会话轮次。发送消息后会按轮次展示当前会话的执行链路。
-          </div>
-        ) : filteredGroups.length === 0 ? (
-          <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
-            没有匹配的思维链。可以按时间、工具名、用户问题或结果关键字搜索。
-          </div>
         ) : (
           <div className="space-y-3">
-            {filteredGroups.slice(-30).reverse().map((group) => (
+            <RunTraceStrip events={runTraceEvents} loading={runTraceLoading} />
+            {traceGroups.length === 0 ? (
+              <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
+                暂无会话轮次。发送消息后会按轮次展示当前会话的执行链路。
+              </div>
+            ) : filteredGroups.length === 0 ? (
+              <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
+                没有匹配的思维链。可以按时间、工具名、用户问题或结果关键字搜索。
+              </div>
+            ) : filteredGroups.slice(-30).reverse().map((group) => (
               <div
                 key={`${group.id}-${group.traces.length}`}
                 className="w-full overflow-hidden rounded-2xl border border-ops-surface0/90 bg-ops-dark/32 text-left transition hover:border-ops-accent/45 hover:bg-ops-dark/45"
@@ -644,6 +708,49 @@ export default function AiThinkingChainPanel({
         )}
       </div>
     </section>
+  )
+}
+
+function RunTraceStrip({
+  events,
+  loading,
+}: {
+  events: RunTraceEvent[]
+  loading: boolean
+}) {
+  const recent = events.slice(-12).reverse()
+  return (
+    <div className="rounded-2xl border border-ops-accent/22 bg-ops-accent/8 px-3 py-2.5">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-ops-accent">AIOps Run Trace</div>
+        <div className="font-mono text-[10px] text-ops-overlay">{loading ? '同步中' : `${events.length} 条`}</div>
+      </div>
+      {recent.length === 0 ? (
+        <div className="text-[11px] leading-5 text-ops-subtext">
+          暂无运行事件。新会话开始执行后会显示 run、step 和 tool 生命周期。
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {recent.map((event, index) => (
+            <div
+              key={`${event.id || event.event_ts || event.created_at || index}-${event.event_type}`}
+              className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-xl border border-ops-surface0/75 bg-ops-panel/35 px-2.5 py-2"
+            >
+              <span className={`mt-1.5 h-2 w-2 rounded-full ${runTraceTone(event)}`} />
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="shrink-0 text-[11px] font-semibold text-ops-text">{runTraceStatus(event)}</span>
+                  <span className="truncate font-mono text-[10px] text-ops-overlay">{formatRunTraceTime(event)}</span>
+                </div>
+                <div className="mt-0.5 line-clamp-2 text-[11px] leading-5 text-ops-subtext">
+                  {event.summary || event.event_type}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

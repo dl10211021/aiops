@@ -254,6 +254,15 @@ export interface ExecTraceItem {
   completedAt?: number
 }
 
+export interface RunTraceEvent {
+  id?: string | number
+  created_at?: string | number
+  event_type: string
+  event_ts?: number
+  payload: Record<string, unknown>
+  summary: string
+}
+
 export interface ToolEvidence {
   evidence_id: string
   session_id: string

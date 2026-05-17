@@ -1,5 +1,5 @@
 import { request } from './http'
-import type { ExecTraceItem, MemoryReference, SessionMemoryActivity } from '@/types'
+import type { ExecTraceItem, MemoryReference, RunTraceEvent, SessionMemoryActivity } from '@/types'
 
 interface SessionHistoryApiMessage {
   role: string
@@ -55,6 +55,15 @@ export async function getSessionHistoryEvidenceTrace(
   search.set('limit', String(params.limit || 200))
   return request<{ trace: ExecTraceItem; message?: { id?: string | number; role?: string; created_at?: string | number; preview?: string } }>(
     `/session/${sessionId}/history/evidence?${search.toString()}`,
+    options,
+)
+}
+
+export async function getSessionRunTrace(sessionId: string, limit = 120, options?: RequestInit) {
+  const search = new URLSearchParams()
+  search.set('limit', String(limit))
+  return request<{ events: RunTraceEvent[] }>(
+    `/session/${sessionId}/history/run-trace?${search.toString()}`,
     options,
   )
 }
