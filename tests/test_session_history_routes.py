@@ -51,6 +51,7 @@ class TestSessionHistoryRoutes(unittest.TestCase):
 
         self.assertIn("/session/{session_id}/history", paths)
         self.assertIn("/session/{session_id}/history/run-trace", paths)
+        self.assertIn("/session/{session_id}/history/run-trace/learning-preview", paths)
         self.assertIn("/session/{session_id}/history/{message_id}", paths)
         self.assertIn("/session/{session_id}/history/{message_id}/feedback", paths)
         self.assertIn("/session/{session_id}/memory/activity", paths)
@@ -83,6 +84,9 @@ class TestSessionHistoryRoutes(unittest.TestCase):
             run_trace_response = asyncio.run(session_history_routes.get_session_run_trace("sid-1"))
             run_trace_filter_response = asyncio.run(
                 session_history_routes.get_session_run_trace("sid-1", run_id="run-missing")
+            )
+            learning_preview_response = asyncio.run(
+                session_history_routes.get_session_run_learning_preview("sid-1")
             )
 
         self.assertEqual(list_response.status, "success")
@@ -118,6 +122,8 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         self.assertEqual(run_trace_response.status, "success")
         self.assertEqual(run_trace_response.data, {"events": [], "runs": []})
         self.assertEqual(run_trace_filter_response.data, {"events": [], "runs": []})
+        self.assertEqual(learning_preview_response.status, "success")
+        self.assertEqual(learning_preview_response.data["preview"]["eligible"], False)
 
     def test_session_history_export_preserves_response_shape(self):
         with patch(

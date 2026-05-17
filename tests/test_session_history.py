@@ -4,6 +4,7 @@ from core.session_history import (
     attach_legacy_exec_traces,
     build_session_memory_activity,
     build_session_history_markdown,
+    build_session_run_learning_preview,
     clear_session_history,
     delete_session_message,
     find_session_exec_trace,
@@ -265,6 +266,62 @@ class TestSessionHistory(unittest.TestCase):
 
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["run_id"], "run-2")
+
+    def test_build_session_run_learning_preview_is_read_only_candidate_draft(self):
+        memory_db = FakeMemoryDB()
+        memory_db.messages = [
+            {
+                "id": 1,
+                "role": "system",
+                "content": "start",
+                "memory_type": "aiops_run_trace",
+                "run_id": "run-1",
+                "run_event_type": "run:start",
+                "run_event_payload": {"session_id": "sid-1", "run_id": "run-1"},
+                "run_event_ts": 1.0,
+            },
+            {
+                "id": 2,
+                "role": "system",
+                "content": "tool done",
+                "memory_type": "aiops_run_trace",
+                "run_id": "run-1",
+                "run_event_type": "tool:after",
+                "run_event_payload": {
+                    "session_id": "sid-1",
+                    "run_id": "run-1",
+                    "tool_name": "linux_execute_command",
+                    "tool_call_id": "call-1",
+                    "evidence_id": "tev-sid-1-call-1",
+                    "status": "done",
+                },
+                "run_event_ts": 2.0,
+            },
+            {
+                "id": 3,
+                "role": "system",
+                "content": "end",
+                "memory_type": "aiops_run_trace",
+                "run_id": "run-1",
+                "run_event_type": "run:end",
+                "run_event_payload": {"session_id": "sid-1", "run_id": "run-1", "status": "completed"},
+                "run_event_ts": 3.0,
+            },
+        ]
+
+        before_messages = list(memory_db.messages)
+
+        preview = build_session_run_learning_preview(memory_db, "sid-1", run_id="run-1")
+
+        self.assertTrue(preview["eligible"])
+        self.assertEqual(preview["candidate_type"], "runbook")
+        self.assertEqual(preview["run_id"], "run-1")
+        self.assertEqual(preview["event_count"], 3)
+        self.assertEqual(preview["tool_count"], 1)
+        self.assertEqual(preview["status_counts"], {"done": 1})
+        self.assertEqual(preview["evidence_refs"][0]["id"], "tev-sid-1-call-1")
+        self.assertEqual(preview["evidence_refs"][0]["tool"], "linux_execute_command")
+        self.assertEqual(memory_db.messages, before_messages)
 
     def test_attach_legacy_exec_traces_rebuilds_tool_results_for_ui(self):
         messages = [

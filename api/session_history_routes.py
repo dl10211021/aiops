@@ -10,6 +10,7 @@ from api.response_mappers.session import (
     session_history_message_updated_response_kwargs,
     session_history_response_kwargs,
     session_memory_activity_response_kwargs,
+    session_run_learning_preview_response_kwargs,
     session_run_trace_response_kwargs,
 )
 from api.schema_models.common import ResponseModel
@@ -21,6 +22,7 @@ from core.session_history_service import (
     delete_session_history_message_record,
     export_session_history_markdown_record,
     find_session_history_evidence_trace,
+    get_session_run_learning_preview_record,
     get_session_run_trace_record,
     get_session_memory_activity_record,
     list_session_history_messages,
@@ -76,6 +78,20 @@ async def get_session_run_trace(
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_run_trace_response_kwargs(trace["events"], trace["runs"]))
+
+
+@router.get("/session/{session_id}/history/run-trace/learning-preview", response_model=ResponseModel)
+async def get_session_run_learning_preview(
+    session_id: str,
+    limit: int = Query(200, ge=1, le=500),
+    run_id: str = "",
+):
+    """从会话 Run Trace 生成只读学习候选预览，不写入记忆。"""
+    try:
+        preview = get_session_run_learning_preview_record(session_id, limit=limit, run_id=run_id)
+    except SessionHistoryServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**session_run_learning_preview_response_kwargs(preview))
 
 
 @router.delete("/session/{session_id}/history", response_model=ResponseModel)

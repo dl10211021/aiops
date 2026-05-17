@@ -7,6 +7,7 @@ from core.session_history_service import (
     export_session_history_markdown_record,
     find_session_history_evidence_trace,
     get_session_memory_activity_record,
+    get_session_run_learning_preview_record,
     get_session_run_trace_record,
     list_session_run_trace_records,
     list_session_history_messages,
@@ -247,6 +248,34 @@ class TestSessionHistoryService(unittest.TestCase):
 
         self.assertEqual([event["run_id"] for event in trace["events"]], ["run-2"])
         self.assertEqual([run["run_id"] for run in trace["runs"]], ["run-2"])
+
+    def test_get_session_run_learning_preview_record_uses_injected_db(self):
+        memory_db = FakeMemoryDB(
+            [
+                {
+                    "id": 4,
+                    "role": "system",
+                    "content": "tool done",
+                    "memory_type": "aiops_run_trace",
+                    "run_id": "run-2",
+                    "run_event_type": "tool:after",
+                    "run_event_payload": {
+                        "session_id": "sid-1",
+                        "run_id": "run-2",
+                        "tool_name": "db_execute_query",
+                        "tool_call_id": "call-db",
+                        "evidence_id": "tev-db",
+                        "status": "done",
+                    },
+                }
+            ]
+        )
+
+        preview = get_session_run_learning_preview_record("sid-1", memory_db=memory_db)
+
+        self.assertTrue(preview["eligible"])
+        self.assertEqual(preview["evidence_refs"][0]["id"], "tev-db")
+        self.assertEqual(preview["evidence_refs"][0]["tool"], "db_execute_query")
 
     def test_export_session_history_markdown_maps_empty_history_to_404(self):
         memory_db = FakeMemoryDB([])

@@ -150,6 +150,102 @@ def summarize_session_run_trace_events(events: list[dict]) -> list[dict]:
     return ordered_runs
 
 
+def build_session_run_learning_preview(
+    memory_db,
+    session_id: str,
+    *,
+    limit: int = 200,
+    run_id: str = "",
+) -> dict:
+    events = list_session_run_trace_events(memory_db, session_id, limit=limit, run_id=run_id)
+    runs = summarize_session_run_trace_events(events)
+    tool_events = [event for event in events if event.get("event_type") == "tool:after"]
+    evidence_refs = _run_trace_evidence_refs(tool_events)
+    selected_run_id = str(run_id or "").strip()
+    if not selected_run_id and len(runs) == 1:
+        selected_run_id = str(runs[0].get("run_id") or "")
+    title_suffix = f" {selected_run_id}" if selected_run_id else ""
+    status_counts = _run_trace_tool_status_counts(tool_events)
+    return {
+        "session_id": session_id,
+        "run_id": selected_run_id,
+        "source": "session_run_trace",
+        "candidate_type": "runbook",
+        "eligible": bool(events and evidence_refs),
+        "title": f"会话运行经验候选{title_suffix}".strip(),
+        "summary": _run_trace_learning_summary(runs, tool_events, status_counts),
+        "event_count": len(events),
+        "run_count": len(runs),
+        "tool_count": len(tool_events),
+        "status_counts": status_counts,
+        "evidence_refs": evidence_refs,
+        "draft": {
+            "title": f"Runbook 候选{title_suffix}".strip(),
+            "outline": [
+                "适用场景：来自会话 Run Trace 的一次运维执行过程。",
+                "执行步骤：按工具证据复核关键命令、查询和结果。",
+                "验证方式：确认工具状态、证据 ID、审批记录和最终运行状态。",
+                "风险边界：发布前需要人工确认适用系统、权限要求和回滚条件。",
+            ],
+        },
+        "next_action": "在知识库学习候选池中人工确认后，再发布为 Runbook 或 Skill。",
+    }
+
+
+def _run_trace_evidence_refs(tool_events: list[dict]) -> list[dict]:
+    refs: list[dict] = []
+    seen: set[str] = set()
+    for event in tool_events:
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        evidence_id = str(payload.get("evidence_id") or "").strip()
+        tool_call_id = str(payload.get("tool_call_id") or "").strip()
+        ref_id = evidence_id or tool_call_id
+        if not ref_id or ref_id in seen:
+            continue
+        seen.add(ref_id)
+        tool_name = str(payload.get("tool_name") or "").strip()
+        refs.append(
+            {
+                "type": "tool_evidence" if evidence_id else "tool_trace",
+                "label": "工具证据" if evidence_id else "执行轨迹",
+                "id": ref_id,
+                "tool": tool_name,
+                "status": str(payload.get("status") or "").strip(),
+                "event_id": event.get("id"),
+            }
+        )
+    return refs
+
+
+def _run_trace_tool_status_counts(tool_events: list[dict]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for event in tool_events:
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        status = str(payload.get("status") or "unknown").strip() or "unknown"
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def _run_trace_learning_summary(
+    runs: list[dict],
+    tool_events: list[dict],
+    status_counts: dict[str, int],
+) -> str:
+    if not runs and not tool_events:
+        return "未找到可用于学习的运行轨迹。"
+    latest = runs[-1] if runs else {}
+    status = latest.get("status") or "unknown"
+    parts = [
+        f"运行状态 {status}",
+        f"工具调用 {len(tool_events)} 次",
+    ]
+    if status_counts:
+        parts.append("结果分布 " + ", ".join(f"{key}:{value}" for key, value in sorted(status_counts.items())))
+    if latest.get("reason"):
+        parts.append(f"原因 {latest.get('reason')}")
+    return "；".join(parts) + "。"
+
+
 def _run_trace_duration_ms(started_at: object, ended_at: object) -> int | None:
     if not isinstance(started_at, (int, float)) or not isinstance(ended_at, (int, float)):
         return None

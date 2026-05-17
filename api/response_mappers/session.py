@@ -120,6 +120,13 @@ def session_run_trace_response_kwargs(
     }
 
 
+def session_run_learning_preview_response_kwargs(preview: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"preview": preview},
+    }
+
+
 def session_history_cleared_response_kwargs() -> dict[str, Any]:
     return {
         "status": "success",

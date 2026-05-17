@@ -4,6 +4,7 @@ from typing import Any
 
 from core import memory as memory_module
 from core.session_history import (
+    build_session_run_learning_preview,
     build_session_memory_activity,
     build_session_history_markdown,
     clear_session_history,
@@ -88,6 +89,24 @@ def get_session_run_trace_record(
             "events": events,
             "runs": summarize_session_run_trace_events(events),
         }
+    except Exception as exc:
+        raise SessionHistoryServiceError(500, str(exc)) from exc
+
+
+def get_session_run_learning_preview_record(
+    session_id: str,
+    *,
+    limit: int = 200,
+    run_id: str = "",
+    memory_db: Any | None = None,
+) -> dict:
+    try:
+        return build_session_run_learning_preview(
+            _resolve_memory_db(memory_db),
+            session_id,
+            limit=limit,
+            run_id=run_id,
+        )
     except Exception as exc:
         raise SessionHistoryServiceError(500, str(exc)) from exc
 
