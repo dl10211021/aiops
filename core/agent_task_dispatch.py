@@ -42,6 +42,17 @@ def _timeout_label(timeout_seconds: float) -> str:
     return str(int(timeout_value)) if timeout_value.is_integer() else str(timeout_seconds)
 
 
+def _observability_metadata(task: Mapping[str, Any]) -> dict[str, str]:
+    metadata: dict[str, str] = {}
+    observability_task_id = str(task.get("observability_task_id") or task.get("task_id") or "").strip()
+    investigation_id = str(task.get("investigation_id") or "").strip()
+    if observability_task_id:
+        metadata["observability_task_id"] = observability_task_id[:120]
+    if investigation_id:
+        metadata["investigation_id"] = investigation_id[:120]
+    return metadata
+
+
 async def dispatch_group_tasks(
     tasks: list[dict],
     allow_mod: bool,
@@ -66,12 +77,14 @@ async def dispatch_group_tasks(
         target_sid = task.get("target_session_id")
         task_desc = task.get("task_description")
         dispatch_scope = str(task.get("dispatch_scope") or "group")
+        observability_metadata = _observability_metadata(task)
 
         if not target_sid or not task_desc:
             return {
                 "session_id": target_sid,
                 "status": "ERROR",
                 "error": "Invalid task definition",
+                **observability_metadata,
             }
 
         target_info = active_sessions.get(target_sid, {}).get("info", {})
@@ -99,6 +112,7 @@ async def dispatch_group_tasks(
                 "allow_modifications": effective_allow_mod,
                 "session_mode": permission_boundary["effective_mode"],
                 "permission_boundary": permission_boundary,
+                **observability_metadata,
                 "report": result,
             }
         except asyncio.TimeoutError:
@@ -106,12 +120,14 @@ async def dispatch_group_tasks(
                 "session_id": target_sid,
                 "status": "ERROR",
                 "error": f"跨域协同超时 ({timeout_text}秒) 被强行中断。",
+                **observability_metadata,
             }
         except Exception as e:
             return {
                 "session_id": target_sid,
                 "status": "ERROR",
                 "error": f"跨域协同异常: {str(e)}",
+                **observability_metadata,
             }
 
     async def bound_run_task(task: dict) -> dict:

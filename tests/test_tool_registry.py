@@ -89,6 +89,9 @@ class TestToolRegistry(unittest.TestCase):
         self.assertIn("dispatch_scope", parameters)
         self.assertEqual(parameters["dispatch_scope"]["enum"], ["global", "group"])
         self.assertIn("group_name", parameters)
+        task_properties = parameters["tasks"]["items"]["properties"]
+        self.assertIn("observability_task_id", task_properties)
+        self.assertIn("investigation_id", task_properties)
         self.assertIn("当前会话组", tool["description"])
 
     def test_tool_catalog_exposes_runtime_policy_metadata(self):

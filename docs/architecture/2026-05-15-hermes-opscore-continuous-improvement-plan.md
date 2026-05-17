@@ -974,3 +974,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只增强前端草稿内容，不改变 `dispatch_sub_agents`、不自动执行、不新增后端调度路径、不影响告警、巡检或资产中心。
 - 遗留风险：task_id 仍由草稿提示保留，执行层还没有强制校验或自动注入；后续需要调度层正式传递。
 - 下一轮建议：这个功能到此收手。后续更高价值方向是让 `dispatch_sub_agents` 接受并保留 `observability_task_id` 元数据，或接入主/副模型对学习候选的交叉审核事件。
+
+### 2026-05-18 Round 73：多 Agent 调度保留可观测任务元数据
+
+- 完成：`dispatch_sub_agents` 的任务 schema 显式支持 `observability_task_id` 和 `investigation_id`；底层 `dispatch_group_tasks` 在成功、超时、异常和非法任务结果里保留这些元数据，便于后续把子 Agent Run Trace 证据回填到具体可观测任务。
+- 验证：`python -m pytest tests/test_agent_task_dispatch.py tests/test_dispatcher_session_tools.py tests/test_tool_registry.py -q`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：协同任务从“草稿带标识”推进到“调度结果也保留标识”，形成 investigation -> agent task -> dispatch result -> evidence backfill 的更稳定契约。
+- OpsCore 主线影响：只保留审计/回填元数据，不改变子 Agent 执行策略、不自动执行、不新增调度 API、不影响告警、巡检、资产中心或审批。
+- 遗留风险：当前仍没有把子 Agent 真实 run_id 自动写入可观测任务；下一步需要在执行上下文中产生可关联的 run/evidence 引用。
+- 下一轮建议：这个功能到此收手。后续更高价值方向是做子 Agent Run Trace 自动回填，或把主/副模型审核结果接入学习候选 `review_events`。

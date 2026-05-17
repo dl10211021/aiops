@@ -194,6 +194,50 @@ class DispatcherSessionToolsTest(unittest.TestCase):
         self.assertEqual(len(dispatch.call_args.args[0]), 2)
         self.assertEqual([item["session_id"] for item in payload["results"]], ["sid-db", "sid-web"])
 
+    def test_dispatch_sub_agents_passes_observability_metadata(self):
+        from connections.ssh_manager import ssh_manager
+
+        active_sessions = {
+            "sid-db": {"info": {"tags": ["数据库组"], "allow_modifications": False}},
+        }
+
+        async def fake_dispatch(tasks, allow_mod):
+            return [
+                {
+                    "session_id": item["target_session_id"],
+                    "status": "SUCCESS",
+                    "observability_task_id": item.get("observability_task_id"),
+                    "investigation_id": item.get("investigation_id"),
+                }
+                for item in tasks
+            ]
+
+        with patch.object(ssh_manager, "active_sessions", active_sessions):
+            with patch("core.agent.dispatch_group_tasks", side_effect=fake_dispatch) as dispatch:
+                result = asyncio.run(
+                    execute_session_tool(
+                        "dispatch_sub_agents",
+                        {
+                            "dispatch_scope": "global",
+                            "tasks": [
+                                {
+                                    "target_session_id": "sid-db",
+                                    "task_description": "查数据库",
+                                    "observability_task_id": "inv-1-summary",
+                                    "investigation_id": "inv-1",
+                                },
+                            ],
+                        },
+                        {"allow_modifications": False, "target_scope": "global"},
+                    )
+                )
+
+        payload = json.loads(result)
+        self.assertEqual(dispatch.call_args.args[0][0]["observability_task_id"], "inv-1-summary")
+        self.assertEqual(dispatch.call_args.args[0][0]["investigation_id"], "inv-1")
+        self.assertEqual(payload["results"][0]["observability_task_id"], "inv-1-summary")
+        self.assertEqual(payload["results"][0]["investigation_id"], "inv-1")
+
 
 if __name__ == "__main__":
     unittest.main()

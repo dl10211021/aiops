@@ -1110,6 +1110,14 @@ def _register_builtin_tools() -> None:
                             "properties": {
                                 "target_session_id": {"type": "string"},
                                 "task_description": {"type": "string"},
+                                "observability_task_id": {
+                                    "type": "string",
+                                    "description": "可选。可观测排查任务 ID，用于调度结果、Run Trace 证据和审计回填。",
+                                },
+                                "investigation_id": {
+                                    "type": "string",
+                                    "description": "可选。可观测排查事件 ID，用于把子任务结果关联回原事件。",
+                                },
                             },
                             "required": ["target_session_id", "task_description"],
                         },

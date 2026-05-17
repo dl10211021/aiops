@@ -118,6 +118,30 @@ class AgentTaskDispatchTests(unittest.TestCase):
         self.assertEqual(results[0]["permission_boundary"]["effective_mode"], "readwrite")
         self.assertFalse(results[0]["permission_boundary"]["downgraded"])
 
+    def test_dispatch_result_preserves_observability_metadata(self):
+        async def runner(session_id, task_description, allow_mod):
+            return f"done:{session_id}"
+
+        results = asyncio.run(
+            dispatch_group_tasks(
+                [
+                    {
+                        "target_session_id": "sid-1",
+                        "task_description": "检查订单库",
+                        "dispatch_scope": "global",
+                        "observability_task_id": "inv-1-summary",
+                        "investigation_id": "inv-1",
+                    }
+                ],
+                False,
+                task_runner=runner,
+                active_sessions={"sid-1": {"info": {"allow_modifications": False}}},
+            )
+        )
+
+        self.assertEqual(results[0]["observability_task_id"], "inv-1-summary")
+        self.assertEqual(results[0]["investigation_id"], "inv-1")
+
     def test_rejects_invalid_task_definition_before_running(self):
         async def runner(session_id, task_description, allow_mod):
             raise AssertionError("runner should not be called")
