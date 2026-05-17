@@ -21,6 +21,7 @@ from core.assistant_model_config import (
     resolve_assistant_model_id,
 )
 from core.chat_execution_intent import ExecutionIntent, classify_execution_intent
+from core.run_hooks import emit_run_hook
 from core.tool_display import tool_label
 from core.tool_trace import make_tool_trace_collector
 from core.tool_trace_policy import trace_evidence_id, trace_policy_summary, trace_runtime_summary
@@ -147,6 +148,35 @@ def _native_tool_required_prompt(
     }
 
 
+def _run_hook_context(context: dict) -> dict[str, Any]:
+    keys = (
+        "session_id",
+        "execution_mode",
+        "session_mode",
+        "mode",
+        "asset_id",
+        "asset_type",
+        "protocol",
+        "host",
+        "port",
+        "allow_modifications",
+        "memory_scope_ids",
+    )
+    return {key: context.get(key) for key in keys if key in context}
+
+
+async def _emit_chat_run_hook(
+    emitter: Callable[[str, dict[str, Any]], Awaitable[None]],
+    event_type: str,
+    payload: dict[str, Any],
+    event_logger: logging.Logger,
+) -> None:
+    try:
+        await emitter(event_type, payload)
+    except Exception as exc:
+        event_logger.warning("Chat run hook failed for %s: %s", event_type, exc)
+
+
 class ChatLoopMemoryStore(Protocol):
     def append_message(self, session_id: str, message: dict) -> int | None:
         ...
@@ -190,42 +220,79 @@ async def run_chat_agent_loop(
     tool_call_processor: Callable[..., AsyncIterator[str]] = process_chat_tool_calls,
     step_summary_streamer: Callable[..., AsyncIterator[str]] = stream_step_limit_summary,
     compression_scheduler: Callable[..., Any] = schedule_ltm_compression,
+    run_hook_emitter: Callable[[str, dict[str, Any]], Awaitable[None]] = emit_run_hook,
 ) -> AsyncIterator[str]:
     yield sse_event({"type": "status", "content": "🤖 AI 正在分析并规划执行路径..."})
     await sleep(0.05)
 
     orchestration = _resolve_model_orchestration(model_name, orchestration_mode)
-    if orchestration["enabled"]:
-        async for event in _run_split_model_chat_agent_loop(
-            session_id=session_id,
-            model_name=model_name,
-            thinking_mode=thinking_mode,
-            messages=messages,
-            context=context,
-            tools=tools,
-            memory_store=memory_store,
-            dispatcher=dispatcher,
-            cancel_flags=cancel_flags,
-            event_logger=event_logger,
-            sleep=sleep,
-            max_steps=max_steps_resolver("chat"),
-            tool_call_processor=tool_call_processor,
-            step_summary_streamer=step_summary_streamer,
-            orchestration=orchestration,
-            memory_references=memory_references,
-        ):
-            yield event
-        compression_scheduler(
-            memory_store=memory_store,
-            session_id=session_id,
-            emb_client=emb_client,
-            embedding_model=embedding_model,
-            primary_model_id=model_name,
-            memory_scope_ids=context.get("memory_scope_ids"),
-        )
-        return
-
     max_steps = max_steps_resolver("chat")
+    run_status = "completed"
+    run_reason = "completed"
+    await _emit_chat_run_hook(
+        run_hook_emitter,
+        "run:start",
+        {
+            "session_id": session_id,
+            "model_name": model_name,
+            "thinking_mode": thinking_mode,
+            "orchestration_mode": orchestration.get("mode", orchestration_mode),
+            "max_steps": max_steps,
+            "context": _run_hook_context(context),
+        },
+        event_logger,
+    )
+    try:
+        if orchestration["enabled"]:
+            async for event in _run_split_model_chat_agent_loop(
+                session_id=session_id,
+                model_name=model_name,
+                thinking_mode=thinking_mode,
+                messages=messages,
+                context=context,
+                tools=tools,
+                memory_store=memory_store,
+                dispatcher=dispatcher,
+                cancel_flags=cancel_flags,
+                event_logger=event_logger,
+                sleep=sleep,
+                max_steps=max_steps,
+                tool_call_processor=tool_call_processor,
+                step_summary_streamer=step_summary_streamer,
+                orchestration=orchestration,
+                memory_references=memory_references,
+                run_hook_emitter=run_hook_emitter,
+            ):
+                yield event
+            compression_scheduler(
+                memory_store=memory_store,
+                session_id=session_id,
+                emb_client=emb_client,
+                embedding_model=embedding_model,
+                primary_model_id=model_name,
+                memory_scope_ids=context.get("memory_scope_ids"),
+            )
+            return
+    except Exception:
+        run_status = "failed"
+        run_reason = "exception"
+        raise
+    finally:
+        if orchestration["enabled"]:
+            await _emit_chat_run_hook(
+                run_hook_emitter,
+                "run:end",
+                {
+                    "session_id": session_id,
+                    "model_name": model_name,
+                    "status": run_status,
+                    "reason": run_reason,
+                    "orchestration_mode": orchestration.get("mode", orchestration_mode),
+                    "context": _run_hook_context(context),
+                },
+                event_logger,
+            )
+
     pending_memory_references = list(memory_references or [])
     turn_exec_trace: list[dict] = []
     native_execution_intent = _native_execution_intent(
@@ -237,161 +304,196 @@ async def run_chat_agent_loop(
     force_native_attempts = 0
     native_tools = _native_asset_tools(tools)
     spin_guard = ToolSpinGuard()
-    for iteration in range(max_steps):
-        event_logger.info(
-            f"Loop {iteration} for {session_id}, cancel_flags: {cancel_flags.get(session_id)}"
-        )
-        if cancel_flags.get(session_id) is True:
-            cancel_flags[session_id] = False
-            yield sse_event({"type": "error", "content": "任务已被手动中止。"})
-            yield sse_event({"type": "done"})
-            return
-
-        yield sse_event({"type": "status", "content": "💭 思考中..."})
-
-        use_forced_native_tool = force_native_tool_pending and force_native_attempts < 2
-        turn_tools = native_tools if use_forced_native_tool else tools
-        turn_messages = (
-            [*messages, _native_tool_required_prompt(context, native_tools, native_execution_intent)]
-            if use_forced_native_tool
-            else messages
-        )
-        turn_tool_choice = "required" if use_forced_native_tool else "auto"
-        if turn_tool_choice == "required":
-            force_native_attempts += 1
-            yield sse_event({"type": "status", "content": "🧰 正在强制调用当前会话原生工具采集证据..."})
-
-        stream_state = AgentStreamState()
-        async for event in assistant_streamer(
-            model_name=model_name,
-            messages=turn_messages,
-            thinking_mode=thinking_mode,
-            tools=turn_tools,
-            tool_choice=turn_tool_choice,
-            state=stream_state,
-            cancel_requested=lambda: cancel_flags.get(session_id) is True,
-        ):
-            yield event
-
-        tool_calls = stream_state.tool_calls
-        if use_forced_native_tool and not tool_calls:
-            event_logger.warning(
-                "Model returned no native tool call for forced execution request in session %s; discarding direct answer.",
-                session_id,
+    try:
+        for iteration in range(max_steps):
+            await _emit_chat_run_hook(
+                run_hook_emitter,
+                "agent:step",
+                {
+                    "session_id": session_id,
+                    "iteration": iteration,
+                    "max_steps": max_steps,
+                    "model_name": model_name,
+                    "orchestration_mode": orchestration.get("mode", orchestration_mode),
+                    "context": _run_hook_context(context),
+                },
+                event_logger,
             )
-            if force_native_attempts < 2:
-                messages.append(
-                    {
-                        "role": "system",
-                        "content": (
-                            "上一轮响应没有调用当前会话原生工具，已被平台丢弃。"
-                            "必须调用原生工具取得实时证据；不要直接输出报告。"
-                        ),
-                    }
+            event_logger.info(
+                f"Loop {iteration} for {session_id}, cancel_flags: {cancel_flags.get(session_id)}"
+            )
+            if cancel_flags.get(session_id) is True:
+                cancel_flags[session_id] = False
+                run_status = "cancelled"
+                run_reason = "manual_cancel"
+                yield sse_event({"type": "error", "content": "任务已被手动中止。"})
+                yield sse_event({"type": "done"})
+                return
+
+            yield sse_event({"type": "status", "content": "💭 思考中..."})
+
+            use_forced_native_tool = force_native_tool_pending and force_native_attempts < 2
+            turn_tools = native_tools if use_forced_native_tool else tools
+            turn_messages = (
+                [*messages, _native_tool_required_prompt(context, native_tools, native_execution_intent)]
+                if use_forced_native_tool
+                else messages
+            )
+            turn_tool_choice = "required" if use_forced_native_tool else "auto"
+            if turn_tool_choice == "required":
+                force_native_attempts += 1
+                yield sse_event({"type": "status", "content": "🧰 正在强制调用当前会话原生工具采集证据..."})
+
+            stream_state = AgentStreamState()
+            async for event in assistant_streamer(
+                model_name=model_name,
+                messages=turn_messages,
+                thinking_mode=thinking_mode,
+                tools=turn_tools,
+                tool_choice=turn_tool_choice,
+                state=stream_state,
+                cancel_requested=lambda: cancel_flags.get(session_id) is True,
+            ):
+                yield event
+
+            tool_calls = stream_state.tool_calls
+            if use_forced_native_tool and not tool_calls:
+                event_logger.warning(
+                    "Model returned no native tool call for forced execution request in session %s; discarding direct answer.",
+                    session_id,
                 )
-                yield sse_event({"type": "status", "content": "⚠️ 模型未发起工具调用，已丢弃直接回答并重新约束工具调用..."})
-                continue
-            safe_msg = {
-                "role": "assistant",
-                "content": (
-                    "本轮已被平台拦截：模型没有发起当前会话原生工具调用，因此不会输出无证据巡检报告。"
-                    "请重试，或检查当前模型是否支持工具调用。"
-                ),
-            }
+                if force_native_attempts < 2:
+                    messages.append(
+                        {
+                            "role": "system",
+                            "content": (
+                                "上一轮响应没有调用当前会话原生工具，已被平台丢弃。"
+                                "必须调用原生工具取得实时证据；不要直接输出报告。"
+                            ),
+                        }
+                    )
+                    yield sse_event({"type": "status", "content": "⚠️ 模型未发起工具调用，已丢弃直接回答并重新约束工具调用..."})
+                    continue
+                safe_msg = {
+                    "role": "assistant",
+                    "content": (
+                        "本轮已被平台拦截：模型没有发起当前会话原生工具调用，因此不会输出无证据巡检报告。"
+                        "请重试，或检查当前模型是否支持工具调用。"
+                    ),
+                }
+                messages.append(safe_msg)
+                memory_store.append_message(session_id, safe_msg)
+                yield sse_event({"type": "chunk", "content": safe_msg["content"]})
+                yield sse_event({"type": "done"})
+                break
+            if tool_calls:
+                force_native_tool_pending = False
+            safe_msg = stream_state.assistant_message()
+            if not tool_calls:
+                if turn_exec_trace:
+                    safe_msg["exec_trace"] = list(turn_exec_trace)
+                pending_memory_references = _attach_memory_references_if_visible(
+                    safe_msg,
+                    pending_memory_references,
+                )
             messages.append(safe_msg)
-            memory_store.append_message(session_id, safe_msg)
-            yield sse_event({"type": "chunk", "content": safe_msg["content"]})
-            yield sse_event({"type": "done"})
-            break
-        if tool_calls:
-            force_native_tool_pending = False
-        safe_msg = stream_state.assistant_message()
-        if not tool_calls:
-            if turn_exec_trace:
-                safe_msg["exec_trace"] = list(turn_exec_trace)
-            pending_memory_references = _attach_memory_references_if_visible(
-                safe_msg,
-                pending_memory_references,
-            )
-        messages.append(safe_msg)
-        assistant_memory_id = memory_store.append_message(session_id, safe_msg)
+            assistant_memory_id = memory_store.append_message(session_id, safe_msg)
 
-        if not tool_calls:
-            memory_ref_event = _memory_references_sse_event(safe_msg)
-            if memory_ref_event:
-                yield memory_ref_event
-            yield sse_event({"type": "done"})
-            break
+            if not tool_calls:
+                memory_ref_event = _memory_references_sse_event(safe_msg)
+                if memory_ref_event:
+                    yield memory_ref_event
+                yield sse_event({"type": "done"})
+                break
 
-        exec_trace: list[dict] = []
-        record_exec_trace = make_tool_trace_collector(exec_trace)
+            exec_trace: list[dict] = []
+            record_exec_trace = make_tool_trace_collector(exec_trace)
 
-        async for event in tool_call_processor(
-            tool_calls=tool_calls,
-            session_id=session_id,
-            messages=messages,
-            memory_store=memory_store,
-            dispatcher=dispatcher,
-            context=context,
-            iteration=iteration,
-            trace_collector=record_exec_trace,
-            spin_guard=spin_guard,
-        ):
-            yield event
-        interrupted = cancel_flags.get(session_id) is True
-        if interrupted:
-            cancel_flags[session_id] = False
-            yield sse_event({"type": "error", "content": "任务已被手动中止。"})
-            yield sse_event({"type": "done"})
-        if assistant_memory_id and exec_trace:
-            if orchestration.get("trace_review") or orchestration.get("risk_advice"):
-                yield sse_event({"type": "status", "content": "🧩 正在审查本轮思维链和风险建议..."})
-                await append_assistant_trace_review(
-                    model_name=resolve_assistant_model_id(model_name),
-                    thinking_mode=assistant_thinking_mode(),
-                    messages=messages,
+            async for event in tool_call_processor(
+                tool_calls=tool_calls,
+                session_id=session_id,
+                messages=messages,
+                memory_store=memory_store,
+                dispatcher=dispatcher,
+                context=context,
+                iteration=iteration,
+                trace_collector=record_exec_trace,
+                spin_guard=spin_guard,
+            ):
+                yield event
+            interrupted = cancel_flags.get(session_id) is True
+            if interrupted:
+                cancel_flags[session_id] = False
+                yield sse_event({"type": "error", "content": "任务已被手动中止。"})
+                yield sse_event({"type": "done"})
+            if assistant_memory_id and exec_trace:
+                if orchestration.get("trace_review") or orchestration.get("risk_advice"):
+                    yield sse_event({"type": "status", "content": "🧩 正在审查本轮思维链和风险建议..."})
+                    await append_assistant_trace_review(
+                        model_name=resolve_assistant_model_id(model_name),
+                        thinking_mode=assistant_thinking_mode(),
+                        messages=messages,
+                        context=context,
+                        exec_trace=exec_trace,
+                        assistant_content=safe_msg.get("content") or "",
+                        event_logger=event_logger,
+                    )
+                memory_store.update_message_exec_trace(
+                    session_id,
+                    assistant_memory_id,
+                    exec_trace,
+                )
+                turn_exec_trace.extend(exec_trace)
+                success_memory = build_successful_execution_memory(
+                    session_id=session_id,
                     context=context,
                     exec_trace=exec_trace,
                     assistant_content=safe_msg.get("content") or "",
-                    event_logger=event_logger,
+                    interrupted=interrupted,
                 )
-            memory_store.update_message_exec_trace(
-                session_id,
-                assistant_memory_id,
-                exec_trace,
-            )
-            turn_exec_trace.extend(exec_trace)
-            success_memory = build_successful_execution_memory(
+                if success_memory:
+                    memory_store.append_message(session_id, success_memory)
+            if interrupted:
+                return
+
+        else:
+            run_reason = "step_limit"
+            async for event in step_summary_streamer(
+                model_name=model_name,
+                messages=messages,
                 session_id=session_id,
-                context=context,
-                exec_trace=exec_trace,
-                assistant_content=safe_msg.get("content") or "",
-                interrupted=interrupted,
-            )
-            if success_memory:
-                memory_store.append_message(session_id, success_memory)
-        if interrupted:
-            return
+                max_steps=max_steps,
+                memory_store=memory_store,
+                exec_trace=turn_exec_trace,
+            ):
+                yield event
 
-    else:
-        async for event in step_summary_streamer(
-            model_name=model_name,
-            messages=messages,
-            session_id=session_id,
-            max_steps=max_steps,
+        compression_scheduler(
             memory_store=memory_store,
-            exec_trace=turn_exec_trace,
-        ):
-            yield event
-
-    compression_scheduler(
-        memory_store=memory_store,
-        session_id=session_id,
-        emb_client=emb_client,
-        embedding_model=embedding_model,
-        primary_model_id=model_name,
-        memory_scope_ids=context.get("memory_scope_ids"),
-    )
+            session_id=session_id,
+            emb_client=emb_client,
+            embedding_model=embedding_model,
+            primary_model_id=model_name,
+            memory_scope_ids=context.get("memory_scope_ids"),
+        )
+    except Exception:
+        run_status = "failed"
+        run_reason = "exception"
+        raise
+    finally:
+        await _emit_chat_run_hook(
+            run_hook_emitter,
+            "run:end",
+            {
+                "session_id": session_id,
+                "model_name": model_name,
+                "status": run_status,
+                "reason": run_reason,
+                "orchestration_mode": orchestration.get("mode", orchestration_mode),
+                "context": _run_hook_context(context),
+            },
+            event_logger,
+        )
 
 
 def _resolve_model_orchestration(primary_model_id: str, orchestration_mode: str = "single") -> dict[str, Any]:
@@ -719,6 +821,7 @@ async def _run_split_model_chat_agent_loop(
     step_summary_streamer: Callable[..., AsyncIterator[str]],
     orchestration: dict[str, Any],
     memory_references: list[dict[str, Any]] | None = None,
+    run_hook_emitter: Callable[[str, dict[str, Any]], Awaitable[None]] = emit_run_hook,
 ) -> AsyncIterator[str]:
     primary_model_id = str(orchestration["primary_model_id"])
     assistant_model_id = str(orchestration["assistant_model_id"] or model_name)
@@ -764,6 +867,20 @@ async def _run_split_model_chat_agent_loop(
         )
 
     for iteration in range(max_steps):
+        await _emit_chat_run_hook(
+            run_hook_emitter,
+            "agent:step",
+            {
+                "session_id": session_id,
+                "iteration": iteration,
+                "max_steps": max_steps,
+                "model_name": assistant_model_id,
+                "primary_model_id": primary_model_id,
+                "orchestration_mode": orchestration.get("mode"),
+                "context": _run_hook_context(context),
+            },
+            event_logger,
+        )
         event_logger.info(
             "Split model loop %s for %s, cancel_flags: %s",
             iteration,

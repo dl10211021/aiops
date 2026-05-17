@@ -395,8 +395,16 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
             kwargs["state"].assistant_content = "完成"
             yield "stream-event"
 
+        hook_events = []
+
+        async def hook_emitter(event_type, payload):
+            hook_events.append((event_type, payload))
+
         events, kwargs, memory_store, _cancel_flags, scheduler_calls = (
-            await collect_chat_loop_events(assistant_streamer=streamer)
+            await collect_chat_loop_events(
+                assistant_streamer=streamer,
+                run_hook_emitter=hook_emitter,
+            )
         )
 
         self.assertEqual(
@@ -416,6 +424,10 @@ class AgentChatLoopTests(unittest.IsolatedAsyncioTestCase):
             scheduler_calls[0]["memory_scope_ids"],
             ["sid-1"],
         )
+        self.assertEqual([event_type for event_type, _payload in hook_events], ["run:start", "agent:step", "run:end"])
+        self.assertEqual(hook_events[0][1]["session_id"], "sid-1")
+        self.assertEqual(hook_events[1][1]["iteration"], 0)
+        self.assertEqual(hook_events[2][1]["status"], "completed")
 
     async def test_cancel_before_streaming_resets_flag_without_ltm_schedule(self):
         async def streamer(**_kwargs):
