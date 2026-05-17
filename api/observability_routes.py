@@ -5,6 +5,10 @@ from pydantic import BaseModel, Field
 
 from api.schema_models.common import ResponseModel
 from core.observability.service import catalog_service
+from core.session_history_service import (
+    SessionHistoryServiceError,
+    find_session_history_evidence_trace,
+)
 
 
 router = APIRouter(prefix="/observability", tags=["observability"])
@@ -29,6 +33,16 @@ class EvidenceAppendRequest(BaseModel):
     raw_excerpt: str = Field(default="", max_length=1200)
     tool_evidence: dict = Field(default_factory=dict)
     confidence: str = Field(default="pending_review", pattern="^(confirmed|inferred|unknown|pending_review)$")
+
+
+class RunTraceEvidenceAppendRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=120)
+    evidence_id: str = Field(default="", max_length=160)
+    tool_call_id: str = Field(default="", max_length=160)
+    tool: str = Field(default="", max_length=120)
+    title: str = Field(default="", max_length=160)
+    summary: str = Field(default="", max_length=1000)
+    confidence: str = Field(default="confirmed", pattern="^(confirmed|inferred|unknown|pending_review)$")
 
 
 class RootCauseAppendRequest(BaseModel):
@@ -168,6 +182,37 @@ async def append_observability_evidence(investigation_id: str, req: EvidenceAppe
         raw_ref=req.raw_ref,
         raw_excerpt=req.raw_excerpt,
         tool_evidence=req.tool_evidence,
+        confidence=req.confidence,
+    )
+    if not evidence:
+        raise HTTPException(status_code=404, detail="排查事件不存在")
+    investigation = catalog_service.get_investigation(investigation_id)
+    return ResponseModel(
+        status="success",
+        data={"evidence": evidence.model_dump(), "investigation": investigation.model_dump() if investigation else None},
+    )
+
+
+@router.post("/investigations/{investigation_id}/run-trace-evidence", response_model=ResponseModel)
+async def append_observability_run_trace_evidence(investigation_id: str, req: RunTraceEvidenceAppendRequest):
+    if not any([req.evidence_id, req.tool_call_id, req.tool]):
+        raise HTTPException(status_code=400, detail="必须提供 evidence_id、tool_call_id 或 tool")
+    try:
+        trace_result = find_session_history_evidence_trace(
+            req.session_id,
+            evidence_id=req.evidence_id,
+            tool_call_id=req.tool_call_id,
+            tool=req.tool,
+            limit=200,
+        )
+    except SessionHistoryServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    evidence = catalog_service.append_run_trace_evidence(
+        investigation_id,
+        session_id=req.session_id,
+        trace_result=trace_result,
+        title=req.title,
+        summary=req.summary,
         confidence=req.confidence,
     )
     if not evidence:

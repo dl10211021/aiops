@@ -1,6 +1,7 @@
 import type {
   ObservabilityOverview,
   ObservabilityDiscoveryCandidate,
+  ObservabilityEvidence,
   ObservabilityInvestigation,
   ObservabilityComponent,
   ObservabilityProfile,
@@ -94,6 +95,24 @@ export async function appendObservabilityEvidence(investigationId: string, paylo
 }) {
   return request<{ investigation: ObservabilityInvestigation }>(
     `/observability/investigations/${encodeURIComponent(investigationId)}/evidence`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export async function appendObservabilityRunTraceEvidence(investigationId: string, payload: {
+  session_id: string
+  evidence_id?: string
+  tool_call_id?: string
+  tool?: string
+  title?: string
+  summary?: string
+  confidence?: string
+}) {
+  return request<{ evidence: ObservabilityEvidence; investigation: ObservabilityInvestigation }>(
+    `/observability/investigations/${encodeURIComponent(investigationId)}/run-trace-evidence`,
     {
       method: 'POST',
       body: JSON.stringify(payload),

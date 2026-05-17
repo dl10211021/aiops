@@ -24,3 +24,19 @@ def test_observability_frontend_can_append_root_cause_candidates():
     assert "收起详情" in view
     assert "raw_ref: {evidence.raw_ref || '-'}" in view
     assert "evidence.raw_excerpt || '暂无原始摘录'" in view
+
+
+def test_observability_frontend_surfaces_run_trace_evidence_refs():
+    api = Path("frontend/src/api/observability.ts").read_text(encoding="utf-8")
+    view = Path("frontend/src/components/views/ObservabilityCenter.tsx").read_text(encoding="utf-8")
+    types = Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
+
+    assert "appendObservabilityRunTraceEvidence" in api
+    assert "/run-trace-evidence" in api
+    assert "session_id: string" in api
+    assert "tool_evidence: Record<string, unknown>" in types
+    assert "EvidenceReferenceChip" in view
+    assert "Run Trace 证据" in view
+    assert "runTraceEvidenceId(evidence)" in view
+    assert "runTraceEvidenceSessionId(evidence)" in view
+    assert "runTraceEvidenceToolName(evidence)" in view

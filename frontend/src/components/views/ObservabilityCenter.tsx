@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import PageHeader from '@/components/layout/PageHeader'
+import { EvidenceReferenceChip } from './EvidenceReferenceChip'
 import {
   appendObservabilityEvidence,
   appendObservabilityRootCause,
@@ -20,6 +21,7 @@ import type {
   Asset,
   ObservabilityComponent,
   ObservabilityDiscoveryCandidate,
+  ObservabilityEvidence,
   ObservabilityInvestigation,
   ObservabilityOverview,
   ObservabilityProfile,
@@ -1183,6 +1185,20 @@ function InvestigationCard({
                 </button>
                 {expandedEvidenceId === evidence.id && (
                   <div className="mt-2 space-y-2 rounded border border-ops-surface1/40 bg-ops-dark/30 p-3">
+                    {runTraceEvidenceId(evidence) && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <EvidenceReferenceChip
+                          kind="evidence"
+                          label="Run Trace 证据"
+                          value={runTraceEvidenceId(evidence)}
+                          title="Run Trace 工具证据引用"
+                          onClick={() => setExpandedEvidenceId(evidence.id)}
+                        />
+                        <span className="font-mono text-[11px] text-ops-overlay">
+                          {runTraceEvidenceSessionId(evidence) || '-'} · {runTraceEvidenceToolName(evidence) || '-'}
+                        </span>
+                      </div>
+                    )}
                     <div className="grid gap-2 font-mono text-[11px] text-ops-overlay md:grid-cols-2">
                       <span>confidence: {evidence.confidence}</span>
                       <span>time: {evidence.timestamp || evidence.created_at || '-'}</span>
@@ -1200,6 +1216,18 @@ function InvestigationCard({
       )}
     </div>
   )
+}
+
+function runTraceEvidenceId(evidence: ObservabilityEvidence): string {
+  return String(evidence.tool_evidence?.evidence_id || evidence.raw_ref || '')
+}
+
+function runTraceEvidenceSessionId(evidence: ObservabilityEvidence): string {
+  return String(evidence.tool_evidence?.session_id || '')
+}
+
+function runTraceEvidenceToolName(evidence: ObservabilityEvidence): string {
+  return String(evidence.tool_evidence?.tool_name || '')
 }
 
 function rootCauseStatusLabel(status: string): string {

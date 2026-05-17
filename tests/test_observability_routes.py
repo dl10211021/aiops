@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from unittest.mock import patch
 
 from fastapi import HTTPException
 
@@ -178,6 +179,60 @@ class TestObservabilityRoutes(unittest.TestCase):
         self.assertEqual(evidence["tool_evidence"], tool_evidence)
         self.assertEqual(evidence["raw_ref"], "tev-sid-1-call-1")
         self.assertEqual(evidence["raw_excerpt"], "1")
+        self.assertEqual(response.data["investigation"]["evidence_count"], 1)
+
+    def test_append_run_trace_evidence_route_hydrates_tool_evidence(self):
+        create_response = asyncio.run(
+            observability_routes.create_observability_investigation(
+                observability_routes.InvestigationCreateRequest(
+                    system_id="global-portal-test",
+                    title="Run Trace 证据接入测试",
+                    symptom="需要把会话运行证据挂到可观测排查",
+                    severity="warning",
+                )
+            )
+        )
+        investigation_id = create_response.data["investigation"]["id"]
+        trace_result = {
+            "source": "run_trace",
+            "trace": {
+                "tool": "db_execute_query",
+                "toolCallId": "call-db-1",
+                "evidenceId": "tev-sid-db-call-db-1",
+                "status": "success",
+                "resultMeta": {"tool_policy": {"evidence_family": "database"}},
+                "evidence": {
+                    "evidence_id": "tev-sid-db-call-db-1",
+                    "tool_family": "database",
+                    "input_summary": "select count(*) from orders",
+                    "output_preview": "42",
+                    "result_status": "success",
+                },
+            },
+            "run": {"run_id": "run-1", "event_type": "tool:after"},
+        }
+
+        with patch.object(observability_routes, "find_session_history_evidence_trace", return_value=trace_result):
+            response = asyncio.run(
+                observability_routes.append_observability_run_trace_evidence(
+                    investigation_id,
+                    observability_routes.RunTraceEvidenceAppendRequest(
+                        session_id="sid-db",
+                        evidence_id="tev-sid-db-call-db-1",
+                    ),
+                )
+            )
+
+        evidence = response.data["evidence"]
+        self.assertEqual(evidence["evidence_type"], "run_trace_tool")
+        self.assertEqual(evidence["raw_ref"], "tev-sid-db-call-db-1")
+        self.assertEqual(evidence["raw_excerpt"], "42")
+        self.assertEqual(evidence["tool_evidence"]["session_id"], "sid-db")
+        self.assertEqual(evidence["tool_evidence"]["run_id"], "run-1")
+        self.assertEqual(evidence["tool_evidence"]["tool_call_id"], "call-db-1")
+        self.assertEqual(evidence["tool_evidence"]["tool_name"], "db_execute_query")
+        self.assertEqual(evidence["tool_evidence"]["tool_family"], "database")
+        self.assertIn("select count(*)", evidence["summary"])
         self.assertEqual(response.data["investigation"]["evidence_count"], 1)
 
     def test_bind_asset_and_session_routes_return_updated_profile(self):

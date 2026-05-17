@@ -893,3 +893,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只读聚合和前端展示，不改审批决策、不自动执行、不改工具 gate、不影响告警、巡检、资产中心或 Hermes 参考目录。
 - 遗留风险：聚合仍基于本地审批 JSON 存储和最多 500 条样本，不是分页审计仓库；按“功能满足即可收手”，先解决运营可见性。
 - 下一轮建议：停止继续打磨审批中心。后续更高价值方向是可观测调查与 Run Trace 证据引用打通，或把执行层 `timeout/retry/concurrency_safe` 的实际结果进入统一审计。
+
+### 2026-05-18 Round 64：可观测排查挂接 Run Trace 证据
+
+- 完成：新增 `/observability/investigations/{investigation_id}/run-trace-evidence`，可通过 `session_id + evidence_id/tool_call_id/tool` 查询会话工具证据并挂到可观测排查事件；前端证据详情显示 Run Trace 证据引用、来源会话和工具名。
+- 验证：`python -m pytest tests/test_observability_routes.py tests/test_observability_investigation.py tests/test_observability_frontend.py tests/test_tool_policy_runtime_frontend.py -q`；`python -m compileall core api`；`cd frontend && npm run build`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：可观测排查不再只靠手动证据文本，可以复用会话执行层已经产生的工具证据，形成 investigation -> evidence -> run trace 的引用链。
+- OpsCore 主线影响：只新增证据挂接和展示，不改 Run Trace 采集、不改会话历史查询、不自动执行工具、不影响告警、巡检、资产中心或审批。
+- 遗留风险：当前前端只展示引用和基础元数据，还没有从可观测页面直接打开完整 ToolTraceList 详情；按“功能满足即可收手”，本轮先把证据引用链打通。
+- 下一轮建议：停止继续打磨可观测证据卡片。后续更高价值方向是执行层 `timeout/retry/concurrency_safe` 的实际结果进入统一审计，或让可观测任务真正生成多 Agent 指令草稿。

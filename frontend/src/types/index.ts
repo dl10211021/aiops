@@ -1677,6 +1677,7 @@ export interface ObservabilityEvidence {
   summary: string
   raw_ref: string
   raw_excerpt: string
+  tool_evidence: Record<string, unknown>
   confidence: string
   timestamp: string
   created_at: string

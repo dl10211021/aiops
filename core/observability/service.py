@@ -684,6 +684,53 @@ class ObservabilityCatalogService:
         investigation.updated_at = now
         return evidence
 
+    def append_run_trace_evidence(
+        self,
+        investigation_id: str,
+        *,
+        session_id: str,
+        trace_result: dict,
+        title: str = "",
+        summary: str = "",
+        confidence: str = "confirmed",
+    ) -> EvidenceItem | None:
+        trace = trace_result.get("trace") if isinstance(trace_result.get("trace"), dict) else {}
+        evidence = trace.get("evidence") if isinstance(trace.get("evidence"), dict) else {}
+        result_meta = trace.get("resultMeta") if isinstance(trace.get("resultMeta"), dict) else {}
+        tool_policy = result_meta.get("tool_policy") if isinstance(result_meta.get("tool_policy"), dict) else {}
+        run = trace_result.get("run") if isinstance(trace_result.get("run"), dict) else {}
+        evidence_id = str(trace.get("evidenceId") or evidence.get("evidence_id") or "").strip()
+        tool_name = str(trace.get("tool") or evidence.get("tool_name") or "").strip()
+        output_preview = str(evidence.get("output_preview") or evidence.get("result_preview") or "")
+        tool_evidence = {
+            "evidence_id": evidence_id,
+            "session_id": str(session_id or evidence.get("session_id") or ""),
+            "run_id": str(run.get("run_id") or evidence.get("run_id") or ""),
+            "tool_call_id": str(trace.get("toolCallId") or evidence.get("tool_call_id") or ""),
+            "tool_name": tool_name,
+            "tool_family": str(evidence.get("tool_family") or tool_policy.get("evidence_family") or ""),
+            "input_summary": str(evidence.get("input_summary") or evidence.get("redacted_input") or ""),
+            "output_preview": output_preview,
+            "result_status": str(trace.get("status") or evidence.get("result_status") or ""),
+        }
+        default_summary = "；".join(
+            item for item in [
+                f"工具={tool_name}" if tool_name else "",
+                f"输入={tool_evidence['input_summary']}" if tool_evidence["input_summary"] else "",
+                f"结果={output_preview}" if output_preview else "",
+            ] if item
+        )
+        return self.append_evidence(
+            investigation_id,
+            title=title or f"Run Trace 工具证据：{tool_name or evidence_id or 'unknown'}",
+            summary=summary or default_summary or "Run Trace 工具执行证据已挂接到排查事件。",
+            evidence_type="run_trace_tool",
+            raw_ref=evidence_id,
+            raw_excerpt=output_preview,
+            tool_evidence=tool_evidence,
+            confidence=confidence,
+        )
+
     def append_root_cause(
         self,
         investigation_id: str,
