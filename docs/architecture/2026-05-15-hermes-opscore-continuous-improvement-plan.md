@@ -524,3 +524,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只读展示现有隐藏审计消息，不改变会话消息、工具调用、审批、巡检或告警逻辑。
 - 遗留风险：当前只显示最近事件列表，还没有按 run_id 折叠、耗时统计、失败原因聚合和点击定位工具证据。
 - 下一轮建议：给 run trace 事件补 run_id 聚合，并在前端按一次运行折叠显示开始、步骤、工具和结束状态。
+
+### 2026-05-17 Round 23：Run Trace 单次运行下钻
+
+- 完成：Run Trace 后端查询支持按 `run_id` 过滤，服务层和前端 API 保持兼容；右侧链路面板新增“全部运行 / 单次运行”选择，默认保持简约总览，选择某个 `run_id` 后只拉取这一轮的完整事件并可一键恢复全部。
+- 验证：`python -m pytest tests/test_session_history.py tests/test_session_history_service.py tests/test_session_history_routes.py -q` 通过，32 passed；`cd frontend && npm run build` 通过；Playwright 打开 `http://127.0.0.1:4173/` 应用正常渲染，当前 500 来自本地预览代理访问未运行的 `/api/v1/sessions/active` 后端接口。
+- Hermes 差距变化：Run Trace 从“可见最近事件”推进到“可按一次运行下钻”，更接近 Hermes 运行日志中按 run/session 追踪单条任务的体验。
+- OpsCore 主线影响：仍是只读审计和进度查看，不改变工具执行、审批、资产、巡检、通知或告警链路。
+- 遗留风险：单次运行下钻仍在右侧链路面板内，没有独立 Run 详情页；事件还不能直接跳转到具体工具证据、审批记录或学习候选。
+- 下一轮建议：给每个 Run Trace 事件补 `evidence_ref` / `approval_ref` 的前端定位入口，或先做后端 `Run Trace -> Learning Candidate` 的只读候选提取预览。

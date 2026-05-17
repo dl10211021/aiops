@@ -374,6 +374,8 @@ export default function AiThinkingChainPanel({
   const [memoryLoading, setMemoryLoading] = useState(false)
   const [runTraceEvents, setRunTraceEvents] = useState<RunTraceEvent[]>([])
   const [runTraceRuns, setRunTraceRuns] = useState<RunTraceRun[]>([])
+  const [runTraceRunIndex, setRunTraceRunIndex] = useState<RunTraceRun[]>([])
+  const [selectedRunTraceId, setSelectedRunTraceId] = useState('')
   const [runTraceLoading, setRunTraceLoading] = useState(false)
   const deferredMessages = useDeferredValue(messages)
   const displayTab = fixedTab || activeTab
@@ -400,6 +402,10 @@ export default function AiThinkingChainPanel({
     }
     return Array.from(byDate.entries())
   }, [traceGroups])
+
+  useEffect(() => {
+    setSelectedRunTraceId('')
+  }, [sessionId])
 
   useEffect(() => {
     if (displayTab !== 'memory') {
@@ -439,17 +445,23 @@ export default function AiThinkingChainPanel({
     if (!sessionId) {
       setRunTraceEvents([])
       setRunTraceRuns([])
+      setRunTraceRunIndex([])
+      setSelectedRunTraceId('')
       setRunTraceLoading(false)
       return
     }
     let cancelled = false
     const controller = new AbortController()
     setRunTraceLoading(true)
-    getSessionRunTrace(sessionId, 120, { signal: controller.signal })
+    getSessionRunTrace(sessionId, selectedRunTraceId ? 500 : 120, {
+      signal: controller.signal,
+      runId: selectedRunTraceId || undefined,
+    })
       .then((response) => {
         if (!cancelled) {
           setRunTraceEvents(response.data.events || [])
           setRunTraceRuns(response.data.runs || [])
+          if (!selectedRunTraceId) setRunTraceRunIndex(response.data.runs || [])
         }
       })
       .catch((error) => {
@@ -457,6 +469,7 @@ export default function AiThinkingChainPanel({
         if (!cancelled) {
           setRunTraceEvents([])
           setRunTraceRuns([])
+          if (!selectedRunTraceId) setRunTraceRunIndex([])
         }
       })
       .finally(() => {
@@ -466,7 +479,7 @@ export default function AiThinkingChainPanel({
       cancelled = true
       controller.abort()
     }
-  }, [sessionId, deferredMessages.length, displayTab])
+  }, [sessionId, deferredMessages.length, displayTab, selectedRunTraceId])
 
   const selectGroup = (groupId: string) => {
     setSelectedGroupId(groupId)
@@ -549,7 +562,14 @@ export default function AiThinkingChainPanel({
           <MemoryActivityPanel activity={memoryActivity} loading={memoryLoading} />
         ) : (
           <div className="space-y-3">
-            <RunTraceStrip events={runTraceEvents} runs={runTraceRuns} loading={runTraceLoading} />
+            <RunTraceStrip
+              events={runTraceEvents}
+              runs={runTraceRuns}
+              runIndex={runTraceRunIndex}
+              loading={runTraceLoading}
+              selectedRunId={selectedRunTraceId}
+              onSelectRun={setSelectedRunTraceId}
+            />
             {traceGroups.length === 0 ? (
               <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
                 暂无会话轮次。发送消息后会按轮次展示当前会话的执行链路。
@@ -775,20 +795,60 @@ export default function AiThinkingChainPanel({
 function RunTraceStrip({
   events,
   runs,
+  runIndex,
   loading,
+  selectedRunId,
+  onSelectRun,
 }: {
   events: RunTraceEvent[]
   runs: RunTraceRun[]
+  runIndex: RunTraceRun[]
   loading: boolean
+  selectedRunId: string
+  onSelectRun: (runId: string) => void
 }) {
   const recentRuns = groupRunTraceEvents(events).slice(-6).reverse()
   const runSummaries = new Map(runs.map((run) => [run.run_id, run]))
+  const runOptions = [...runIndex].slice(-30).reverse()
   return (
     <div className="rounded-2xl border border-ops-accent/22 bg-ops-accent/8 px-3 py-2.5">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-ops-accent">AIOps Run Trace</div>
-        <div className="font-mono text-[10px] text-ops-overlay">{loading ? '同步中' : `${recentRuns.length} 次 / ${events.length} 条`}</div>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-ops-accent">
+          AIOps Run Trace
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          {runOptions.length > 0 && (
+            <select
+              value={selectedRunId}
+              onChange={(event) => onSelectRun(event.target.value)}
+              className="h-7 max-w-[180px] rounded-md border border-ops-surface1/80 bg-ops-panel/70 px-2 text-[10px] text-ops-text outline-none focus:border-ops-accent/60"
+              title="按单次运行查看完整事件"
+            >
+              <option value="">全部运行</option>
+              {runOptions.map((run) => (
+                <option key={run.run_id} value={run.run_id}>
+                  {`${run.status || 'unknown'} · ${run.tool_count} tool · ${run.run_id}`}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="font-mono text-[10px] text-ops-overlay">
+            {loading ? '同步中' : `${recentRuns.length} 次 / ${events.length} 条`}
+          </div>
+        </div>
       </div>
+      {selectedRunId && (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-ops-accent/25 bg-ops-accent/10 px-2 py-1 text-[10px] text-ops-subtext">
+          <span className="min-w-0 truncate font-mono">当前只看：{selectedRunId}</span>
+          <button
+            type="button"
+            onClick={() => onSelectRun('')}
+            className="shrink-0 rounded border border-ops-surface1 px-2 py-0.5 text-ops-text hover:border-ops-accent/60"
+          >
+            全部
+          </button>
+        </div>
+      )}
       {recentRuns.length === 0 ? (
         <div className="text-[11px] leading-5 text-ops-subtext">
           暂无运行事件。新会话开始执行后会显示 run、step 和 tool 生命周期。
