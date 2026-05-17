@@ -99,6 +99,48 @@ def list_session_run_trace_events(
     return events[-limit:]
 
 
+def summarize_session_run_trace_events(events: list[dict]) -> list[dict]:
+    runs_by_id: dict[str, dict] = {}
+    ordered_runs: list[dict] = []
+    for index, event in enumerate(events):
+        run_id = str(event.get("run_id") or (event.get("payload") or {}).get("run_id") or "").strip()
+        if not run_id:
+            run_id = f"ungrouped-{event.get('event_ts') or event.get('created_at') or index}"
+        run = runs_by_id.get(run_id)
+        if run is None:
+            run = {
+                "run_id": run_id,
+                "started_at": None,
+                "ended_at": None,
+                "status": "running",
+                "event_count": 0,
+                "tool_count": 0,
+                "step_count": 0,
+                "latest_event_type": "",
+                "latest_summary": "",
+            }
+            runs_by_id[run_id] = run
+            ordered_runs.append(run)
+
+        event_type = str(event.get("event_type") or "")
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        event_time = event.get("event_ts") or event.get("created_at")
+        run["event_count"] += 1
+        run["latest_event_type"] = event_type
+        run["latest_summary"] = event.get("summary") or ""
+        if event_type == "run:start":
+            run["started_at"] = event_time
+            run["status"] = "running"
+        elif event_type == "run:end":
+            run["ended_at"] = event_time
+            run["status"] = str(payload.get("status") or "completed").lower()
+        elif event_type == "agent:step":
+            run["step_count"] += 1
+        elif event_type.startswith("tool:"):
+            run["tool_count"] += 1
+    return ordered_runs
+
+
 def _exec_trace_matches(
     trace: Mapping,
     *,

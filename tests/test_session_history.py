@@ -11,6 +11,7 @@ from core.session_history import (
     is_user_visible_history_message,
     list_session_run_trace_events,
     session_history_export_title,
+    summarize_session_run_trace_events,
     update_session_message_feedback,
     update_session_message_content,
 )
@@ -166,6 +167,49 @@ class TestSessionHistory(unittest.TestCase):
         self.assertEqual(events[0]["event_type"], "run:start")
         self.assertEqual(events[0]["payload"]["model_name"], "model-a")
         self.assertEqual(visible, [{"role": "user", "content": "hi"}])
+
+    def test_summarize_session_run_trace_events_groups_run_status_and_counts(self):
+        events = [
+            {
+                "run_id": "run-1",
+                "event_type": "run:start",
+                "event_ts": 1.0,
+                "payload": {"run_id": "run-1"},
+                "summary": "start",
+            },
+            {
+                "run_id": "run-1",
+                "event_type": "agent:step",
+                "event_ts": 2.0,
+                "payload": {"run_id": "run-1"},
+                "summary": "step",
+            },
+            {
+                "run_id": "run-1",
+                "event_type": "tool:after",
+                "event_ts": 3.0,
+                "payload": {"run_id": "run-1", "status": "done"},
+                "summary": "tool",
+            },
+            {
+                "run_id": "run-1",
+                "event_type": "run:end",
+                "event_ts": 4.0,
+                "payload": {"run_id": "run-1", "status": "completed"},
+                "summary": "end",
+            },
+        ]
+
+        runs = summarize_session_run_trace_events(events)
+
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(runs[0]["run_id"], "run-1")
+        self.assertEqual(runs[0]["status"], "completed")
+        self.assertEqual(runs[0]["event_count"], 4)
+        self.assertEqual(runs[0]["step_count"], 1)
+        self.assertEqual(runs[0]["tool_count"], 1)
+        self.assertEqual(runs[0]["started_at"], 1.0)
+        self.assertEqual(runs[0]["ended_at"], 4.0)
 
     def test_attach_legacy_exec_traces_rebuilds_tool_results_for_ui(self):
         messages = [

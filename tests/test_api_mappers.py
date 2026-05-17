@@ -874,7 +874,7 @@ class TestApiMappers(unittest.TestCase):
         )
         self.assertEqual(
             session_run_trace_response_kwargs([{"event_type": "run:start"}]),
-            {"status": "success", "data": {"events": [{"event_type": "run:start"}]}},
+            {"status": "success", "data": {"events": [{"event_type": "run:start"}], "runs": []}},
         )
         self.assertEqual(
             session_history_cleared_response_kwargs(),

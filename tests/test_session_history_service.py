@@ -7,6 +7,7 @@ from core.session_history_service import (
     export_session_history_markdown_record,
     find_session_history_evidence_trace,
     get_session_memory_activity_record,
+    get_session_run_trace_record,
     list_session_run_trace_records,
     list_session_history_messages,
     update_session_history_message_feedback_record,
@@ -203,16 +204,20 @@ class TestSessionHistoryService(unittest.TestCase):
                     "role": "system",
                     "content": "【AIOps Run Trace】运行结束：状态=completed",
                     "memory_type": "aiops_run_trace",
+                    "run_id": "run-1",
                     "run_event_type": "run:end",
-                    "run_event_payload": {"session_id": "sid-1", "status": "completed"},
+                    "run_event_payload": {"session_id": "sid-1", "status": "completed", "run_id": "run-1"},
                 }
             ]
         )
 
         events = list_session_run_trace_records("sid-1", memory_db=memory_db)
+        trace = get_session_run_trace_record("sid-1", memory_db=memory_db)
 
         self.assertEqual(events[0]["event_type"], "run:end")
         self.assertEqual(events[0]["payload"]["status"], "completed")
+        self.assertEqual(trace["runs"][0]["run_id"], "run-1")
+        self.assertEqual(trace["runs"][0]["status"], "completed")
 
     def test_export_session_history_markdown_maps_empty_history_to_404(self):
         memory_db = FakeMemoryDB([])

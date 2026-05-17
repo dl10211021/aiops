@@ -264,6 +264,18 @@ export interface RunTraceEvent {
   summary: string
 }
 
+export interface RunTraceRun {
+  run_id: string
+  started_at?: string | number | null
+  ended_at?: string | number | null
+  status: string
+  event_count: number
+  tool_count: number
+  step_count: number
+  latest_event_type?: string
+  latest_summary?: string
+}
+
 export interface ToolEvidence {
   evidence_id: string
   session_id: string

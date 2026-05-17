@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { ChatMessage, ChatRuntimeEvent, ExecTraceItem, RunTraceEvent, SessionMemoryActivity } from '@/types'
+import type { ChatMessage, ChatRuntimeEvent, ExecTraceItem, RunTraceEvent, RunTraceRun, SessionMemoryActivity } from '@/types'
 import { isAbortError } from '@/api/http'
 import { getSessionMemoryActivity, getSessionRunTrace } from '@/api/sessionHistory'
 import { toolLabel } from '@/utils/assetDisplay'
@@ -362,6 +362,7 @@ export default function AiThinkingChainPanel({
   const [memoryActivity, setMemoryActivity] = useState<SessionMemoryActivity | null>(null)
   const [memoryLoading, setMemoryLoading] = useState(false)
   const [runTraceEvents, setRunTraceEvents] = useState<RunTraceEvent[]>([])
+  const [runTraceRuns, setRunTraceRuns] = useState<RunTraceRun[]>([])
   const [runTraceLoading, setRunTraceLoading] = useState(false)
   const deferredMessages = useDeferredValue(messages)
   const displayTab = fixedTab || activeTab
@@ -426,6 +427,7 @@ export default function AiThinkingChainPanel({
     }
     if (!sessionId) {
       setRunTraceEvents([])
+      setRunTraceRuns([])
       setRunTraceLoading(false)
       return
     }
@@ -434,11 +436,17 @@ export default function AiThinkingChainPanel({
     setRunTraceLoading(true)
     getSessionRunTrace(sessionId, 120, { signal: controller.signal })
       .then((response) => {
-        if (!cancelled) setRunTraceEvents(response.data.events || [])
+        if (!cancelled) {
+          setRunTraceEvents(response.data.events || [])
+          setRunTraceRuns(response.data.runs || [])
+        }
       })
       .catch((error) => {
         if (isAbortError(error)) return
-        if (!cancelled) setRunTraceEvents([])
+        if (!cancelled) {
+          setRunTraceEvents([])
+          setRunTraceRuns([])
+        }
       })
       .finally(() => {
         if (!cancelled) setRunTraceLoading(false)
@@ -530,7 +538,7 @@ export default function AiThinkingChainPanel({
           <MemoryActivityPanel activity={memoryActivity} loading={memoryLoading} />
         ) : (
           <div className="space-y-3">
-            <RunTraceStrip events={runTraceEvents} loading={runTraceLoading} />
+            <RunTraceStrip events={runTraceEvents} runs={runTraceRuns} loading={runTraceLoading} />
             {traceGroups.length === 0 ? (
               <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
                 暂无会话轮次。发送消息后会按轮次展示当前会话的执行链路。
@@ -755,12 +763,15 @@ export default function AiThinkingChainPanel({
 
 function RunTraceStrip({
   events,
+  runs,
   loading,
 }: {
   events: RunTraceEvent[]
+  runs: RunTraceRun[]
   loading: boolean
 }) {
   const recentRuns = groupRunTraceEvents(events).slice(-6).reverse()
+  const runSummaries = new Map(runs.map((run) => [run.run_id, run]))
   return (
     <div className="rounded-2xl border border-ops-accent/22 bg-ops-accent/8 px-3 py-2.5">
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -774,6 +785,7 @@ function RunTraceStrip({
       ) : (
         <div className="space-y-2">
           {recentRuns.map((run) => {
+            const summary = runSummaries.get(run.id)
             const first = run.startedAt || run.events[0]
             const latest = run.endedAt || run.events[run.events.length - 1]
             const previewEvents = run.events.slice(-5).reverse()
@@ -784,12 +796,18 @@ function RunTraceStrip({
                     {runTraceGroupStatus(run)}
                   </span>
                   <span className="min-w-0 truncate font-mono text-[10px] text-ops-overlay">
-                    {formatRunTraceTime(first)} · {run.events.length} 事件
+                    {formatRunTraceTime(first)} · {summary?.event_count || run.events.length} 事件
                   </span>
                   <span className="ml-auto max-w-[42%] truncate font-mono text-[10px] text-ops-overlay" title={run.id}>
                     {run.id}
                   </span>
                 </div>
+                {summary && (summary.step_count > 0 || summary.tool_count > 0) && (
+                  <div className="mb-1.5 flex gap-1.5 text-[10px] text-ops-overlay">
+                    <span className="rounded-full border border-ops-surface1 px-2 py-0.5">step {summary.step_count}</span>
+                    <span className="rounded-full border border-ops-surface1 px-2 py-0.5">tool {summary.tool_count}</span>
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   {previewEvents.map((event, index) => (
                     <div

@@ -11,6 +11,7 @@ from core.session_history import (
     find_session_exec_trace,
     get_user_visible_session_history,
     list_session_run_trace_events,
+    summarize_session_run_trace_events,
     update_session_message_content,
     update_session_message_feedback,
 )
@@ -69,20 +70,37 @@ def find_session_history_evidence_trace(
     return result
 
 
+def get_session_run_trace_record(
+    session_id: str,
+    *,
+    limit: int = 200,
+    memory_db: Any | None = None,
+) -> dict:
+    try:
+        events = list_session_run_trace_events(
+            _resolve_memory_db(memory_db),
+            session_id,
+            limit=limit,
+        )
+        return {
+            "events": events,
+            "runs": summarize_session_run_trace_events(events),
+        }
+    except Exception as exc:
+        raise SessionHistoryServiceError(500, str(exc)) from exc
+
+
 def list_session_run_trace_records(
     session_id: str,
     *,
     limit: int = 200,
     memory_db: Any | None = None,
 ) -> list[dict]:
-    try:
-        return list_session_run_trace_events(
-            _resolve_memory_db(memory_db),
-            session_id,
-            limit=limit,
-        )
-    except Exception as exc:
-        raise SessionHistoryServiceError(500, str(exc)) from exc
+    return get_session_run_trace_record(
+        session_id,
+        limit=limit,
+        memory_db=memory_db,
+    )["events"]
 
 
 def clear_session_history_messages(

@@ -113,7 +113,7 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         self.assertEqual(memory_db.feedback, [("sid-1", 2, "up", None)])
         self.assertEqual(activity_response.data["activity"]["summary"]["pending_conflict_count"], 1)
         self.assertEqual(run_trace_response.status, "success")
-        self.assertEqual(run_trace_response.data, {"events": []})
+        self.assertEqual(run_trace_response.data, {"events": [], "runs": []})
 
     def test_session_history_export_preserves_response_shape(self):
         with patch(

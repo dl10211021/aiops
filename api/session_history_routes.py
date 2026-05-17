@@ -21,8 +21,8 @@ from core.session_history_service import (
     delete_session_history_message_record,
     export_session_history_markdown_record,
     find_session_history_evidence_trace,
+    get_session_run_trace_record,
     get_session_memory_activity_record,
-    list_session_run_trace_records,
     list_session_history_messages,
     update_session_history_message_feedback_record,
     update_session_history_message_record,
@@ -71,10 +71,10 @@ async def get_session_run_trace(
 ):
     """获取会话运行生命周期事件，用于 AIOps Run Trace。"""
     try:
-        events = list_session_run_trace_records(session_id, limit=limit)
+        trace = get_session_run_trace_record(session_id, limit=limit)
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
-    return ResponseModel(**session_run_trace_response_kwargs(events))
+    return ResponseModel(**session_run_trace_response_kwargs(trace["events"], trace["runs"]))
 
 
 @router.delete("/session/{session_id}/history", response_model=ResponseModel)
