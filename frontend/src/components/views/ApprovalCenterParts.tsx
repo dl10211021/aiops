@@ -4,6 +4,8 @@ import type {
   SessionModeSource,
 } from '@/features/sessions/toolPolicyPresentation'
 import {
+  approvalRiskFilterLabel,
+  type ApprovalRiskFilter,
   type ApprovalMetricTone,
   type ApprovalStatusFilter,
 } from './approvalDisplay'
@@ -16,6 +18,8 @@ const STATUS_OPTIONS: Array<{ id: ApprovalStatusFilter; label: string }> = [
   { id: 'timeout', label: '已超时' },
   { id: 'all', label: '全部' },
 ]
+
+const RISK_OPTIONS: ApprovalRiskFilter[] = ['all', 'destructive', 'external_effect', 'write', 'skill']
 
 export function ApprovalStatusFilters({
   status,
@@ -39,6 +43,45 @@ export function ApprovalStatusFilters({
           {item.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+export function ApprovalQueueFilters({
+  riskFilter,
+  search,
+  onRiskFilterChange,
+  onSearchChange,
+}: {
+  riskFilter: ApprovalRiskFilter
+  search: string
+  onRiskFilterChange: (filter: ApprovalRiskFilter) => void
+  onSearchChange: (value: string) => void
+}) {
+  return (
+    <div className="ops-data-toolbar mb-5 grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="flex flex-wrap gap-2">
+        {RISK_OPTIONS.map((item) => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => onRiskFilterChange(item)}
+            className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+              riskFilter === item
+                ? 'border-ops-accent bg-ops-accent text-ops-dark'
+                : 'border-ops-surface1 bg-ops-surface0 text-ops-subtext hover:text-ops-text'
+            }`}
+          >
+            {approvalRiskFilterLabel(item)}
+          </button>
+        ))}
+      </div>
+      <input
+        value={search}
+        onChange={(event) => onSearchChange(event.target.value)}
+        className="ops-control h-9 w-full px-3 text-sm"
+        placeholder="搜索审批 ID、工具、会话、资产"
+      />
     </div>
   )
 }
@@ -75,8 +118,10 @@ export function ApprovalList({
   onExecute,
   resolveSessionMode,
   resolveSessionModeSourceLabel,
+  totalCount,
 }: {
   approvals: ApprovalRequest[]
+  totalCount: number
   loading: boolean
   busyId: string | null
   onApprove: (approval: ApprovalRequest) => void
@@ -94,7 +139,7 @@ export function ApprovalList({
             <p className="mt-1 text-xs text-ops-subtext">参数和上下文已由后端脱敏，审批动作会写入审计状态。</p>
           </div>
           <span className="ops-control px-3 py-1 text-xs text-ops-accent">
-            当前 {approvals.length} 条
+            当前 {approvals.length}/{totalCount} 条
           </span>
         </div>
       </div>

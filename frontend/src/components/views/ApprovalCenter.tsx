@@ -12,6 +12,7 @@ import {
   ApprovalEmptyState,
   ApprovalList,
   ApprovalMetric,
+  ApprovalQueueFilters,
   ApprovalStatusFilters,
 } from './ApprovalCenterParts'
 import { useApprovalCenterData } from './useApprovalCenterData'
@@ -20,6 +21,8 @@ export default function ApprovalCenter() {
   const sessions = useStore((state) => state.sessions)
   const {
     approvals,
+    approvalSearch,
+    approvalTotal,
     busyId,
     counts,
     decisionNote,
@@ -30,9 +33,12 @@ export default function ApprovalCenter() {
     loading,
     openDecision,
     operator,
+    riskFilter,
+    setApprovalSearch,
     setDecisionNote,
     setDecisionTarget,
     setOperator,
+    setRiskFilter,
     setStatus,
     status,
     submitDecision,
@@ -72,6 +78,12 @@ export default function ApprovalCenter() {
         />
 
         <ApprovalStatusFilters status={status} onChange={setStatus} />
+        <ApprovalQueueFilters
+          riskFilter={riskFilter}
+          search={approvalSearch}
+          onRiskFilterChange={setRiskFilter}
+          onSearchChange={setApprovalSearch}
+        />
 
         {error && (
           <div className="mb-4 rounded-lg border border-ops-alert/35 bg-ops-alert/10 px-4 py-3 text-sm text-ops-alert">
@@ -89,6 +101,7 @@ export default function ApprovalCenter() {
         {loading || approvals.length > 0 ? (
           <ApprovalList
             approvals={approvals}
+            totalCount={approvalTotal}
             loading={loading}
             busyId={busyId}
             resolveSessionMode={resolveSessionModeWithSourceForList}

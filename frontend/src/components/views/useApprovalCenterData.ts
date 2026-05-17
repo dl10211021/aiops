@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { decideApproval, executeApproval, getApprovals } from '@/api/approvals'
 import { useStore } from '@/store'
 import type { ApprovalRequest } from '@/types'
-import type { ApprovalStatusFilter } from './approvalDisplay'
+import type { ApprovalRiskFilter, ApprovalStatusFilter } from './approvalDisplay'
 
 export function useApprovalCenterData() {
   const addToast = useStore((s) => s.addToast)
   const [status, setStatus] = useState<ApprovalStatusFilter>('pending')
+  const [riskFilter, setRiskFilter] = useState<ApprovalRiskFilter>('all')
+  const [approvalSearch, setApprovalSearch] = useState('')
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
   const [allApprovals, setAllApprovals] = useState<ApprovalRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,6 +46,14 @@ export function useApprovalCenterData() {
     }
     return next
   }, [allApprovals])
+
+  const visibleApprovals = useMemo(() => {
+    const query = approvalSearch.trim().toLowerCase()
+    return approvals.filter((item) => (
+      approvalMatchesRiskFilter(item, riskFilter)
+      && (!query || approvalSearchText(item).includes(query))
+    ))
+  }, [approvalSearch, approvals, riskFilter])
 
   const openDecision = (approval: ApprovalRequest, approved: boolean) => {
     setDecisionTarget({ approval, approved })
@@ -91,7 +101,9 @@ export function useApprovalCenterData() {
   }
 
   return {
-    approvals,
+    approvals: visibleApprovals,
+    approvalSearch,
+    approvalTotal: approvals.length,
     busyId,
     counts,
     decisionNote,
@@ -102,11 +114,49 @@ export function useApprovalCenterData() {
     loading,
     openDecision,
     operator,
+    riskFilter,
+    setApprovalSearch,
     setDecisionNote,
     setDecisionTarget,
     setOperator,
+    setRiskFilter,
     setStatus,
     status,
     submitDecision,
   }
+}
+
+function approvalMatchesRiskFilter(approval: ApprovalRequest, filter: ApprovalRiskFilter) {
+  if (filter === 'all') return true
+  const policy = approval.metadata?.tool_policy
+  const operationMode = String(policy?.operation_mode || '')
+  if (filter === 'destructive') return Boolean(policy?.destructive) || operationMode === 'destructive'
+  if (filter === 'external_effect') return operationMode === 'external_effect'
+  if (filter === 'write') {
+    return ['write', 'read_write'].includes(operationMode)
+      || policy?.approval_policy === 'guarded_write'
+  }
+  if (filter === 'skill') {
+    return Boolean(approval.metadata?.skill_change || approval.metadata?.skill_rollback)
+      || approval.tool_name.includes('skill')
+  }
+  return true
+}
+
+function approvalSearchText(approval: ApprovalRequest) {
+  const context = approval.context || {}
+  const requestedAction = approval.metadata?.requested_action
+  return [
+    approval.id,
+    approval.tool_call_id,
+    approval.session_id,
+    approval.tool_name,
+    approval.reason,
+    context.host,
+    context.remark,
+    context.asset_type,
+    context.protocol,
+    requestedAction?.label,
+    requestedAction?.kind,
+  ].filter(Boolean).join(' ').toLowerCase()
 }

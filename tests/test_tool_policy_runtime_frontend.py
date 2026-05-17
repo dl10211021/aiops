@@ -438,3 +438,33 @@ def test_approval_row_shows_requested_action_separately_from_policy():
     assert "const requestedAction = approval.metadata?.requested_action" in approval_row
     assert "实际动作：{requestedAction.label}" in approval_row
     assert "title={requestedAction.kind || 'requested_action'}" in approval_row
+
+
+def test_approval_center_exposes_risk_filters_and_search():
+    center = Path("frontend/src/components/views/ApprovalCenter.tsx").read_text(encoding="utf-8")
+    parts = Path("frontend/src/components/views/ApprovalCenterParts.tsx").read_text(encoding="utf-8")
+    data = Path("frontend/src/components/views/useApprovalCenterData.ts").read_text(encoding="utf-8")
+    display = Path("frontend/src/components/views/approvalDisplay.ts").read_text(encoding="utf-8")
+
+    assert "ApprovalQueueFilters" in center
+    assert "riskFilter={riskFilter}" in center
+    assert "search={approvalSearch}" in center
+    assert "onRiskFilterChange={setRiskFilter}" in center
+    assert "onSearchChange={setApprovalSearch}" in center
+    assert "totalCount={approvalTotal}" in center
+    assert "export type ApprovalRiskFilter" in display
+    assert "approvalRiskFilterLabel" in display
+    assert "破坏性" in display
+    assert "外发/通知" in display
+    assert "写入变更" in display
+    assert "技能变更" in display
+    assert "const RISK_OPTIONS: ApprovalRiskFilter[]" in parts
+    assert "搜索审批 ID、工具、会话、资产" in parts
+    assert "当前 {approvals.length}/{totalCount} 条" in parts
+    assert "const [riskFilter, setRiskFilter] = useState<ApprovalRiskFilter>('all')" in data
+    assert "const [approvalSearch, setApprovalSearch] = useState('')" in data
+    assert "approvalMatchesRiskFilter(item, riskFilter)" in data
+    assert "approvalSearchText(item).includes(query)" in data
+    assert "approvalTotal: approvals.length" in data
+    assert "function approvalMatchesRiskFilter" in data
+    assert "function approvalSearchText" in data
