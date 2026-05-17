@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from core.asset_protocols import get_asset_catalog
 from core.agent_prompts import (
+    build_chat_prompt_manifest,
     render_chat_system_prompt,
     render_headless_system_prompt,
 )
@@ -28,6 +29,26 @@ class AgentPromptTests(unittest.TestCase):
                 f"D:/skills/{name}" for name in active_skills
             ],
         )
+
+    def test_chat_prompt_manifest_records_modules_without_prompt_text(self):
+        manifest = build_chat_prompt_manifest(
+            session_context=self._session_context(),
+            has_skill_instructions=True,
+            has_asset_profile=True,
+            has_rag_context=False,
+            has_ltm_context=True,
+        )
+
+        self.assertEqual(manifest["version"], 1)
+        self.assertEqual(manifest["surface"], "chat")
+        self.assertEqual(manifest["asset_type"], "linux")
+        self.assertEqual(manifest["protocol"], "ssh")
+        self.assertIn("evidence_contract", manifest["modules"])
+        self.assertIn("context_precedence", manifest["modules"])
+        self.assertTrue(manifest["enabled"]["skill_instructions"])
+        self.assertFalse(manifest["enabled"]["rag_context"])
+        self.assertNotIn("BASE", str(manifest))
+        self.assertNotIn("SKILL-INSTRUCTIONS", str(manifest))
 
     @patch("core.agent_prompts.protocol_tool_list")
     @patch("core.agent_prompts.protocol_tool_guidance")

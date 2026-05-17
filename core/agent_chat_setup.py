@@ -7,7 +7,7 @@ from typing import Any, Protocol
 
 from core.agent_ltm import retrieve_ltm_context_with_references
 from core.agent_message_history import build_chat_message_history
-from core.agent_prompts import render_chat_system_prompt
+from core.agent_prompts import build_chat_prompt_manifest, render_chat_system_prompt
 from core.agent_session_context import AgentSessionContext, build_agent_session_context
 from core.agent_profiles import load_agent_profile_prompt
 from core.assistant_model_config import assistant_task_enabled
@@ -207,13 +207,14 @@ async def prepare_chat_agent_run(
         session_context=session_context,
         profile=asset_profile,
     )
+    skill_instructions = dispatcher.get_skill_instructions(
+        active_skills,
+        allow_local_scripts=session_context.local_skill_scripts_allowed,
+    )
     system_prompt = render_chat_system_prompt(
         session_context=session_context,
         base_prompt=base_prompt,
-        skill_instructions=dispatcher.get_skill_instructions(
-            active_skills,
-            allow_local_scripts=session_context.local_skill_scripts_allowed,
-        ),
+        skill_instructions=skill_instructions,
         ltm_context=ltm_result.context,
         asset_profile_prompt=profile_to_system_prompt(asset_profile),
         rag_context=rag_context,
@@ -229,7 +230,15 @@ async def prepare_chat_agent_run(
         user_attachments=user_attachments or [],
         model_name=model_name,
     )
-    context = session_context.tool_context()
+    prompt_modules = build_chat_prompt_manifest(
+        session_context=session_context,
+        has_skill_instructions=bool(str(skill_instructions or "").strip()),
+        has_asset_profile=bool(asset_profile_ref),
+        has_rag_context=bool(str(rag_context or "").strip()),
+        has_ltm_context=bool(str(ltm_result.context or "").strip()),
+        analysis_only=analysis_only,
+    )
+    context = {**session_context.tool_context(), "prompt_modules": prompt_modules}
     if analysis_only:
         context = {**context, "analysis_only": True}
         tools = []

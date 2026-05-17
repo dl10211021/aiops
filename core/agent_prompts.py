@@ -19,6 +19,8 @@ from core.prompt_packs import (
 )
 from core.agent_session_context import AgentSessionContext
 
+PROMPT_MANIFEST_VERSION = 1
+
 
 _CATEGORY_LABELS = {
     "os": "操作系统",
@@ -205,6 +207,52 @@ def render_chat_system_prompt(
 
 {render_context_precedence_prompt()}
 """
+
+
+def build_chat_prompt_manifest(
+    *,
+    session_context: AgentSessionContext,
+    has_skill_instructions: bool,
+    has_asset_profile: bool,
+    has_rag_context: bool,
+    has_ltm_context: bool,
+    analysis_only: bool = False,
+) -> dict:
+    modules = [
+        "agent_profile",
+        "session_context",
+        "asset_credentials",
+        "permission_mode",
+        "trusted_operator_source",
+        "ops_runbook",
+        "evidence_contract",
+        "aiops_behavior",
+        "skill_install",
+        "web_browser",
+        "tool_catalog",
+        "skill_instructions",
+        "asset_profile",
+        "rag_context",
+        "ltm_context",
+        "context_precedence",
+    ]
+    if analysis_only:
+        modules.append("analysis_only")
+    return {
+        "version": PROMPT_MANIFEST_VERSION,
+        "surface": "chat",
+        "asset_type": session_context.asset_type,
+        "protocol": session_context.protocol,
+        "mode": "read_write" if session_context.allow_modifications else "read_only",
+        "modules": modules,
+        "enabled": {
+            "skill_instructions": has_skill_instructions,
+            "asset_profile": has_asset_profile,
+            "rag_context": has_rag_context,
+            "ltm_context": has_ltm_context,
+            "analysis_only": analysis_only,
+        },
+    }
 
 
 def render_headless_system_prompt(

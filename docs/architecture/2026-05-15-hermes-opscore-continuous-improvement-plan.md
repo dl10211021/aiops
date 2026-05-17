@@ -659,3 +659,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只增强候选池元数据和知识库展示，不调用真实模型、不自动批准、不自动发布、不影响资产、告警、巡检或工具执行。
 - 遗留风险：当前是规则化审核，尚未接入真实辅助模型输出；按“功能满足即可收手”，本轮先让审核状态可存、可更新、可见。
 - 下一轮建议：若继续学习治理，再做辅助模型审核接口；否则转向 Prompt 生命周期或 ContextEngine 这类架构缺口。
+
+### 2026-05-17 Round 38：Prompt 模块清单进入 Run Trace
+
+- 完成：聊天会话准备阶段生成 `prompt_modules` manifest，只记录模块名、版本、启用状态、资产类型和权限模式，不保存完整 prompt、Skill 内容、RAG 正文或密钥；Run Hook 上下文白名单携带该清单，后续 Run Trace 可审计本轮注入了哪些 prompt 模块。
+- 验证：`python -m pytest tests/test_agent_prompts.py tests/test_agent_chat_setup.py tests/test_agent_chat_loop.py -q`；提交前继续跑 `python scripts/preflight.py --check-git`、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：Prompt 从“拼装后不可见”推进到“可审计模块生命周期”，接近 Hermes 的 prompt/context governance，同时保留 OpsCore 的脱敏和证据优先边界。
+- OpsCore 主线影响：只增加运行上下文元数据，不改变 prompt 文本、不改变工具选择、不改变模型调用、不影响资产、告警、巡检或审批。
+- 遗留风险：当前只覆盖 chat surface；headless/cron 后续可复用同一 manifest 思路，但本轮先收住，避免大范围重构。
+- 下一轮建议：再做 headless prompt manifest 或 ContextEngine 最小接口，二选一推进。

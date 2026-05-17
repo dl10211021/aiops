@@ -173,6 +173,13 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(run.memory_references[2]["source_type"], "rag")
         self.assertEqual(run.context["session_id"], "sid-1")
         self.assertEqual(run.context["active_skill_paths"], ["D:/skills/skill-creator"])
+        self.assertEqual(run.context["prompt_modules"]["version"], 1)
+        self.assertEqual(run.context["prompt_modules"]["surface"], "chat")
+        self.assertIn("evidence_contract", run.context["prompt_modules"]["modules"])
+        self.assertIn("context_precedence", run.context["prompt_modules"]["modules"])
+        self.assertTrue(run.context["prompt_modules"]["enabled"]["skill_instructions"])
+        self.assertTrue(run.context["prompt_modules"]["enabled"]["rag_context"])
+        self.assertTrue(run.context["prompt_modules"]["enabled"]["ltm_context"])
         self.assertEqual(dispatcher.tool_contexts, [run.context])
 
     async def test_uses_explicit_model_without_default_resolver(self):
@@ -318,6 +325,8 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(run.tools, [])
         self.assertEqual(dispatcher.tool_contexts, [])
         self.assertTrue(run.context["analysis_only"])
+        self.assertTrue(run.context["prompt_modules"]["enabled"]["analysis_only"])
+        self.assertIn("analysis_only", run.context["prompt_modules"]["modules"])
         self.assertIn("本轮终端记录分析模式", run.messages[0]["content"])
         self.assertIn("不得调用任何工具", run.messages[0]["content"])
 
