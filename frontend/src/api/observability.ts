@@ -127,6 +127,24 @@ export async function appendObservabilityRunTraceEvidence(investigationId: strin
   )
 }
 
+export async function syncObservabilityRunTraceEvidence(investigationId: string, payload: {
+  session_ids?: string[]
+  limit?: number
+  confidence?: string
+} = {}) {
+  return request<{
+    sync: { matched_count: number; appended_count: number; skipped_count: number; session_count: number }
+    appended: ObservabilityEvidence[]
+    investigation: ObservabilityInvestigation
+  }>(
+    `/observability/investigations/${encodeURIComponent(investigationId)}/run-trace-evidence/sync`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
 export async function appendObservabilityRootCause(investigationId: string, payload: {
   title: string
   description?: string

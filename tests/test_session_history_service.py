@@ -10,6 +10,7 @@ from core.session_history_service import (
     get_session_memory_activity_record,
     get_session_run_learning_preview_record,
     get_session_run_trace_record,
+    collect_observability_run_trace_evidence_records,
     list_session_run_trace_records,
     list_session_history_messages,
     update_session_history_message_feedback_record,
@@ -225,6 +226,66 @@ class TestSessionHistoryService(unittest.TestCase):
             find_session_history_evidence_trace("sid-1", evidence_id="missing", memory_db=memory_db)
 
         self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_collect_observability_run_trace_evidence_records_matches_investigation(self):
+        memory_db = FakeMemoryDB(
+            [
+                {
+                    "id": 4,
+                    "role": "system",
+                    "content": "tool done",
+                    "memory_type": "aiops_run_trace",
+                    "run_id": "run-1",
+                    "run_event_type": "tool:after",
+                    "run_event_payload": {
+                        "session_id": "sid-1",
+                        "run_id": "run-1",
+                        "tool_name": "linux_execute_command",
+                        "tool_call_id": "call-1",
+                        "evidence_id": "tev-sid-1-call-1",
+                        "status": "done",
+                        "context": {
+                            "investigation_id": "inv-1",
+                            "observability_task_id": "inv-1-os",
+                        },
+                        "evidence": {
+                            "evidence_id": "tev-sid-1-call-1",
+                            "investigation_id": "inv-1",
+                            "observability_task_id": "inv-1-os",
+                            "output_preview": "load average ok",
+                        },
+                    },
+                },
+                {
+                    "id": 5,
+                    "role": "system",
+                    "content": "other tool",
+                    "memory_type": "aiops_run_trace",
+                    "run_id": "run-2",
+                    "run_event_type": "tool:after",
+                    "run_event_payload": {
+                        "session_id": "sid-1",
+                        "run_id": "run-2",
+                        "tool_name": "db_execute_query",
+                        "tool_call_id": "call-2",
+                        "evidence_id": "tev-sid-1-call-2",
+                        "context": {"investigation_id": "other"},
+                    },
+                },
+            ]
+        )
+
+        records = collect_observability_run_trace_evidence_records(
+            "inv-1",
+            session_ids=["sid-1"],
+            memory_db=memory_db,
+        )
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["session_id"], "sid-1")
+        self.assertEqual(records[0]["task_id"], "inv-1-os")
+        self.assertEqual(records[0]["trace_result"]["trace"]["evidenceId"], "tev-sid-1-call-1")
+        self.assertEqual(records[0]["trace_result"]["run"]["run_id"], "run-1")
 
     def test_value_errors_map_to_not_found(self):
         memory_db = FailingMemoryDB(ValueError("message not found"))

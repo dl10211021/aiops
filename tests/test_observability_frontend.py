@@ -75,3 +75,15 @@ def test_observability_frontend_can_backfill_task_evidence():
     assert "evidence_type: 'agent_task_output'" in view
     assert "raw_ref: task.id" in view
     assert "item.id === investigationId ? response.data.investigation : item" in view
+
+
+def test_observability_frontend_can_sync_run_trace_evidence():
+    api = Path("frontend/src/api/observability.ts").read_text(encoding="utf-8")
+    view = Path("frontend/src/components/views/ObservabilityCenter.tsx").read_text(encoding="utf-8")
+
+    assert "syncObservabilityRunTraceEvidence" in api
+    assert "/run-trace-evidence/sync" in api
+    assert "同步 Run Trace" in view
+    assert "onSyncRunTraceEvidence" in view
+    assert "syncInvestigationRunTraceEvidence" in view
+    assert "已同步 Run Trace 证据" in view

@@ -7,6 +7,7 @@ from api.schema_models.common import ResponseModel
 from core.observability.service import catalog_service
 from core.session_history_service import (
     SessionHistoryServiceError,
+    collect_observability_run_trace_evidence_records,
     find_session_history_evidence_trace,
 )
 
@@ -43,6 +44,12 @@ class RunTraceEvidenceAppendRequest(BaseModel):
     tool: str = Field(default="", max_length=120)
     title: str = Field(default="", max_length=160)
     summary: str = Field(default="", max_length=1000)
+    confidence: str = Field(default="confirmed", pattern="^(confirmed|inferred|unknown|pending_review)$")
+
+
+class RunTraceEvidenceSyncRequest(BaseModel):
+    session_ids: list[str] = Field(default_factory=list)
+    limit: int = Field(default=200, ge=1, le=500)
     confidence: str = Field(default="confirmed", pattern="^(confirmed|inferred|unknown|pending_review)$")
 
 
@@ -223,6 +230,64 @@ async def append_observability_run_trace_evidence(investigation_id: str, req: Ru
     return ResponseModel(
         status="success",
         data={"evidence": evidence.model_dump(), "investigation": investigation.model_dump() if investigation else None},
+    )
+
+
+@router.post("/investigations/{investigation_id}/run-trace-evidence/sync", response_model=ResponseModel)
+async def sync_observability_run_trace_evidence(investigation_id: str, req: RunTraceEvidenceSyncRequest):
+    investigation = catalog_service.get_investigation(investigation_id)
+    if not investigation:
+        raise HTTPException(status_code=404, detail="排查事件不存在")
+
+    session_ids = [str(item or "").strip() for item in req.session_ids if str(item or "").strip()]
+    if not session_ids:
+        from connections.ssh_manager import ssh_manager
+
+        session_ids = sorted(str(session_id) for session_id in ssh_manager.active_sessions.keys())
+    existing_refs = {
+        str(evidence.raw_ref or evidence.tool_evidence.get("evidence_id") or "").strip()
+        for evidence in investigation.evidence
+    }
+    records = collect_observability_run_trace_evidence_records(
+        investigation_id,
+        session_ids=session_ids,
+        limit=req.limit,
+    )
+    appended = []
+    skipped = 0
+    for record in records:
+        trace_result = record.get("trace_result") if isinstance(record.get("trace_result"), dict) else {}
+        trace = trace_result.get("trace") if isinstance(trace_result.get("trace"), dict) else {}
+        evidence_id = str(trace.get("evidenceId") or "").strip()
+        if evidence_id and evidence_id in existing_refs:
+            skipped += 1
+            continue
+        evidence = catalog_service.append_run_trace_evidence(
+            investigation_id,
+            session_id=str(record.get("session_id") or ""),
+            trace_result=trace_result,
+            task_id=str(record.get("task_id") or "") or None,
+            confidence=req.confidence,
+        )
+        if evidence:
+            appended.append(evidence.model_dump())
+            if evidence.raw_ref:
+                existing_refs.add(evidence.raw_ref)
+        else:
+            skipped += 1
+    investigation = catalog_service.get_investigation(investigation_id)
+    return ResponseModel(
+        status="success",
+        data={
+            "sync": {
+                "matched_count": len(records),
+                "appended_count": len(appended),
+                "skipped_count": skipped,
+                "session_count": len(session_ids),
+            },
+            "appended": appended,
+            "investigation": investigation.model_dump() if investigation else None,
+        },
     )
 
 

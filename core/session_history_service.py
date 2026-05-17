@@ -133,6 +133,78 @@ def _find_run_trace_evidence_trace(
     return None
 
 
+def collect_observability_run_trace_evidence_records(
+    investigation_id: str,
+    *,
+    session_ids: list[str],
+    limit: int = 200,
+    memory_db: Any | None = None,
+) -> list[dict]:
+    target_investigation_id = str(investigation_id or "").strip()
+    if not target_investigation_id:
+        return []
+
+    records: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    store = _resolve_memory_db(memory_db)
+    for session_id in [str(item or "").strip() for item in session_ids]:
+        if not session_id:
+            continue
+        events = list_session_run_trace_events(store, session_id, limit=limit)
+        for event in reversed(events):
+            if event.get("event_type") != "tool:after":
+                continue
+            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+            evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
+            payload_investigation_id = str(
+                evidence.get("investigation_id") or context.get("investigation_id") or ""
+            ).strip()
+            if payload_investigation_id != target_investigation_id:
+                continue
+            evidence_id = str(payload.get("evidence_id") or evidence.get("evidence_id") or "").strip()
+            tool_call_id = str(payload.get("tool_call_id") or evidence.get("tool_call_id") or "").strip()
+            dedupe_key = (session_id, evidence_id, tool_call_id)
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            tool_name = str(payload.get("tool_name") or payload.get("tool") or evidence.get("tool_name") or "").strip()
+            result_meta = payload.get("result_meta") if isinstance(payload.get("result_meta"), dict) else {}
+            records.append(
+                {
+                    "session_id": session_id,
+                    "task_id": str(
+                        evidence.get("observability_task_id")
+                        or context.get("observability_task_id")
+                        or ""
+                    ).strip(),
+                    "trace_result": {
+                        "source": "run_trace",
+                        "trace": {
+                            "tool": tool_name,
+                            "toolCallId": tool_call_id,
+                            "evidenceId": evidence_id,
+                            "status": str(payload.get("status") or evidence.get("result_status") or ""),
+                            "resultMeta": result_meta,
+                            "evidence": evidence,
+                        },
+                        "message": {
+                            "id": event.get("id"),
+                            "role": "system",
+                            "created_at": event.get("created_at") or event.get("event_ts"),
+                            "preview": event.get("summary") or "",
+                        },
+                        "run": {
+                            "run_id": event.get("run_id") or payload.get("run_id") or "",
+                            "event_type": event.get("event_type") or "",
+                            "event_ts": event.get("event_ts"),
+                        },
+                    },
+                }
+            )
+    return records
+
+
 def get_session_run_trace_record(
     session_id: str,
     *,

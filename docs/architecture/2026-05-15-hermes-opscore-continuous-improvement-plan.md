@@ -992,3 +992,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只增加运行事件和证据元数据，不自动调用可观测服务、不改变工具执行权限、不改变审批、不影响告警、巡检或资产中心。
 - 遗留风险：当前证据已经具备可关联标识，但还没有做“自动把匹配 Run Trace evidence 写入 investigation”的后台任务；下一步可在可观测页或服务层提供一键同步。
 - 下一轮建议：这个功能到此收手。后续更高价值方向是做可观测 Run Trace 证据一键同步，或把主/副模型审核接入学习候选 `review_events`。
+
+### 2026-05-18 Round 75：可观测 Run Trace 证据一键同步
+
+- 完成：新增 `/observability/investigations/{id}/run-trace-evidence/sync`，默认扫描当前在线会话 Run Trace，匹配 `investigation_id` 后把未挂接过的工具证据写入 investigation；可观测页新增“同步 Run Trace”按钮并刷新证据链。
+- 验证：`python -m pytest tests/test_session_history_service.py tests/test_observability_routes.py tests/test_observability_investigation.py tests/test_observability_frontend.py -q`；`python -m compileall core api`；提交前继续跑 frontend build、preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：从“子 Agent 运行证据带标识”推进到“可在排查事件里一键收集这些真实工具证据”，形成 investigation -> multi-agent -> run trace -> evidence 的人工确认闭环。
+- OpsCore 主线影响：只做显式按钮同步，不后台自动写入、不自动生成根因、不改变工具执行权限或审批、不影响告警、巡检、资产中心。
+- 遗留风险：当前同步范围默认是在线会话最近 Run Trace；离线历史、大规模分页和自动定时同步仍需要单独设计。
+- 下一轮建议：这个功能到此收手。后续更高价值方向是把主/副模型审核接入学习候选 `review_events`，或做可观测排查证据的根因排序辅助。

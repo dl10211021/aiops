@@ -14,6 +14,7 @@ import {
   getObservabilityProfile,
   getObservabilityProfilePacks,
   getObservabilitySystems,
+  syncObservabilityRunTraceEvidence,
   unbindObservabilityComponent,
   updateObservabilityComponent,
 } from '@/api/observability'
@@ -449,6 +450,22 @@ export default function ObservabilityCenter() {
     }
   }
 
+  const syncInvestigationRunTraceEvidence = async (investigationId: string) => {
+    setLoading(true)
+    setError('')
+    try {
+      const response = await syncObservabilityRunTraceEvidence(investigationId)
+      setInvestigations((items) => items.map((item) => (
+        item.id === investigationId ? response.data.investigation : item
+      )))
+      setError(`已同步 Run Trace 证据 ${response.data.sync.appended_count} 条，跳过 ${response.data.sync.skipped_count} 条`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Run Trace 证据同步失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const composeInvestigationDispatchDraft = (investigation: ObservabilityInvestigation) => {
     const sessionIds = Object.keys(sessions)
     const activeSessionId = currentSessionId || sessionIds[0]
@@ -815,6 +832,7 @@ export default function ObservabilityCenter() {
                       onAppendTaskEvidence={(task) => void appendTaskEvidence(item.id, task)}
                       onAppendRootCause={() => void appendEvidenceRootCause(item)}
                       onComposeDispatchDraft={() => composeInvestigationDispatchDraft(item)}
+                      onSyncRunTraceEvidence={() => void syncInvestigationRunTraceEvidence(item.id)}
                     />
                   ))}
                 </div>
@@ -1141,12 +1159,14 @@ function InvestigationCard({
   onAppendTaskEvidence,
   onAppendRootCause,
   onComposeDispatchDraft,
+  onSyncRunTraceEvidence,
 }: {
   investigation: ObservabilityInvestigation
   onAppendEvidence: () => void
   onAppendTaskEvidence: (task: ObservabilityInvestigation['tasks'][number]) => void
   onAppendRootCause: () => void
   onComposeDispatchDraft: () => void
+  onSyncRunTraceEvidence: () => void
 }) {
   const [expandedEvidenceId, setExpandedEvidenceId] = useState<string | null>(null)
   const taskEvidenceCounts = (investigation.evidence || []).reduce<Record<string, { total: number; runTrace: number }>>((acc, evidence) => {
@@ -1172,6 +1192,9 @@ function InvestigationCard({
           </button>
           <button className="ops-control rounded-lg px-3 py-1.5 text-xs font-bold" onClick={onAppendRootCause}>
             生成根因候选
+          </button>
+          <button className="ops-control rounded-lg px-3 py-1.5 text-xs font-bold" onClick={onSyncRunTraceEvidence}>
+            同步 Run Trace
           </button>
           <button className="ops-primary-action rounded-lg px-3 py-1.5 text-xs font-bold" onClick={onComposeDispatchDraft}>
             生成协同指令

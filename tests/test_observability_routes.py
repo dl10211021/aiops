@@ -237,6 +237,59 @@ class TestObservabilityRoutes(unittest.TestCase):
         self.assertIn("select count(*)", evidence["summary"])
         self.assertEqual(response.data["investigation"]["evidence_count"], 1)
 
+    def test_sync_run_trace_evidence_route_appends_matching_records_once(self):
+        create_response = asyncio.run(
+            observability_routes.create_observability_investigation(
+                observability_routes.InvestigationCreateRequest(
+                    system_id="global-portal-test",
+                    title="Run Trace 同步测试",
+                    symptom="同步子 Agent 证据",
+                    severity="warning",
+                )
+            )
+        )
+        investigation_id = create_response.data["investigation"]["id"]
+        trace_records = [
+            {
+                "session_id": "sid-db",
+                "task_id": f"{investigation_id}-summary",
+                "trace_result": {
+                    "source": "run_trace",
+                    "trace": {
+                        "tool": "db_execute_query",
+                        "toolCallId": "call-db-1",
+                        "evidenceId": "tev-sid-db-call-db-1",
+                        "status": "done",
+                        "evidence": {
+                            "evidence_id": "tev-sid-db-call-db-1",
+                            "output_preview": "42",
+                        },
+                    },
+                    "run": {"run_id": "run-1", "event_type": "tool:after"},
+                },
+            }
+        ]
+
+        with patch.object(observability_routes, "collect_observability_run_trace_evidence_records", return_value=trace_records):
+            first = asyncio.run(
+                observability_routes.sync_observability_run_trace_evidence(
+                    investigation_id,
+                    observability_routes.RunTraceEvidenceSyncRequest(session_ids=["sid-db"]),
+                )
+            )
+            second = asyncio.run(
+                observability_routes.sync_observability_run_trace_evidence(
+                    investigation_id,
+                    observability_routes.RunTraceEvidenceSyncRequest(session_ids=["sid-db"]),
+                )
+            )
+
+        self.assertEqual(first.data["sync"]["matched_count"], 1)
+        self.assertEqual(first.data["sync"]["appended_count"], 1)
+        self.assertEqual(second.data["sync"]["matched_count"], 1)
+        self.assertEqual(second.data["sync"]["appended_count"], 0)
+        self.assertEqual(second.data["investigation"]["evidence_count"], 1)
+
     def test_bind_asset_and_session_routes_return_updated_profile(self):
         asset_response = asyncio.run(
             observability_routes.bind_observability_asset(
