@@ -393,6 +393,34 @@ export default function ObservabilityCenter() {
     }
   }
 
+  const appendTaskEvidence = async (
+    investigationId: string,
+    task: ObservabilityInvestigation['tasks'][number],
+  ) => {
+    setLoading(true)
+    setError('')
+    try {
+      const response = await appendObservabilityEvidence(investigationId, {
+        title: `${task.agent_role} 输出摘要`,
+        summary: task.output_summary || 'Agent 任务输出待补充。',
+        evidence_type: 'agent_task_output',
+        task_id: task.id,
+        component_id: task.target_component_id || undefined,
+        source_id: task.source_id || undefined,
+        raw_ref: task.id,
+        raw_excerpt: task.output_summary || '',
+        confidence: task.status === 'completed' ? 'confirmed' : 'pending_review',
+      })
+      setInvestigations((items) => items.map((item) => (
+        item.id === investigationId ? response.data.investigation : item
+      )))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '任务证据回填失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const appendEvidenceRootCause = async (investigation: ObservabilityInvestigation) => {
     const evidenceIds = (investigation.evidence || []).map((item) => item.id)
     if (evidenceIds.length === 0) {
@@ -784,6 +812,7 @@ export default function ObservabilityCenter() {
                       key={item.id}
                       investigation={item}
                       onAppendEvidence={() => void appendSampleEvidence(item.id)}
+                      onAppendTaskEvidence={(task) => void appendTaskEvidence(item.id, task)}
                       onAppendRootCause={() => void appendEvidenceRootCause(item)}
                       onComposeDispatchDraft={() => composeInvestigationDispatchDraft(item)}
                     />
@@ -1109,11 +1138,13 @@ function DiscoveryCandidateCard({ candidate }: { candidate: ObservabilityDiscove
 function InvestigationCard({
   investigation,
   onAppendEvidence,
+  onAppendTaskEvidence,
   onAppendRootCause,
   onComposeDispatchDraft,
 }: {
   investigation: ObservabilityInvestigation
   onAppendEvidence: () => void
+  onAppendTaskEvidence: (task: ObservabilityInvestigation['tasks'][number]) => void
   onAppendRootCause: () => void
   onComposeDispatchDraft: () => void
 }) {
@@ -1146,16 +1177,24 @@ function InvestigationCard({
           <div className="mt-2 space-y-2">
             {(investigation.tasks?.length ? investigation.tasks : investigation.agent_plan.map((step, index) => ({
               id: `${investigation.id}-plan-${index}`,
+              investigation_id: investigation.id,
               output_summary: step,
               agent_role: `Agent ${index + 1}`,
               status: 'pending',
               task_type: 'plan',
+              input_json: {},
+              started_at: '',
+              finished_at: '',
+              error_message: '',
             }))).map((task, index) => (
-              <div key={task.id} className="grid gap-1 rounded bg-ops-dark/30 px-3 py-2 text-xs text-ops-subtext md:grid-cols-[24px_130px_1fr_auto]">
+              <div key={task.id} className="grid gap-1 rounded bg-ops-dark/30 px-3 py-2 text-xs text-ops-subtext md:grid-cols-[24px_130px_1fr_auto_auto]">
                 <span className="font-mono text-ops-accent">{index + 1}</span>
                 <span className="font-bold text-ops-text">{task.agent_role}</span>
                 <span>{task.output_summary}</span>
                 <span className="font-mono text-ops-overlay">{task.status}</span>
+                <button className="text-xs font-bold text-ops-accent hover:text-ops-accent2" onClick={() => onAppendTaskEvidence(task)}>
+                  回填证据
+                </button>
               </div>
             ))}
           </div>

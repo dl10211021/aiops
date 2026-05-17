@@ -91,9 +91,15 @@ export async function appendObservabilityEvidence(investigationId: string, paylo
   title: string
   summary?: string
   evidence_type?: string
+  task_id?: string
+  component_id?: string
+  source_id?: string
+  raw_ref?: string
+  raw_excerpt?: string
+  tool_evidence?: Record<string, unknown>
   confidence?: string
 }) {
-  return request<{ investigation: ObservabilityInvestigation }>(
+  return request<{ evidence: ObservabilityEvidence; investigation: ObservabilityInvestigation }>(
     `/observability/investigations/${encodeURIComponent(investigationId)}/evidence`,
     {
       method: 'POST',

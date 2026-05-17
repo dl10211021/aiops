@@ -54,3 +54,17 @@ def test_observability_frontend_builds_multi_agent_dispatch_draft():
     assert "window.dispatchEvent(new CustomEvent('opscore:chat-draft'" in view
     assert "setView('chat')" in view
     assert "window.addEventListener('opscore:chat-draft'" in chat_window
+
+
+def test_observability_frontend_can_backfill_task_evidence():
+    api = Path("frontend/src/api/observability.ts").read_text(encoding="utf-8")
+    view = Path("frontend/src/components/views/ObservabilityCenter.tsx").read_text(encoding="utf-8")
+
+    assert "task_id?: string" in api
+    assert "raw_ref?: string" in api
+    assert "回填证据" in view
+    assert "appendTaskEvidence" in view
+    assert "task_id: task.id" in view
+    assert "evidence_type: 'agent_task_output'" in view
+    assert "raw_ref: task.id" in view
+    assert "item.id === investigationId ? response.data.investigation : item" in view

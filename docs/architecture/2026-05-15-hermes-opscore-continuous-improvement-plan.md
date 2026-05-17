@@ -920,3 +920,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只改前端草稿生成，不新增后端调度 API，不改 `dispatch_sub_agents` 执行边界，不影响告警、巡检、资产中心或审批。
 - 遗留风险：当前目标匹配交给主会话模型基于 `list_active_sessions` 决定；还没有在可观测页直接展示会话多选器。
 - 下一轮建议：这个功能到此收手。后续更高价值方向是可观测调查结果回填证据，或做离线审计报表。
+
+### 2026-05-18 Round 67：可观测任务输出回填证据
+
+- 完成：可观测排查事件的 Agent 任务行新增“回填证据”，复用已有 `/observability/investigations/{id}/evidence`，把任务 `output_summary` 作为 `agent_task_output` 证据草稿写回证据链，并保留 `task_id/raw_ref/raw_excerpt`。
+- 验证：`python -m pytest tests/test_observability_frontend.py::test_observability_frontend_can_backfill_task_evidence -q`；提交前继续跑 frontend build、preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：可观测任务从“计划和指令草稿”推进到“任务输出可进入证据链”，开始形成任务 -> 证据 -> 根因候选的闭环。
+- OpsCore 主线影响：复用既有证据 API，不新增后端接口，不改变任务调度和执行，不影响告警、巡检、资产中心或审批。
+- 遗留风险：当前回填的是任务摘要草稿，不是自动读取真实子 Agent 运行结果；真实结果仍应通过 Run Trace 证据挂接补齐。
+- 下一轮建议：这个功能到此收手。后续更高价值方向是做离线审计报表，或把子 Agent Run Trace 结果自动关联到对应可观测任务。
