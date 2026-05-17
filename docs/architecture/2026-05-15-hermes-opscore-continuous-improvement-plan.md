@@ -560,3 +560,21 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：审批详情入口只读，不提供批准、拒绝或执行动作，不改变审批决策、工具执行、资产、巡检、通知或告警链路。
 - 遗留风险：证据和审批详情弹窗仍在 Run Trace 面板内部各自实现，和知识库、报告页还没有共用组件。
 - 下一轮建议：抽出通用 `EvidenceRefButton` / `ApprovalRefButton` 或 Run Trace detail components，减少知识库、报告、Run Trace 的重复实现。
+
+### 2026-05-17 Round 27：Run Trace 学习候选提交去重
+
+- 完成：Run Trace 学习候选提交按 `session_id + run_id` 查重；重复提交时返回已有 Runbook 学习候选，不再重复写入候选池；学习候选记录保留 `run_id`，便于后续审计和前端定位来源运行。
+- 验证：`python -m pytest tests/test_session_history_service.py tests/test_file_memory_store.py -q` 通过，38 passed；`python scripts/preflight.py --check-git` 通过，1298 tests；`python scripts/worktree_audit.py --check-staged` 通过；GitNexus staged 变更检测已复核。
+- Hermes 差距变化：学习候选不再因为重复点击或重新打开预览而产生多份相同草稿，候选池生命周期更接近可治理队列。
+- OpsCore 主线影响：只影响学习候选提交路径，不改变工具执行、审批、资产、巡检、通知或告警链路。
+- 遗留风险：后端已返回 `deduped`，但前端如果不展示去重状态，用户仍会误以为又创建了一条候选。
+- 下一轮建议：前端展示“已存在候选”，让重复提交结果和真实后端行为一致。
+
+### 2026-05-17 Round 28：Run Trace 学习候选重复提交反馈
+
+- 完成：前端 `SessionRunLearningCandidateResult` 补充 `deduped` 字段；Run Trace 学习预览弹窗在重复提交时显示“已存在候选”，按钮也同步进入已存在状态，避免误导用户继续重复操作。
+- 验证：`python -m pytest tests/test_tool_policy_runtime_frontend.py -q` 通过，17 passed；`cd frontend && npm run build` 通过。
+- Hermes 差距变化：候选生成从“后端可去重”推进到“用户可感知去重”，减少学习治理队列里的重复和误操作。
+- OpsCore 主线影响：只改前端反馈和类型，不新增配置、不改变候选状态机、不触碰资产、巡检、告警或审批执行。
+- 遗留风险：学习候选详情仍分散在 Run Trace 弹窗和知识库候选池中，后续可以在满足当前功能后再考虑复用组件。
+- 下一轮建议：停止继续打磨这个小功能，转向 `session_search` 或多 Agent 权限继承这类 Hermes 对标中更高价值的下一项。

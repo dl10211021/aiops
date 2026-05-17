@@ -325,6 +325,7 @@ interface RunTraceLearningPreviewDetail {
   loading?: boolean
   submitting?: boolean
   submittedCandidateId?: string
+  submittedDeduped?: boolean
   error?: string
 }
 
@@ -620,6 +621,7 @@ export default function AiThinkingChainPanel({
         ...runTraceLearningPreview,
         submitting: false,
         submittedCandidateId: response.data.learning_candidate?.id || response.data.candidate?.candidate_id || '已提交',
+        submittedDeduped: Boolean(response.data.deduped),
       })
     } catch (error: unknown) {
       setRunTraceLearningPreview({
@@ -1226,7 +1228,7 @@ function RunTraceLearningPreviewDialog({
               <div className="flex flex-wrap items-center justify-end gap-2 border-t border-ops-surface0 pt-3">
                 {detail.submittedCandidateId && (
                   <span className="mr-auto rounded-full border border-ops-success/35 bg-ops-success/10 px-2 py-1 text-xs text-ops-success">
-                    已提交：{detail.submittedCandidateId}
+                    {detail.submittedDeduped ? '已存在候选' : '已提交'}：{detail.submittedCandidateId}
                   </span>
                 )}
                 <button
@@ -1236,7 +1238,7 @@ function RunTraceLearningPreviewDialog({
                   className="rounded-md border border-ops-accent/45 bg-ops-accent/12 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/18 disabled:cursor-not-allowed disabled:opacity-45"
                   title="提交后进入学习候选池，仍需人工审核质量清单。"
                 >
-                  {detail.submitting ? '提交中...' : detail.submittedCandidateId ? '已提交候选池' : '提交候选池'}
+                  {detail.submitting ? '提交中...' : detail.submittedCandidateId ? (detail.submittedDeduped ? '已存在候选' : '已提交候选池') : '提交候选池'}
                 </button>
               </div>
             </>

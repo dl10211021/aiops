@@ -302,6 +302,7 @@ export interface SessionRunLearningCandidateResult {
   candidate?: MemoryCandidate
   learning_candidate?: LearningCandidate
   preview?: SessionRunLearningPreview
+  deduped?: boolean
 }
 
 export interface ToolEvidence {
