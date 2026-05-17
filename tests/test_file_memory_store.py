@@ -269,6 +269,8 @@ class FileMemoryStoreTests(unittest.TestCase):
         checklist = {row["key"]: row for row in learning_candidates[0]["quality_checklist"]}
         self.assertIn("source_message", checklist)
         self.assertIn("tool_evidence", checklist)
+        self.assertIn("evidence_action", checklist)
+        self.assertFalse(checklist["evidence_action"]["ok"])
         self.assertIn("steps", checklist)
         self.assertIn("rollback", checklist)
         updated_candidate = self.store.update_learning_candidate_status(
@@ -564,6 +566,9 @@ class FileMemoryStoreTests(unittest.TestCase):
         candidate = self.store.list_candidate_entries(limit=10)[0]
         self.store.resolve_candidate_entry(candidate["candidate_id"], "to_runbook")
         learning_candidate = self.store.list_learning_candidates(limit=10)[0]
+        checklist = {row["key"]: row for row in learning_candidate["quality_checklist"]}
+        self.assertTrue(checklist["tool_evidence"]["ok"])
+        self.assertTrue(checklist["evidence_action"]["ok"])
         updated_quality = self.store.update_learning_candidate_quality_checklist(
             learning_candidate["id"],
             checklist=[

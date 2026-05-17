@@ -883,10 +883,13 @@ class FileMemoryStore:
     ) -> list[dict[str, Any]]:
         has_source = bool(entry.get("source_session_id"))
         has_feedback = bool(metadata.get("feedback_target_message_id"))
-        has_evidence = bool(self._candidate_evidence_refs(metadata))
+        evidence_refs = self._candidate_evidence_refs(metadata)
+        has_evidence = bool(evidence_refs)
+        has_evidence_action = any(self._evidence_ref_action(ref) for ref in evidence_refs)
         common = [
             {"key": "source_message", "label": "来源消息", "ok": has_source and has_feedback},
             {"key": "tool_evidence", "label": "工具证据", "ok": has_evidence},
+            {"key": "evidence_action", "label": "证据动作", "ok": has_evidence_action},
             {"key": "scope", "label": "适用范围", "ok": False},
             {"key": "risk_boundary", "label": "风险边界", "ok": False},
             {"key": "rollback", "label": "回滚方案", "ok": False},
@@ -898,6 +901,17 @@ class FileMemoryStore:
             common.insert(3, {"key": "inputs", "label": "输入参数", "ok": False})
             common.append({"key": "tests", "label": "测试项", "ok": False})
         return common
+
+    def _evidence_ref_action(self, ref: dict[str, Any]) -> str:
+        if not isinstance(ref, dict):
+            return ""
+        return str(
+            ref.get("command_action")
+            or ref.get("sql_action")
+            or ref.get("http_action")
+            or ref.get("action_label")
+            or ""
+        ).strip()
 
     def _normalize_learning_candidate_quality_checklist(self, checklist: Any) -> list[dict[str, Any]]:
         if not isinstance(checklist, list):
