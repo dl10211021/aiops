@@ -157,6 +157,7 @@ function SessionGroupList({
                   <div className={`flex shrink-0 items-center gap-1 transition-opacity ${
                     selected ? 'opacity-90' : 'opacity-0 group-hover/session:opacity-80'
                   }`}>
+                    <GroupPermissionPreview sessions={items} />
                     <button
                       onClick={() => onSetGroupPermission(group, false)}
                       className="rounded-md border border-amber-400/35 bg-amber-400/8 px-1.5 py-0.5 text-[11px] font-semibold text-amber-100 transition-colors hover:bg-amber-400/14"
@@ -289,6 +290,19 @@ function GroupMetrics({ sessions }: { sessions: Session[] }) {
         </span>
       )}
       <span>{metrics.total}</span>
+    </span>
+  )
+}
+
+function GroupPermissionPreview({ sessions }: { sessions: Session[] }) {
+  const metrics = summarizeSessions(sessions)
+  if (metrics.total <= 0) return null
+  return (
+    <span
+      className="rounded-md border border-ops-surface1/60 bg-ops-dark/35 px-1.5 py-0.5 text-[10px] font-semibold text-ops-overlay"
+      title={`将影响 ${metrics.total} 个会话：只读 ${metrics.readonly}，读写 ${metrics.readwrite}`}
+    >
+      {metrics.readonly}只读/{metrics.readwrite}读写
     </span>
   )
 }

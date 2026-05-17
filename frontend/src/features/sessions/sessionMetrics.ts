@@ -3,6 +3,8 @@ import { sessionAttention } from './sessionAttention'
 
 export interface SessionMetrics {
   total: number
+  readonly: number
+  readwrite: number
   running: number
   pendingApproval: number
   pendingInput: number
@@ -12,6 +14,8 @@ export interface SessionMetrics {
 export function summarizeSessions(sessions: Session[]): SessionMetrics {
   const metrics: SessionMetrics = {
     total: sessions.length,
+    readonly: 0,
+    readwrite: 0,
     running: 0,
     pendingApproval: 0,
     pendingInput: 0,
@@ -19,6 +23,8 @@ export function summarizeSessions(sessions: Session[]): SessionMetrics {
   }
 
   for (const session of sessions) {
+    if (session.isReadWriteMode) metrics.readwrite += 1
+    else metrics.readonly += 1
     if (isSessionRunning(session)) metrics.running += 1
     const attention = sessionAttention(session)
     if (attention.type === 'approval') metrics.pendingApproval += 1

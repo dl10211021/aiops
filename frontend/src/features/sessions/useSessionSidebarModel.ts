@@ -331,6 +331,8 @@ export function useSessionSidebarModel() {
     allGroupNames: groupNames,
     pendingApprovalCount: sessionMetrics.pendingApproval,
     pendingInputCount: sessionMetrics.pendingInput,
+    readonlyCount: sessionMetrics.readonly,
+    readwriteCount: sessionMetrics.readwrite,
     runningCount: sessionMetrics.running,
     selectedGroup,
     sessionList: visibleSessions.sessionList,

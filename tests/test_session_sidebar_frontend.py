@@ -29,6 +29,27 @@ def test_session_sidebar_exposes_global_permission_actions():
     assert "暂无活跃会话" in model
 
 
+def test_session_permission_scope_preview_shows_target_counts():
+    metrics = Path("frontend/src/features/sessions/sessionMetrics.ts").read_text(encoding="utf-8")
+    sidebar = Path("frontend/src/features/sessions/SessionSidebar.tsx").read_text(encoding="utf-8")
+    group_list = Path("frontend/src/features/sessions/SessionGroupList.tsx").read_text(encoding="utf-8")
+    model = Path("frontend/src/features/sessions/useSessionSidebarModel.ts").read_text(encoding="utf-8")
+
+    assert "readonly: number" in metrics
+    assert "readwrite: number" in metrics
+    assert "session.isReadWriteMode" in metrics
+    assert "readonlyCount: sessionMetrics.readonly" in model
+    assert "readwriteCount: sessionMetrics.readwrite" in model
+    assert "PermissionScopePreview" in sidebar
+    assert 'label="全局影响"' in sidebar
+    assert "readonly={model.readonlyCount}" in sidebar
+    assert "readwrite={model.readwriteCount}" in sidebar
+    assert "将影响 ${total} 个会话：只读 ${readonly}，读写 ${readwrite}" in sidebar
+    assert "GroupPermissionPreview" in group_list
+    assert "{metrics.readonly}只读/{metrics.readwrite}读写" in group_list
+    assert "将影响 ${metrics.total} 个会话：只读 ${metrics.readonly}，读写 ${metrics.readwrite}" in group_list
+
+
 def test_session_group_bulk_permission_sync_is_optimistic_and_rolls_back_failures():
     effects = Path("frontend/src/features/sessions/sessionSidebarEffects.ts").read_text(encoding="utf-8")
 

@@ -69,6 +69,12 @@ export default function SessionSidebar() {
             全部读写
           </button>
         </div>
+        <PermissionScopePreview
+          label="全局影响"
+          total={model.totalSessionCount}
+          readonly={model.readonlyCount}
+          readwrite={model.readwriteCount}
+        />
 
         <div className="mt-2">
           <SessionSearchBox
@@ -146,6 +152,31 @@ export default function SessionSidebar() {
         </div>
       )}
     </aside>
+  )
+}
+
+function PermissionScopePreview({
+  label,
+  total,
+  readonly,
+  readwrite,
+}: {
+  label: string
+  total: number
+  readonly: number
+  readwrite: number
+}) {
+  if (total <= 0) return null
+  return (
+    <div
+      className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-lg border border-ops-surface1/60 bg-ops-dark/28 px-2 py-1 text-[10px] text-ops-overlay"
+      title={`将影响 ${total} 个会话：只读 ${readonly}，读写 ${readwrite}`}
+    >
+      <span className="font-semibold text-ops-subtext">{label}</span>
+      <span className="rounded-md bg-ops-surface0/65 px-1.5 py-0.5">{total} 个</span>
+      <span className="rounded-md bg-amber-400/8 px-1.5 py-0.5 text-amber-100">只读 {readonly}</span>
+      <span className="rounded-md bg-ops-success/8 px-1.5 py-0.5 text-ops-success">读写 {readwrite}</span>
+    </div>
   )
 }
 
