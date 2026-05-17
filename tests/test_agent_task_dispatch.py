@@ -30,6 +30,14 @@ class AgentTaskDispatchTests(unittest.TestCase):
                     "status": "SUCCESS",
                     "allow_modifications": True,
                     "session_mode": "readwrite",
+                    "permission_boundary": {
+                        "scope": "group",
+                        "parent_mode": "readwrite",
+                        "target_mode": "readwrite",
+                        "effective_mode": "readwrite",
+                        "downgraded": False,
+                        "reason": "allowed",
+                    },
                     "report": "done:sid-1:检查磁盘:True",
                 }
             ],
@@ -62,8 +70,53 @@ class AgentTaskDispatchTests(unittest.TestCase):
         self.assertEqual(calls, [("sid-readonly", False), ("sid-readwrite", False)])
         self.assertFalse(parent_readwrite_results[0]["allow_modifications"])
         self.assertEqual(parent_readwrite_results[0]["session_mode"], "readonly")
+        self.assertEqual(
+            parent_readwrite_results[0]["permission_boundary"],
+            {
+                "scope": "group",
+                "parent_mode": "readwrite",
+                "target_mode": "readonly",
+                "effective_mode": "readonly",
+                "downgraded": True,
+                "reason": "target_readonly",
+            },
+        )
         self.assertFalse(parent_readonly_results[0]["allow_modifications"])
         self.assertEqual(parent_readonly_results[0]["session_mode"], "readonly")
+        self.assertEqual(
+            parent_readonly_results[0]["permission_boundary"],
+            {
+                "scope": "group",
+                "parent_mode": "readonly",
+                "target_mode": "readwrite",
+                "effective_mode": "readonly",
+                "downgraded": False,
+                "reason": "parent_readonly",
+            },
+        )
+
+    def test_dispatch_result_preserves_explicit_global_scope_boundary(self):
+        async def runner(session_id, task_description, allow_mod):
+            return f"mode:{allow_mod}"
+
+        results = asyncio.run(
+            dispatch_group_tasks(
+                [
+                    {
+                        "target_session_id": "sid-1",
+                        "task_description": "全局检查",
+                        "dispatch_scope": "global",
+                    }
+                ],
+                True,
+                task_runner=runner,
+                active_sessions={"sid-1": {"info": {"allow_modifications": True}}},
+            )
+        )
+
+        self.assertEqual(results[0]["permission_boundary"]["scope"], "global")
+        self.assertEqual(results[0]["permission_boundary"]["effective_mode"], "readwrite")
+        self.assertFalse(results[0]["permission_boundary"]["downgraded"])
 
     def test_rejects_invalid_task_definition_before_running(self):
         async def runner(session_id, task_description, allow_mod):

@@ -758,3 +758,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只读前端汇总，不新增接口、不展示 prompt 正文、不改变模型调用、不影响资产、告警、巡检、工具执行或审批。
 - 遗留风险：当前聚合范围是前端最近 6 次运行，不是全局后端报表；按“功能满足即可收手”，本轮只补可见汇总。
 - 下一轮建议：停止继续打磨 Run Trace 汇总条，后续转向更高价值的后端审计报表或工具执行策略可视化。
+
+### 2026-05-17 Round 49：多 Agent 指令边界审计字段
+
+- 完成：`dispatch_group_tasks` 的每个成功子任务结果新增 `permission_boundary`，记录 `scope`、父级模式、目标会话模式、最终执行模式、是否降权和降权原因。
+- 验证：`python -m pytest tests/test_agent_task_dispatch.py -q`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：多 Agent 协同不再只返回最终 `readonly/readwrite`，而是能解释全局/组/会话权限如何合成，后续前端和 Run Trace 可以直接展示。
+- OpsCore 主线影响：只增加后端返回审计字段，不改变实际权限计算，不扩大写权限，不影响告警、巡检、资产中心或工具注册。
+- 遗留风险：当前只是结果字段，前端还没有完整展示全局/组/单会话边界；按“功能满足即可收手”，本轮只补执行结果可审计基础。
+- 下一轮建议：在会话侧边栏或 Run Trace 中展示 `permission_boundary`，让用户能看到全局/组模式下哪些会话被降权。

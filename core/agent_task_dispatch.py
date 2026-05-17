@@ -11,6 +11,32 @@ logger = logging.getLogger(__name__)
 TaskRunner = Callable[[str, str, bool], Awaitable[str]]
 
 
+def _session_mode(allow_modifications: bool) -> str:
+    return "readwrite" if allow_modifications else "readonly"
+
+
+def _permission_boundary(
+    *,
+    scope: str,
+    parent_allow_mod: bool,
+    target_allow_mod: bool,
+) -> dict[str, Any]:
+    effective_allow_mod = bool(parent_allow_mod and target_allow_mod)
+    reason = "allowed"
+    if not parent_allow_mod:
+        reason = "parent_readonly"
+    elif not target_allow_mod:
+        reason = "target_readonly"
+    return {
+        "scope": scope,
+        "parent_mode": _session_mode(parent_allow_mod),
+        "target_mode": _session_mode(target_allow_mod),
+        "effective_mode": _session_mode(effective_allow_mod),
+        "downgraded": bool(parent_allow_mod and not effective_allow_mod),
+        "reason": reason,
+    }
+
+
 def _timeout_label(timeout_seconds: float) -> str:
     timeout_value = float(timeout_seconds)
     return str(int(timeout_value)) if timeout_value.is_integer() else str(timeout_seconds)
@@ -39,6 +65,7 @@ async def dispatch_group_tasks(
     async def run_task(task: dict) -> dict:
         target_sid = task.get("target_session_id")
         task_desc = task.get("task_description")
+        dispatch_scope = str(task.get("dispatch_scope") or "group")
 
         if not target_sid or not task_desc:
             return {
@@ -49,7 +76,13 @@ async def dispatch_group_tasks(
 
         target_info = active_sessions.get(target_sid, {}).get("info", {})
         target_name = target_info.get("remark") or target_info.get("host") or target_sid
-        effective_allow_mod = bool(allow_mod and target_info.get("allow_modifications", False))
+        target_allow_mod = bool(target_info.get("allow_modifications", False))
+        permission_boundary = _permission_boundary(
+            scope=dispatch_scope,
+            parent_allow_mod=bool(allow_mod),
+            target_allow_mod=target_allow_mod,
+        )
+        effective_allow_mod = permission_boundary["effective_mode"] == "readwrite"
 
         log.warning(
             f"🤖 [Swarm 协同] 指挥官 Agent 正在向子会话 {target_name} ({target_sid}) 下达自然语言任务: {task_desc}"
@@ -64,7 +97,8 @@ async def dispatch_group_tasks(
                 "session_id": target_sid,
                 "status": "SUCCESS",
                 "allow_modifications": effective_allow_mod,
-                "session_mode": "readwrite" if effective_allow_mod else "readonly",
+                "session_mode": permission_boundary["effective_mode"],
+                "permission_boundary": permission_boundary,
                 "report": result,
             }
         except asyncio.TimeoutError:
