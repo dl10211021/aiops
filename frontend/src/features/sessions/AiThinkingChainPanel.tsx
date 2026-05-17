@@ -21,6 +21,7 @@ import {
 } from '@/api/sessionHistory'
 import { toolLabel } from '@/utils/assetDisplay'
 import { ApprovalInfo, ApprovalStatusBadge } from '@/components/views/ApprovalCenterShared'
+import { EvidenceReferenceChip } from '@/components/views/EvidenceReferenceChip'
 import { ApprovalSourceSummary } from './ApprovalSourceSummary'
 import { parseJsonRecord } from './jsonRecords'
 import ToolTraceList from './ToolTraceList'
@@ -1274,24 +1275,20 @@ function RunTraceStrip({
                         {(runTraceEvidenceId(event) || runTraceApprovalRef(event)) && (
                           <div className="mt-1 flex flex-wrap gap-1.5">
                             {runTraceEvidenceId(event) && (
-                              <button
-                                type="button"
+                              <EvidenceReferenceChip
+                                kind="evidence"
+                                value={runTraceEvidenceId(event)}
                                 onClick={() => onOpenEvidence(event)}
-                                className="max-w-full truncate rounded-full border border-ops-surface1 px-2 py-0.5 font-mono text-[10px] text-ops-overlay"
                                 title="查看本次工具执行归档的完整证据详情。"
-                              >
-                                证据：{runTraceEvidenceId(event)}
-                              </button>
+                              />
                             )}
                             {runTraceApprovalRef(event) && (
-                              <button
-                                type="button"
+                              <EvidenceReferenceChip
+                                kind="approval"
+                                value={runTraceApprovalRef(event)}
                                 onClick={() => onOpenApproval(event)}
-                                className="max-w-full truncate rounded-full border border-amber-400/35 bg-amber-400/10 px-2 py-0.5 font-mono text-[10px] text-amber-100"
                                 title="查看本次工具执行关联的审批详情。"
-                              >
-                                审批：{runTraceApprovalRef(event)}
-                              </button>
+                              />
                             )}
                           </div>
                         )}

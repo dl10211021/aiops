@@ -839,3 +839,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只改知识库前端本地筛选，不改候选状态机、不改记忆写入、不自动发布 Runbook/Skill，不影响告警、巡检、资产中心或 Hermes 参考目录。
 - 遗留风险：当前仍是本地已加载候选搜索，不是服务端分页/全文索引；按“功能满足即可收手”，先满足几十到几百条候选的定位需求。
 - 下一轮建议：停止继续打磨候选列表。后续转向可观测证据统一组件、Context/Prompt 审计汇总，或在实际数据量变大后再做服务端搜索分页。
+
+### 2026-05-18 Round 58：证据引用按钮复用
+
+- 完成：新增 `EvidenceReferenceChip`，Run Trace 事件里的证据/审批引用和知识库学习候选里的工具证据引用统一使用同一个引用按钮组件。
+- 验证：`python -m pytest tests/test_tool_policy_runtime_frontend.py -q`；`cd frontend && npm run build`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：前端开始把 trace、审批和学习候选的引用入口收束为可复用 UI，后续做统一证据详情、报告引用和可观测证据回查时不会继续复制按钮样式和语义。
+- OpsCore 主线影响：只抽取前端展示组件，不改证据查询 API、不改审批 API、不改变工具执行、告警、巡检或资产中心。
+- 遗留风险：当前只统一“引用入口按钮”，详情弹窗仍保留在各自页面内；按“功能满足即可收手”，本轮不继续扩大到跨页面弹窗重构。
+- 下一轮建议：停止继续拆 UI 组件。后续更高价值方向是 Context/Prompt 审计汇总页，或可观测证据与 Run Trace 的统一详情查询接口。

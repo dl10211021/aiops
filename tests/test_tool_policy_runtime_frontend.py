@@ -208,6 +208,8 @@ def test_memory_candidates_panel_splits_runbook_and_skill_candidates():
     assert "item.review_status === 'runbook_candidate'" in knowledge_parts
     assert "item.review_status === 'skill_candidate'" in knowledge_parts
     assert "const actionable = (item.review_status || 'pending') === 'pending'" in knowledge_parts
+    assert "import { EvidenceReferenceChip } from './EvidenceReferenceChip'" in knowledge_parts
+    assert "value={`${ref.id || ref.tool || ref.type || '-'}" in knowledge_parts
 
 
 def test_memory_quality_panel_summarizes_learning_publish_quality():
@@ -273,8 +275,12 @@ def test_run_trace_events_show_evidence_and_approval_refs():
 
     assert "function runTraceEvidenceId(event: RunTraceEvent)" in source
     assert "function runTraceApprovalRef(event: RunTraceEvent)" in source
-    assert "证据：{runTraceEvidenceId(event)}" in source
-    assert "审批：{runTraceApprovalRef(event)}" in source
+    assert "import { EvidenceReferenceChip } from '@/components/views/EvidenceReferenceChip'" in source
+    assert "<EvidenceReferenceChip" in source
+    assert 'kind="evidence"' in source
+    assert 'kind="approval"' in source
+    assert "value={runTraceEvidenceId(event)}" in source
+    assert "value={runTraceApprovalRef(event)}" in source
     assert "查看本次工具执行归档的完整证据详情" in source
 
 
@@ -290,6 +296,7 @@ def test_run_trace_evidence_refs_open_tool_trace_detail():
     assert "Run Trace 工具证据" in source
     assert "查看本次工具执行归档的完整证据详情" in source
     assert "ToolTraceList items={[trace]} sessionMode={sessionMode}" in source
+    assert "EvidenceReferenceChipProps" in Path("frontend/src/components/views/EvidenceReferenceChip.tsx").read_text(encoding="utf-8")
 
 
 def test_run_trace_approval_refs_open_readonly_approval_detail():

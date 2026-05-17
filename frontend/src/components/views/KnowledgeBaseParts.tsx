@@ -25,6 +25,7 @@ import type {
   SessionMemoryActivity,
 } from '@/types'
 import ToolTraceList from '@/features/sessions/ToolTraceList'
+import { EvidenceReferenceChip } from './EvidenceReferenceChip'
 import { ACCEPTED_KNOWLEDGE_TYPES, knowledgeFileKind } from './knowledgeBaseModel'
 
 export type KnowledgeTab = 'documents' | 'memory'
@@ -2047,16 +2048,15 @@ export function MemoryCandidatesPanel({
                   <div className="text-[11px] font-semibold text-ops-text">工具证据</div>
                   <div className="mt-1 space-y-1">
                     {(item.evidence_refs || []).length > 0 ? item.evidence_refs?.slice(0, 4).map((ref, refIndex) => (
-                      <button
+                      <EvidenceReferenceChip
                         key={`${item.candidate_id}-evidence-${refIndex}`}
-                        type="button"
+                        kind="evidence"
+                        label="证据"
+                        value={`${ref.id || ref.tool || ref.type || '-'}${ref.status ? ` · ${ref.status}` : ''}${candidateEvidenceActionText(ref) ? ` · ${candidateEvidenceActionText(ref)}` : ''}`}
                         onClick={() => onOpenEvidence(item, ref)}
-                        className="block max-w-full truncate text-left font-mono text-[11px] text-ops-accent hover:text-ops-text"
+                        className="text-[11px] text-ops-accent hover:text-ops-text"
                         title={[ref.id || ref.tool || '', candidateEvidenceActionText(ref)].filter(Boolean).join(' · ')}
-                      >
-                        {ref.id || ref.tool || ref.type || '-'}{ref.status ? ` · ${ref.status}` : ''}
-                        {candidateEvidenceActionText(ref) ? ` · ${candidateEvidenceActionText(ref)}` : ''}
-                      </button>
+                      />
                     )) : (
                       <div className="text-[11px] text-ops-overlay">暂无工具证据绑定</div>
                     )}
