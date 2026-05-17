@@ -236,6 +236,36 @@ class TestSessionHistory(unittest.TestCase):
         self.assertEqual(runs[0]["reason"], "工具连续失败")
         self.assertEqual(runs[0]["duration_ms"], 2500)
 
+    def test_list_session_run_trace_events_filters_by_run_id(self):
+        memory_db = FakeMemoryDB()
+        memory_db.messages = [
+            {
+                "id": 1,
+                "role": "system",
+                "content": "run 1",
+                "memory_type": "aiops_run_trace",
+                "run_id": "run-1",
+                "run_event_type": "run:start",
+                "run_event_payload": {"session_id": "sid-1", "run_id": "run-1"},
+                "run_event_ts": 1.0,
+            },
+            {
+                "id": 2,
+                "role": "system",
+                "content": "run 2",
+                "memory_type": "aiops_run_trace",
+                "run_id": "run-2",
+                "run_event_type": "run:start",
+                "run_event_payload": {"session_id": "sid-1", "run_id": "run-2"},
+                "run_event_ts": 2.0,
+            },
+        ]
+
+        events = list_session_run_trace_events(memory_db, "sid-1", run_id="run-2")
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["run_id"], "run-2")
+
     def test_attach_legacy_exec_traces_rebuilds_tool_results_for_ui(self):
         messages = [
             {"role": "user", "content": "检查 Windows 服务"},

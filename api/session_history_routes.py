@@ -68,10 +68,11 @@ async def get_session_history_evidence(
 async def get_session_run_trace(
     session_id: str,
     limit: int = Query(200, ge=1, le=500),
+    run_id: str = "",
 ):
     """获取会话运行生命周期事件，用于 AIOps Run Trace。"""
     try:
-        trace = get_session_run_trace_record(session_id, limit=limit)
+        trace = get_session_run_trace_record(session_id, limit=limit, run_id=run_id)
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_run_trace_response_kwargs(trace["events"], trace["runs"]))

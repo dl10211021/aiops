@@ -219,6 +219,35 @@ class TestSessionHistoryService(unittest.TestCase):
         self.assertEqual(trace["runs"][0]["run_id"], "run-1")
         self.assertEqual(trace["runs"][0]["status"], "completed")
 
+    def test_get_session_run_trace_record_filters_by_run_id(self):
+        memory_db = FakeMemoryDB(
+            [
+                {
+                    "id": 3,
+                    "role": "system",
+                    "content": "run 1",
+                    "memory_type": "aiops_run_trace",
+                    "run_id": "run-1",
+                    "run_event_type": "run:start",
+                    "run_event_payload": {"session_id": "sid-1", "run_id": "run-1"},
+                },
+                {
+                    "id": 4,
+                    "role": "system",
+                    "content": "run 2",
+                    "memory_type": "aiops_run_trace",
+                    "run_id": "run-2",
+                    "run_event_type": "run:start",
+                    "run_event_payload": {"session_id": "sid-1", "run_id": "run-2"},
+                },
+            ]
+        )
+
+        trace = get_session_run_trace_record("sid-1", run_id="run-2", memory_db=memory_db)
+
+        self.assertEqual([event["run_id"] for event in trace["events"]], ["run-2"])
+        self.assertEqual([run["run_id"] for run in trace["runs"]], ["run-2"])
+
     def test_export_session_history_markdown_maps_empty_history_to_404(self):
         memory_db = FakeMemoryDB([])
 

@@ -69,6 +69,7 @@ def list_session_run_trace_events(
     session_id: str,
     *,
     limit: int = 200,
+    run_id: str = "",
 ) -> list[dict]:
     try:
         limit = max(1, min(int(limit or 200), 500))
@@ -80,16 +81,20 @@ def list_session_run_trace_events(
         messages = memory_db.get_messages(session_id, for_ui=True)
         messages = messages[-limit:]
 
+    target_run_id = str(run_id or "").strip()
     events: list[dict] = []
     for message in messages:
         if message.get("memory_type") != RUN_TRACE_MEMORY_TYPE:
             continue
         payload = message.get("run_event_payload")
+        event_run_id = message.get("run_id") or (payload.get("run_id") if isinstance(payload, dict) else "")
+        if target_run_id and event_run_id != target_run_id:
+            continue
         events.append(
             {
                 "id": message.get("_memory_id") or message.get("id"),
                 "created_at": message.get("created_at") or message.get("timestamp"),
-                "run_id": message.get("run_id") or (payload.get("run_id") if isinstance(payload, dict) else ""),
+                "run_id": event_run_id,
                 "event_type": message.get("run_event_type") or "",
                 "event_ts": message.get("run_event_ts"),
                 "payload": payload if isinstance(payload, dict) else {},

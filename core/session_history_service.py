@@ -74,6 +74,7 @@ def get_session_run_trace_record(
     session_id: str,
     *,
     limit: int = 200,
+    run_id: str = "",
     memory_db: Any | None = None,
 ) -> dict:
     try:
@@ -81,6 +82,7 @@ def get_session_run_trace_record(
             _resolve_memory_db(memory_db),
             session_id,
             limit=limit,
+            run_id=run_id,
         )
         return {
             "events": events,
@@ -94,11 +96,13 @@ def list_session_run_trace_records(
     session_id: str,
     *,
     limit: int = 200,
+    run_id: str = "",
     memory_db: Any | None = None,
 ) -> list[dict]:
     return get_session_run_trace_record(
         session_id,
         limit=limit,
+        run_id=run_id,
         memory_db=memory_db,
     )["events"]
 

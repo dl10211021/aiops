@@ -81,6 +81,9 @@ class TestSessionHistoryRoutes(unittest.TestCase):
             )
             activity_response = asyncio.run(session_history_routes.get_session_memory_activity("sid-1"))
             run_trace_response = asyncio.run(session_history_routes.get_session_run_trace("sid-1"))
+            run_trace_filter_response = asyncio.run(
+                session_history_routes.get_session_run_trace("sid-1", run_id="run-missing")
+            )
 
         self.assertEqual(list_response.status, "success")
         self.assertEqual(list_response.data, {"messages": memory_db.messages})
@@ -114,6 +117,7 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         self.assertEqual(activity_response.data["activity"]["summary"]["pending_conflict_count"], 1)
         self.assertEqual(run_trace_response.status, "success")
         self.assertEqual(run_trace_response.data, {"events": [], "runs": []})
+        self.assertEqual(run_trace_filter_response.data, {"events": [], "runs": []})
 
     def test_session_history_export_preserves_response_shape(self):
         with patch(

@@ -59,9 +59,10 @@ export async function getSessionHistoryEvidenceTrace(
 )
 }
 
-export async function getSessionRunTrace(sessionId: string, limit = 120, options?: RequestInit) {
+export async function getSessionRunTrace(sessionId: string, limit = 120, options?: RequestInit, runId?: string) {
   const search = new URLSearchParams()
   search.set('limit', String(limit))
+  if (runId) search.set('run_id', runId)
   return request<{ events: RunTraceEvent[]; runs?: RunTraceRun[] }>(
     `/session/${sessionId}/history/run-trace?${search.toString()}`,
     options,
