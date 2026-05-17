@@ -848,3 +848,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只抽取前端展示组件，不改证据查询 API、不改审批 API、不改变工具执行、告警、巡检或资产中心。
 - 遗留风险：当前只统一“引用入口按钮”，详情弹窗仍保留在各自页面内；按“功能满足即可收手”，本轮不继续扩大到跨页面弹窗重构。
 - 下一轮建议：停止继续拆 UI 组件。后续更高价值方向是 Context/Prompt 审计汇总页，或可观测证据与 Run Trace 的统一详情查询接口。
+
+### 2026-05-18 Round 59：Run Trace 审计覆盖提示
+
+- 完成：Run Trace 的 Context/Prompt 审计汇总新增“未审计”计数，明确显示最近运行中哪些 run 没有 context sources 或 prompt manifest。
+- 验证：`python -m pytest tests/test_tool_policy_runtime_frontend.py -q`；`cd frontend && npm run build`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：审计面板不再只展示已有审计数据，也能暴露旧运行或未接入路径的审计缺口，避免用户误判所有运行都已纳入 prompt/context 治理。
+- OpsCore 主线影响：只改 Run Trace 前端汇总展示，不改 hook payload、不改 ContextEngine、不改 prompt 构建、不影响告警、巡检或资产中心。
+- 遗留风险：当前是前端根据已加载事件判断覆盖情况，不是服务端审计报表；按“功能满足即可收手”，先满足会话内最近运行的缺口可见。
+- 下一轮建议：停止继续打磨 Run Trace 小标签。后续若继续做治理，应转向服务端 Context/Prompt 审计聚合或可观测证据统一查询。

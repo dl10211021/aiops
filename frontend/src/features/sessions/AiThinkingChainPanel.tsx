@@ -486,13 +486,15 @@ function runTraceAuditSummary(groups: RunTraceGroup[]) {
     (acc, group) => {
       const contextSources = runTraceContextSources(group)
       const promptManifest = runTracePromptManifest(group)
+      const hasAudit = contextSources.length > 0 || Boolean(promptManifest)
       acc.contextSources += contextSources.length
       acc.contextHits += contextSources.filter((source) => source.enabled && source.hit).length
       acc.contextErrors += contextSources.filter((source) => source.status === 'error').length
       acc.promptModules += promptManifest?.modules.filter((module) => module.enabled).length || 0
+      if (!hasAudit) acc.unauditedRuns += 1
       return acc
     },
-    { contextSources: 0, contextHits: 0, contextErrors: 0, promptModules: 0 },
+    { contextSources: 0, contextHits: 0, contextErrors: 0, promptModules: 0, unauditedRuns: 0 },
   )
 }
 
@@ -1144,6 +1146,9 @@ function RunTraceStrip({
             失败 {auditSummary.contextErrors}
           </span>
           <span className="rounded-full border border-ops-surface1 px-2 py-0.5">Prompt 模块 {auditSummary.promptModules}</span>
+          <span className={`rounded-full border px-2 py-0.5 ${auditSummary.unauditedRuns > 0 ? 'border-amber-400/35 text-amber-200' : 'border-ops-surface1 text-ops-overlay'}`}>
+            未审计 {auditSummary.unauditedRuns}
+          </span>
         </div>
       )}
       {selectedRunId && (

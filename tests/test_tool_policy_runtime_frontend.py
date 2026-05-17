@@ -394,6 +394,8 @@ def test_run_trace_context_prompt_audit_summary_is_visible():
     assert "命中 {auditSummary.contextHits}" in source
     assert "失败 {auditSummary.contextErrors}" in source
     assert "Prompt 模块 {auditSummary.promptModules}" in source
+    assert "未审计 {auditSummary.unauditedRuns}" in source
+    assert "if (!hasAudit) acc.unauditedRuns += 1" in source
     assert "contextSources.filter((source) => source.enabled && source.hit).length" in source
     assert "promptManifest?.modules.filter((module) => module.enabled).length" in source
 
