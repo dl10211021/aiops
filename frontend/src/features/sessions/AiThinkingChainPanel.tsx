@@ -2,9 +2,10 @@ import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { ChatMessage, ChatRuntimeEvent, ExecTraceItem, RunTraceEvent, RunTraceRun, SessionMemoryActivity } from '@/types'
 import { isAbortError } from '@/api/http'
-import { getSessionMemoryActivity, getSessionRunTrace } from '@/api/sessionHistory'
+import { getSessionHistoryEvidenceTrace, getSessionMemoryActivity, getSessionRunTrace } from '@/api/sessionHistory'
 import { toolLabel } from '@/utils/assetDisplay'
 import { parseJsonRecord } from './jsonRecords'
+import ToolTraceList from './ToolTraceList'
 import { resultReason, traceExecutionText, traceTargetLabel } from './traceUtils'
 import {
   commandActionFromTrace,
@@ -286,6 +287,13 @@ interface RunTraceGroup {
   endedAt?: RunTraceEvent
 }
 
+interface RunTraceEvidenceDetail {
+  evidenceId: string
+  trace?: ExecTraceItem | null
+  loading?: boolean
+  error?: string
+}
+
 function eventRunId(event: RunTraceEvent, index: number) {
   const payloadRunId = typeof event.payload?.run_id === 'string' ? event.payload.run_id : ''
   return event.run_id || payloadRunId || `ungrouped-${event.event_ts || event.created_at || index}`
@@ -388,6 +396,7 @@ export default function AiThinkingChainPanel({
   const [runTraceRuns, setRunTraceRuns] = useState<RunTraceRun[]>([])
   const [runTraceRunIndex, setRunTraceRunIndex] = useState<RunTraceRun[]>([])
   const [selectedRunTraceId, setSelectedRunTraceId] = useState('')
+  const [runTraceEvidenceDetail, setRunTraceEvidenceDetail] = useState<RunTraceEvidenceDetail | null>(null)
   const [runTraceLoading, setRunTraceLoading] = useState(false)
   const deferredMessages = useDeferredValue(messages)
   const displayTab = fixedTab || activeTab
@@ -511,6 +520,22 @@ export default function AiThinkingChainPanel({
     scrollChatMessage(group.outputMessageId || group.scrollMessageId || group.userMessageId)
   }
 
+  const openRunTraceEvidence = async (event: RunTraceEvent) => {
+    const evidenceId = runTraceEvidenceId(event)
+    if (!sessionId || !evidenceId) return
+    setRunTraceEvidenceDetail({ evidenceId, loading: true })
+    try {
+      const response = await getSessionHistoryEvidenceTrace(sessionId, { evidenceId, limit: 200 })
+      setRunTraceEvidenceDetail({ evidenceId, trace: response.data.trace })
+    } catch (error: unknown) {
+      setRunTraceEvidenceDetail({
+        evidenceId,
+        trace: null,
+        error: error instanceof Error ? error.message : '加载工具证据详情失败',
+      })
+    }
+  }
+
   return (
     <section className="min-h-0 flex min-w-0 flex-1 flex-col overflow-hidden border-t border-ops-surface0/80">
       <header className="space-y-2 border-b border-ops-surface0/80 bg-ops-dark/55 px-3 py-2.5">
@@ -581,6 +606,7 @@ export default function AiThinkingChainPanel({
               loading={runTraceLoading}
               selectedRunId={selectedRunTraceId}
               onSelectRun={setSelectedRunTraceId}
+              onOpenEvidence={(event) => void openRunTraceEvidence(event)}
             />
             {traceGroups.length === 0 ? (
               <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
@@ -800,6 +826,11 @@ export default function AiThinkingChainPanel({
           </div>
         )}
       </div>
+      <RunTraceEvidenceDialog
+        detail={runTraceEvidenceDetail}
+        sessionMode={sessionMode}
+        onClose={() => setRunTraceEvidenceDetail(null)}
+      />
     </section>
   )
 }
@@ -811,6 +842,7 @@ function RunTraceStrip({
   loading,
   selectedRunId,
   onSelectRun,
+  onOpenEvidence,
 }: {
   events: RunTraceEvent[]
   runs: RunTraceRun[]
@@ -818,6 +850,7 @@ function RunTraceStrip({
   loading: boolean
   selectedRunId: string
   onSelectRun: (runId: string) => void
+  onOpenEvidence: (event: RunTraceEvent) => void
 }) {
   const recentRuns = groupRunTraceEvents(events).slice(-6).reverse()
   const runSummaries = new Map(runs.map((run) => [run.run_id, run]))
@@ -919,12 +952,14 @@ function RunTraceStrip({
                         {(runTraceEvidenceId(event) || runTraceApprovalRef(event)) && (
                           <div className="mt-1 flex flex-wrap gap-1.5">
                             {runTraceEvidenceId(event) && (
-                              <span
+                              <button
+                                type="button"
+                                onClick={() => onOpenEvidence(event)}
                                 className="max-w-full truncate rounded-full border border-ops-surface1 px-2 py-0.5 font-mono text-[10px] text-ops-overlay"
-                                title="本次工具执行归档的证据 ID，可用于后续报告、审计和学习候选回查。"
+                                title="查看本次工具执行归档的完整证据详情。"
                               >
                                 证据：{runTraceEvidenceId(event)}
-                              </span>
+                              </button>
                             )}
                             {runTraceApprovalRef(event) && (
                               <span
@@ -950,6 +985,57 @@ function RunTraceStrip({
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function RunTraceEvidenceDialog({
+  detail,
+  onClose,
+  sessionMode,
+}: {
+  detail: RunTraceEvidenceDetail | null
+  onClose: () => void
+  sessionMode?: 'readonly' | 'readwrite'
+}) {
+  if (!detail) return null
+  const trace = detail.trace || null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+      <section className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-xl border border-ops-surface1 bg-ops-panel shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-ops-surface0 px-4 py-3">
+          <div>
+            <div className="text-sm font-semibold text-ops-text">Run Trace 工具证据</div>
+            <div className="mt-1 font-mono text-[11px] text-ops-overlay">{detail.evidenceId}</div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-ops-surface0 px-2 py-1 text-xs text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
+          >
+            关闭
+          </button>
+        </div>
+        <div className="max-h-[72vh] overflow-y-auto p-4">
+          {detail.loading && (
+            <div className="rounded border border-ops-accent/30 bg-ops-accent/10 px-3 py-2 text-xs text-ops-accent">
+              正在加载工具证据详情...
+            </div>
+          )}
+          {detail.error && (
+            <div className="rounded border border-ops-alert/35 bg-ops-alert/10 px-3 py-2 text-xs text-ops-alert">
+              {detail.error}
+            </div>
+          )}
+          {trace ? (
+            <ToolTraceList items={[trace]} sessionMode={sessionMode} />
+          ) : !detail.loading && !detail.error ? (
+            <div className="rounded border border-ops-surface0 bg-ops-dark/35 px-3 py-3 text-xs text-ops-subtext">
+              暂未在会话历史中匹配到完整执行轨迹，仅保留当前 Run Trace 上的证据引用。
+            </div>
+          ) : null}
+        </div>
+      </section>
     </div>
   )
 }

@@ -216,7 +216,21 @@ def test_run_trace_events_show_evidence_and_approval_refs():
     assert "function runTraceApprovalRef(event: RunTraceEvent)" in source
     assert "证据：{runTraceEvidenceId(event)}" in source
     assert "审批：{runTraceApprovalRef(event)}" in source
-    assert "报告、审计和学习候选回查" in source
+    assert "查看本次工具执行归档的完整证据详情" in source
+
+
+def test_run_trace_evidence_refs_open_tool_trace_detail():
+    source = Path(
+        "frontend/src/features/sessions/AiThinkingChainPanel.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert "import ToolTraceList from './ToolTraceList'" in source
+    assert "getSessionHistoryEvidenceTrace(sessionId, { evidenceId, limit: 200 })" in source
+    assert "onOpenEvidence={(event) => void openRunTraceEvidence(event)}" in source
+    assert "function RunTraceEvidenceDialog(" in source
+    assert "Run Trace 工具证据" in source
+    assert "查看本次工具执行归档的完整证据详情" in source
+    assert "ToolTraceList items={[trace]} sessionMode={sessionMode}" in source
 
 
 def test_frontend_shows_actual_http_action_separately_from_tool_policy():
