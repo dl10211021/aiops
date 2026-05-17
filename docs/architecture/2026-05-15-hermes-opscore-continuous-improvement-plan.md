@@ -668,3 +668,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只增加运行上下文元数据，不改变 prompt 文本、不改变工具选择、不改变模型调用、不影响资产、告警、巡检或审批。
 - 遗留风险：当前只覆盖 chat surface；headless/cron 后续可复用同一 manifest 思路，但本轮先收住，避免大范围重构。
 - 下一轮建议：再做 headless prompt manifest 或 ContextEngine 最小接口，二选一推进。
+
+### 2026-05-17 Round 39：Headless Prompt 模块清单
+
+- 完成：后台无人值守 headless 执行准备阶段生成 `prompt_modules` manifest，记录 headless surface、资产类型、协议、读写模式、委派任务模块、工具目录和本地 Skill 路径可用性；Run Hook 上下文同步携带该清单。
+- 验证：`python -m pytest tests/test_agent_prompts.py tests/test_agent_headless_setup.py tests/test_agent_headless_loop.py -q` 通过，19 passed，182 subtests。
+- Hermes 差距变化：chat 和 headless 两条主要 Agent 入口都具备 Prompt 生命周期审计元数据，继续向 Hermes 式 context/prompt governance 靠拢，但不保存完整 prompt 内容。
+- OpsCore 主线影响：只增加 headless 运行上下文元数据，不改变 prompt 文本、不改变工具执行、不改变审批 gate、不影响资产、告警、巡检或通知。
+- 遗留风险：cron/巡检等上层任务若有独立运行记录，还需要后续在其调度记录里引用同一 manifest；本轮按“功能满足即可收手”先覆盖 headless 主路径。
+- 下一轮建议：停止继续打磨 prompt manifest，转向 ContextEngine 最小只读接口或知识/记忆治理的下一处缺口。

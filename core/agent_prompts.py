@@ -255,6 +255,33 @@ def build_chat_prompt_manifest(
     }
 
 
+def build_headless_prompt_manifest(
+    *,
+    session_context: AgentSessionContext,
+) -> dict:
+    modules = [
+        "agent_profile",
+        "session_context",
+        "asset_credentials",
+        "trusted_operator_source",
+        "ops_runbook",
+        "evidence_contract",
+        "delegated_task",
+        "tool_catalog",
+    ]
+    return {
+        "version": PROMPT_MANIFEST_VERSION,
+        "surface": "headless",
+        "asset_type": session_context.asset_type,
+        "protocol": session_context.protocol,
+        "mode": "read_write" if session_context.allow_modifications else "read_only",
+        "modules": modules,
+        "enabled": {
+            "skill_paths": session_context.has_local_skill_scripts,
+        },
+    }
+
+
 def render_headless_system_prompt(
     *,
     session_context: AgentSessionContext,

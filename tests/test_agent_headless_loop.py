@@ -51,7 +51,14 @@ class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
             model_name="model",
             messages=messages,
             tools=[],
-            context={"session_id": "sid"},
+            context={
+                "session_id": "sid",
+                "prompt_modules": {
+                    "version": 1,
+                    "surface": "headless",
+                    "modules": ["delegated_task"],
+                },
+            },
             session_id="sid",
             agent_profile="default",
             host="host.local",
@@ -68,6 +75,8 @@ class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(messages, [{"role": "system", "content": "sys"}])
         self.assertEqual([event_type for event_type, _payload in hook_events], ["run:start", "agent:step", "run:end"])
         self.assertEqual(hook_events[0][1]["session_id"], "sid")
+        self.assertEqual(hook_events[0][1]["context"]["prompt_modules"]["surface"], "headless")
+        self.assertEqual(hook_events[1][1]["context"]["prompt_modules"]["modules"], ["delegated_task"])
         self.assertEqual(hook_events[1][1]["iteration"], 0)
         self.assertEqual(hook_events[2][1]["status"], "completed")
 

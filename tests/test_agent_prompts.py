@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from core.asset_protocols import get_asset_catalog
 from core.agent_prompts import (
+    build_headless_prompt_manifest,
     build_chat_prompt_manifest,
     render_chat_system_prompt,
     render_headless_system_prompt,
@@ -49,6 +50,22 @@ class AgentPromptTests(unittest.TestCase):
         self.assertFalse(manifest["enabled"]["rag_context"])
         self.assertNotIn("BASE", str(manifest))
         self.assertNotIn("SKILL-INSTRUCTIONS", str(manifest))
+
+    def test_headless_prompt_manifest_records_delegated_modules_without_prompt_text(self):
+        manifest = build_headless_prompt_manifest(
+            session_context=self._session_context(protocol="virtual"),
+        )
+
+        self.assertEqual(manifest["version"], 1)
+        self.assertEqual(manifest["surface"], "headless")
+        self.assertEqual(manifest["asset_type"], "virtual")
+        self.assertEqual(manifest["protocol"], "virtual")
+        self.assertEqual(manifest["mode"], "read_only")
+        self.assertIn("delegated_task", manifest["modules"])
+        self.assertIn("tool_catalog", manifest["modules"])
+        self.assertTrue(manifest["enabled"]["skill_paths"])
+        self.assertNotIn("BASE", str(manifest))
+        self.assertNotIn("检查 Skills 工程结构", str(manifest))
 
     @patch("core.agent_prompts.protocol_tool_list")
     @patch("core.agent_prompts.protocol_tool_guidance")

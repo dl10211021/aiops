@@ -35,6 +35,7 @@ def _headless_hook_context(context: dict) -> dict[str, Any]:
         "host",
         "port",
         "allow_modifications",
+        "prompt_modules",
     )
     return {key: context.get(key) for key in keys if key in context}
 

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from core.agent_prompts import render_headless_system_prompt
+from core.agent_prompts import build_headless_prompt_manifest, render_headless_system_prompt
 from core.agent_session_context import AgentSessionContext, build_agent_session_context
 from core.agent_profiles import load_agent_profile_prompt
 
@@ -73,6 +73,9 @@ def prepare_headless_agent_run(
     context = session_context.tool_context(
         execution_mode="headless",
         trigger_source="background_agent",
+    )
+    context["prompt_modules"] = build_headless_prompt_manifest(
+        session_context=session_context,
     )
     tools = dispatcher.get_available_tools(context)
 
