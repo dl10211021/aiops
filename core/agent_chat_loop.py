@@ -7,6 +7,7 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Protocol
 
+from core.agent_loop_guard import ToolSpinGuard
 from core.agent_ltm import schedule_ltm_compression
 from core.agent_runtime_config import agent_max_steps
 from core.agent_sse import sse_event
@@ -235,6 +236,7 @@ async def run_chat_agent_loop(
     force_native_tool_pending = native_execution_intent.requires_live_evidence
     force_native_attempts = 0
     native_tools = _native_asset_tools(tools)
+    spin_guard = ToolSpinGuard()
     for iteration in range(max_steps):
         event_logger.info(
             f"Loop {iteration} for {session_id}, cancel_flags: {cancel_flags.get(session_id)}"
@@ -333,6 +335,7 @@ async def run_chat_agent_loop(
             context=context,
             iteration=iteration,
             trace_collector=record_exec_trace,
+            spin_guard=spin_guard,
         ):
             yield event
         interrupted = cancel_flags.get(session_id) is True
@@ -731,6 +734,7 @@ async def _run_split_model_chat_agent_loop(
     force_native_tool_pending = native_execution_intent.requires_live_evidence
     force_native_attempts = 0
     native_tools = _native_asset_tools(tools)
+    spin_guard = ToolSpinGuard()
 
     yield sse_event(
         {
@@ -928,6 +932,7 @@ async def _run_split_model_chat_agent_loop(
             context=context,
             iteration=iteration,
             trace_collector=record_exec_trace,
+            spin_guard=spin_guard,
         ):
             yield event
         interrupted = cancel_flags.get(session_id) is True

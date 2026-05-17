@@ -479,3 +479,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：保留 OpsCore 在资产协议、数据库、监控日志、网络、存储、虚拟化、K8s、CI/CD、大数据和通知审计上的优势；不把 Spotify、HomeAssistant、RL、Yuanbao 等非 AIOps 工具放入核心。
 - 遗留风险：当前只是文档对照，工具中心前端还没有新的分组筛选，`session_search` 和 `delegate_task` 仍未真正接入执行链。
 - 下一轮建议：实现最小 `run_hooks` 事件总线，先覆盖 `run:start`、`agent:step`、`tool:before`、`tool:after`、`run:end`，为后续 loop heartbeat 和 spin guard 做底座。
+
+### 2026-05-17 Round 18：Run Hook 事件总线和工具防重复调用
+
+- 完成：新增 `core/run_hooks.py` 作为轻量内部事件总线，支持精确事件、通配事件、同步/异步 handler、异常隔离和 payload 脱敏；工具执行链在执行前后发出 `tool:before` / `tool:after`；新增 `ToolSpinGuard`，同一工具和参数连续失败达到阈值后返回 `spin_guard` 阻断结果，避免模型进入重复失败循环。
+- 验证：`python -m pytest tests/test_run_hooks.py tests/test_agent_tool_loop.py tests/test_agent_chat_loop.py -q` 通过，35 passed。
+- Hermes 差距变化：开始把 Hermes 的 lifecycle hook 和 runaway loop 防护落到 OpsCore 运行时，而不是只停留在文档计划。
+- OpsCore 主线影响：事件总线不改变现有工具执行结果，只提供审计、学习、可观测和后续 Run Trace 的接入点；防重复调用只拦截连续失败的同工具同参数。
+- 遗留风险：当前只覆盖工具前后事件和 chat loop 的重复失败 guard；`run:start`、`agent:step`、`run:end`、headless/cron heartbeat 还需继续接入。
+- 下一轮建议：把 `run:start`、`agent:step`、`run:end` 接入 chat/headless loop，并把 hook 事件写入 AIOps Run Trace 或 session trace，前端再显示简单进度。

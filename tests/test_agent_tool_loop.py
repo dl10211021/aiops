@@ -3,6 +3,7 @@ import json
 import unittest
 from unittest.mock import patch
 
+from core.agent_loop_guard import ToolSpinGuard
 from core.agent_tool_events import PreparedToolCall
 from core.agent_tool_loop import process_chat_tool_calls
 
@@ -52,6 +53,10 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         dispatcher = FakeDispatcher()
         messages = []
         context = {"session_id": "sid-tool"}
+        hook_events = []
+
+        async def record_hook(event_type, payload):
+            hook_events.append((event_type, payload))
 
         events = await collect_tool_events(
             tool_calls=[
@@ -69,6 +74,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
             dispatcher=dispatcher,
             context=context,
             iteration=0,
+            run_hook_emitter=record_hook,
         )
 
         payloads = [decode_sse(event) for event in events]
@@ -96,6 +102,13 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(messages[0]["tool_call_id"], "call-1")
         self.assertEqual(memory_store.appended[0][1], messages[0])
+        self.assertEqual([event[0] for event in hook_events], ["tool:before", "tool:after"])
+        self.assertEqual(hook_events[0][1]["tool_name"], "linux_execute_command")
+        self.assertEqual(hook_events[0][1]["tool_call_id"], "call-1")
+        self.assertEqual(hook_events[0][1]["args"], {"command": "uptime"})
+        self.assertEqual(hook_events[0][1]["tool_policy"]["name"], "linux_execute_command")
+        self.assertEqual(hook_events[1][1]["status"], "done")
+        self.assertEqual(hook_events[1][1]["result_meta"]["runtime_execution"]["final_status"], "success")
 
     async def test_approval_request_includes_tool_policy(self):
         memory_store = FakeMemoryStore()
@@ -326,6 +339,65 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(runtime_execution["retried"])
         self.assertEqual(runtime_execution["final_status"], "success")
         self.assertEqual(attempts, 2)
+
+    async def test_spin_guard_blocks_repeated_failed_tool_call(self):
+        memory_store = FakeMemoryStore()
+        dispatcher = FakeDispatcher()
+        messages = []
+        attempts = 0
+
+        async def failing_execute(tool_name, args, context):
+            nonlocal attempts
+            attempts += 1
+            raise RuntimeError("still broken")
+
+        dispatcher.route_and_execute = failing_execute
+
+        with patch(
+            "core.agent_tool_loop.tool_policy_metadata",
+            return_value={
+                "name": "repeat_tool",
+                "operation_mode": "read",
+                "approval_policy": "none",
+                "destructive": False,
+                "concurrency_safe": False,
+                "timeout_policy": {"default_seconds": 1},
+                "retry_policy": {"max_attempts": 1, "retry_on": []},
+                "evidence_family": "platform",
+            },
+        ):
+            events = await collect_tool_events(
+                tool_calls=[
+                    {
+                        "id": "repeat-1",
+                        "function": {
+                            "name": "repeat_tool",
+                            "arguments": json.dumps({"target": "same"}),
+                        },
+                    },
+                    {
+                        "id": "repeat-2",
+                        "function": {
+                            "name": "repeat_tool",
+                            "arguments": json.dumps({"target": "same"}),
+                        },
+                    },
+                ],
+                session_id="sid-tool",
+                messages=messages,
+                memory_store=memory_store,
+                dispatcher=dispatcher,
+                context={"session_id": "sid-tool"},
+                iteration=0,
+                spin_guard=ToolSpinGuard(max_repeated_failures=1),
+            )
+
+        payloads = [decode_sse(event) for event in events]
+        self.assertEqual(attempts, 1)
+        self.assertEqual(payloads[1]["result_status"], "error")
+        self.assertEqual(payloads[2]["result_status"], "error")
+        self.assertEqual(payloads[2]["result_meta"]["error_type"], "spin_guard")
+        self.assertIn("重复调用", messages[1]["content"])
 
     async def test_concurrency_safe_tools_run_in_parallel_batch(self):
         memory_store = FakeMemoryStore()

@@ -11,6 +11,7 @@ from core.agent_interactions import (
     _build_interaction_payload,
     _wait_for_user_interaction,
 )
+from core.agent_loop_guard import ToolSpinGuard
 from core.agent_sse import sse_event, sse_raw
 from core.agent_tool_events import (
     PreparedToolCall,
@@ -19,6 +20,7 @@ from core.agent_tool_events import (
     prepare_tool_call,
 )
 from core.redaction import redact_value
+from core.run_hooks import emit_run_hook
 from core.safety_policy import approval_timeout_seconds
 from core.tool_execution_policy import (
     evaluate_tool_execution_gate,
@@ -94,6 +96,8 @@ async def process_chat_tool_calls(
     iteration: int,
     trace_collector: Callable[[dict], None] | None = None,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    run_hook_emitter: Callable[[str, dict[str, Any]], Awaitable[None]] = emit_run_hook,
+    spin_guard: ToolSpinGuard | None = None,
 ) -> AsyncIterator[str]:
     index = 0
     while index < len(tool_calls):
@@ -113,6 +117,8 @@ async def process_chat_tool_calls(
                 context=context,
                 trace_collector=trace_collector,
                 sleep=sleep,
+                run_hook_emitter=run_hook_emitter,
+                iteration=iteration,
             ):
                 yield event
             index += len(concurrent_plan)
@@ -139,6 +145,25 @@ async def process_chat_tool_calls(
                 finished_at=finished_at,
             )
             _collect_tool_end_trace(trace_collector, msg_end)
+            if spin_guard:
+                spin_guard.record_result(
+                    func_name,
+                    func_args,
+                    status="error",
+                    result_meta={"error_type": "invalid_arguments"},
+                )
+            await _emit_tool_after_hook(
+                run_hook_emitter,
+                session_id=session_id,
+                tool_call_id=tc_id,
+                tool_name=func_name,
+                args=func_args,
+                context=context,
+                iteration=iteration,
+                status="error",
+                result_meta={"error_type": "invalid_arguments"},
+                finished_at=finished_at,
+            )
             yield sse_raw(msg_end)
             tool_msg = {
                 "tool_call_id": tc_id,
@@ -204,6 +229,51 @@ async def process_chat_tool_calls(
                     "content": safe_tool_res,
                 },
             )
+            continue
+
+        spin_guard_reason = spin_guard.block_reason(func_name, func_args) if spin_guard else ""
+        if spin_guard_reason:
+            tool_res = json.dumps(
+                {
+                    "status": "BLOCKED",
+                    "error_type": "spin_guard",
+                    "error": spin_guard_reason,
+                    "hint": "请换一种检查方式，或先查看已有工具错误证据。",
+                },
+                ensure_ascii=False,
+            )
+            finished_at = int(time.time() * 1000)
+            msg_end, safe_tool_res = build_tool_end_event(
+                tc_id,
+                func_name,
+                tool_res,
+                session_id=session_id,
+                context=context,
+                input_summary=display_cmd,
+                finished_at=finished_at,
+            )
+            _collect_tool_end_trace(trace_collector, msg_end)
+            await _emit_tool_after_hook(
+                run_hook_emitter,
+                session_id=session_id,
+                tool_call_id=tc_id,
+                tool_name=func_name,
+                args=func_args,
+                context=context,
+                iteration=iteration,
+                status="blocked",
+                result_meta={"error_type": "spin_guard"},
+                finished_at=finished_at,
+            )
+            yield sse_raw(msg_end)
+            tool_msg = {
+                "tool_call_id": tc_id,
+                "role": "tool",
+                "name": func_name,
+                "content": safe_tool_res,
+            }
+            messages.append(tool_msg)
+            memory_store.append_message(session_id, tool_msg)
             continue
 
         execution_gate = _resolve_execution_gate(
@@ -311,6 +381,39 @@ async def process_chat_tool_calls(
                     approval_ref=tc_id,
                 )
                 _collect_tool_end_trace(trace_collector, msg_end)
+                if spin_guard:
+                    spin_guard.record_result(
+                        func_name,
+                        func_args,
+                        status="blocked",
+                        result_meta={
+                            "error_type": (
+                                "approval_timeout"
+                                if approval_timed_out
+                                else "approval_rejected"
+                            ),
+                        },
+                    )
+                await _emit_tool_after_hook(
+                    run_hook_emitter,
+                    session_id=session_id,
+                    tool_call_id=tc_id,
+                    tool_name=func_name,
+                    args=func_args,
+                    context=context,
+                    iteration=iteration,
+                    status="blocked",
+                    result_meta={
+                        "error_type": (
+                            "approval_timeout"
+                            if approval_timed_out
+                            else "approval_rejected"
+                        ),
+                        "tool_policy": tool_policy,
+                    },
+                    approval_ref=tc_id,
+                    finished_at=finished_at,
+                )
                 yield sse_raw(msg_end)
 
                 tool_msg = {
@@ -324,6 +427,17 @@ async def process_chat_tool_calls(
                 continue
 
         started_at = int(time.time() * 1000)
+        await _emit_tool_before_hook(
+            run_hook_emitter,
+            session_id=session_id,
+            tool_call_id=tc_id,
+            tool_name=func_name,
+            args=func_args,
+            context=context,
+            iteration=iteration,
+            tool_policy=tool_policy,
+            started_at=started_at,
+        )
         msg_start = json.dumps(
             {
                 "type": "tool_start",
@@ -379,6 +493,29 @@ async def process_chat_tool_calls(
             else None,
         )
         _collect_tool_end_trace(trace_collector, msg_end)
+        result_status = _tool_result_status(msg_end)
+        result_meta = {"tool_policy": tool_policy, "runtime_execution": runtime_execution}
+        if spin_guard:
+            spin_guard.record_result(
+                func_name,
+                func_args,
+                status=result_status,
+                result_meta=result_meta,
+            )
+        await _emit_tool_after_hook(
+            run_hook_emitter,
+            session_id=session_id,
+            tool_call_id=tc_id,
+            tool_name=func_name,
+            args=func_args,
+            context=context,
+            iteration=iteration,
+            status=result_status,
+            result_meta=result_meta,
+            approval_ref=tc_id if approval_required else None,
+            started_at=started_at,
+            finished_at=finished_at,
+        )
         yield sse_raw(msg_end)
         await sleep(0.05)
 
@@ -448,6 +585,8 @@ async def _process_concurrent_tool_calls(
     context: dict,
     trace_collector: Callable[[dict], None] | None,
     sleep: Callable[[float], Awaitable[None]],
+    run_hook_emitter: Callable[[str, dict[str, Any]], Awaitable[None]],
+    iteration: int,
 ) -> AsyncIterator[str]:
     started_at_by_id: dict[str, int] = {}
     for item in plan:
@@ -455,6 +594,18 @@ async def _process_concurrent_tool_calls(
         tool_policy = item["policy"]
         started_at = int(time.time() * 1000)
         started_at_by_id[prepared_call.id] = started_at
+        await _emit_tool_before_hook(
+            run_hook_emitter,
+            session_id=session_id,
+            tool_call_id=prepared_call.id,
+            tool_name=prepared_call.name,
+            args=prepared_call.args,
+            context=context,
+            iteration=iteration,
+            tool_policy=tool_policy,
+            started_at=started_at,
+            concurrent=True,
+        )
         msg_start = json.dumps(
             {
                 "type": "tool_start",
@@ -511,6 +662,20 @@ async def _process_concurrent_tool_calls(
             else None,
         )
         _collect_tool_end_trace(trace_collector, msg_end)
+        await _emit_tool_after_hook(
+            run_hook_emitter,
+            session_id=session_id,
+            tool_call_id=prepared_call.id,
+            tool_name=prepared_call.name,
+            args=prepared_call.args,
+            context=context,
+            iteration=iteration,
+            status=_tool_result_status(msg_end),
+            result_meta={"tool_policy": item["policy"], "runtime_execution": runtime_execution},
+            started_at=started_at_by_id.get(prepared_call.id),
+            finished_at=finished_at,
+            concurrent=True,
+        )
         yield sse_raw(msg_end)
         await sleep(0.05)
 
@@ -547,3 +712,94 @@ def _collect_tool_end_trace(
             "completedAt": payload.get("finished_at"),
         }
     )
+
+
+async def _emit_tool_before_hook(
+    emitter: Callable[[str, dict[str, Any]], Awaitable[None]],
+    *,
+    session_id: str,
+    tool_call_id: str,
+    tool_name: str,
+    args: dict[str, Any],
+    context: dict,
+    iteration: int,
+    tool_policy: dict[str, Any],
+    started_at: int,
+    concurrent: bool = False,
+) -> None:
+    await emitter(
+        "tool:before",
+        {
+            "session_id": session_id,
+            "tool_call_id": tool_call_id,
+            "tool_name": tool_name,
+            "args": args,
+            "iteration": iteration,
+            "context": _hook_context(context),
+            "tool_policy": tool_policy,
+            "started_at": started_at,
+            "concurrent": concurrent,
+        },
+    )
+
+
+async def _emit_tool_after_hook(
+    emitter: Callable[[str, dict[str, Any]], Awaitable[None]],
+    *,
+    session_id: str,
+    tool_call_id: str,
+    tool_name: str,
+    args: dict[str, Any],
+    context: dict,
+    iteration: int,
+    status: str,
+    result_meta: dict[str, Any],
+    approval_ref: str | None = None,
+    started_at: int | None = None,
+    finished_at: int | None = None,
+    concurrent: bool = False,
+) -> None:
+    await emitter(
+        "tool:after",
+        {
+            "session_id": session_id,
+            "tool_call_id": tool_call_id,
+            "tool_name": tool_name,
+            "args": args,
+            "iteration": iteration,
+            "context": _hook_context(context),
+            "status": status,
+            "result_meta": result_meta,
+            "approval_ref": approval_ref,
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "concurrent": concurrent,
+        },
+    )
+
+
+def _hook_context(context: dict) -> dict[str, Any]:
+    return {
+        key: context.get(key)
+        for key in (
+            "session_id",
+            "execution_mode",
+            "session_mode",
+            "mode",
+            "asset_id",
+            "asset_type",
+            "protocol",
+            "host",
+            "port",
+            "allow_modifications",
+        )
+        if key in context
+    }
+
+
+def _tool_result_status(raw_event: str) -> str:
+    try:
+        payload = json.loads(raw_event)
+    except Exception:
+        return "done"
+    return str(payload.get("result_status") or "done")
