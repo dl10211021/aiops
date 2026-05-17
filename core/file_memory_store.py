@@ -509,8 +509,10 @@ class FileMemoryStore:
             if str(item.get("id") or "") != normalized_id:
                 continue
             previous_status = str(item.get("status") or "draft")
-            if normalized_status in {"approved", "published"} and not self._learning_candidate_quality_ready(item):
-                raise ValueError("发布候选质量清单未全部通过，不能批准或发布")
+            if normalized_status in {"approved", "published"}:
+                item["review"] = self._learning_candidate_review(item)
+                if not self._learning_candidate_review_ready(item):
+                    raise ValueError("发布候选辅助审核未通过，不能批准或发布")
             item["status"] = normalized_status
             item["updated_at"] = now
             events = item.get("status_events")
@@ -595,6 +597,14 @@ class FileMemoryStore:
         if not isinstance(checklist, list) or not checklist:
             return False
         return all(isinstance(row, dict) and row.get("ok") is True for row in checklist)
+
+    def _learning_candidate_review_ready(self, item: dict[str, Any]) -> bool:
+        review = item.get("review")
+        return (
+            self._learning_candidate_quality_ready(item)
+            and isinstance(review, dict)
+            and str(review.get("decision") or "") == "accept"
+        )
 
     def _generate_learning_candidate_publish_artifact(
         self,

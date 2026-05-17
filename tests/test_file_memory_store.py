@@ -287,7 +287,7 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertEqual(updated_candidate["status"], "reviewing")
         self.assertEqual(updated_candidate["status_events"][-1]["from"], "draft")
         self.assertEqual(updated_candidate["status_events"][-1]["reason"], "准备评审")
-        with self.assertRaisesRegex(ValueError, "质量清单未全部通过"):
+        with self.assertRaisesRegex(ValueError, "辅助审核未通过"):
             self.store.update_learning_candidate_status(
                 learning_candidates[0]["id"],
                 status="approved",
@@ -316,6 +316,7 @@ class FileMemoryStoreTests(unittest.TestCase):
             reason="质量清单已通过",
         )
         self.assertEqual(approved_candidate["status"], "approved")
+        self.assertEqual(approved_candidate["review"]["decision"], "accept")
         published_candidate = self.store.update_learning_candidate_status(
             learning_candidates[0]["id"],
             status="published",
@@ -499,6 +500,51 @@ class FileMemoryStoreTests(unittest.TestCase):
                 checklist=[],
                 reason="",
             )
+
+    def test_update_learning_candidate_status_refreshes_review_gate(self):
+        self.store.append_memory(
+            scope_id="sid-review",
+            summary="【记忆类型】用户认可回答\n【候选状态】待人工确认\n【核心记忆】发布前需要保留证据和回滚步骤。",
+            source_session_id="sid-review",
+            metadata={
+                "source": "answer_feedback_candidate",
+                "memory_kind": "success_experience",
+                "review_status": "pending",
+                "retrieval_enabled": False,
+                "run_id": "run-review",
+            },
+        )
+        candidate = self.store.list_candidate_entries(limit=10)[0]
+        self.store.resolve_candidate_entry(candidate["candidate_id"], "to_runbook")
+        learning_candidate = self.store.list_learning_candidates(limit=10)[0]
+        updated_quality = self.store.update_learning_candidate_quality_checklist(
+            learning_candidate["id"],
+            checklist=[
+                {**row, "ok": True, "note": "已补齐"}
+                for row in learning_candidate["quality_checklist"]
+            ],
+            actor="tester",
+            reason="补齐发布前检查项",
+        )
+        updated_quality["review"] = {
+            "reviewer": "legacy_import",
+            "decision": "needs_human_review",
+            "risk_level": "medium",
+            "missing_items": ["legacy"],
+            "suggestions": ["legacy"],
+        }
+        self.store._write_learning_candidate_rows([updated_quality])
+
+        approved_candidate = self.store.update_learning_candidate_status(
+            learning_candidate["id"],
+            status="approved",
+            actor="tester",
+            reason="刷新辅助审核后批准",
+        )
+
+        self.assertEqual(approved_candidate["status"], "approved")
+        self.assertEqual(approved_candidate["review"]["decision"], "accept")
+        self.assertEqual(approved_candidate["review"]["missing_items"], [])
 
     def test_list_read_delete_and_versions_support_management_ui(self):
         self.store.append_memory(
