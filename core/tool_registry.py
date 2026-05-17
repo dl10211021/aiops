@@ -1091,9 +1091,18 @@ def _register_builtin_tools() -> None:
             toolset="orchestration",
             scope="global",
             safety_category="batch",
-            description="向多个会话并发下发自然语言调查任务。",
+            description="按全局或当前会话组边界，向一个或多个目标会话并发下发自然语言调查任务。",
             parameters=_obj(
                 {
+                    "dispatch_scope": {
+                        "type": "string",
+                        "enum": ["global", "group"],
+                        "description": "global 可指定任意在线会话；group 只能指定当前会话组内的会话。",
+                    },
+                    "group_name": {
+                        "type": "string",
+                        "description": "group 模式的会话组名称；不填时使用当前会话组。",
+                    },
                     "tasks": {
                         "type": "array",
                         "items": {

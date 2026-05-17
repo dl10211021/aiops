@@ -803,3 +803,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只改会话侧边栏展示和统计，不新增接口、不改变权限同步语义、不改变多 Agent 任务下发，不碰告警、巡检、资产中心或 Hermes 参考目录。
 - 遗留风险：当前仍是全局全部或组内全部的预览，还没有多选目标选择器；按“功能满足即可收手”，本轮只补最小影响面可见性。
 - 下一轮建议：进入目标选择器前先确认业务需要；如果继续阶段 2，再做“全局/组模式指定某个或多个会话下发任务”的最小切片。
+
+### 2026-05-18 Round 54：多 Agent 下发执行层分组边界
+
+- 完成：会话上下文带出 `group_name/tags`；`list_active_sessions` 返回非敏感组名；`dispatch_sub_agents` 支持 `dispatch_scope=global/group` 和 `group_name`，分组模式下只允许向当前组内在线会话下发，组外目标直接返回 `group_mismatch`。
+- 验证：`python -m pytest tests/test_agent_session_context.py tests/test_dispatcher_session_tools.py tests/test_tool_registry.py -q`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：多 Agent 不再只依赖前端按钮或模型自觉遵守范围，执行工具本身开始承载全局/分组边界，符合解耦且安全的 orchestration gate。
+- OpsCore 主线影响：只改会话工具执行边界和工具 schema，不改变单会话工具、不改变读写权限合成、不改变告警、巡检、资产中心或 Hermes 参考目录。
+- 遗留风险：当前仍由模型通过 `dispatch_sub_agents` 提供任务列表，还没有前端多选下发面板；按“功能满足即可收手”，本轮先把执行层边界做硬。
+- 下一轮建议：如果继续阶段 2，再做轻量前端“选中会话并生成多 Agent 任务”的入口；否则转向可观测/知识/审批的更高优先级缺口。

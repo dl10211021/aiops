@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from core.agent_protocol_context import allow_local_skill_scripts
+from core.session_groups import DEFAULT_SESSION_GROUP, normalize_session_group_name
 
 
 SkillPathResolver = Callable[[list[str]], list[str]]
@@ -23,6 +24,8 @@ class AgentSessionContext:
     username: str
     password: Any
     extra_args: dict[str, Any]
+    group_name: str
+    tags: list[str]
     target_scope: str
     scope_value: Any
     active_skill_paths: list[str]
@@ -54,6 +57,8 @@ class AgentSessionContext:
             "username": self.username,
             "password": self.password,
             "extra_args": self.extra_args,
+            "group_name": self.group_name,
+            "tags": self.tags,
             "target_scope": self.target_scope,
             "scope_value": self.scope_value,
             "memory_scope_ids": self.memory_scope_ids(),
@@ -86,6 +91,8 @@ def build_agent_session_context(
     asset_type = session_info.get("asset_type", "ssh")
     protocol = session_info.get("protocol", asset_type)
     local_skill_scripts_allowed = allow_local_skill_scripts(protocol)
+    tags = list(session_info.get("tags") or [DEFAULT_SESSION_GROUP])
+    group_name = normalize_session_group_name(tags[0] if tags else DEFAULT_SESSION_GROUP) or DEFAULT_SESSION_GROUP
 
     return AgentSessionContext(
         session_id=session_id,
@@ -104,6 +111,8 @@ def build_agent_session_context(
         username=session_info.get("username", ""),
         password=session_info.get("password"),
         extra_args=session_info.get("extra_args", {}),
+        group_name=group_name,
+        tags=tags,
         target_scope=session_info.get("target_scope", "asset"),
         scope_value=session_info.get("scope_value", None),
         active_skill_paths=skill_path_resolver(active_skills),

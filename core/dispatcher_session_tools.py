@@ -7,6 +7,7 @@ import json
 import logging
 from typing import Any
 
+from core.session_groups import DEFAULT_SESSION_GROUP, normalize_session_group_name
 from core.asset_protocols import (
     MIDDLEWARE_ASSET_TYPES,
     NETWORK_SSH_ASSET_TYPES,
@@ -205,6 +206,7 @@ async def _list_active_sessions(logger: logging.Logger) -> str:
     sessions_info = []
     for sid, sdata in list(ssh_manager.active_sessions.items()):
         info = sdata["info"]
+        group_name = _session_group_name(info)
         sessions_info.append(
             {
                 "session_id": sid,
@@ -213,6 +215,7 @@ async def _list_active_sessions(logger: logging.Logger) -> str:
                 "asset_type": info.get("asset_type"),
                 "protocol": info.get("protocol"),
                 "profile": info.get("agent_profile", ""),
+                "group_name": group_name,
                 "allow_modifications": info.get("allow_modifications", False),
             }
         )
@@ -222,8 +225,79 @@ async def _list_active_sessions(logger: logging.Logger) -> str:
 
 async def _dispatch_sub_agents(args: dict[str, Any], context: dict[str, Any]) -> str:
     from core.agent import dispatch_group_tasks
+    from connections.ssh_manager import ssh_manager
+
+    scope = _resolve_dispatch_scope(args, context)
+    if scope not in {"global", "group"}:
+        return json.dumps(
+            {"status": "ERROR", "error": "dispatch_scope 必须是 global 或 group"},
+            ensure_ascii=False,
+        )
+    group_name = _resolve_dispatch_group_name(args, context)
+    if scope == "group" and not group_name:
+        return json.dumps(
+            {"status": "ERROR", "error": "分组模式必须提供 group_name 或当前会话组"},
+            ensure_ascii=False,
+        )
 
     tasks = args.get("tasks", [])
+    accepted_tasks: list[tuple[int, dict[str, Any]]] = []
+    results_by_index: dict[int, dict[str, Any]] = {}
+    task_items = tasks if isinstance(tasks, list) else []
+    for index, task in enumerate(task_items):
+        task_payload = dict(task or {})
+        task_payload["dispatch_scope"] = scope
+        target_sid = str(task_payload.get("target_session_id") or "").strip()
+        if scope == "group" and target_sid:
+            target_data = ssh_manager.active_sessions.get(target_sid)
+            target_group = _session_group_name((target_data or {}).get("info") or {})
+            if not target_data or target_group != group_name:
+                results_by_index[index] = {
+                    "session_id": target_sid,
+                    "status": "ERROR",
+                    "error": "目标会话不在当前分组或已离线，分组模式不能跨组下发。",
+                    "permission_boundary": {
+                        "scope": "group",
+                        "group_name": group_name,
+                        "target_group_name": target_group,
+                        "reason": "group_mismatch",
+                    },
+                }
+                continue
+        accepted_tasks.append((index, task_payload))
+
     parent_allow_mod = context.get("allow_modifications", False)
-    results = await dispatch_group_tasks(tasks, parent_allow_mod)
-    return json.dumps({"status": "BATCH_COMPLETE", "results": results}, ensure_ascii=False)
+    accepted_results = (
+        await dispatch_group_tasks([task for _, task in accepted_tasks], parent_allow_mod)
+        if accepted_tasks
+        else []
+    )
+    for (index, _), result in zip(accepted_tasks, accepted_results):
+        results_by_index[index] = result
+    return json.dumps(
+        {
+            "status": "BATCH_COMPLETE",
+            "dispatch_scope": scope,
+            "group_name": group_name if scope == "group" else "",
+            "results": [results_by_index[index] for index in sorted(results_by_index)],
+        },
+        ensure_ascii=False,
+    )
+
+
+def _session_group_name(info: dict[str, Any]) -> str:
+    tags = info.get("tags") or [DEFAULT_SESSION_GROUP]
+    return normalize_session_group_name(tags[0] if tags else DEFAULT_SESSION_GROUP) or DEFAULT_SESSION_GROUP
+
+
+def _resolve_dispatch_scope(args: dict[str, Any], context: dict[str, Any]) -> str:
+    requested = str(args.get("dispatch_scope") or context.get("target_scope") or "group").strip().lower()
+    return "global" if requested == "global" else "group" if requested in {"group", "tag", "asset"} else requested
+
+
+def _resolve_dispatch_group_name(args: dict[str, Any], context: dict[str, Any]) -> str:
+    return (
+        normalize_session_group_name(args.get("group_name"))
+        or normalize_session_group_name(context.get("group_name"))
+        or normalize_session_group_name(context.get("scope_value"))
+    )

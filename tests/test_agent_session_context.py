@@ -49,6 +49,8 @@ class AgentSessionContextTests(unittest.TestCase):
                 "username": "ops",
                 "password": "secret",
                 "extra_args": {},
+                "group_name": "未分组",
+                "tags": ["未分组"],
                 "target_scope": "tag",
                 "scope_value": "prod",
                 "memory_scope_ids": ["sid-1"],
@@ -93,6 +95,8 @@ class AgentSessionContextTests(unittest.TestCase):
                 "username": "",
                 "password": None,
                 "extra_args": {"login_protocol": "virtual"},
+                "group_name": "未分组",
+                "tags": ["未分组"],
                 "target_scope": "asset",
                 "scope_value": None,
                 "memory_scope_ids": ["sid-2"],
@@ -123,6 +127,21 @@ class AgentSessionContextTests(unittest.TestCase):
         self.assertFalse(
             any(scope.startswith("asset") for scope in session_context.memory_scope_ids())
         )
+
+    def test_tool_context_exposes_group_boundary_metadata(self):
+        session_context = build_agent_session_context(
+            "sid-group",
+            {
+                "tags": ["数据库组", "oracle"],
+                "target_scope": "group",
+                "scope_value": "数据库组",
+            },
+            skill_path_resolver=lambda active_skills: [],
+        )
+
+        self.assertEqual(session_context.group_name, "数据库组")
+        self.assertEqual(session_context.tool_context()["group_name"], "数据库组")
+        self.assertEqual(session_context.tool_context()["tags"], ["数据库组", "oracle"])
 
 
 if __name__ == "__main__":

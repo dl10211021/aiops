@@ -71,6 +71,26 @@ class TestToolRegistry(unittest.TestCase):
         self.assertIn("审批", description)
         self.assertNotIn("只支持 SELECT", description)
 
+    def test_dispatch_sub_agents_schema_exposes_scope_boundary(self):
+        tool = enabled_tool(
+            {
+                "target_scope": "global",
+                "asset_type": "virtual",
+                "protocol": "virtual",
+                "extra_args": {},
+            },
+            "dispatch_sub_agents",
+        )
+
+        self.assertIsNotNone(tool)
+        definition = tool_registry.get("dispatch_sub_agents")
+        self.assertIsNotNone(definition)
+        parameters = definition.parameters["properties"]
+        self.assertIn("dispatch_scope", parameters)
+        self.assertEqual(parameters["dispatch_scope"]["enum"], ["global", "group"])
+        self.assertIn("group_name", parameters)
+        self.assertIn("当前会话组", tool["description"])
+
     def test_tool_catalog_exposes_runtime_policy_metadata(self):
         linux_tool = enabled_tool(
             {
