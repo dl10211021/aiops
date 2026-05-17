@@ -252,6 +252,7 @@ class FileMemoryStoreTests(unittest.TestCase):
                 "candidate_type": "feedback_success_experience",
                 "review_status": "pending",
                 "retrieval_enabled": False,
+                "run_id": "run-abc",
             },
         )
         candidate = self.store.list_candidate_entries(limit=10)[0]
@@ -263,6 +264,7 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertEqual(len(learning_candidates), 1)
         self.assertEqual(learning_candidates[0]["target_type"], "runbook")
         self.assertEqual(learning_candidates[0]["status"], "draft")
+        self.assertEqual(learning_candidates[0]["run_id"], "run-abc")
         self.assertEqual(learning_candidates[0]["source_candidate_id"], candidate["candidate_id"])
         self.assertIn("Runbook 草稿", learning_candidates[0]["next_action"])
         self.assertEqual(learning_candidates[0]["status_events"][0]["to"], "draft")

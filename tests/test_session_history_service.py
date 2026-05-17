@@ -78,6 +78,7 @@ class FakeFileMemoryStore:
         self.appended = []
         self.resolved = []
         self.candidates = []
+        self.learning_candidates = []
 
     def append_memory(self, *, scope_id, summary, source_session_id, metadata=None):
         self.appended.append((scope_id, summary, source_session_id, metadata or {}))
@@ -93,17 +94,26 @@ class FakeFileMemoryStore:
     def list_candidate_entries(self, limit=50, review_statuses=None):
         return self.candidates[:limit]
 
+    def list_learning_candidates(self, limit=50, target_type=""):
+        items = [
+            item
+            for item in self.learning_candidates
+            if not target_type or item.get("target_type") == target_type
+        ]
+        return items[:limit]
+
     def resolve_candidate_entry(self, candidate_id, action, actor="user"):
         self.resolved.append((candidate_id, action, actor))
-        return {
-            "version_id": "v2",
-            "learning_candidate": {
-                "id": "learncand_run",
-                "target_type": "runbook",
-                "status": "draft",
-                "source_candidate_id": candidate_id,
-            },
+        learning_candidate = {
+            "id": "learncand_run",
+            "target_type": "runbook",
+            "status": "draft",
+            "source_candidate_id": candidate_id,
+            "source_session_id": "sid-1",
+            "run_id": "run-2",
         }
+        self.learning_candidates.insert(0, learning_candidate)
+        return {"version_id": "v2", "learning_candidate": learning_candidate}
 
 
 class TestSessionHistoryService(unittest.TestCase):
@@ -350,6 +360,46 @@ class TestSessionHistoryService(unittest.TestCase):
         self.assertEqual(metadata["candidate_type"], "run_trace_runbook_preview")
         self.assertFalse(metadata["retrieval_enabled"])
         self.assertEqual(metadata["evidence_refs"][0]["id"], "tev-db")
+
+    def test_create_session_run_learning_candidate_is_idempotent_per_run(self):
+        memory_db = FakeMemoryDB(
+            [
+                {
+                    "id": 4,
+                    "role": "system",
+                    "content": "tool done",
+                    "memory_type": "aiops_run_trace",
+                    "run_id": "run-2",
+                    "run_event_type": "tool:after",
+                    "run_event_payload": {
+                        "session_id": "sid-1",
+                        "run_id": "run-2",
+                        "tool_name": "db_execute_query",
+                        "tool_call_id": "call-db",
+                        "evidence_id": "tev-db",
+                        "status": "done",
+                    },
+                }
+            ]
+        )
+        store = FakeFileMemoryStore()
+        store.learning_candidates = [
+            {
+                "id": "learncand_existing",
+                "target_type": "runbook",
+                "status": "draft",
+                "source_session_id": "sid-1",
+                "run_id": "run-2",
+            }
+        ]
+        memory_db.file_memory_store = store
+
+        result = create_session_run_learning_candidate_record("sid-1", run_id="run-2", memory_db=memory_db)
+
+        self.assertTrue(result["deduped"])
+        self.assertEqual(result["learning_candidate"]["id"], "learncand_existing")
+        self.assertEqual(store.appended, [])
+        self.assertEqual(store.resolved, [])
 
     def test_create_session_run_learning_candidate_rejects_preview_without_evidence(self):
         memory_db = FakeMemoryDB([])

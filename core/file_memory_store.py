@@ -910,6 +910,7 @@ class FileMemoryStore:
             "source_candidate_id": source_candidate_id,
             "source_path": source_path,
             "source_session_id": entry.get("source_session_id") or "",
+            "run_id": metadata.get("run_id") or "",
             "feedback_target_message_id": metadata.get("feedback_target_message_id"),
             "summary": entry.get("summary") or "",
             "summary_preview": self._preview(entry.get("summary") or ""),

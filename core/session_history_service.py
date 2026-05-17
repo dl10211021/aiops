@@ -133,6 +133,17 @@ def create_session_run_learning_candidate_record(
         if store is None:
             raise SessionHistoryServiceError(500, "记忆候选池不可用。")
 
+        source_run_id = str(preview.get("run_id") or run_id or "all").strip() or "all"
+        existing = _existing_run_learning_candidate(store, session_id=session_id, run_id=source_run_id)
+        if existing:
+            return {
+                "candidate": None,
+                "learning_candidate": existing,
+                "version": None,
+                "preview": preview,
+                "deduped": True,
+            }
+
         summary = _run_learning_candidate_summary(preview)
         version = store.append_memory(
             scope_id=session_id,
@@ -144,7 +155,7 @@ def create_session_run_learning_candidate_record(
                 "candidate_type": "run_trace_runbook_preview",
                 "review_status": "pending",
                 "retrieval_enabled": False,
-                "run_id": preview.get("run_id") or run_id,
+                "run_id": source_run_id,
                 "submit_reason": reason,
                 "source_refs": [
                     {"type": "session", "label": "来源会话", "id": session_id},
@@ -196,6 +207,20 @@ def _latest_run_learning_candidate(store: Any, *, session_id: str) -> dict | Non
         if (
             item.get("source_session_id") == session_id
             and item.get("candidate_type") == "run_trace_runbook_preview"
+        ):
+            return item
+    return None
+
+
+def _existing_run_learning_candidate(store: Any, *, session_id: str, run_id: str) -> dict | None:
+    list_candidates = getattr(store, "list_learning_candidates", None)
+    if not callable(list_candidates):
+        return None
+    for item in list_candidates(limit=200, target_type="runbook"):
+        if (
+            item.get("source_session_id") == session_id
+            and str(item.get("run_id") or "") == run_id
+            and str(item.get("status") or "") != "rejected"
         ):
             return item
     return None
