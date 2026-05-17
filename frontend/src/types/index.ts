@@ -692,8 +692,16 @@ export interface DashboardRunTraceAuditOverview {
   context_hits: number
   context_errors: number
   prompt_modules: number
+  runtime_tool_count: number
+  runtime_success_count: number
+  runtime_error_count: number
+  runtime_timeout_count: number
+  runtime_retry_count: number
+  runtime_concurrent_count: number
+  runtime_untracked_count: number
   source_counts?: Record<string, { total: number; hit: number; error: number; disabled: number }>
   module_counts?: Record<string, { total: number; enabled: number; disabled: number }>
+  runtime_error_types?: Record<string, number>
   sessions: Array<{
     session_id: string
     label: string
@@ -704,6 +712,10 @@ export interface DashboardRunTraceAuditOverview {
     audited_run_count: number
     unaudited_run_count: number
     context_errors: number
+    runtime_tool_count?: number
+    runtime_error_count?: number
+    runtime_timeout_count?: number
+    runtime_retry_count?: number
   }>
 }
 

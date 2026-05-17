@@ -902,3 +902,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只新增证据挂接和展示，不改 Run Trace 采集、不改会话历史查询、不自动执行工具、不影响告警、巡检、资产中心或审批。
 - 遗留风险：当前前端只展示引用和基础元数据，还没有从可观测页面直接打开完整 ToolTraceList 详情；按“功能满足即可收手”，本轮先把证据引用链打通。
 - 下一轮建议：停止继续打磨可观测证据卡片。后续更高价值方向是执行层 `timeout/retry/concurrency_safe` 的实际结果进入统一审计，或让可观测任务真正生成多 Agent 指令草稿。
+
+### 2026-05-18 Round 65：执行运行态审计聚合
+
+- 完成：会话 Run Trace 审计摘要开始聚合 `runtime_execution/runtime_policy` 的实际工具执行结果，统计实际工具数、成功、失败、超时、重试、并发和未跟踪旧事件；总览 `Context/Prompt 审计` 面板同步展示实际执行审计。
+- 验证：`python -m pytest tests/test_session_history_routes.py::TestSessionHistoryRoutes::test_session_run_trace_audit_summary_counts_runtime_execution tests/test_dashboard_service.py::TestDashboardService::test_run_trace_audit_overview_aggregates_active_sessions tests/test_tool_policy_runtime_frontend.py::test_dashboard_shows_global_run_trace_audit_overview -q`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：执行层策略不再只在单个工具卡片可见，平台首页能看到实际超时、重试和并发执行信号，更接近运行治理闭环。
+- OpsCore 主线影响：只读聚合和展示，不改变工具执行、不改变 timeout/retry/concurrency_safe 策略本身，不影响审批、告警、巡检、资产中心或 Hermes 参考目录。
+- 遗留风险：当前聚合范围仍跟随在线会话 Run Trace，不是独立审计仓库；老事件没有 runtime 元数据时只进入“未跟踪”统计。
+- 下一轮建议：停止继续打磨总览审计小面板。后续更高价值方向是让可观测任务生成多 Agent 指令草稿，或把审计数据沉淀为离线报表。

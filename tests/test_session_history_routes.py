@@ -201,6 +201,90 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         self.assertEqual(summary["source_counts"]["knowledge_base"]["hit"], 1)
         self.assertEqual(summary["module_counts"]["rag_context"]["disabled"], 1)
 
+    def test_session_run_trace_audit_summary_counts_runtime_execution(self):
+        memory_db = FakeMemoryDB()
+        memory_db.messages = [
+            {
+                "id": 10,
+                "memory_type": RUN_TRACE_MEMORY_TYPE,
+                "run_id": "run-1",
+                "run_event_type": "run:start",
+                "run_event_ts": 100.0,
+                "run_event_payload": {"run_id": "run-1"},
+                "content": "run start",
+            },
+            {
+                "id": 11,
+                "memory_type": RUN_TRACE_MEMORY_TYPE,
+                "run_id": "run-1",
+                "run_event_type": "tool:after",
+                "run_event_ts": 101.0,
+                "run_event_payload": {
+                    "run_id": "run-1",
+                    "tool_name": "ssh_exec",
+                    "status": "error",
+                    "result_meta": {
+                        "runtime_execution": {
+                            "attempts": 2,
+                            "max_attempts": 2,
+                            "retried": True,
+                            "concurrent": True,
+                            "final_status": "error",
+                            "error_type": "tool_timeout",
+                            "timeout_seconds": 30,
+                        }
+                    },
+                },
+                "content": "tool timeout",
+            },
+            {
+                "id": 12,
+                "memory_type": RUN_TRACE_MEMORY_TYPE,
+                "run_id": "run-1",
+                "run_event_type": "tool:after",
+                "run_event_ts": 102.0,
+                "run_event_payload": {
+                    "run_id": "run-1",
+                    "tool_name": "asset_lookup",
+                    "status": "success",
+                    "result_meta": {
+                        "runtime_execution": {
+                            "attempts": 1,
+                            "max_attempts": 1,
+                            "final_status": "success",
+                        }
+                    },
+                },
+                "content": "tool success",
+            },
+            {
+                "id": 13,
+                "memory_type": RUN_TRACE_MEMORY_TYPE,
+                "run_id": "run-1",
+                "run_event_type": "tool:after",
+                "run_event_ts": 103.0,
+                "run_event_payload": {
+                    "run_id": "run-1",
+                    "tool_name": "legacy_tool",
+                    "status": "success",
+                },
+                "content": "legacy tool",
+            },
+        ]
+
+        with patch("core.memory.memory_db", memory_db):
+            response = asyncio.run(session_history_routes.get_session_run_trace_audit_summary("sid-1"))
+
+        summary = response.data["summary"]
+        self.assertEqual(summary["runtime_tool_count"], 3)
+        self.assertEqual(summary["runtime_success_count"], 1)
+        self.assertEqual(summary["runtime_error_count"], 1)
+        self.assertEqual(summary["runtime_timeout_count"], 1)
+        self.assertEqual(summary["runtime_retry_count"], 1)
+        self.assertEqual(summary["runtime_concurrent_count"], 1)
+        self.assertEqual(summary["runtime_untracked_count"], 1)
+        self.assertEqual(summary["runtime_error_types"]["tool_timeout"], 1)
+
     def test_session_history_export_preserves_response_shape(self):
         with patch(
             "api.session_history_routes.export_session_history_markdown_record",

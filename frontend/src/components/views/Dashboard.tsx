@@ -113,6 +113,9 @@ export default function Dashboard() {
                   <AuditMiniStat label="上下文命中" value={runTraceAudit?.context_hits || 0} hint={`来源 ${runTraceAudit?.context_sources || 0}`} />
                   <AuditMiniStat label="读取失败" value={runTraceAudit?.context_errors || 0} hint={`会话错误 ${runTraceAudit?.session_errors || 0}`} tone={runTraceAudit?.context_errors ? 'warn' : 'ok'} />
                   <AuditMiniStat label="Prompt 模块" value={runTraceAudit?.prompt_modules || 0} hint={`已审计 ${runTraceAudit?.audited_run_count || 0}`} />
+                  <AuditMiniStat label="实际工具" value={runTraceAudit?.runtime_tool_count || 0} hint={`未跟踪 ${runTraceAudit?.runtime_untracked_count || 0}`} tone={runTraceAudit?.runtime_untracked_count ? 'warn' : 'ok'} />
+                  <AuditMiniStat label="实际超时" value={runTraceAudit?.runtime_timeout_count || 0} hint={`失败 ${runTraceAudit?.runtime_error_count || 0}`} tone={runTraceAudit?.runtime_timeout_count ? 'warn' : 'ok'} />
+                  <AuditMiniStat label="实际重试" value={runTraceAudit?.runtime_retry_count || 0} hint={`并发 ${runTraceAudit?.runtime_concurrent_count || 0}`} tone={runTraceAudit?.runtime_retry_count ? 'warn' : 'ok'} />
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {auditSources.map(([source, counts]) => (

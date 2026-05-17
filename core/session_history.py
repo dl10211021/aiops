@@ -168,19 +168,40 @@ def summarize_session_run_trace_audit(events: list[dict]) -> dict:
         "context_hits": 0,
         "context_errors": 0,
         "prompt_modules": 0,
+        "runtime_tool_count": 0,
+        "runtime_success_count": 0,
+        "runtime_error_count": 0,
+        "runtime_timeout_count": 0,
+        "runtime_retry_count": 0,
+        "runtime_concurrent_count": 0,
+        "runtime_untracked_count": 0,
         "source_counts": {},
         "module_counts": {},
+        "runtime_error_types": {},
     }
     for run in runs:
         run_events = events_by_run.get(str(run.get("run_id") or ""), [])
         context = _run_trace_audit_context(run_events)
         context_sources = _run_trace_context_sources(context)
         prompt_manifest = _run_trace_prompt_manifest(context)
+        runtime_audit = _run_trace_runtime_audit(run_events)
         has_audit = bool(context_sources or prompt_manifest.get("modules"))
         if has_audit:
             summary["audited_run_count"] += 1
         else:
             summary["unaudited_run_count"] += 1
+
+        for key in (
+            "runtime_tool_count",
+            "runtime_success_count",
+            "runtime_error_count",
+            "runtime_timeout_count",
+            "runtime_retry_count",
+            "runtime_concurrent_count",
+            "runtime_untracked_count",
+        ):
+            summary[key] += runtime_audit[key]
+        _merge_flat_count_map(summary["runtime_error_types"], runtime_audit["runtime_error_types"])
 
         for source in context_sources:
             source_id = source["source"]
@@ -216,6 +237,85 @@ def summarize_session_run_trace_audit(events: list[dict]) -> dict:
             else:
                 module_counts["enabled"] += 1
     return summary
+
+
+def _run_trace_runtime_audit(events: list[dict]) -> dict:
+    audit = {
+        "runtime_tool_count": 0,
+        "runtime_success_count": 0,
+        "runtime_error_count": 0,
+        "runtime_timeout_count": 0,
+        "runtime_retry_count": 0,
+        "runtime_concurrent_count": 0,
+        "runtime_untracked_count": 0,
+        "runtime_error_types": {},
+    }
+    for event in events:
+        if event.get("event_type") != "tool:after":
+            continue
+        audit["runtime_tool_count"] += 1
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        runtime = _run_trace_runtime_execution(payload)
+        if not runtime:
+            audit["runtime_untracked_count"] += 1
+            continue
+        final_status = _runtime_final_status(runtime, payload)
+        error_type = str(runtime.get("error_type") or payload.get("error_type") or "").strip()
+        if final_status == "success":
+            audit["runtime_success_count"] += 1
+        elif final_status == "error":
+            audit["runtime_error_count"] += 1
+            normalized_error = error_type or "tool_execution_failed"
+            audit["runtime_error_types"][normalized_error] = audit["runtime_error_types"].get(normalized_error, 0) + 1
+            if normalized_error == "tool_timeout":
+                audit["runtime_timeout_count"] += 1
+        if runtime.get("retried") is True or _runtime_attempts(runtime) > 1:
+            audit["runtime_retry_count"] += 1
+        if runtime.get("concurrent") is True:
+            audit["runtime_concurrent_count"] += 1
+    return audit
+
+
+def _run_trace_runtime_execution(payload: dict) -> dict:
+    result_meta = payload.get("result_meta") or payload.get("resultMeta")
+    if isinstance(result_meta, dict):
+        runtime = result_meta.get("runtime_execution") or result_meta.get("runtime_policy")
+        if isinstance(runtime, dict):
+            return runtime
+    evidence = payload.get("evidence")
+    if isinstance(evidence, dict):
+        evidence_meta = evidence.get("result_meta") or evidence.get("resultMeta")
+        if isinstance(evidence_meta, dict):
+            runtime = evidence_meta.get("runtime_execution") or evidence_meta.get("runtime_policy")
+            if isinstance(runtime, dict):
+                return runtime
+    return {}
+
+
+def _runtime_final_status(runtime: dict, payload: dict) -> str:
+    status = str(runtime.get("final_status") or payload.get("status") or "").strip().lower()
+    if status in {"success", "ok", "done", "completed"}:
+        return "success"
+    if status in {"error", "failed", "failure", "blocked", "timeout"}:
+        return "error"
+    if runtime.get("error_type") or payload.get("error_type"):
+        return "error"
+    return status or "unknown"
+
+
+def _runtime_attempts(runtime: dict) -> int:
+    try:
+        return int(runtime.get("attempts") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _merge_flat_count_map(target: dict[str, int], source: Mapping[str, int]) -> None:
+    for key, value in source.items():
+        try:
+            target[str(key)] = target.get(str(key), 0) + int(value or 0)
+        except (TypeError, ValueError):
+            continue
 
 
 def _run_trace_audit_context(events: list[dict]) -> dict:

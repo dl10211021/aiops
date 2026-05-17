@@ -53,8 +53,16 @@ def build_run_trace_audit_overview(
         "context_hits": 0,
         "context_errors": 0,
         "prompt_modules": 0,
+        "runtime_tool_count": 0,
+        "runtime_success_count": 0,
+        "runtime_error_count": 0,
+        "runtime_timeout_count": 0,
+        "runtime_retry_count": 0,
+        "runtime_concurrent_count": 0,
+        "runtime_untracked_count": 0,
         "source_counts": {},
         "module_counts": {},
+        "runtime_error_types": {},
         "sessions": [],
     }
     for session_id, session_data in list(active_sessions.items()):
@@ -82,10 +90,18 @@ def build_run_trace_audit_overview(
             "context_hits",
             "context_errors",
             "prompt_modules",
+            "runtime_tool_count",
+            "runtime_success_count",
+            "runtime_error_count",
+            "runtime_timeout_count",
+            "runtime_retry_count",
+            "runtime_concurrent_count",
+            "runtime_untracked_count",
         ):
             overview[key] += summary[key]
         _merge_count_map(overview["source_counts"], summary.get("source_counts") or {})
         _merge_count_map(overview["module_counts"], summary.get("module_counts") or {})
+        _merge_flat_count_map(overview["runtime_error_types"], summary.get("runtime_error_types") or {})
         if summary["run_count"] > 0 or summary["unaudited_run_count"] > 0:
             overview["sessions"].append(
                 {
@@ -98,6 +114,10 @@ def build_run_trace_audit_overview(
                     "audited_run_count": summary["audited_run_count"],
                     "unaudited_run_count": summary["unaudited_run_count"],
                     "context_errors": summary["context_errors"],
+                    "runtime_tool_count": summary["runtime_tool_count"],
+                    "runtime_error_count": summary["runtime_error_count"],
+                    "runtime_timeout_count": summary["runtime_timeout_count"],
+                    "runtime_retry_count": summary["runtime_retry_count"],
                 }
             )
     overview["sessions"] = sorted(
@@ -118,6 +138,14 @@ def _merge_count_map(target: dict[str, dict[str, int]], source: Mapping[str, Map
                 target_counts[str(count_key)] = target_counts.get(str(count_key), 0) + int(value or 0)
             except (TypeError, ValueError):
                 continue
+
+
+def _merge_flat_count_map(target: dict[str, int], source: Mapping[str, int]) -> None:
+    for key, value in source.items():
+        try:
+            target[str(key)] = target.get(str(key), 0) + int(value or 0)
+        except (TypeError, ValueError):
+            continue
 
 
 def build_dashboard_alert_trend_payload(limit: int = 5000) -> dict[str, Any]:

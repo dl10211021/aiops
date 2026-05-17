@@ -86,6 +86,28 @@ class TestDashboardService(unittest.TestCase):
                 "run_event_ts": 2.0,
                 "run_event_payload": {"run_id": "run-2"},
             },
+            {
+                "id": 3,
+                "session_id": "sid-2",
+                "memory_type": "aiops_run_trace",
+                "run_id": "run-2",
+                "run_event_type": "tool:after",
+                "run_event_ts": 3.0,
+                "run_event_payload": {
+                    "run_id": "run-2",
+                    "status": "error",
+                    "result_meta": {
+                        "runtime_execution": {
+                            "attempts": 2,
+                            "max_attempts": 2,
+                            "retried": True,
+                            "concurrent": True,
+                            "final_status": "error",
+                            "error_type": "tool_timeout",
+                        }
+                    },
+                },
+            },
         ]
 
         payload = dashboard_service.build_run_trace_audit_overview(
@@ -106,9 +128,16 @@ class TestDashboardService(unittest.TestCase):
         self.assertEqual(payload["context_hits"], 1)
         self.assertEqual(payload["context_errors"], 1)
         self.assertEqual(payload["prompt_modules"], 2)
+        self.assertEqual(payload["runtime_tool_count"], 1)
+        self.assertEqual(payload["runtime_error_count"], 1)
+        self.assertEqual(payload["runtime_timeout_count"], 1)
+        self.assertEqual(payload["runtime_retry_count"], 1)
+        self.assertEqual(payload["runtime_concurrent_count"], 1)
+        self.assertEqual(payload["runtime_error_types"]["tool_timeout"], 1)
         self.assertEqual(payload["source_counts"]["knowledge_base"]["hit"], 1)
         self.assertEqual(payload["module_counts"]["rag_context"]["disabled"], 1)
         self.assertEqual(payload["sessions"][0]["session_id"], "sid-2")
+        self.assertEqual(payload["sessions"][0]["runtime_timeout_count"], 1)
 
     def test_alert_trend_and_risk_ranking_payloads_use_alert_store(self):
         alerts = [

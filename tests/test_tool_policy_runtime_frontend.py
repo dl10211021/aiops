@@ -435,9 +435,14 @@ def test_dashboard_shows_global_run_trace_audit_overview():
     assert "AI审计覆盖" in dashboard
     assert "Context/Prompt 审计" in dashboard
     assert "未审计 {runTraceAudit?.unaudited_run_count || 0}" in dashboard
+    assert "实际工具" in dashboard
+    assert "runTraceAudit?.runtime_timeout_count" in dashboard
+    assert "runTraceAudit?.runtime_retry_count" in dashboard
     assert "function AuditMiniStat" in dashboard
     assert "export interface DashboardRunTraceAuditOverview" in types
     assert "run_trace_audit?: DashboardRunTraceAuditOverview" in types
+    assert "runtime_tool_count: number" in types
+    assert "runtime_error_types?: Record<string, number>" in types
 
 
 def test_frontend_shows_actual_http_action_separately_from_tool_policy():
