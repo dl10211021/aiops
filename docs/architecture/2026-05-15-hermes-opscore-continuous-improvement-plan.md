@@ -623,3 +623,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只影响前端活跃会话权限批量操作，不改变工具执行、审批、资产、巡检、通知或告警逻辑。
 - 遗留风险：仍是前端逐会话调用；大量会话场景后续可补后端批量接口和进度条。
 - 下一轮建议：权限切换这块已达到可用闭环，应收手，下一轮转向可观测/记忆治理。
+
+### 2026-05-17 Round 34：可观测根因候选前端入口
+
+- 完成：可观测排查卡片新增“生成根因候选”，复用现有后端 root-cause 接口，把当前证据链写入待复核根因候选；没有证据时只提示先追加证据。
+- 验证：`python -m pytest tests/test_observability_frontend.py tests/test_observability_routes.py tests/test_observability_investigation.py -q`；`cd frontend && npm run build`；提交前继续跑完整 preflight 和 staged audit。
+- Hermes 差距变化：可观测任务从“有任务和证据”推进到“能形成可复核根因候选”，更接近 Hermes 式 trace -> evidence -> hypothesis 的闭环。
+- OpsCore 主线影响：只改可观测前端调用和展示入口，不自动处置、不触发工具执行、不改变资产、告警、巡检或审批链路。
+- 遗留风险：候选内容仍是证据驱动的待复核草稿，不是模型自动排序；后续可接入 Summary Agent 生成更精细的候选。
+- 下一轮建议：可观测这块先继续补“证据详情/根因候选状态”这类小闭环，不直接做复杂自动编排。

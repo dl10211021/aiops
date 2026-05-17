@@ -101,6 +101,24 @@ export async function appendObservabilityEvidence(investigationId: string, paylo
   )
 }
 
+export async function appendObservabilityRootCause(investigationId: string, payload: {
+  title: string
+  description?: string
+  likelihood?: string
+  impact?: string
+  confidence?: string
+  supporting_evidence_ids?: string[]
+  recommended_next_steps?: string[]
+}) {
+  return request<{ investigation: ObservabilityInvestigation }>(
+    `/observability/investigations/${encodeURIComponent(investigationId)}/root-causes`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
 export async function getObservabilityProfilePacks() {
   return request<{ profile_packs: ObservabilityProfilePack[] }>('/observability/profile-packs')
 }

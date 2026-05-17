@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import PageHeader from '@/components/layout/PageHeader'
 import {
   appendObservabilityEvidence,
+  appendObservabilityRootCause,
   bindObservabilityAsset,
   createObservabilityInvestigation,
   getObservableSources,
@@ -385,6 +386,34 @@ export default function ObservabilityCenter() {
     }
   }
 
+  const appendEvidenceRootCause = async (investigation: ObservabilityInvestigation) => {
+    const evidenceIds = (investigation.evidence || []).map((item) => item.id)
+    if (evidenceIds.length === 0) {
+      setError('请先追加证据，再生成根因候选')
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      const response = await appendObservabilityRootCause(investigation.id, {
+        title: '待复核根因候选',
+        description: '基于当前证据链生成的待复核候选，需要继续由 Summary Agent 或人工确认。',
+        likelihood: 'medium',
+        impact: investigation.severity || 'unknown',
+        confidence: 'pending_review',
+        supporting_evidence_ids: evidenceIds.slice(0, 5),
+        recommended_next_steps: ['补充同时间窗口指标/日志证据', '确认是否存在发布、扩容或配置变更', '由人工确认后再进入处置建议'],
+      })
+      setInvestigations((items) => items.map((item) => (
+        item.id === investigation.id ? response.data.investigation : item
+      )))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '根因候选生成失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const orderedLayers = useMemo(() => {
     if (!profile) return []
     return [...profile.components, ...profile.unknowns].reduce<Array<{ layer: string; items: typeof profile.components }>>((acc, component) => {
@@ -731,6 +760,7 @@ export default function ObservabilityCenter() {
                       key={item.id}
                       investigation={item}
                       onAppendEvidence={() => void appendSampleEvidence(item.id)}
+                      onAppendRootCause={() => void appendEvidenceRootCause(item)}
                     />
                   ))}
                 </div>
@@ -1054,9 +1084,11 @@ function DiscoveryCandidateCard({ candidate }: { candidate: ObservabilityDiscove
 function InvestigationCard({
   investigation,
   onAppendEvidence,
+  onAppendRootCause,
 }: {
   investigation: ObservabilityInvestigation
   onAppendEvidence: () => void
+  onAppendRootCause: () => void
 }) {
   return (
     <div className="rounded-lg border border-ops-surface0/80 bg-ops-surface0/35 p-4">
@@ -1069,6 +1101,9 @@ function InvestigationCard({
           <span className="rounded bg-ops-accent/15 px-2 py-1 text-xs text-ops-accent">{investigation.status}</span>
           <button className="ops-control rounded-lg px-3 py-1.5 text-xs font-bold" onClick={onAppendEvidence}>
             追加证据
+          </button>
+          <button className="ops-control rounded-lg px-3 py-1.5 text-xs font-bold" onClick={onAppendRootCause}>
+            生成根因候选
           </button>
         </div>
       </div>
