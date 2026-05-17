@@ -50,6 +50,28 @@ def test_session_permission_scope_preview_shows_target_counts():
     assert "将影响 ${metrics.total} 个会话：只读 ${metrics.readonly}，读写 ${metrics.readwrite}" in group_list
 
 
+def test_session_sidebar_builds_multi_agent_target_draft():
+    sidebar = Path("frontend/src/features/sessions/SessionSidebar.tsx").read_text(encoding="utf-8")
+    group_list = Path("frontend/src/features/sessions/SessionGroupList.tsx").read_text(encoding="utf-8")
+    item = Path("frontend/src/features/sessions/SessionItem.tsx").read_text(encoding="utf-8")
+    model = Path("frontend/src/features/sessions/useSessionSidebarModel.ts").read_text(encoding="utf-8")
+    chat_window = Path("frontend/src/components/chat/ChatWindow.tsx").read_text(encoding="utf-8")
+
+    assert "MultiAgentTargetBar" in sidebar
+    assert "生成指令" in sidebar
+    assert "onSelectGroupTargets={model.handleSelectGroupTargets}" in sidebar
+    assert "onToggleMultiAgentTarget={model.handleToggleMultiAgentTarget}" in sidebar
+    assert "multiAgentTargetIds={model.multiAgentTargetIds}" in sidebar
+    assert "选目标" in group_list
+    assert "multiAgentTargetSelected={multiAgentTargetIds.has(session.id)}" in group_list
+    assert "选择为多 Agent 目标" in item
+    assert "handleComposeMultiAgentDraft" in model
+    assert "dispatch_scope: ${scope}" in model
+    assert "window.dispatchEvent(new CustomEvent('opscore:chat-draft'" in model
+    assert "window.addEventListener('opscore:chat-draft'" in chat_window
+    assert "setDraftsBySession((prev) => ({ ...prev, [targetSessionId]: message }))" in chat_window
+
+
 def test_session_group_bulk_permission_sync_is_optimistic_and_rolls_back_failures():
     effects = Path("frontend/src/features/sessions/sessionSidebarEffects.ts").read_text(encoding="utf-8")
 

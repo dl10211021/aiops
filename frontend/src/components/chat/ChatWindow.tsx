@@ -193,6 +193,23 @@ export default function ChatWindow() {
     }
   }, [sendMessage])
 
+  useEffect(() => {
+    const handleExternalChatDraft = (event: Event) => {
+      const customEvent = event as CustomEvent<{ sessionId?: string; message?: string }>
+      const message = String(customEvent.detail?.message || '')
+      if (!message) return
+      const targetSessionId = customEvent.detail?.sessionId || currentSessionId
+      if (!targetSessionId) return
+      inputDrafts.setDraftsBySession((prev) => ({ ...prev, [targetSessionId]: message }))
+      inputDrafts.setHistoryIndex(null)
+      requestAnimationFrame(() => textareaRef.current?.focus())
+    }
+    window.addEventListener('opscore:chat-draft', handleExternalChatDraft as EventListener)
+    return () => {
+      window.removeEventListener('opscore:chat-draft', handleExternalChatDraft as EventListener)
+    }
+  }, [currentSessionId, inputDrafts, textareaRef])
+
   const messageHistoryActions = useMessageHistoryActions(currentSessionId)
   useSessionHistorySync(currentSessionId, session, hasActiveStream)
 

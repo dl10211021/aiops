@@ -25,7 +25,9 @@ interface SessionItemProps {
   session: Session
   active: boolean
   group: string
+  multiAgentTargetSelected?: boolean
   onSelectSession: (sessionId: string, group: string) => void
+  onToggleMultiAgentTarget?: (sid: string) => void
   onDisconnect: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
   onEdit: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
   onOpenTerminal: (sid: string, event: MouseEvent<HTMLButtonElement>) => void
@@ -35,7 +37,9 @@ function SessionItem({
   session,
   active,
   group,
+  multiAgentTargetSelected = false,
   onSelectSession,
+  onToggleMultiAgentTarget,
   onDisconnect,
   onEdit,
   onOpenTerminal,
@@ -58,6 +62,22 @@ function SessionItem({
             : 'border-ops-surface1/45 bg-[linear-gradient(135deg,rgba(20,31,45,0.72),rgba(9,19,32,0.92))] text-ops-subtext hover:border-ops-accent/32 hover:bg-[linear-gradient(135deg,rgba(26,42,60,0.74),rgba(10,23,38,0.94))] hover:text-ops-text'}`}
     >
       <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ops-accent/18 to-transparent" />
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation()
+          onToggleMultiAgentTarget?.(session.id)
+        }}
+        className={`absolute left-1 top-1 grid h-4 w-4 place-items-center rounded border text-[10px] font-black transition-colors ${
+          multiAgentTargetSelected
+            ? 'border-ops-accent bg-ops-accent text-ops-dark'
+            : 'border-ops-surface1/70 bg-ops-dark/70 text-ops-overlay hover:border-ops-accent/60 hover:text-ops-accent'
+        }`}
+        title={multiAgentTargetSelected ? '取消多 Agent 目标' : '选择为多 Agent 目标'}
+        aria-label={multiAgentTargetSelected ? '取消多 Agent 目标' : '选择为多 Agent 目标'}
+      >
+        {multiAgentTargetSelected ? '✓' : ''}
+      </button>
       <span
         title={`${session.asset_type}/${session.protocol}`}
         className={`grid h-9 w-11 shrink-0 place-items-center rounded-md border px-1 text-center text-[10px] font-black leading-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${protocolBadgeClass(session)}`}
@@ -138,11 +158,13 @@ export default memo(SessionItem, areSessionItemsEqual)
 function areSessionItemsEqual(prev: SessionItemProps, next: SessionItemProps) {
   return prev.active === next.active
     && prev.group === next.group
+    && prev.multiAgentTargetSelected === next.multiAgentTargetSelected
     && prev.session === next.session
     && prev.onDisconnect === next.onDisconnect
     && prev.onEdit === next.onEdit
     && prev.onOpenTerminal === next.onOpenTerminal
     && prev.onSelectSession === next.onSelectSession
+    && prev.onToggleMultiAgentTarget === next.onToggleMultiAgentTarget
 }
 
 function supportsSshTerminal(session: Session): boolean {

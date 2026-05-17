@@ -21,9 +21,12 @@ interface SessionGroupListProps {
   onDeleteGroup: (group: string) => void
   onRenameGroup: (oldName: string, newName: string) => boolean
   onSelectGroup: (group: string) => void
+  onSelectGroupTargets: (group: string) => void
   onSelectSession: (sessionId: string, group: string) => void
   onSetGroupPermission: (group: string, allowModifications: boolean) => void
+  onToggleMultiAgentTarget: (sid: string) => void
   onToggleGroup: (group: string) => void
+  multiAgentTargetIds: Set<string>
   searching?: boolean
 }
 
@@ -40,9 +43,12 @@ function SessionGroupList({
   onDeleteGroup,
   onRenameGroup,
   onSelectGroup,
+  onSelectGroupTargets,
   onSelectSession,
   onSetGroupPermission,
+  onToggleMultiAgentTarget,
   onToggleGroup,
+  multiAgentTargetIds,
   searching = false,
 }: SessionGroupListProps) {
   const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
@@ -157,6 +163,13 @@ function SessionGroupList({
                   <div className={`flex shrink-0 items-center gap-1 transition-opacity ${
                     selected ? 'opacity-90' : 'opacity-0 group-hover/session:opacity-80'
                   }`}>
+                    <button
+                      onClick={() => onSelectGroupTargets(group)}
+                      className="rounded-md border border-ops-accent/35 bg-ops-accent/8 px-1.5 py-0.5 text-[11px] font-semibold text-ops-accent transition-colors hover:bg-ops-accent/14"
+                      title={`选择 ${group} 组作为多 Agent 目标`}
+                    >
+                      选目标
+                    </button>
                     <GroupPermissionPreview sessions={items} />
                     <button
                       onClick={() => onSetGroupPermission(group, false)}
@@ -211,7 +224,9 @@ function SessionGroupList({
                         session={session}
                         active={session.id === currentSessionId}
                         group={group}
+                        multiAgentTargetSelected={multiAgentTargetIds.has(session.id)}
                         onSelectSession={onSelectSession}
+                        onToggleMultiAgentTarget={onToggleMultiAgentTarget}
                         onDisconnect={onDisconnect}
                         onEdit={onEdit}
                         onOpenTerminal={onOpenTerminal}
@@ -267,9 +282,12 @@ function areSessionGroupListPropsEqual(prev: SessionGroupListProps, next: Sessio
     && prev.onDeleteGroup === next.onDeleteGroup
     && prev.onRenameGroup === next.onRenameGroup
     && prev.onSelectGroup === next.onSelectGroup
+    && prev.onSelectGroupTargets === next.onSelectGroupTargets
     && prev.onSelectSession === next.onSelectSession
     && prev.onSetGroupPermission === next.onSetGroupPermission
+    && prev.onToggleMultiAgentTarget === next.onToggleMultiAgentTarget
     && prev.onToggleGroup === next.onToggleGroup
+    && prev.multiAgentTargetIds === next.multiAgentTargetIds
     && prev.searching === next.searching
 }
 

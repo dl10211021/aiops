@@ -43,6 +43,7 @@ export function useSessionSidebarModel() {
   const [activeTerminalSessionId, setActiveTerminalSessionId] = useState<string | null>(null)
   const [terminalMinimized, setTerminalMinimized] = useState(false)
   const [editingBusy, setEditingBusy] = useState(false)
+  const [multiAgentTargetIds, setMultiAgentTargetIds] = useState<Set<string>>(new Set())
   const deferredSessionSearch = useDeferredValue(sessionSearch)
 
   const sessionList = useStableSidebarSessionList(sessions)
@@ -118,6 +119,14 @@ export function useSessionSidebarModel() {
 
   useEffect(() => {
     const availableIds = new Set(Object.keys(sessionsById))
+    setMultiAgentTargetIds((current) => {
+      const next = new Set([...current].filter((sid) => availableIds.has(sid)))
+      return next.size === current.size ? current : next
+    })
+  }, [sessionsById])
+
+  useEffect(() => {
+    const availableIds = new Set(Object.keys(sessionsById))
     setTerminalSessionIds((current) => current.filter((sid) => availableIds.has(sid)))
     setActiveTerminalSessionId((current) => {
       if (!current || availableIds.has(current)) return current
@@ -137,6 +146,14 @@ export function useSessionSidebarModel() {
   }, [activeTerminalSessionId, terminalMinimized, terminalSessionIds])
 
   const sessionMetrics = useMemo(() => summarizeSessions(sessionList), [sessionList])
+  const multiAgentTargets = useMemo(
+    () => [...multiAgentTargetIds].map((sid) => sessionsById[sid]).filter(Boolean) as Session[],
+    [multiAgentTargetIds, sessionsById],
+  )
+  const multiAgentTargetGroups = useMemo(() => {
+    return [...new Set(multiAgentTargets.map((session) => sessionPrimaryGroup(session)))]
+  }, [multiAgentTargets])
+  const multiAgentDraftScope = multiAgentTargetGroups.length === 1 ? 'group' : 'global'
   const handleDisconnect = useCallback(async (sid: string, event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     await disconnectSidebarSession(sid, removeSession)
@@ -252,6 +269,72 @@ export function useSessionSidebarModel() {
     void syncSessionsPermissionToBackend(sessionList, allowModifications, updateSession, addToast, 'global')
   }, [addToast, sessionList, updateSession])
 
+  const handleToggleMultiAgentTarget = useCallback((sid: string) => {
+    setMultiAgentTargetIds((current) => {
+      const next = new Set(current)
+      if (next.has(sid)) next.delete(sid)
+      else next.add(sid)
+      return next
+    })
+  }, [])
+
+  const handleSelectGroupTargets = useCallback((group: string) => {
+    const currentName = normalizeSessionGroupName(group)
+    const ids = (grouped[currentName] || []).map((session) => session.id)
+    setMultiAgentTargetIds(new Set(ids))
+    setSelectedGroup(currentName)
+    addToast(ids.length > 0 ? `已选择 ${ids.length} 个协同目标` : '该会话组暂无会话', ids.length > 0 ? 'success' : 'info')
+  }, [addToast, grouped])
+
+  const handleClearMultiAgentTargets = useCallback(() => {
+    setMultiAgentTargetIds(new Set())
+  }, [])
+
+  const handleComposeMultiAgentDraft = useCallback(() => {
+    if (multiAgentTargets.length === 0) {
+      addToast('请先选择协同目标', 'info')
+      return
+    }
+    const activeSessionId = currentSessionId || multiAgentTargets[0]?.id
+    if (!activeSessionId) return
+    if (!currentSessionId) setCurrentSession(activeSessionId)
+    setView('chat')
+    const scope = multiAgentDraftScope
+    const groupName = scope === 'group' ? multiAgentTargetGroups[0] : ''
+    const targetLines = multiAgentTargets.map((session) => (
+      `- ${session.id} | ${session.remark || session.host} | ${session.user}@${session.host} | ${session.asset_type}/${session.protocol}`
+    ))
+    const message = [
+      '请按以下目标执行多 Agent 协同任务，先确认任务内容后再调用 dispatch_sub_agents。',
+      `dispatch_scope: ${scope}`,
+      groupName ? `group_name: ${groupName}` : 'group_name: ',
+      'targets:',
+      ...targetLines,
+      '',
+      '任务内容：',
+      '<在这里填写要让每个目标执行的排查或操作任务>',
+      '',
+      '执行要求：',
+      '- 对每个目标生成一条 tasks 记录，target_session_id 必须使用上面列出的 ID。',
+      '- task_description 使用“任务内容”并结合目标资产信息。',
+      '- group 模式必须带 group_name；global 模式不要扩大到未列出的目标。',
+    ].join('\n')
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('opscore:chat-draft', {
+        detail: { sessionId: activeSessionId, message },
+      }))
+    }, 0)
+    addToast(`已生成 ${multiAgentTargets.length} 个目标的协同指令草稿`, 'success')
+  }, [
+    addToast,
+    currentSessionId,
+    multiAgentDraftScope,
+    multiAgentTargetGroups,
+    multiAgentTargets,
+    setCurrentSession,
+    setView,
+  ])
+
   const handleSelectSession = useCallback((sessionId: string, group: string) => {
     setCurrentSession(sessionId)
     setView('chat')
@@ -320,6 +403,10 @@ export function useSessionSidebarModel() {
     handleSelectSession,
     handleSetAllSessionsPermission,
     handleSetGroupPermission,
+    handleClearMultiAgentTargets,
+    handleComposeMultiAgentDraft,
+    handleSelectGroupTargets,
+    handleToggleMultiAgentTarget,
     closeSessionEdit: () => setEditingSessionId(null),
     closeTerminal: () => {
       if (!activeTerminalSessionId) return
@@ -334,6 +421,10 @@ export function useSessionSidebarModel() {
     readonlyCount: sessionMetrics.readonly,
     readwriteCount: sessionMetrics.readwrite,
     runningCount: sessionMetrics.running,
+    multiAgentDraftScope,
+    multiAgentTargetCount: multiAgentTargets.length,
+    multiAgentTargetIds,
+    multiAgentTargetGroups,
     selectedGroup,
     sessionList: visibleSessions.sessionList,
     sessionSearch,

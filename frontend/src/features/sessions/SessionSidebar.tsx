@@ -75,6 +75,13 @@ export default function SessionSidebar() {
           readonly={model.readonlyCount}
           readwrite={model.readwriteCount}
         />
+        <MultiAgentTargetBar
+          count={model.multiAgentTargetCount}
+          scope={model.multiAgentDraftScope}
+          groups={model.multiAgentTargetGroups}
+          onCompose={model.handleComposeMultiAgentDraft}
+          onClear={model.handleClearMultiAgentTargets}
+        />
 
         <div className="mt-2">
           <SessionSearchBox
@@ -97,9 +104,12 @@ export default function SessionSidebar() {
         onDeleteGroup={model.handleDeleteGroup}
         onRenameGroup={model.handleRenameGroup}
         onSelectGroup={model.setSelectedGroup}
+        onSelectGroupTargets={model.handleSelectGroupTargets}
         onSelectSession={model.handleSelectSession}
         onSetGroupPermission={model.handleSetGroupPermission}
+        onToggleMultiAgentTarget={model.handleToggleMultiAgentTarget}
         onToggleGroup={model.toggleGroup}
+        multiAgentTargetIds={model.multiAgentTargetIds}
         searching={Boolean(model.sessionSearch.trim())}
       />
 
@@ -152,6 +162,46 @@ export default function SessionSidebar() {
         </div>
       )}
     </aside>
+  )
+}
+
+function MultiAgentTargetBar({
+  count,
+  scope,
+  groups,
+  onCompose,
+  onClear,
+}: {
+  count: number
+  scope: string
+  groups: string[]
+  onCompose: () => void
+  onClear: () => void
+}) {
+  if (count <= 0) return null
+  const scopeText = scope === 'group' ? `分组 ${groups[0] || ''}` : '全局'
+  return (
+    <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded-lg border border-ops-accent/30 bg-ops-accent/8 px-2 py-1 text-[10px] text-ops-subtext">
+      <span className="truncate" title={`已选 ${count} 个多 Agent 目标，范围：${scopeText}`}>
+        已选 {count} 个目标 · {scopeText}
+      </span>
+      <button
+        type="button"
+        onClick={onCompose}
+        className="rounded-md border border-ops-accent/40 bg-ops-accent/12 px-1.5 py-0.5 font-semibold text-ops-accent transition-colors hover:bg-ops-accent/18"
+        title="生成多 Agent 协同指令草稿"
+      >
+        生成指令
+      </button>
+      <button
+        type="button"
+        onClick={onClear}
+        className="rounded-md border border-ops-surface1/65 bg-ops-dark/35 px-1.5 py-0.5 font-semibold text-ops-overlay transition-colors hover:text-ops-text"
+        title="清空多 Agent 目标"
+      >
+        清空
+      </button>
+    </div>
   )
 }
 
