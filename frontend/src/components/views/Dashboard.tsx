@@ -1,4 +1,5 @@
 import PageHeader from '@/components/layout/PageHeader'
+import { exportDashboardRunTraceAudit } from '@/api/dashboard'
 import { categoryLabel, protocolLabel, statusLabel, toolsetLabel } from '@/utils/assetDisplay'
 import { BarList, InspectionTrendStrip, MetricCard, TrendStrip } from './DashboardParts'
 import { useDashboardData } from './useDashboardData'
@@ -31,6 +32,17 @@ export default function Dashboard() {
   const auditModules = Object.entries(runTraceAudit?.module_counts || {})
     .sort((a, b) => (b[1].total || 0) - (a[1].total || 0))
     .slice(0, 4)
+  const handleExportRunTraceAudit = async () => {
+    const response = await exportDashboardRunTraceAudit()
+    const markdown = response.data.markdown || ''
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `opscore-run-trace-audit-${new Date().toISOString().slice(0, 10)}.md`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="ops-page">
@@ -108,6 +120,11 @@ export default function Dashboard() {
                   <span className={`rounded-lg px-2.5 py-1 font-mono text-xs font-bold ${runTraceAudit?.unaudited_run_count ? 'bg-ops-accent/12 text-ops-accent' : 'bg-ops-success/12 text-ops-success'}`}>
                     {auditCoverage}%
                   </span>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button className="ops-control rounded-lg px-3 py-1.5 text-xs font-bold" onClick={() => void handleExportRunTraceAudit()}>
+                    导出审计
+                  </button>
                 </div>
                 <div className="mt-3 grid gap-2 md:grid-cols-3">
                   <AuditMiniStat label="上下文命中" value={runTraceAudit?.context_hits || 0} hint={`来源 ${runTraceAudit?.context_sources || 0}`} />

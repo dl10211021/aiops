@@ -429,6 +429,7 @@ def test_run_trace_context_prompt_audit_summary_is_visible():
 
 def test_dashboard_shows_global_run_trace_audit_overview():
     dashboard = Path("frontend/src/components/views/Dashboard.tsx").read_text(encoding="utf-8")
+    dashboard_api = Path("frontend/src/api/dashboard.ts").read_text(encoding="utf-8")
     types = Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
 
     assert "const runTraceAudit = overview?.run_trace_audit" in dashboard
@@ -438,6 +439,10 @@ def test_dashboard_shows_global_run_trace_audit_overview():
     assert "实际工具" in dashboard
     assert "runTraceAudit?.runtime_timeout_count" in dashboard
     assert "runTraceAudit?.runtime_retry_count" in dashboard
+    assert "导出审计" in dashboard
+    assert "exportDashboardRunTraceAudit" in dashboard
+    assert "export async function exportDashboardRunTraceAudit" in dashboard_api
+    assert "/dashboard/run-trace-audit/export" in dashboard_api
     assert "function AuditMiniStat" in dashboard
     assert "export interface DashboardRunTraceAuditOverview" in types
     assert "run_trace_audit?: DashboardRunTraceAuditOverview" in types

@@ -5,6 +5,10 @@ export async function getDashboardOverview() {
   return request<DashboardOverview>('/dashboard/overview')
 }
 
+export async function exportDashboardRunTraceAudit() {
+  return request<{ markdown: string; overview: DashboardOverview['run_trace_audit'] }>('/dashboard/run-trace-audit/export')
+}
+
 export async function getDashboardAlertTrend() {
   return request<{ points: AlertTrendPoint[] }>('/dashboard/alerts/trend')
 }

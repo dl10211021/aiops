@@ -139,6 +139,47 @@ class TestDashboardService(unittest.TestCase):
         self.assertEqual(payload["sessions"][0]["session_id"], "sid-2")
         self.assertEqual(payload["sessions"][0]["runtime_timeout_count"], 1)
 
+    def test_run_trace_audit_markdown_report_summarizes_runtime_and_gaps(self):
+        overview = {
+            "session_count": 2,
+            "sessions_with_trace": 2,
+            "run_count": 3,
+            "audited_run_count": 2,
+            "unaudited_run_count": 1,
+            "context_hits": 4,
+            "context_sources": 5,
+            "context_errors": 1,
+            "prompt_modules": 3,
+            "runtime_tool_count": 8,
+            "runtime_error_count": 2,
+            "runtime_timeout_count": 1,
+            "runtime_retry_count": 2,
+            "runtime_concurrent_count": 4,
+            "runtime_untracked_count": 1,
+            "runtime_error_types": {"tool_timeout": 1, "tool_execution_failed": 1},
+            "sessions": [
+                {
+                    "session_id": "sid-2",
+                    "label": "旧会话",
+                    "protocol": "ssh",
+                    "run_count": 1,
+                    "unaudited_run_count": 1,
+                    "context_errors": 0,
+                    "runtime_timeout_count": 1,
+                    "runtime_retry_count": 1,
+                }
+            ],
+        }
+
+        markdown = dashboard_service.format_run_trace_audit_markdown(overview)
+
+        self.assertIn("# OpsCore Run Trace 审计报表", markdown)
+        self.assertIn("- 审计覆盖: 2/3", markdown)
+        self.assertIn("- 未审计运行: 1", markdown)
+        self.assertIn("- 实际超时: 1", markdown)
+        self.assertIn("| 旧会话 | ssh | 1 | 1 | 1 | 1 |", markdown)
+        self.assertIn("tool_timeout: 1", markdown)
+
     def test_alert_trend_and_risk_ranking_payloads_use_alert_store(self):
         alerts = [
             {"created_at": "2026-05-01 10:00:00", "severity": "critical", "host": "db-1"},

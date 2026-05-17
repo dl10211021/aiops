@@ -929,3 +929,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：复用既有证据 API，不新增后端接口，不改变任务调度和执行，不影响告警、巡检、资产中心或审批。
 - 遗留风险：当前回填的是任务摘要草稿，不是自动读取真实子 Agent 运行结果；真实结果仍应通过 Run Trace 证据挂接补齐。
 - 下一轮建议：这个功能到此收手。后续更高价值方向是做离线审计报表，或把子 Agent Run Trace 结果自动关联到对应可观测任务。
+
+### 2026-05-18 Round 68：Run Trace 离线审计报表
+
+- 完成：新增 `/dashboard/run-trace-audit/export` 只读导出接口，基于现有全局 Run Trace 审计 overview 生成 Markdown 报表；总览审计面板新增“导出审计”按钮，下载当前审计覆盖、Context/Prompt、实际执行、错误类型和高风险会话摘要。
+- 验证：`python -m pytest tests/test_dashboard_service.py::TestDashboardService::test_run_trace_audit_markdown_report_summarizes_runtime_and_gaps tests/test_tool_policy_runtime_frontend.py::test_dashboard_shows_global_run_trace_audit_overview -q`；提交前继续跑 frontend build、preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：审计信息从在线面板推进到可离线留存的 Markdown 报表，便于复盘 prompt/context 覆盖和执行层超时、重试、并发结果。
+- OpsCore 主线影响：只读导出，不新增审计仓库，不改变 Run Trace 采集、工具执行、审批、告警、巡检或资产中心。
+- 遗留风险：报表仍基于当前在线会话聚合，不是全历史审计仓库；大规模长期审计需要单独落库和分页。
+- 下一轮建议：这个功能到此收手。后续更高价值方向是把子 Agent Run Trace 结果自动关联到对应可观测任务，或做记忆/学习质量报表。

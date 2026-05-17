@@ -10,6 +10,7 @@ from core.dashboard_service import (
     build_dashboard_inspection_run_trend_payload,
     build_dashboard_overview_payload,
     build_dashboard_risk_ranking_payload,
+    build_run_trace_audit_export_payload,
 )
 from core.tool_registry import tool_registry
 
@@ -32,6 +33,15 @@ async def get_dashboard_toolsets():
     """大屏/配置页工具集接口：展示平台工具覆盖度。"""
     catalog = tool_registry.catalog()
     return ResponseModel(**dashboard_response_kwargs(catalog))
+
+
+@router.get("/dashboard/run-trace-audit/export", response_model=ResponseModel)
+async def export_dashboard_run_trace_audit():
+    data = await asyncio.to_thread(
+        build_run_trace_audit_export_payload,
+        ssh_manager.active_sessions,
+    )
+    return ResponseModel(**dashboard_response_kwargs(data))
 
 
 @router.get("/dashboard/alerts/trend", response_model=ResponseModel)

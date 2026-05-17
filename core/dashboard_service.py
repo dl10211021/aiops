@@ -128,6 +128,85 @@ def build_run_trace_audit_overview(
     return overview
 
 
+def build_run_trace_audit_export_payload(
+    active_sessions: Mapping[str, dict],
+    *,
+    memory_db: Any | None = None,
+) -> dict[str, Any]:
+    overview = build_run_trace_audit_overview(active_sessions, memory_db=memory_db)
+    return {"markdown": format_run_trace_audit_markdown(overview), "overview": overview}
+
+
+def format_run_trace_audit_markdown(overview: Mapping[str, Any]) -> str:
+    runtime_errors = overview.get("runtime_error_types") if isinstance(overview.get("runtime_error_types"), Mapping) else {}
+    sessions = overview.get("sessions") if isinstance(overview.get("sessions"), list) else []
+    lines = [
+        "# OpsCore Run Trace 审计报表",
+        "",
+        "## 总览",
+        f"- 会话: {_int_value(overview, 'sessions_with_trace')}/{_int_value(overview, 'session_count')}",
+        f"- 运行: {_int_value(overview, 'run_count')}",
+        f"- 审计覆盖: {_int_value(overview, 'audited_run_count')}/{_int_value(overview, 'run_count')}",
+        f"- 未审计运行: {_int_value(overview, 'unaudited_run_count')}",
+        "",
+        "## Context / Prompt",
+        f"- 上下文命中: {_int_value(overview, 'context_hits')}/{_int_value(overview, 'context_sources')}",
+        f"- 上下文读取失败: {_int_value(overview, 'context_errors')}",
+        f"- Prompt 模块: {_int_value(overview, 'prompt_modules')}",
+        "",
+        "## 实际执行",
+        f"- 实际工具: {_int_value(overview, 'runtime_tool_count')}",
+        f"- 实际失败: {_int_value(overview, 'runtime_error_count')}",
+        f"- 实际超时: {_int_value(overview, 'runtime_timeout_count')}",
+        f"- 实际重试: {_int_value(overview, 'runtime_retry_count')}",
+        f"- 实际并发: {_int_value(overview, 'runtime_concurrent_count')}",
+        f"- 未跟踪旧事件: {_int_value(overview, 'runtime_untracked_count')}",
+        "",
+        "## 错误类型",
+    ]
+    if runtime_errors:
+        lines.extend(f"- {key}: {value}" for key, value in sorted(runtime_errors.items()))
+    else:
+        lines.append("- 无")
+    lines.extend(
+        [
+            "",
+            "## 高风险会话",
+            "| 会话 | 协议 | 运行 | 未审计 | 超时 | 重试 |",
+            "| --- | --- | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    if sessions:
+        for session in sessions:
+            if not isinstance(session, Mapping):
+                continue
+            lines.append(
+                "| {label} | {protocol} | {run_count} | {unaudited} | {timeout} | {retry} |".format(
+                    label=_markdown_cell(session.get("label") or session.get("session_id") or "-"),
+                    protocol=_markdown_cell(session.get("protocol") or "-"),
+                    run_count=_int_value(session, "run_count"),
+                    unaudited=_int_value(session, "unaudited_run_count"),
+                    timeout=_int_value(session, "runtime_timeout_count"),
+                    retry=_int_value(session, "runtime_retry_count"),
+                )
+            )
+    else:
+        lines.append("| 无 | - | 0 | 0 | 0 | 0 |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _int_value(source: Mapping[str, Any], key: str) -> int:
+    try:
+        return int(source.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _markdown_cell(value: object) -> str:
+    return str(value or "").replace("|", "\\|").replace("\n", " ").strip() or "-"
+
+
 def _merge_count_map(target: dict[str, dict[str, int]], source: Mapping[str, Mapping[str, int]]) -> None:
     for key, counts in source.items():
         if not isinstance(counts, Mapping):
