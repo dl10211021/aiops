@@ -533,3 +533,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：仍是只读审计和进度查看，不改变工具执行、审批、资产、巡检、通知或告警链路。
 - 遗留风险：单次运行下钻仍在右侧链路面板内，没有独立 Run 详情页；事件还不能直接跳转到具体工具证据、审批记录或学习候选。
 - 下一轮建议：给每个 Run Trace 事件补 `evidence_ref` / `approval_ref` 的前端定位入口，或先做后端 `Run Trace -> Learning Candidate` 的只读候选提取预览。
+
+### 2026-05-17 Round 24：Run Trace 证据和审批引用
+
+- 完成：工具执行结束 hook payload 增加 `evidence_id`，保留已有 `approval_ref`；右侧 Run Trace 事件卡片显示“证据”和“审批”引用，后续报告、审计和学习候选可以直接沿这些 ID 回查。
+- 验证：`python -m pytest tests/test_agent_tool_loop.py tests/test_run_trace_store.py tests/test_tool_policy_runtime_frontend.py -q` 通过，27 passed；`cd frontend && npm run build` 通过。
+- Hermes 差距变化：Run Trace 不再只是时间线文本，开始携带可回查的证据锚点，更接近 Hermes 的 trace/log 可追溯体验，同时保留 OpsCore 的运维证据链。
+- OpsCore 主线影响：只增加审计引用字段和只读展示，不改变工具执行结果、审批决策、资产、巡检、通知或告警逻辑。
+- 遗留风险：当前只是显示 ID，尚未提供点击打开工具证据详情、审批详情或学习候选预览。
+- 下一轮建议：复用知识库候选的 evidence dialog，给 Run Trace 的证据 ID 增加“查看证据详情”入口。

@@ -108,6 +108,7 @@ class AgentToolLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(hook_events[0][1]["args"], {"command": "uptime"})
         self.assertEqual(hook_events[0][1]["tool_policy"]["name"], "linux_execute_command")
         self.assertEqual(hook_events[1][1]["status"], "done")
+        self.assertEqual(hook_events[1][1]["evidence_id"], payloads[1]["evidence_id"])
         self.assertEqual(hook_events[1][1]["result_meta"]["runtime_execution"]["final_status"], "success")
 
     async def test_approval_request_includes_tool_policy(self):

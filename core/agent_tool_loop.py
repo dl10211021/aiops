@@ -162,6 +162,7 @@ async def process_chat_tool_calls(
                 iteration=iteration,
                 status="error",
                 result_meta={"error_type": "invalid_arguments"},
+                evidence_id=_tool_end_evidence_id(msg_end),
                 finished_at=finished_at,
             )
             yield sse_raw(msg_end)
@@ -263,6 +264,7 @@ async def process_chat_tool_calls(
                 iteration=iteration,
                 status="blocked",
                 result_meta={"error_type": "spin_guard"},
+                evidence_id=_tool_end_evidence_id(msg_end),
                 finished_at=finished_at,
             )
             yield sse_raw(msg_end)
@@ -412,6 +414,7 @@ async def process_chat_tool_calls(
                         "tool_policy": tool_policy,
                     },
                     approval_ref=tc_id,
+                    evidence_id=_tool_end_evidence_id(msg_end),
                     finished_at=finished_at,
                 )
                 yield sse_raw(msg_end)
@@ -513,6 +516,7 @@ async def process_chat_tool_calls(
             status=result_status,
             result_meta=result_meta,
             approval_ref=tc_id if approval_required else None,
+            evidence_id=_tool_end_evidence_id(msg_end),
             started_at=started_at,
             finished_at=finished_at,
         )
@@ -672,6 +676,7 @@ async def _process_concurrent_tool_calls(
             iteration=iteration,
             status=_tool_result_status(msg_end),
             result_meta={"tool_policy": item["policy"], "runtime_execution": runtime_execution},
+            evidence_id=_tool_end_evidence_id(msg_end),
             started_at=started_at_by_id.get(prepared_call.id),
             finished_at=finished_at,
             concurrent=True,
@@ -712,6 +717,14 @@ def _collect_tool_end_trace(
             "completedAt": payload.get("finished_at"),
         }
     )
+
+
+def _tool_end_evidence_id(raw_event: str) -> str:
+    try:
+        payload = json.loads(raw_event)
+    except Exception:
+        return ""
+    return str(payload.get("evidence_id") or "").strip()
 
 
 async def _emit_tool_before_hook(
@@ -755,6 +768,7 @@ async def _emit_tool_after_hook(
     status: str,
     result_meta: dict[str, Any],
     approval_ref: str | None = None,
+    evidence_id: str | None = None,
     started_at: int | None = None,
     finished_at: int | None = None,
     concurrent: bool = False,
@@ -770,6 +784,7 @@ async def _emit_tool_after_hook(
             "context": _hook_context(context),
             "status": status,
             "result_meta": result_meta,
+            "evidence_id": evidence_id or "",
             "approval_ref": approval_ref,
             "started_at": started_at,
             "finished_at": finished_at,

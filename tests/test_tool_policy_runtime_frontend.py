@@ -207,6 +207,18 @@ def test_thinking_chain_search_includes_runtime_execution_labels():
     assert "toolPolicySearchText(toolPolicyFromTrace(trace))" in source
 
 
+def test_run_trace_events_show_evidence_and_approval_refs():
+    source = Path(
+        "frontend/src/features/sessions/AiThinkingChainPanel.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert "function runTraceEvidenceId(event: RunTraceEvent)" in source
+    assert "function runTraceApprovalRef(event: RunTraceEvent)" in source
+    assert "证据：{runTraceEvidenceId(event)}" in source
+    assert "审批：{runTraceApprovalRef(event)}" in source
+    assert "报告、审计和学习候选回查" in source
+
+
 def test_frontend_shows_actual_http_action_separately_from_tool_policy():
     presentation = Path(
         "frontend/src/features/sessions/toolPolicyPresentation.ts"
