@@ -1,9 +1,12 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { ChatMessage, ChatRuntimeEvent, ExecTraceItem, RunTraceEvent, RunTraceRun, SessionMemoryActivity } from '@/types'
+import type { ApprovalRequest, ChatMessage, ChatRuntimeEvent, ExecTraceItem, RunTraceEvent, RunTraceRun, SessionMemoryActivity } from '@/types'
+import { getApproval } from '@/api/approvals'
 import { isAbortError } from '@/api/http'
 import { getSessionHistoryEvidenceTrace, getSessionMemoryActivity, getSessionRunTrace } from '@/api/sessionHistory'
 import { toolLabel } from '@/utils/assetDisplay'
+import { ApprovalInfo, ApprovalStatusBadge } from '@/components/views/ApprovalCenterShared'
+import { ApprovalSourceSummary } from './ApprovalSourceSummary'
 import { parseJsonRecord } from './jsonRecords'
 import ToolTraceList from './ToolTraceList'
 import { resultReason, traceExecutionText, traceTargetLabel } from './traceUtils'
@@ -294,6 +297,13 @@ interface RunTraceEvidenceDetail {
   error?: string
 }
 
+interface RunTraceApprovalDetail {
+  approvalId: string
+  approval?: ApprovalRequest | null
+  loading?: boolean
+  error?: string
+}
+
 function eventRunId(event: RunTraceEvent, index: number) {
   const payloadRunId = typeof event.payload?.run_id === 'string' ? event.payload.run_id : ''
   return event.run_id || payloadRunId || `ungrouped-${event.event_ts || event.created_at || index}`
@@ -397,6 +407,7 @@ export default function AiThinkingChainPanel({
   const [runTraceRunIndex, setRunTraceRunIndex] = useState<RunTraceRun[]>([])
   const [selectedRunTraceId, setSelectedRunTraceId] = useState('')
   const [runTraceEvidenceDetail, setRunTraceEvidenceDetail] = useState<RunTraceEvidenceDetail | null>(null)
+  const [runTraceApprovalDetail, setRunTraceApprovalDetail] = useState<RunTraceApprovalDetail | null>(null)
   const [runTraceLoading, setRunTraceLoading] = useState(false)
   const deferredMessages = useDeferredValue(messages)
   const displayTab = fixedTab || activeTab
@@ -536,6 +547,22 @@ export default function AiThinkingChainPanel({
     }
   }
 
+  const openRunTraceApproval = async (event: RunTraceEvent) => {
+    const approvalId = runTraceApprovalRef(event)
+    if (!approvalId) return
+    setRunTraceApprovalDetail({ approvalId, loading: true })
+    try {
+      const response = await getApproval(approvalId)
+      setRunTraceApprovalDetail({ approvalId, approval: response.data.approval })
+    } catch (error: unknown) {
+      setRunTraceApprovalDetail({
+        approvalId,
+        approval: null,
+        error: error instanceof Error ? error.message : '加载审批详情失败',
+      })
+    }
+  }
+
   return (
     <section className="min-h-0 flex min-w-0 flex-1 flex-col overflow-hidden border-t border-ops-surface0/80">
       <header className="space-y-2 border-b border-ops-surface0/80 bg-ops-dark/55 px-3 py-2.5">
@@ -607,6 +634,7 @@ export default function AiThinkingChainPanel({
               selectedRunId={selectedRunTraceId}
               onSelectRun={setSelectedRunTraceId}
               onOpenEvidence={(event) => void openRunTraceEvidence(event)}
+              onOpenApproval={(event) => void openRunTraceApproval(event)}
             />
             {traceGroups.length === 0 ? (
               <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
@@ -831,6 +859,10 @@ export default function AiThinkingChainPanel({
         sessionMode={sessionMode}
         onClose={() => setRunTraceEvidenceDetail(null)}
       />
+      <RunTraceApprovalDialog
+        detail={runTraceApprovalDetail}
+        onClose={() => setRunTraceApprovalDetail(null)}
+      />
     </section>
   )
 }
@@ -843,6 +875,7 @@ function RunTraceStrip({
   selectedRunId,
   onSelectRun,
   onOpenEvidence,
+  onOpenApproval,
 }: {
   events: RunTraceEvent[]
   runs: RunTraceRun[]
@@ -851,6 +884,7 @@ function RunTraceStrip({
   selectedRunId: string
   onSelectRun: (runId: string) => void
   onOpenEvidence: (event: RunTraceEvent) => void
+  onOpenApproval: (event: RunTraceEvent) => void
 }) {
   const recentRuns = groupRunTraceEvents(events).slice(-6).reverse()
   const runSummaries = new Map(runs.map((run) => [run.run_id, run]))
@@ -962,12 +996,14 @@ function RunTraceStrip({
                               </button>
                             )}
                             {runTraceApprovalRef(event) && (
-                              <span
+                              <button
+                                type="button"
+                                onClick={() => onOpenApproval(event)}
                                 className="max-w-full truncate rounded-full border border-amber-400/35 bg-amber-400/10 px-2 py-0.5 font-mono text-[10px] text-amber-100"
-                                title="本次工具执行关联的审批或受控执行引用。"
+                                title="查看本次工具执行关联的审批详情。"
                               >
                                 审批：{runTraceApprovalRef(event)}
-                              </span>
+                              </button>
                             )}
                           </div>
                         )}
@@ -1032,6 +1068,83 @@ function RunTraceEvidenceDialog({
           ) : !detail.loading && !detail.error ? (
             <div className="rounded border border-ops-surface0 bg-ops-dark/35 px-3 py-3 text-xs text-ops-subtext">
               暂未在会话历史中匹配到完整执行轨迹，仅保留当前 Run Trace 上的证据引用。
+            </div>
+          ) : null}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function RunTraceApprovalDialog({
+  detail,
+  onClose,
+}: {
+  detail: RunTraceApprovalDetail | null
+  onClose: () => void
+}) {
+  if (!detail) return null
+  const approval = detail.approval || null
+  const context = approval?.context || {}
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+      <section className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-xl border border-ops-surface1 bg-ops-panel shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-ops-surface0 px-4 py-3">
+          <div>
+            <div className="text-sm font-semibold text-ops-text">Run Trace 审批详情</div>
+            <div className="mt-1 font-mono text-[11px] text-ops-overlay">{detail.approvalId}</div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-ops-surface0 px-2 py-1 text-xs text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
+          >
+            关闭
+          </button>
+        </div>
+        <div className="max-h-[72vh] overflow-y-auto p-4">
+          {detail.loading && (
+            <div className="rounded border border-ops-accent/30 bg-ops-accent/10 px-3 py-2 text-xs text-ops-accent">
+              正在加载审批详情...
+            </div>
+          )}
+          {detail.error && (
+            <div className="rounded border border-ops-alert/35 bg-ops-alert/10 px-3 py-2 text-xs text-ops-alert">
+              {detail.error}
+            </div>
+          )}
+          {approval ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <ApprovalStatusBadge status={approval.status} />
+                <span className="text-sm font-semibold text-ops-accent">{toolLabel(approval.tool_name)}</span>
+                <span className="font-mono text-[11px] text-ops-overlay">{approval.id}</span>
+              </div>
+              <ApprovalSourceSummary
+                source={approval.metadata?.approval_source || null}
+                sources={approval.metadata?.approval_sources || null}
+                reason={approval.reason}
+              />
+              <div className="grid gap-2 md:grid-cols-2">
+                <ApprovalInfo label="会话" value={approval.session_id || '-'} />
+                <ApprovalInfo label="资产" value={context.remark || context.host || '-'} />
+                <ApprovalInfo label="申请时间" value={approval.requested_at || '-'} />
+                <ApprovalInfo label="处理人" value={approval.operator || '-'} />
+                <ApprovalInfo label="处理结果" value={approval.decision || approval.status} />
+                <ApprovalInfo label="到期时间" value={approval.expires_at || '-'} />
+              </div>
+              {approval.note && (
+                <div className="rounded border border-ops-surface0 bg-ops-dark/35 px-3 py-2 text-xs text-ops-subtext">
+                  备注：{approval.note}
+                </div>
+              )}
+              <pre className="ops-data-panel max-h-56 overflow-auto p-3 text-xs leading-relaxed text-ops-subtext">
+                {JSON.stringify(approval.args || {}, null, 2)}
+              </pre>
+            </div>
+          ) : !detail.loading && !detail.error ? (
+            <div className="rounded border border-ops-surface0 bg-ops-dark/35 px-3 py-3 text-xs text-ops-subtext">
+              暂未找到该审批记录，当前 Run Trace 仅保留审批引用 ID。
             </div>
           ) : null}
         </div>

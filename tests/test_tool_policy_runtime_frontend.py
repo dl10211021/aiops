@@ -233,6 +233,23 @@ def test_run_trace_evidence_refs_open_tool_trace_detail():
     assert "ToolTraceList items={[trace]} sessionMode={sessionMode}" in source
 
 
+def test_run_trace_approval_refs_open_readonly_approval_detail():
+    source = Path(
+        "frontend/src/features/sessions/AiThinkingChainPanel.tsx"
+    ).read_text(encoding="utf-8")
+    approvals_api = Path("frontend/src/api/approvals.ts").read_text(encoding="utf-8")
+
+    assert "export async function getApproval(approvalId: string)" in approvals_api
+    assert "import { getApproval } from '@/api/approvals'" in source
+    assert "onOpenApproval={(event) => void openRunTraceApproval(event)}" in source
+    assert "function RunTraceApprovalDialog(" in source
+    assert "Run Trace 审批详情" in source
+    assert "查看本次工具执行关联的审批详情" in source
+    assert "ApprovalStatusBadge status={approval.status}" in source
+    assert "ApprovalSourceSummary" in source
+    assert "暂未找到该审批记录，当前 Run Trace 仅保留审批引用 ID。" in source
+
+
 def test_frontend_shows_actual_http_action_separately_from_tool_policy():
     presentation = Path(
         "frontend/src/features/sessions/toolPolicyPresentation.ts"

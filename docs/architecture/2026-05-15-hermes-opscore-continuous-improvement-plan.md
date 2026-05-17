@@ -551,3 +551,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只读查询会话历史中的既有工具轨迹，不改变执行、审批、资产、巡检、通知或告警链路。
 - 遗留风险：审批引用仍只是显示 ID，尚未点击打开审批详情；证据详情只在当前会话历史可查时可用，历史清理后还需要独立 evidence 索引支撑。
 - 下一轮建议：给审批引用增加审批详情入口，或先抽象一个通用 EvidenceRef 组件，避免知识库、Run Trace、报告页面重复实现证据打开逻辑。
+
+### 2026-05-17 Round 26：Run Trace 审批详情入口
+
+- 完成：前端审批 API 增加只读 `getApproval`；右侧 Run Trace 的审批引用从静态 ID 升级为可点击入口，弹窗展示审批状态、工具、审批来源、会话、资产、申请时间、处理人、处理结果和参数。
+- 验证：`python -m pytest tests/test_tool_policy_runtime_frontend.py tests/test_interaction_approval_skill_routes.py -q` 通过，24 passed；`cd frontend && npm run build` 通过。
+- Hermes 差距变化：Run Trace 现在可从 run -> tool -> evidence / approval 两条链路下钻，审计闭环更接近 Hermes 的可追踪运行记录。
+- OpsCore 主线影响：审批详情入口只读，不提供批准、拒绝或执行动作，不改变审批决策、工具执行、资产、巡检、通知或告警链路。
+- 遗留风险：证据和审批详情弹窗仍在 Run Trace 面板内部各自实现，和知识库、报告页还没有共用组件。
+- 下一轮建议：抽出通用 `EvidenceRefButton` / `ApprovalRefButton` 或 Run Trace detail components，减少知识库、报告、Run Trace 的重复实现。

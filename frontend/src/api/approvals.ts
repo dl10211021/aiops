@@ -8,6 +8,10 @@ export async function getApprovals(status?: string, limit = 100) {
   return request<{ approvals: ApprovalRequest[] }>(`/approvals?${params.toString()}`)
 }
 
+export async function getApproval(approvalId: string) {
+  return request<{ approval: ApprovalRequest }>(`/approvals/${approvalId}`)
+}
+
 export async function decideApproval(
   approvalId: string,
   approved: boolean,
