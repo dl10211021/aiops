@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from connections.ssh_manager import ssh_manager
 from api.errors import raise_http_error
 from api.response_mappers.approvals import (
+    approval_audit_summary_response_kwargs,
     approval_decision_response_kwargs,
     approval_execution_response_kwargs,
     approval_request_response_kwargs,
@@ -25,6 +26,7 @@ from core.approval_execution_service import (
 from core.approval_request_service import (
     ApprovalRequestServiceError,
     decide_approval_request_record,
+    get_approval_audit_summary_record,
     get_approval_request_record,
     list_approval_request_records,
 )
@@ -78,6 +80,16 @@ async def list_approval_requests(status: str | None = None, limit: int = 100):
     return ResponseModel(
         **approval_requests_response_kwargs(
             list_approval_request_records(status=status, limit=limit)
+        )
+    )
+
+
+@router.get("/approvals/summary", response_model=ResponseModel)
+async def get_approval_summary(limit: int = 500):
+    """查询审批策略执行审计聚合。"""
+    return ResponseModel(
+        **approval_audit_summary_response_kwargs(
+            get_approval_audit_summary_record(limit=limit)
         )
     )
 

@@ -6,6 +6,7 @@ from api.mappers import (
     agent_runtime_config_saved_response_kwargs,
     active_sessions_response_kwargs,
     all_sessions_poll_response_kwargs,
+    approval_audit_summary_response_kwargs,
     approval_decision_response_kwargs,
     approval_execution_response_kwargs,
     approval_request_response_kwargs,
@@ -1039,6 +1040,11 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             approval_requests_response_kwargs(approvals),
             {"status": "success", "data": {"approvals": approvals}},
+        )
+        summary = {"total": 1, "by_status": {"pending": 1}}
+        self.assertEqual(
+            approval_audit_summary_response_kwargs(summary),
+            {"status": "success", "data": {"summary": summary}},
         )
         self.assertEqual(
             approval_request_response_kwargs(approval),

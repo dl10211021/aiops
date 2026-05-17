@@ -17,6 +17,13 @@ def approval_requests_response_kwargs(approvals: list[dict[str, Any]]) -> dict[s
     }
 
 
+def approval_audit_summary_response_kwargs(summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"summary": summary},
+    }
+
+
 def approval_request_response_kwargs(approval: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "success",

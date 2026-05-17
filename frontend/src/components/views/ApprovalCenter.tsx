@@ -9,6 +9,7 @@ import type { ApprovalRequest } from '@/types'
 import { useStore } from '@/store'
 import { ApprovalDecisionModal } from './ApprovalDecisionModal'
 import {
+  ApprovalAuditSummaryPanel,
   ApprovalEmptyState,
   ApprovalList,
   ApprovalMetric,
@@ -23,6 +24,7 @@ export default function ApprovalCenter() {
     approvals,
     approvalSearch,
     approvalTotal,
+    auditSummary,
     busyId,
     counts,
     decisionNote,
@@ -97,6 +99,8 @@ export default function ApprovalCenter() {
           <ApprovalMetric label="已拒绝" value={counts.rejected} tone="red" />
           <ApprovalMetric label="已超时" value={counts.timeout} tone="slate" />
         </div>
+
+        <ApprovalAuditSummaryPanel auditSummary={auditSummary} />
 
         {loading || approvals.length > 0 ? (
           <ApprovalList

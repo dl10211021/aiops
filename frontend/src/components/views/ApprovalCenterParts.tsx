@@ -1,4 +1,4 @@
-import type { ApprovalRequest } from '@/types'
+import type { ApprovalAuditSummary, ApprovalRequest } from '@/types'
 import type {
   SessionModeResolution,
   SessionModeSource,
@@ -109,6 +109,48 @@ export function ApprovalMetric({
   )
 }
 
+export function ApprovalAuditSummaryPanel({
+  auditSummary,
+}: {
+  auditSummary: ApprovalAuditSummary | null
+}) {
+  const layers = topEntries(auditSummary?.by_layer)
+  const risks = topEntries(auditSummary?.by_risk)
+  const recent = auditSummary?.recent?.slice(0, 4) || []
+  return (
+    <section className="ops-data-panel mb-5 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-bold text-ops-text">审批策略审计聚合</h2>
+          <p className="mt-1 text-xs text-ops-subtext">按策略层、风险类型和最近审批记录汇总，便于确认哪些 gate 正在生效。</p>
+        </div>
+        <span className="ops-control px-3 py-1 text-xs text-ops-subtext">
+          样本 {auditSummary?.total || 0}/{auditSummary?.limit || 500}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        <ApprovalSummaryBlock title="策略层" items={layers} labelFor={approvalLayerLabel} />
+        <ApprovalSummaryBlock title="风险类型" items={risks} labelFor={approvalRiskSummaryLabel} />
+        <div className="rounded-lg border border-ops-surface1 bg-ops-surface0/45 p-3">
+          <div className="text-xs font-semibold text-ops-subtext">最近审批</div>
+          <div className="mt-3 space-y-2">
+            {recent.length > 0 ? recent.map((item) => (
+              <div key={item.id || `${item.tool_name}-${item.requested_at}`} className="min-w-0 text-xs">
+                <div className="truncate font-mono text-ops-text">{item.tool_name || '-'}</div>
+                <div className="mt-0.5 truncate text-ops-subtext">
+                  {approvalStatusLabel(item.status)} · {item.session_id || '-'} · {item.reason || '-'}
+                </div>
+              </div>
+            )) : (
+              <div className="text-xs text-ops-subtext">暂无审批记录</div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function ApprovalList({
   approvals,
   loading,
@@ -160,6 +202,66 @@ export function ApprovalList({
       </div>
     </section>
   )
+}
+
+function ApprovalSummaryBlock({
+  title,
+  items,
+  labelFor,
+}: {
+  title: string
+  items: Array<[string, number]>
+  labelFor: (value: string) => string
+}) {
+  return (
+    <div className="rounded-lg border border-ops-surface1 bg-ops-surface0/45 p-3">
+      <div className="text-xs font-semibold text-ops-subtext">{title}</div>
+      <div className="mt-3 space-y-2">
+        {items.length > 0 ? items.map(([key, count]) => (
+          <div key={key} className="flex items-center justify-between gap-3 text-xs">
+            <span className="truncate text-ops-text">{labelFor(key)}</span>
+            <span className="font-mono font-semibold text-ops-accent">{count}</span>
+          </div>
+        )) : (
+          <div className="text-xs text-ops-subtext">暂无数据</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function topEntries(values?: Record<string, number>) {
+  return Object.entries(values || {})
+    .filter(([, count]) => count > 0)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 5)
+}
+
+function approvalLayerLabel(value: string) {
+  return {
+    runtime_policy: '运行策略',
+    safety_policy: '安全策略',
+    action_policy: '动作策略',
+    unknown: '未识别',
+  }[value] || value
+}
+
+function approvalRiskSummaryLabel(value: string) {
+  return {
+    destructive: '高危/破坏性',
+    write_or_external: '写入/外发',
+    skill_change: '技能变更',
+    policy_only: '策略审批',
+  }[value] || value
+}
+
+function approvalStatusLabel(value?: string) {
+  return {
+    pending: '待审批',
+    approved: '已批准',
+    rejected: '已拒绝',
+    timeout: '已超时',
+  }[value || ''] || '未知'
 }
 
 export function ApprovalEmptyState({

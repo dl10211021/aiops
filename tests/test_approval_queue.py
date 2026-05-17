@@ -334,6 +334,47 @@ class TestApprovalQueue(unittest.TestCase):
         self.assertEqual(timed_out["decision"], "timeout")
         self.assertEqual(timed_out["operator"], "system")
 
+    def test_approval_audit_summary_counts_status_policy_layer_and_risk(self):
+        from core import approval_queue
+
+        store_path = self._store_path("summary")
+        with patch.object(approval_queue, "APPROVAL_STORE_PATH", store_path):
+            approval_queue.record_approval_request(
+                tool_call_id="call-db-write",
+                session_id="sid-db",
+                tool_name="db_execute_query",
+                args={"sql": "UPDATE users SET name='ops' WHERE id=1"},
+                reason="检测到数据库数据修改或结构变更操作。",
+                context={"host": "db.local", "asset_type": "mysql", "protocol": "mysql"},
+            )
+            approval_queue.record_approval_request(
+                tool_call_id="call-runtime",
+                session_id="sid-runtime",
+                tool_name="memory_delete",
+                args={"key": "old"},
+                reason="工具执行策略要求审批：删除记忆，模式=destructive，审批策略=always_required，原因=强制审批",
+                context={"asset_type": "virtual", "protocol": "virtual"},
+            )
+            approval_queue.resolve_approval_request("call-db-write", approved=True, operator="dba")
+
+            summary = approval_queue.approval_audit_summary(limit=50)
+
+            from api import approval_routes
+
+            response = asyncio.run(approval_routes.get_approval_summary(limit=50))
+
+        self.assertEqual(summary["total"], 2)
+        self.assertEqual(summary["by_status"]["pending"], 1)
+        self.assertEqual(summary["by_status"]["approved"], 1)
+        self.assertEqual(summary["by_tool"]["db_execute_query"], 1)
+        self.assertEqual(summary["by_tool"]["memory_delete"], 1)
+        self.assertEqual(summary["by_layer"]["action_policy"], 1)
+        self.assertEqual(summary["by_layer"]["runtime_policy"], 1)
+        self.assertEqual(summary["by_risk"]["write_or_external"], 1)
+        self.assertEqual(summary["by_risk"]["destructive"], 1)
+        self.assertEqual(summary["recent"][0]["id"], "call-runtime")
+        self.assertEqual(response.data["summary"], summary)
+
     def test_approval_routes_list_and_decide_without_live_future(self):
         from core import approval_queue
 

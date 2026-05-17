@@ -478,6 +478,89 @@ def get_approval_request(approval_id: str) -> dict[str, Any] | None:
     return None
 
 
+def _approval_layers(item: dict[str, Any]) -> list[str]:
+    metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    sources = metadata.get("approval_sources") if isinstance(metadata, dict) else None
+    layers: list[str] = []
+    if isinstance(sources, list):
+        for source in sources:
+            if isinstance(source, dict):
+                layer = str(source.get("layer") or "").strip()
+                if layer:
+                    layers.append(layer)
+    if not layers and isinstance(metadata, dict):
+        source = metadata.get("approval_source")
+        if isinstance(source, dict):
+            layer = str(source.get("layer") or "").strip()
+            if layer:
+                layers.append(layer)
+    return list(dict.fromkeys(layers or ["unknown"]))
+
+
+def _approval_risks(item: dict[str, Any]) -> list[str]:
+    metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    tool_policy = metadata.get("tool_policy") if isinstance(metadata, dict) else {}
+    if not isinstance(tool_policy, dict):
+        tool_policy = {}
+    operation_mode = str(tool_policy.get("operation_mode") or "").strip()
+    approval_policy = str(tool_policy.get("approval_policy") or "").strip()
+    risks: list[str] = []
+    if bool(tool_policy.get("destructive")) or operation_mode == "destructive":
+        risks.append("destructive")
+    if operation_mode in {"write", "read_write", "external_effect"} or approval_policy == "guarded_write":
+        risks.append("write_or_external")
+    if isinstance(metadata, dict) and (metadata.get("skill_change") or metadata.get("skill_rollback")):
+        risks.append("skill_change")
+    return list(dict.fromkeys(risks or ["policy_only"]))
+
+
+def approval_audit_summary(limit: int = 500) -> dict[str, Any]:
+    with _LOCK:
+        items = _read_store()
+        changed = _expire_pending(items)
+        if changed:
+            _write_store(items)
+    try:
+        safe_limit = max(1, min(int(limit), 500))
+    except (TypeError, ValueError):
+        safe_limit = 500
+    approvals = sorted(items, key=lambda value: value.get("requested_at_ts", 0), reverse=True)[:safe_limit]
+    by_status = {"pending": 0, "approved": 0, "rejected": 0, "timeout": 0}
+    by_tool: dict[str, int] = {}
+    by_layer: dict[str, int] = {}
+    by_risk = {"destructive": 0, "write_or_external": 0, "skill_change": 0, "policy_only": 0}
+    for item in approvals:
+        status = str(item.get("status") or "unknown")
+        by_status[status] = by_status.get(status, 0) + 1
+        tool_name = str(item.get("tool_name") or "unknown")
+        by_tool[tool_name] = by_tool.get(tool_name, 0) + 1
+        for layer in _approval_layers(item):
+            by_layer[layer] = by_layer.get(layer, 0) + 1
+        for risk in _approval_risks(item):
+            by_risk[risk] = by_risk.get(risk, 0) + 1
+    recent = [
+        {
+            "id": item.get("id"),
+            "status": item.get("status"),
+            "tool_name": item.get("tool_name"),
+            "session_id": item.get("session_id"),
+            "reason": item.get("reason"),
+            "requested_at": item.get("requested_at"),
+            "resolved_at": item.get("resolved_at"),
+        }
+        for item in approvals[:8]
+    ]
+    return {
+        "total": len(approvals),
+        "limit": safe_limit,
+        "by_status": by_status,
+        "by_tool": by_tool,
+        "by_layer": by_layer,
+        "by_risk": by_risk,
+        "recent": recent,
+    }
+
+
 def list_approval_requests(status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
     normalized_status = str(status or "").strip().lower()
     with _LOCK:

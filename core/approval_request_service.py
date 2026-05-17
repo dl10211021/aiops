@@ -4,6 +4,7 @@ from typing import Any
 
 from core import dispatcher as dispatcher_module
 from core.approval_queue import (
+    approval_audit_summary,
     get_approval_request,
     list_approval_requests,
     resolve_approval_request,
@@ -23,6 +24,10 @@ def _resolve_dispatcher(dispatcher: Any | None = None) -> Any:
 
 def list_approval_request_records(status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
     return list_approval_requests(status=status, limit=limit)
+
+
+def get_approval_audit_summary_record(limit: int = 500) -> dict[str, Any]:
+    return approval_audit_summary(limit=limit)
 
 
 def get_approval_request_record(approval_id: str) -> dict[str, Any]:

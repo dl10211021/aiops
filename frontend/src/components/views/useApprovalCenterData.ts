@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { decideApproval, executeApproval, getApprovals } from '@/api/approvals'
+import { decideApproval, executeApproval, getApprovals, getApprovalSummary } from '@/api/approvals'
 import { useStore } from '@/store'
-import type { ApprovalRequest } from '@/types'
+import type { ApprovalAuditSummary, ApprovalRequest } from '@/types'
 import type { ApprovalRiskFilter, ApprovalStatusFilter } from './approvalDisplay'
 
 export function useApprovalCenterData() {
@@ -11,6 +11,7 @@ export function useApprovalCenterData() {
   const [approvalSearch, setApprovalSearch] = useState('')
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
   const [allApprovals, setAllApprovals] = useState<ApprovalRequest[]>([])
+  const [auditSummary, setAuditSummary] = useState<ApprovalAuditSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -22,12 +23,14 @@ export function useApprovalCenterData() {
     setLoading(true)
     setError('')
     try {
-      const [filteredRes, allRes] = await Promise.all([
+      const [filteredRes, allRes, summaryRes] = await Promise.all([
         getApprovals(status, 200),
         getApprovals('all', 500),
+        getApprovalSummary(500),
       ])
       setApprovals(filteredRes.data.approvals || [])
       setAllApprovals(allRes.data.approvals || [])
+      setAuditSummary(summaryRes.data.summary || null)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '加载审批队列失败')
     } finally {
@@ -104,6 +107,7 @@ export function useApprovalCenterData() {
     approvals: visibleApprovals,
     approvalSearch,
     approvalTotal: approvals.length,
+    auditSummary,
     busyId,
     counts,
     decisionNote,

@@ -1,4 +1,4 @@
-import type { ApprovalRequest } from '@/types'
+import type { ApprovalAuditSummary, ApprovalRequest } from '@/types'
 import { request } from './http'
 
 export async function getApprovals(status?: string, limit = 100) {
@@ -10,6 +10,12 @@ export async function getApprovals(status?: string, limit = 100) {
 
 export async function getApproval(approvalId: string) {
   return request<{ approval: ApprovalRequest }>(`/approvals/${approvalId}`)
+}
+
+export async function getApprovalSummary(limit = 500) {
+  const params = new URLSearchParams()
+  params.set('limit', String(limit))
+  return request<{ summary: ApprovalAuditSummary }>(`/approvals/summary?${params.toString()}`)
 }
 
 export async function decideApproval(

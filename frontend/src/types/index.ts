@@ -1817,6 +1817,24 @@ export interface ApprovalRequest {
   resolved_at?: string | null
 }
 
+export interface ApprovalAuditSummary {
+  total: number
+  limit: number
+  by_status: Record<string, number>
+  by_tool: Record<string, number>
+  by_layer: Record<string, number>
+  by_risk: Record<string, number>
+  recent: Array<{
+    id?: string
+    status?: string
+    tool_name?: string
+    session_id?: string
+    reason?: string
+    requested_at?: string
+    resolved_at?: string | null
+  }>
+}
+
 export interface LLMPreset {
   name: string
   base_url: string

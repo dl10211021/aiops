@@ -259,6 +259,25 @@ def test_runtime_execution_labels_show_actual_timeout_and_failure_state():
     assert "labels.push(`实际重试 ${Math.round(attempts)}${totalText} 次`)" in presentation
 
 
+def test_approval_center_surfaces_policy_audit_summary():
+    data = Path("frontend/src/components/views/useApprovalCenterData.ts").read_text(encoding="utf-8")
+    api = Path("frontend/src/api/approvals.ts").read_text(encoding="utf-8")
+    parts = Path("frontend/src/components/views/ApprovalCenterParts.tsx").read_text(encoding="utf-8")
+    center = Path("frontend/src/components/views/ApprovalCenter.tsx").read_text(encoding="utf-8")
+    types = Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
+
+    assert "getApprovalSummary" in api
+    assert "ApprovalAuditSummary" in types
+    assert "const [auditSummary, setAuditSummary]" in data
+    assert "getApprovalSummary(500)" in data
+    assert "ApprovalAuditSummaryPanel" in parts
+    assert "审批策略审计聚合" in parts
+    assert "策略层" in parts
+    assert "风险类型" in parts
+    assert "最近审批" in parts
+    assert "auditSummary={auditSummary}" in center
+
+
 def test_thinking_chain_search_includes_runtime_execution_labels():
     source = Path(
         "frontend/src/features/sessions/AiThinkingChainPanel.tsx"

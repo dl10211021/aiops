@@ -10,6 +10,7 @@ from api.response_mappers.alerts import (
     alert_webhook_response_kwargs,
 )
 from api.response_mappers.approvals import (
+    approval_audit_summary_response_kwargs,
     approval_decision_response_kwargs,
     approval_execution_response_kwargs,
     approval_request_response_kwargs,

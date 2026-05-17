@@ -884,3 +884,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只读 fallback，不新增写入、不改证据 ID 生成、不改工具执行、不影响审批、告警、巡检、资产中心或记忆发布。
 - 遗留风险：仍未建立独立 evidence 索引表；历史清理后，如果 Run Trace 也被清理，旧证据仍只能保留引用 ID。
 - 下一轮建议：停止继续打磨证据弹窗。后续更高价值方向是审批/策略执行结果审计聚合，或可观测调查和 Run Trace 之间的证据引用打通。
+
+### 2026-05-18 Round 63：审批策略审计聚合
+
+- 完成：新增 `/approvals/summary` 只读接口，按审批状态、工具、策略层和风险类型聚合审批记录；审批中心新增“审批策略审计聚合”面板，显示策略层、风险类型和最近审批记录。
+- 验证：`python -m pytest tests/test_api_mappers.py tests/test_approval_queue.py tests/test_tool_policy_runtime_frontend.py -q`；`python -m compileall core api`；`cd frontend && npm run build`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：审批不再只是人工队列，也能看到哪些 runtime/safety/action policy 正在触发，开始形成可审计的策略运行视图。
+- OpsCore 主线影响：只读聚合和前端展示，不改审批决策、不自动执行、不改工具 gate、不影响告警、巡检、资产中心或 Hermes 参考目录。
+- 遗留风险：聚合仍基于本地审批 JSON 存储和最多 500 条样本，不是分页审计仓库；按“功能满足即可收手”，先解决运营可见性。
+- 下一轮建议：停止继续打磨审批中心。后续更高价值方向是可观测调查与 Run Trace 证据引用打通，或把执行层 `timeout/retry/concurrency_safe` 的实际结果进入统一审计。
