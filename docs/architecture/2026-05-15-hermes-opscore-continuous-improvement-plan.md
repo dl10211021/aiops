@@ -497,3 +497,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：本轮不改变前端交互、不改变工具结果、不新增复杂配置；只是给执行层增加可订阅事件。
 - 遗留风险：hook 事件还没有持久化到 AIOps Run Trace；headless/cron/巡检等非 chat 执行路径还未统一接入；前端还看不到 run heartbeat。
 - 下一轮建议：先实现 hook 事件到 session trace / run trace 的轻量写入，再考虑 headless/cron heartbeat，避免直接做复杂前端。
+
+### 2026-05-17 Round 20：Headless Run 生命周期事件
+
+- 完成：`run_headless_agent_loop` 接入同一套 run hook，后台协同任务、心跳和巡检等无头执行路径会发出 `run:start`、`agent:step`、`run:end`；事件 payload 只包含会话、模型、Agent 画像、目标 host、步数和受限上下文。
+- 验证：`python -m pytest tests/test_agent_headless_loop.py tests/test_agent_chat_loop.py tests/test_run_hooks.py -q` 通过，33 passed。
+- Hermes 差距变化：OpsCore 的 chat 与 headless 两条核心执行循环已经都有生命周期事件，具备后续统一 trace、heartbeat 和 loop 审计的入口。
+- OpsCore 主线影响：不改变 headless 返回报告、不改变工具执行和审批阻断逻辑；只是增加可选 hook emitter 和默认内部事件。
+- 遗留风险：headless 工具级 `tool:before` / `tool:after` 还没有与 chat 工具链完全统一；hook 事件仍未持久化。
+- 下一轮建议：新增一个轻量 hook 订阅器，把 run/step/tool 事件写入 session trace 或独立 run trace 文件，供前端后续读取。

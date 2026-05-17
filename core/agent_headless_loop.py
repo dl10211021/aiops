@@ -3,12 +3,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 from core.agent_approval import record_headless_approval_block
 from core.agent_runtime_config import agent_max_steps
 from core.agent_tool_events import _session_mode_from_context, parse_tool_arguments
+from core.run_hooks import emit_run_hook
 from core.safety_policy import explain_policy_decision
 from core.tool_execution_policy import (
     ToolExecutionGate,
@@ -20,6 +21,34 @@ from core.tool_trace_policy import trace_command_actions, trace_command_primary_
 
 
 StreamExecutor = Callable[[str, list[dict], str, Any], AsyncIterator[dict]]
+
+
+def _headless_hook_context(context: dict) -> dict[str, Any]:
+    keys = (
+        "session_id",
+        "execution_mode",
+        "session_mode",
+        "mode",
+        "asset_id",
+        "asset_type",
+        "protocol",
+        "host",
+        "port",
+        "allow_modifications",
+    )
+    return {key: context.get(key) for key in keys if key in context}
+
+
+async def _emit_headless_run_hook(
+    emitter: Callable[[str, dict[str, Any]], Awaitable[None]],
+    event_type: str,
+    payload: dict[str, Any],
+    event_logger: logging.Logger,
+) -> None:
+    try:
+        await emitter(event_type, payload)
+    except Exception as exc:
+        event_logger.warning("Headless run hook failed for %s: %s", event_type, exc)
 
 
 def _parse_headless_tool_call(tc: dict) -> tuple[str, dict]:
@@ -228,6 +257,7 @@ async def run_headless_agent_loop(
     event_logger: logging.Logger,
     stream_executor: StreamExecutor | None = None,
     max_steps: int | None = None,
+    run_hook_emitter: Callable[[str, dict[str, Any]], Awaitable[None]] = emit_run_hook,
 ) -> str:
     if stream_executor is None:
         from core.llm_execution import execute_chat_stream
@@ -236,111 +266,161 @@ async def run_headless_agent_loop(
 
     assistant_content = ""
     step_limit = max_steps if max_steps is not None else agent_max_steps("headless")
-    for _iteration in range(step_limit):
-        assistant_content = ""
-        thinking_content = ""
-        tool_calls = []
+    run_status = "completed"
+    run_reason = "completed"
+    await _emit_headless_run_hook(
+        run_hook_emitter,
+        "run:start",
+        {
+            "session_id": session_id,
+            "model_name": model_name,
+            "agent_profile": agent_profile,
+            "host": host,
+            "max_steps": step_limit,
+            "context": _headless_hook_context(context),
+        },
+        event_logger,
+    )
+    try:
+        for iteration in range(step_limit):
+            await _emit_headless_run_hook(
+                run_hook_emitter,
+                "agent:step",
+                {
+                    "session_id": session_id,
+                    "iteration": iteration,
+                    "max_steps": step_limit,
+                    "model_name": model_name,
+                    "agent_profile": agent_profile,
+                    "host": host,
+                    "context": _headless_hook_context(context),
+                },
+                event_logger,
+            )
+            assistant_content = ""
+            thinking_content = ""
+            tool_calls = []
 
-        async for chunk in stream_executor(model_name, messages, "off", tools=tools):
-            if chunk["type"] == "thinking":
-                thinking_content += chunk["content"]
-            elif chunk["type"] == "content":
-                assistant_content += chunk["content"]
-            elif chunk["type"] == "tool_calls":
-                tool_calls = chunk["tool_calls"]
+            async for chunk in stream_executor(model_name, messages, "off", tools=tools):
+                if chunk["type"] == "thinking":
+                    thinking_content += chunk["content"]
+                elif chunk["type"] == "content":
+                    assistant_content += chunk["content"]
+                elif chunk["type"] == "tool_calls":
+                    tool_calls = chunk["tool_calls"]
 
-        if not tool_calls:
-            break
+            if not tool_calls:
+                break
 
-        safe_msg = {"role": "assistant", "content": assistant_content}
-        if thinking_content:
-            safe_msg["reasoning_content"] = thinking_content
-        safe_msg["tool_calls"] = tool_calls
+            safe_msg = {"role": "assistant", "content": assistant_content}
+            if thinking_content:
+                safe_msg["reasoning_content"] = thinking_content
+            safe_msg["tool_calls"] = tool_calls
 
-        messages.append(safe_msg)
+            messages.append(safe_msg)
 
-        concurrent_plan = _build_headless_concurrent_plan(
-            tool_calls,
-            dispatcher=dispatcher,
-            context=context,
-        )
-        if concurrent_plan:
-            await _run_headless_concurrent_plan(
-                concurrent_plan,
-                messages=messages,
+            concurrent_plan = _build_headless_concurrent_plan(
+                tool_calls,
                 dispatcher=dispatcher,
                 context=context,
             )
-            continue
+            if concurrent_plan:
+                await _run_headless_concurrent_plan(
+                    concurrent_plan,
+                    messages=messages,
+                    dispatcher=dispatcher,
+                    context=context,
+                )
+                continue
 
-        for tc in tool_calls:
-            func_name, func_args = _parse_headless_tool_call(tc)
-            tool_policy = tool_policy_metadata(func_name)
-            gate = _headless_execution_gate(
-                tool_name=func_name,
-                args=func_args,
-                context=context,
-                dispatcher=dispatcher,
-                tool_policy=tool_policy,
-            )
-            reason = gate.reason
-            approval_sources = gate.approval_sources
-
-            if reason:
-                blocked = record_headless_approval_block(
-                    tool_call_id=tc.get("id", ""),
-                    session_id=session_id,
+            for tc in tool_calls:
+                func_name, func_args = _parse_headless_tool_call(tc)
+                tool_policy = tool_policy_metadata(func_name)
+                gate = _headless_execution_gate(
                     tool_name=func_name,
                     args=func_args,
-                    reason=reason,
                     context=context,
-                    approval_sources=approval_sources,
+                    dispatcher=dispatcher,
+                    tool_policy=tool_policy,
                 )
-                event_logger.warning(
-                    "Blocked unattended tool call requiring approval: session=%s tool=%s approval=%s",
-                    session_id,
-                    func_name,
-                    blocked.get("id"),
-                )
-                tool_res = json.dumps(
-                    {
-                        "status": "BLOCKED",
-                        "error": f"后台自治任务触发审批策略，已自动阻断: {reason}",
-                        "approval_id": blocked.get("id"),
-                    },
-                    ensure_ascii=False,
-                )
-            else:
-                runtime_execution = {}
-                tool_res = await execute_with_runtime_policy(
-                    func_name,
-                    lambda: dispatcher.route_and_execute(
+                reason = gate.reason
+                approval_sources = gate.approval_sources
+
+                if reason:
+                    blocked = record_headless_approval_block(
+                        tool_call_id=tc.get("id", ""),
+                        session_id=session_id,
+                        tool_name=func_name,
+                        args=func_args,
+                        reason=reason,
+                        context=context,
+                        approval_sources=approval_sources,
+                    )
+                    event_logger.warning(
+                        "Blocked unattended tool call requiring approval: session=%s tool=%s approval=%s",
+                        session_id,
+                        func_name,
+                        blocked.get("id"),
+                    )
+                    tool_res = json.dumps(
+                        {
+                            "status": "BLOCKED",
+                            "error": f"后台自治任务触发审批策略，已自动阻断: {reason}",
+                            "approval_id": blocked.get("id"),
+                        },
+                        ensure_ascii=False,
+                    )
+                else:
+                    runtime_execution = {}
+                    tool_res = await execute_with_runtime_policy(
+                        func_name,
+                        lambda: dispatcher.route_and_execute(
+                            func_name,
+                            func_args,
+                            context,
+                        ),
+                        policy=tool_policy,
+                        runtime_stats=runtime_execution,
+                    )
+
+                tool_msg = {
+                    "tool_call_id": tc.get("id", ""),
+                    "role": "tool",
+                    "name": func_name,
+                    "content": _headless_tool_message_content(
+                        tool_res,
                         func_name,
                         func_args,
+                        tool_policy,
+                        runtime_execution if not reason else {},
                         context,
                     ),
-                    policy=tool_policy,
-                    runtime_stats=runtime_execution,
-                )
+                }
+                messages.append(tool_msg)
+        else:
+            run_reason = "step_limit"
+            return (
+                f"任务达到 {step_limit} 步执行保护上限，系统已停止继续调用工具。以下是最后一轮阶段性结果："
+                + assistant_content
+            )
 
-            tool_msg = {
-                "tool_call_id": tc.get("id", ""),
-                "role": "tool",
-                "name": func_name,
-                "content": _headless_tool_message_content(
-                    tool_res,
-                    func_name,
-                    func_args,
-                    tool_policy,
-                    runtime_execution if not reason else {},
-                    context,
-                ),
-            }
-            messages.append(tool_msg)
-    else:
-        return (
-            f"任务达到 {step_limit} 步执行保护上限，系统已停止继续调用工具。以下是最后一轮阶段性结果："
-            + assistant_content
+        return f"来自 {agent_profile} Agent ({host}) 的协同任务报告：\n" + assistant_content
+    except Exception:
+        run_status = "failed"
+        run_reason = "exception"
+        raise
+    finally:
+        await _emit_headless_run_hook(
+            run_hook_emitter,
+            "run:end",
+            {
+                "session_id": session_id,
+                "model_name": model_name,
+                "agent_profile": agent_profile,
+                "host": host,
+                "status": run_status,
+                "reason": run_reason,
+                "context": _headless_hook_context(context),
+            },
+            event_logger,
         )
-
-    return f"来自 {agent_profile} Agent ({host}) 的协同任务报告：\n" + assistant_content

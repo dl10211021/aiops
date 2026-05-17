@@ -42,6 +42,10 @@ def stream_executor_factory(calls):
 class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
     async def test_returns_report_when_model_finishes_without_tools(self):
         messages = [{"role": "system", "content": "sys"}]
+        hook_events = []
+
+        async def hook_emitter(event_type, payload):
+            hook_events.append((event_type, payload))
 
         report = await run_headless_agent_loop(
             model_name="model",
@@ -57,10 +61,15 @@ class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
                 [[{"type": "content", "content": "巡检完成"}]]
             ),
             max_steps=3,
+            run_hook_emitter=hook_emitter,
         )
 
         self.assertEqual(report, "来自 default Agent (host.local) 的协同任务报告：\n巡检完成")
         self.assertEqual(messages, [{"role": "system", "content": "sys"}])
+        self.assertEqual([event_type for event_type, _payload in hook_events], ["run:start", "agent:step", "run:end"])
+        self.assertEqual(hook_events[0][1]["session_id"], "sid")
+        self.assertEqual(hook_events[1][1]["iteration"], 0)
+        self.assertEqual(hook_events[2][1]["status"], "completed")
 
     async def test_executes_tool_then_uses_next_iteration_report(self):
         messages = [{"role": "system", "content": "sys"}]
