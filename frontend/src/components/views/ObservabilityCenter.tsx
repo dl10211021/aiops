@@ -1090,6 +1090,8 @@ function InvestigationCard({
   onAppendEvidence: () => void
   onAppendRootCause: () => void
 }) {
+  const [expandedEvidenceId, setExpandedEvidenceId] = useState<string | null>(null)
+
   return (
     <div className="rounded-lg border border-ops-surface0/80 bg-ops-surface0/35 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1173,6 +1175,24 @@ function InvestigationCard({
                   <span className="font-mono text-ops-overlay">{evidence.evidence_type}</span>
                 </div>
                 <div className="mt-1 leading-5">{evidence.summary}</div>
+                <button
+                  className="mt-2 text-xs font-bold text-ops-accent hover:text-ops-accent2"
+                  onClick={() => setExpandedEvidenceId(expandedEvidenceId === evidence.id ? null : evidence.id)}
+                >
+                  {expandedEvidenceId === evidence.id ? '收起详情' : '查看详情'}
+                </button>
+                {expandedEvidenceId === evidence.id && (
+                  <div className="mt-2 space-y-2 rounded border border-ops-surface1/40 bg-ops-dark/30 p-3">
+                    <div className="grid gap-2 font-mono text-[11px] text-ops-overlay md:grid-cols-2">
+                      <span>confidence: {evidence.confidence}</span>
+                      <span>time: {evidence.timestamp || evidence.created_at || '-'}</span>
+                    </div>
+                    <div className="break-all font-mono text-[11px] text-ops-overlay">raw_ref: {evidence.raw_ref || '-'}</div>
+                    <div className="whitespace-pre-wrap rounded bg-ops-dark/40 p-2 text-[11px] leading-5 text-ops-subtext">
+                      {evidence.raw_excerpt || '暂无原始摘录'}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

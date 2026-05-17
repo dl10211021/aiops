@@ -641,3 +641,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：纯前端只读展示，不新增状态修改接口，不触发工具执行、不改变资产、告警、巡检或审批链路。
 - 遗留风险：状态流转仍缺少后端操作入口；按“功能满足即可收手”，本轮先只解决“看不懂候选状态”的问题。
 - 下一轮建议：停止继续打磨根因候选卡片，转向可观测证据详情复用组件或记忆/知识库的更高价值缺口。
+
+### 2026-05-17 Round 36：可观测证据详情展开
+
+- 完成：可观测排查卡片的证据链新增“查看详情/收起详情”，展开后显示证据置信度、时间、`raw_ref` 和原始摘录，方便从根因候选回查证据来源。
+- 验证：`python -m pytest tests/test_observability_frontend.py tests/test_observability_routes.py tests/test_observability_investigation.py -q`；`cd frontend && npm run build`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：可观测从 summary 级证据展示推进到可展开的 source/excerpt 级证据回查，更接近 Hermes trace/log 可回放体验。
+- OpsCore 主线影响：纯前端只读展开，不新增接口、不改变证据生成、不触发工具执行、不碰资产、告警、巡检或审批。
+- 遗留风险：仍是页面内局部展开，不是跨知识库、Run Trace、报告共用的 EvidenceRef 组件；按“功能满足即可收手”，本轮先满足可看证据详情。
+- 下一轮建议：停止继续打磨可观测卡片，转向记忆/知识库的更高价值缺口，或后续统一抽 EvidenceRef 组件。

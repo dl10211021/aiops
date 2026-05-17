@@ -19,3 +19,8 @@ def test_observability_frontend_can_append_root_cause_candidates():
     assert "待复核" in view
     assert "证据 {item.supporting_evidence_ids.length}" in view
     assert "item.recommended_next_steps.slice(0, 3)" in view
+    assert "expandedEvidenceId" in view
+    assert "查看详情" in view
+    assert "收起详情" in view
+    assert "raw_ref: {evidence.raw_ref || '-'}" in view
+    assert "evidence.raw_excerpt || '暂无原始摘录'" in view
