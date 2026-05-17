@@ -106,6 +106,7 @@ function ToolTraceCard({
   const httpAction = httpActionFromTrace(item)
   const commandAction = commandActionFromTrace(item)
   const primaryAction = extractPrimaryAction(parsedResult)
+  const dispatchItems = dispatchResultItems(parsedResult)
   const isPolicyBlocked = isPolicyBlockedResult(parsedResult)
   const isToolError = !isPolicyBlocked && isToolErrorResult(parsedResult)
   const executionText = traceExecutionText(item)
@@ -251,6 +252,37 @@ function ToolTraceCard({
           )}
           {parsedResult && isToolError && <ToolErrorSummary result={parsedResult} />}
           {parsedResult && !isPolicyBlocked && !isToolError && <DatabaseResultSummary result={parsedResult} />}
+          {dispatchItems.length > 0 && (
+            <div className="mb-2 rounded-md border border-ops-surface0 bg-ops-panel/35 px-3 py-2">
+              <div className="mb-1 text-[11px] text-ops-overlay">协同子任务</div>
+              <div className="space-y-1.5 text-[11px]">
+                {dispatchItems.slice(0, 8).map((child, index) => {
+                  const preview = dispatchResultPreview(child)
+                  return (
+                    <div
+                      key={`${recordValue(child, 'session_id') || index}`}
+                      className="flex min-w-0 flex-wrap items-center gap-1.5 rounded border border-ops-surface1/60 bg-ops-dark/35 px-2 py-1"
+                    >
+                      <span className="min-w-0 truncate font-mono text-ops-subtext" title={recordValue(child, 'session_id') || ''}>
+                        {recordValue(child, 'session_id') || `#${index + 1}`}
+                      </span>
+                      <span className="rounded border border-ops-surface1/65 px-1.5 py-0.5 font-semibold text-ops-subtext">
+                        {recordValue(child, 'status') || '-'}
+                      </span>
+                      <span className={`rounded border px-1.5 py-0.5 font-semibold ${dispatchResultModeToneClass(child)}`}>
+                        模式：{dispatchResultModeLabel(child)}
+                      </span>
+                      {preview && (
+                        <span className="min-w-0 flex-1 truncate text-ops-overlay" title={preview}>
+                          {preview}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           {primaryAction && !isPolicyBlocked && (
             <TracePrimaryActionNotice
               action={primaryAction}
@@ -274,4 +306,31 @@ function ToolTraceCard({
       )}
     </div>
   )
+}
+
+function dispatchResultItems(result: Record<string, unknown> | null): Record<string, unknown>[] {
+  if (recordValue(result, 'status') !== 'BATCH_COMPLETE') return []
+  const items = result?.results
+  if (!Array.isArray(items)) return []
+  return items.filter((item): item is Record<string, unknown> => {
+    return Boolean(item && typeof item === 'object' && !Array.isArray(item))
+  })
+}
+
+function dispatchResultModeLabel(item: Record<string, unknown>): string {
+  const mode = parseSessionMode(item.session_mode ?? item.allow_modifications)
+  if (mode === 'readwrite') return '读写'
+  if (mode === 'readonly') return '只读'
+  return '未识别'
+}
+
+function dispatchResultModeToneClass(item: Record<string, unknown>): string {
+  const mode = parseSessionMode(item.session_mode ?? item.allow_modifications)
+  if (mode === 'readwrite') return 'border-ops-success/35 bg-ops-success/10 text-ops-success'
+  if (mode === 'readonly') return 'border-amber-400/35 bg-amber-400/10 text-amber-100'
+  return 'border-ops-surface1/65 bg-ops-dark/35 text-ops-subtext'
+}
+
+function dispatchResultPreview(item: Record<string, unknown>): string {
+  return recordValue(item, 'error') || recordValue(item, 'report') || ''
 }

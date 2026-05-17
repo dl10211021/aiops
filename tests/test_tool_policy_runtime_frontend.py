@@ -82,6 +82,19 @@ def test_tool_policy_chips_are_session_mode_aware():
     assert "border-ops-alert/45 bg-ops-alert/10 text-ops-alert" in presentation
 
 
+def test_tool_trace_shows_multi_agent_child_session_modes():
+    source = Path(
+        "frontend/src/features/sessions/ToolTraceList.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert "协同子任务" in source
+    assert "dispatchResultItems(parsedResult)" in source
+    assert "recordValue(result, 'status') !== 'BATCH_COMPLETE'" in source
+    assert "parseSessionMode(item.session_mode ?? item.allow_modifications)" in source
+    assert "模式：{dispatchResultModeLabel(child)}" in source
+    assert "dispatchItems.slice(0, 8).map" in source
+
+
 def test_memory_candidate_source_navigation_can_focus_history_messages():
     knowledge = Path("frontend/src/components/views/KnowledgeBase.tsx").read_text(encoding="utf-8")
     knowledge_parts = Path("frontend/src/components/views/KnowledgeBaseParts.tsx").read_text(encoding="utf-8")
