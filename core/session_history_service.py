@@ -10,6 +10,7 @@ from core.session_history import (
     delete_session_message,
     find_session_exec_trace,
     get_user_visible_session_history,
+    list_session_run_trace_events,
     update_session_message_content,
     update_session_message_feedback,
 )
@@ -66,6 +67,22 @@ def find_session_history_evidence_trace(
     if not result:
         raise SessionHistoryServiceError(404, "未找到匹配的工具证据。")
     return result
+
+
+def list_session_run_trace_records(
+    session_id: str,
+    *,
+    limit: int = 200,
+    memory_db: Any | None = None,
+) -> list[dict]:
+    try:
+        return list_session_run_trace_events(
+            _resolve_memory_db(memory_db),
+            session_id,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise SessionHistoryServiceError(500, str(exc)) from exc
 
 
 def clear_session_history_messages(

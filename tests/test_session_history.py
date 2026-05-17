@@ -9,6 +9,7 @@ from core.session_history import (
     find_session_exec_trace,
     get_user_visible_session_history,
     is_user_visible_history_message,
+    list_session_run_trace_events,
     session_history_export_title,
     update_session_message_feedback,
     update_session_message_content,
@@ -139,7 +140,30 @@ class TestSessionHistory(unittest.TestCase):
                 }
             ],
         )
-        self.assertTrue(is_user_visible_history_message(messages[0]))
+
+    def test_list_session_run_trace_events_filters_hidden_audit_messages(self):
+        memory_db = FakeMemoryDB()
+        memory_db.messages = [
+            {"role": "user", "content": "hi"},
+            {
+                "_memory_id": 7,
+                "role": "system",
+                "content": "【AIOps Run Trace】运行开始：模型=model-a",
+                "memory_type": "aiops_run_trace",
+                "run_event_type": "run:start",
+                "run_event_payload": {"session_id": "sid-1", "model_name": "model-a"},
+                "run_event_ts": 123.0,
+                "created_at": "2026-05-17 15:00:00",
+            },
+        ]
+
+        events = list_session_run_trace_events(memory_db, "sid-1")
+        visible = get_user_visible_session_history(memory_db, "sid-1")
+
+        self.assertEqual(events[0]["id"], 7)
+        self.assertEqual(events[0]["event_type"], "run:start")
+        self.assertEqual(events[0]["payload"]["model_name"], "model-a")
+        self.assertEqual(visible, [{"role": "user", "content": "hi"}])
 
     def test_attach_legacy_exec_traces_rebuilds_tool_results_for_ui(self):
         messages = [

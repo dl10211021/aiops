@@ -506,3 +506,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：不改变 headless 返回报告、不改变工具执行和审批阻断逻辑；只是增加可选 hook emitter 和默认内部事件。
 - 遗留风险：headless 工具级 `tool:before` / `tool:after` 还没有与 chat 工具链完全统一；hook 事件仍未持久化。
 - 下一轮建议：新增一个轻量 hook 订阅器，把 run/step/tool 事件写入 session trace 或独立 run trace 文件，供前端后续读取。
+
+### 2026-05-17 Round 21：Run Trace 轻量持久化
+
+- 完成：新增 `core/run_trace_store.py`，默认订阅 `run:*`、`agent:step`、`tool:*` 等 hook 事件并写入隐藏系统审计消息；新增 `GET /session/{session_id}/history/run-trace` 查询会话运行事件；普通会话历史仍不会显示这些审计消息。
+- 验证：`python -m pytest tests/test_run_hooks.py tests/test_run_trace_store.py tests/test_session_history.py tests/test_session_history_service.py tests/test_session_history_routes.py tests/test_api_mappers.py tests/test_agent_chat_loop.py tests/test_agent_headless_loop.py -q` 通过，96 passed。
+- Hermes 差距变化：OpsCore 不再只有瞬时 hook，已经具备可追溯的 Run Trace 底座，后续可以接入前端进度、学习候选、审批审计和问题复盘。
+- OpsCore 主线影响：持久化落在现有 session message store 内，不引入新数据库表和复杂配置；payload 写入前经过脱敏，且 `visible_to_user=false`。
+- 遗留风险：当前 run trace 仍是隐藏消息过滤查询，还没有聚合 run_id、耗时统计、前端进度视图和 retention 压缩策略。
+- 下一轮建议：给 run trace 增加 run_id 聚合和状态摘要，再做一个简约前端抽屉显示最近运行步骤。

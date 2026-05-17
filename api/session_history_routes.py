@@ -10,6 +10,7 @@ from api.response_mappers.session import (
     session_history_message_updated_response_kwargs,
     session_history_response_kwargs,
     session_memory_activity_response_kwargs,
+    session_run_trace_response_kwargs,
 )
 from api.schema_models.common import ResponseModel
 from api.schema_models.sessions import SessionMessageFeedbackRequest, SessionMessageUpdateRequest
@@ -21,6 +22,7 @@ from core.session_history_service import (
     export_session_history_markdown_record,
     find_session_history_evidence_trace,
     get_session_memory_activity_record,
+    list_session_run_trace_records,
     list_session_history_messages,
     update_session_history_message_feedback_record,
     update_session_history_message_record,
@@ -60,6 +62,19 @@ async def get_session_history_evidence(
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_history_evidence_response_kwargs(result))
+
+
+@router.get("/session/{session_id}/history/run-trace", response_model=ResponseModel)
+async def get_session_run_trace(
+    session_id: str,
+    limit: int = Query(200, ge=1, le=500),
+):
+    """获取会话运行生命周期事件，用于 AIOps Run Trace。"""
+    try:
+        events = list_session_run_trace_records(session_id, limit=limit)
+    except SessionHistoryServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**session_run_trace_response_kwargs(events))
 
 
 @router.delete("/session/{session_id}/history", response_model=ResponseModel)

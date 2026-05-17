@@ -29,6 +29,7 @@ from core.embedding_config import (
     get_embedding_config,
     update_embedding_config,
 )
+from core.run_trace_store import register_session_run_trace_hooks
 
 cancel_flags = {}
 
@@ -36,6 +37,8 @@ logger = logging.getLogger(__name__)
 
 # 从 SQLite 持久化用户模型
 from core.memory import memory_db
+
+_unregister_run_trace_hooks = register_session_run_trace_hooks(memory_db)
 
 
 async def chat_stream_agent(

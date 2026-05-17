@@ -4,6 +4,7 @@ import json
 from collections.abc import Mapping
 
 from core.session_export import format_session_history_markdown
+from core.run_trace_store import RUN_TRACE_MEMORY_TYPE
 from core.tool_registry import tool_policy_metadata
 from core.tool_trace_policy import trace_command_actions, trace_command_primary_action
 
@@ -61,6 +62,40 @@ def find_session_exec_trace(
                     },
                 }
     return None
+
+
+def list_session_run_trace_events(
+    memory_db,
+    session_id: str,
+    *,
+    limit: int = 200,
+) -> list[dict]:
+    try:
+        limit = max(1, min(int(limit or 200), 500))
+    except (TypeError, ValueError):
+        limit = 200
+    try:
+        messages = memory_db.get_messages(session_id, for_ui=True, limit=limit)
+    except TypeError:
+        messages = memory_db.get_messages(session_id, for_ui=True)
+        messages = messages[-limit:]
+
+    events: list[dict] = []
+    for message in messages:
+        if message.get("memory_type") != RUN_TRACE_MEMORY_TYPE:
+            continue
+        payload = message.get("run_event_payload")
+        events.append(
+            {
+                "id": message.get("_memory_id") or message.get("id"),
+                "created_at": message.get("created_at") or message.get("timestamp"),
+                "event_type": message.get("run_event_type") or "",
+                "event_ts": message.get("run_event_ts"),
+                "payload": payload if isinstance(payload, dict) else {},
+                "summary": message.get("content") or "",
+            }
+        )
+    return events[-limit:]
 
 
 def _exec_trace_matches(

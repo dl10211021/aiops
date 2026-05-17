@@ -50,6 +50,7 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         paths = {route.path for route in routes.router.routes}
 
         self.assertIn("/session/{session_id}/history", paths)
+        self.assertIn("/session/{session_id}/history/run-trace", paths)
         self.assertIn("/session/{session_id}/history/{message_id}", paths)
         self.assertIn("/session/{session_id}/history/{message_id}/feedback", paths)
         self.assertIn("/session/{session_id}/memory/activity", paths)
@@ -79,6 +80,7 @@ class TestSessionHistoryRoutes(unittest.TestCase):
                 )
             )
             activity_response = asyncio.run(session_history_routes.get_session_memory_activity("sid-1"))
+            run_trace_response = asyncio.run(session_history_routes.get_session_run_trace("sid-1"))
 
         self.assertEqual(list_response.status, "success")
         self.assertEqual(list_response.data, {"messages": memory_db.messages})
@@ -110,6 +112,8 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         self.assertEqual(memory_db.deleted, [("sid-1", 1)])
         self.assertEqual(memory_db.feedback, [("sid-1", 2, "up", None)])
         self.assertEqual(activity_response.data["activity"]["summary"]["pending_conflict_count"], 1)
+        self.assertEqual(run_trace_response.status, "success")
+        self.assertEqual(run_trace_response.data, {"events": []})
 
     def test_session_history_export_preserves_response_shape(self):
         with patch(

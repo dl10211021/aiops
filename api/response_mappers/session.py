@@ -110,6 +110,13 @@ def session_history_evidence_response_kwargs(result: dict[str, Any]) -> dict[str
     }
 
 
+def session_run_trace_response_kwargs(events: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"events": events},
+    }
+
+
 def session_history_cleared_response_kwargs() -> dict[str, Any]:
     return {
         "status": "success",
