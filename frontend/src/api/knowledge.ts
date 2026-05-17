@@ -227,11 +227,20 @@ export async function listMemoryCandidates(limit = 50, statuses = ['pending'], o
   return request<{ items: MemoryCandidate[] }>(`/knowledge/memory/candidates?${search.toString()}`, options)
 }
 
-export async function listMemoryLearningCandidates(limit = 50, targetType = '', options?: RequestInit) {
+export async function listMemoryLearningCandidates(
+  limit = 50,
+  targetType = '',
+  statusesOrOptions?: LearningCandidateStatus[] | RequestInit,
+  options?: RequestInit,
+) {
   const search = new URLSearchParams()
   search.set('limit', String(limit))
   if (targetType) search.set('target_type', targetType)
-  return request<{ items: LearningCandidate[] }>(`/knowledge/memory/learning-candidates?${search.toString()}`, options)
+  const requestOptions = Array.isArray(statusesOrOptions) ? options : statusesOrOptions
+  if (Array.isArray(statusesOrOptions) && statusesOrOptions.length > 0) {
+    search.set('statuses', statusesOrOptions.join(','))
+  }
+  return request<{ items: LearningCandidate[] }>(`/knowledge/memory/learning-candidates?${search.toString()}`, requestOptions)
 }
 
 export type LearningCandidateStatus = 'draft' | 'reviewing' | 'approved' | 'rejected' | 'published'

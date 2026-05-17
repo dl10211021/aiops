@@ -457,9 +457,20 @@ class FileMemoryStore:
             return "等待人工整理成 Skill，并通过校验后再进入技能体系；当前不进入模型检索上下文。"
         return "人工确认后再允许进入当前会话长期记忆检索上下文。"
 
-    def list_learning_candidates(self, *, limit: int = 50, target_type: str = "") -> list[dict[str, Any]]:
+    def list_learning_candidates(
+        self,
+        *,
+        limit: int = 50,
+        target_type: str = "",
+        statuses: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         self.initialize()
         allowed_target = str(target_type or "").strip()
+        allowed_statuses = {
+            str(status or "").strip().lower()
+            for status in (statuses or [])
+            if str(status or "").strip().lower() in LEARNING_CANDIDATE_STATUSES
+        }
         items: list[dict[str, Any]] = []
         pool_path = self._learning_candidate_pool_path()
         if not pool_path.exists():
@@ -474,6 +485,8 @@ class FileMemoryStore:
             if not isinstance(item, dict):
                 continue
             if allowed_target and item.get("target_type") != allowed_target:
+                continue
+            if allowed_statuses and str(item.get("status") or "draft").lower() not in allowed_statuses:
                 continue
             items.append(item)
         items.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)

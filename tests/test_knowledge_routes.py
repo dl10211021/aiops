@@ -332,8 +332,8 @@ class TestKnowledgeRoutes(unittest.TestCase):
                 self.candidate_review_statuses = review_statuses
                 return [{"candidate_id": "memcand_1", "path": "sessions/sid-1/memory.md", "review_status": "pending"}]
 
-            def list_learning_candidates(self, limit=50, target_type=""):
-                self.learning_candidate_query = (limit, target_type)
+            def list_learning_candidates(self, limit=50, target_type="", statuses=None):
+                self.learning_candidate_query = (limit, target_type, statuses)
                 return [{"id": "learncand_1", "target_type": "runbook", "status": "draft"}]
 
             def update_learning_candidate_status(self, candidate_id, status, actor="user", reason=""):
@@ -411,7 +411,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
                 knowledge_routes.list_memory_candidates(20, "pending,runbook_candidate,invalid")
             )
             learning_candidates_response = asyncio.run(
-                knowledge_routes.list_memory_learning_candidates(12, "runbook")
+                knowledge_routes.list_memory_learning_candidates(12, "runbook", "draft,reviewing,invalid")
             )
             learning_candidate_status_response = asyncio.run(
                 knowledge_routes.update_memory_learning_candidate_status(
@@ -501,7 +501,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(fake_db.file_memory_store.candidate_limit, 20)
         self.assertEqual(fake_db.file_memory_store.candidate_review_statuses, ["pending", "runbook_candidate"])
         self.assertEqual(learning_candidates_response.data, {"items": [{"id": "learncand_1", "target_type": "runbook", "status": "draft"}]})
-        self.assertEqual(fake_db.file_memory_store.learning_candidate_query, (12, "runbook"))
+        self.assertEqual(fake_db.file_memory_store.learning_candidate_query, (12, "runbook", ["draft", "reviewing"]))
         self.assertEqual(learning_candidate_status_response.message, "发布候选状态已更新")
         self.assertEqual(learning_candidate_publish_response.message, "发布候选状态已更新")
         self.assertIn("published_artifact", learning_candidate_publish_response.data["item"])

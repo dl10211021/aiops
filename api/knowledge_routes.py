@@ -63,6 +63,7 @@ from core.knowledge_base_service import (
     search_vault_knowledge,
     update_vault_candidate,
 )
+from core.file_memory_store import LEARNING_CANDIDATE_STATUSES
 
 
 router = APIRouter()
@@ -267,12 +268,19 @@ async def list_memory_candidates(
 async def list_memory_learning_candidates(
     limit: int = Query(50, ge=1, le=200),
     target_type: str = Query("", pattern="^(|runbook|skill)$"),
+    statuses: str = Query(""),
 ):
     from core.memory import memory_db
 
+    status_filters = [
+        item.strip().lower()
+        for item in statuses.split(",")
+        if item.strip().lower() in LEARNING_CANDIDATE_STATUSES
+    ]
     items = memory_db.file_memory_store.list_learning_candidates(
         limit=limit,
         target_type=target_type,
+        statuses=status_filters,
     )
     return ResponseModel(**memory_learning_candidates_response_kwargs(items))
 

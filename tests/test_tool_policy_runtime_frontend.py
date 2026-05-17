@@ -154,6 +154,8 @@ def test_memory_candidates_panel_splits_runbook_and_skill_candidates():
     assert "updateMemoryLearningCandidateStatus(item.id, status, reason)" in knowledge_data
     assert "updateMemoryLearningCandidateQualityChecklist(item.id, checklist, reason)" in knowledge_data
     assert "statuses.join(',')" in knowledge_api
+    assert "statusesOrOptions?: LearningCandidateStatus[] | RequestInit" in knowledge_api
+    assert "search.set('statuses', statusesOrOptions.join(','))" in knowledge_api
     assert "/knowledge/memory/learning-candidates?" in knowledge_api
     assert "/status" in knowledge_api
     assert "/quality-checklist" in knowledge_api

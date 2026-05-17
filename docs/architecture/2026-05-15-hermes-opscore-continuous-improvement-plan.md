@@ -731,3 +731,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只改 Run Trace 前端展示，不新增接口、不改变 prompt 生成、不改变模型调用、不影响资产、告警、巡检、工具执行或审批。
 - 遗留风险：当前仍是单次运行卡片级展示，不是全局 Prompt 审计报表；按“功能满足即可收手”，本轮只解决“已有 manifest 不可见”的问题。
 - 下一轮建议：停止继续打磨 Run Trace 卡片，后续可转向全局 Prompt/Context 审计汇总或知识库服务端分页。
+
+### 2026-05-17 Round 46：发布候选池服务端状态过滤
+
+- 完成：`/knowledge/memory/learning-candidates` 新增 `statuses` 查询参数，`FileMemoryStore.list_learning_candidates` 在排序和 limit 前按状态过滤；前端 API 包装兼容旧调用，并支持传入发布候选状态列表。
+- 验证：`python -m pytest tests/test_file_memory_store.py tests/test_knowledge_routes.py tests/test_tool_policy_runtime_frontend.py -q` 通过，63 passed；`cd frontend && npm run build` 通过；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：发布候选池从纯前端筛选推进到后端可过滤，为候选数量增长后的服务端分页/运营视图打基础。
+- OpsCore 主线影响：只扩展只读列表查询，不改变候选状态机、不自动批准、不影响资产、告警、巡检、工具执行、审批或通知。
+- 遗留风险：当前仍未做分页游标和服务端计数聚合；按“功能满足即可收手”，本轮只补最小过滤契约。
+- 下一轮建议：停止继续打磨发布候选池，后续转向全局 Prompt/Context 审计汇总或记忆学习质量报表。

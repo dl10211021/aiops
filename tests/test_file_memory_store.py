@@ -460,6 +460,41 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertIn("### 安全边界", artifact_content)
         self.assertIn("validate_skill_candidate", artifact_content)
 
+    def test_list_learning_candidates_filters_statuses_before_limit(self):
+        self.store._write_learning_candidate_rows([
+            {
+                "id": "learncand_old_draft",
+                "target_type": "runbook",
+                "status": "draft",
+                "created_at": "2026-05-15 10:00:00",
+            },
+            {
+                "id": "learncand_new_published",
+                "target_type": "runbook",
+                "status": "published",
+                "created_at": "2026-05-15 12:00:00",
+            },
+            {
+                "id": "learncand_mid_reviewing",
+                "target_type": "skill",
+                "status": "reviewing",
+                "created_at": "2026-05-15 11:00:00",
+            },
+        ])
+
+        active = self.store.list_learning_candidates(
+            limit=1,
+            statuses=["draft", "reviewing", "invalid"],
+        )
+        runbook_published = self.store.list_learning_candidates(
+            limit=10,
+            target_type="runbook",
+            statuses=["published"],
+        )
+
+        self.assertEqual([item["id"] for item in active], ["learncand_mid_reviewing"])
+        self.assertEqual([item["id"] for item in runbook_published], ["learncand_new_published"])
+
     def test_update_learning_candidate_status_validates_reason_and_id(self):
         with self.assertRaises(FileNotFoundError):
             self.store.update_learning_candidate_status(
