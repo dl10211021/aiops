@@ -1134,9 +1134,25 @@ function InvestigationCard({
             {investigation.root_causes?.length
               ? investigation.root_causes.map((item) => (
                 <div key={item.id} className="rounded border border-ops-surface1/50 px-3 py-2 text-xs text-ops-subtext">
-                  <div className="font-bold text-ops-text">{item.title}</div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-bold text-ops-text">{item.title}</div>
+                    <span className={`rounded px-2 py-1 font-bold ${rootCauseStatusClass(item.status)}`}>
+                      {rootCauseStatusLabel(item.status)}
+                    </span>
+                  </div>
                   <div className="mt-1">{item.description || '等待更多证据'}</div>
-                  <div className="mt-2 font-mono text-[11px] text-ops-overlay">{item.likelihood} · {item.confidence}</div>
+                  <div className="mt-2 flex flex-wrap gap-2 font-mono text-[11px] text-ops-overlay">
+                    <span>{item.likelihood} · {item.confidence}</span>
+                    <span>证据 {item.supporting_evidence_ids.length}</span>
+                    {item.contradicting_evidence_ids.length > 0 && <span>反证 {item.contradicting_evidence_ids.length}</span>}
+                  </div>
+                  {item.recommended_next_steps.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {item.recommended_next_steps.slice(0, 3).map((step) => (
+                        <div key={step} className="rounded bg-ops-dark/25 px-2 py-1 text-[11px] text-ops-subtext">{step}</div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))
               : investigation.root_cause_candidates.map((item) => (
@@ -1164,4 +1180,18 @@ function InvestigationCard({
       )}
     </div>
   )
+}
+
+function rootCauseStatusLabel(status: string): string {
+  if (status === 'confirmed') return '已确认'
+  if (status === 'rejected') return '已驳回'
+  if (status === 'watching') return '观察中'
+  return '待复核'
+}
+
+function rootCauseStatusClass(status: string): string {
+  if (status === 'confirmed') return 'bg-emerald-400/15 text-emerald-200'
+  if (status === 'rejected') return 'bg-rose-400/15 text-rose-200'
+  if (status === 'watching') return 'bg-sky-400/15 text-sky-200'
+  return 'bg-amber-400/15 text-amber-200'
 }

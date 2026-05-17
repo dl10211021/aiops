@@ -632,3 +632,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只改可观测前端调用和展示入口，不自动处置、不触发工具执行、不改变资产、告警、巡检或审批链路。
 - 遗留风险：候选内容仍是证据驱动的待复核草稿，不是模型自动排序；后续可接入 Summary Agent 生成更精细的候选。
 - 下一轮建议：可观测这块先继续补“证据详情/根因候选状态”这类小闭环，不直接做复杂自动编排。
+
+### 2026-05-17 Round 35：可观测根因候选状态可见
+
+- 完成：可观测排查卡片里的根因候选从只显示标题和置信度，补为中文状态、支撑证据数、反证数和最多三条建议下一步；`open` 显示为“待复核”，`confirmed/rejected/watching` 分别显示为“已确认/已驳回/观察中”。
+- 验证：`python -m pytest tests/test_observability_frontend.py tests/test_observability_routes.py tests/test_observability_investigation.py -q`；`cd frontend && npm run build`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：可观测根因候选开始具备可读的 review 状态，用户能判断它只是候选、已确认还是被驳回，避免把待复核内容误当成结论。
+- OpsCore 主线影响：纯前端只读展示，不新增状态修改接口，不触发工具执行、不改变资产、告警、巡检或审批链路。
+- 遗留风险：状态流转仍缺少后端操作入口；按“功能满足即可收手”，本轮先只解决“看不懂候选状态”的问题。
+- 下一轮建议：停止继续打磨根因候选卡片，转向可观测证据详情复用组件或记忆/知识库的更高价值缺口。
