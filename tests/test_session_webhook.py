@@ -117,6 +117,7 @@ class TestSessionWebhookService(unittest.TestCase):
         self.assertIn("## 执行审计摘要", markdown)
         self.assertIn("- Step 1: 数据库 SQL 执行 (`db_execute_query`) [done]", markdown)
         self.assertIn("  - Policy: 读写受控；写入受控；数据库证据", markdown)
+        self.assertIn("  - SQL Action: 只读查询 (SELECT)", markdown)
         self.assertIn("  - Evidence: tev-sid-1-call-1", markdown)
         self.assertIn("## 会话摘要", markdown)
 

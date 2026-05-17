@@ -52,6 +52,14 @@ def resolve_session_webhook_target(url: str, allow_private_targets: bool = False
 def _session_webhook_audit_excerpt(markdown: str, max_lines: int = 24) -> str:
     lines = str(markdown or "").splitlines()
     blocks: list[list[str]] = []
+    audit_prefixes = (
+        "  - Policy:",
+        "  - SQL Action:",
+        "  - HTTP Action:",
+        "  - Command Action:",
+        "  - Runtime:",
+        "  - Evidence:",
+    )
     index = 0
     while index < len(lines):
         line = lines[index]
@@ -61,7 +69,7 @@ def _session_webhook_audit_excerpt(markdown: str, max_lines: int = 24) -> str:
         block = [line]
         index += 1
         while index < len(lines) and not lines[index].startswith("- Step "):
-            if lines[index].startswith("  - Policy:") or lines[index].startswith("  - Evidence:"):
+            if lines[index].startswith(audit_prefixes):
                 block.append(lines[index])
             if lines[index].startswith("## ") or lines[index].startswith("### "):
                 break
