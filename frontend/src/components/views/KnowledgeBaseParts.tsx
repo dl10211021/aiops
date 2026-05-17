@@ -1777,6 +1777,8 @@ function latestLearningCandidateEvent(item: LearningCandidate) {
 }
 
 type LearningCandidateChecklist = NonNullable<LearningCandidate['quality_checklist']>
+type LearningCandidateStatusFilter = 'active' | 'all' | LearningCandidateStatus | 'blocked'
+type LearningCandidateTargetFilter = 'all' | 'runbook' | 'skill'
 
 function learningCandidateChecklist(item: LearningCandidate) {
   const fallback = [
@@ -1798,6 +1800,21 @@ function learningCandidateQualityReady(item: LearningCandidate) {
 
 function learningCandidateActionBlocked(item: LearningCandidate, status: LearningCandidateStatus) {
   return (status === 'approved' || status === 'published') && !learningCandidateQualityReady(item)
+}
+
+function learningCandidateStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    draft: '草稿',
+    reviewing: '评审中',
+    approved: '已批准',
+    rejected: '已拒绝',
+    published: '已发布',
+  }
+  return labels[status] || status || '草稿'
+}
+
+function learningCandidateNeedsCompletion(item: LearningCandidate) {
+  return !learningCandidateQualityReady(item) || item.review?.decision === 'needs_human_review'
 }
 
 export function MemoryCandidatesPanel({
@@ -1832,6 +1849,8 @@ export function MemoryCandidatesPanel({
   readingLearningCandidateArtifact?: string | null
 }) {
   const [learningDetail, setLearningDetail] = useState<LearningCandidate | null>(null)
+  const [learningStatusFilter, setLearningStatusFilter] = useState<LearningCandidateStatusFilter>('active')
+  const [learningTargetFilter, setLearningTargetFilter] = useState<LearningCandidateTargetFilter>('all')
   const groupedItems = [
     {
       key: 'pending',
@@ -1858,6 +1877,23 @@ export function MemoryCandidatesPanel({
       badge: 'border-sky-300/35 text-sky-200',
     },
   ]
+  const learningStatusCounts = learningCandidates.reduce<Record<string, number>>((acc, item) => {
+    const status = item.status || 'draft'
+    acc[status] = (acc[status] || 0) + 1
+    if (status !== 'published' && status !== 'rejected') acc.active = (acc.active || 0) + 1
+    if (learningCandidateNeedsCompletion(item)) acc.blocked = (acc.blocked || 0) + 1
+    return acc
+  }, { active: 0, blocked: 0 })
+  const filteredLearningCandidates = learningCandidates.filter((item) => {
+    const status = item.status || 'draft'
+    const targetMatches = learningTargetFilter === 'all' || item.target_type === learningTargetFilter
+    const statusMatches = learningStatusFilter === 'all'
+      || (learningStatusFilter === 'active' && status !== 'published' && status !== 'rejected')
+      || (learningStatusFilter === 'blocked' && learningCandidateNeedsCompletion(item))
+      || status === learningStatusFilter
+    return targetMatches && statusMatches
+  })
+  const visibleLearningCandidates = filteredLearningCandidates.slice(0, 20)
   return (
     <section className="rounded-lg border border-ops-success/30 bg-ops-success/5 p-4">
       <div className="flex items-center justify-between gap-3">
@@ -2031,8 +2067,47 @@ export function MemoryCandidatesPanel({
             {learningCandidates.length}
           </span>
         </div>
+        {learningCandidates.length > 0 ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {[
+              ['active', '处理中', learningStatusCounts.active || 0],
+              ['blocked', '需补齐', learningStatusCounts.blocked || 0],
+              ['draft', '草稿', learningStatusCounts.draft || 0],
+              ['reviewing', '评审中', learningStatusCounts.reviewing || 0],
+              ['approved', '已批准', learningStatusCounts.approved || 0],
+              ['published', '已发布', learningStatusCounts.published || 0],
+              ['rejected', '已拒绝', learningStatusCounts.rejected || 0],
+              ['all', '全部', learningCandidates.length],
+            ].map(([key, label, count]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setLearningStatusFilter(key as LearningCandidateStatusFilter)}
+                className={`rounded border px-2 py-1 text-[11px] font-semibold ${
+                  learningStatusFilter === key
+                    ? 'border-ops-accent/55 bg-ops-accent/10 text-ops-accent'
+                    : 'border-ops-surface0 text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent'
+                }`}
+              >
+                {label} {count}
+              </button>
+            ))}
+            <select
+              value={learningTargetFilter}
+              onChange={(event) => setLearningTargetFilter(event.target.value as LearningCandidateTargetFilter)}
+              className="rounded border border-ops-surface0 bg-ops-panel px-2 py-1 text-[11px] text-ops-subtext outline-none focus:border-ops-accent/55"
+            >
+              <option value="all">全部类型</option>
+              <option value="runbook">Runbook</option>
+              <option value="skill">Skill</option>
+            </select>
+            <span className="text-[11px] text-ops-overlay">
+              显示 {visibleLearningCandidates.length}/{filteredLearningCandidates.length}
+            </span>
+          </div>
+        ) : null}
         <div className="mt-2 grid gap-2 xl:grid-cols-2">
-          {learningCandidates.length > 0 ? learningCandidates.slice(0, 8).map((item) => {
+          {learningCandidates.length > 0 && visibleLearningCandidates.length > 0 ? visibleLearningCandidates.map((item) => {
             const latestEvent = latestLearningCandidateEvent(item)
             const publishedArtifact = item.published_artifact
             return (
@@ -2042,8 +2117,13 @@ export function MemoryCandidatesPanel({
                   {item.target_type === 'runbook' ? 'Runbook' : 'Skill'}
                 </span>
                 <span className="rounded-full border border-amber-300/35 px-2 py-0.5 text-amber-200">
-                  {item.status || 'draft'}
+                  {learningCandidateStatusLabel(item.status || 'draft')}
                 </span>
+                {learningCandidateNeedsCompletion(item) ? (
+                  <span className="rounded-full border border-ops-alert/35 px-2 py-0.5 text-ops-alert">
+                    需补齐
+                  </span>
+                ) : null}
                 <span className="font-mono text-ops-overlay">{item.created_at || '-'}</span>
               </div>
               <div className="mt-2 truncate font-mono text-[11px] text-ops-overlay" title={item.id}>
@@ -2120,7 +2200,7 @@ export function MemoryCandidatesPanel({
             </article>
           )}) : (
             <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-4 text-center text-xs text-ops-overlay xl:col-span-2">
-              暂无发布候选。把学习候选转为 Runbook 或 Skill 后会进入这里。
+              {learningCandidates.length > 0 ? '当前筛选条件下暂无发布候选。' : '暂无发布候选。把学习候选转为 Runbook 或 Skill 后会进入这里。'}
             </div>
           )}
         </div>

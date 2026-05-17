@@ -161,7 +161,16 @@ def test_memory_candidates_panel_splits_runbook_and_skill_candidates():
     assert "Runbook 候选" in knowledge_parts
     assert "Skill 候选" in knowledge_parts
     assert "发布候选池" in knowledge_parts
-    assert "learningCandidates.slice(0, 8).map" in knowledge_parts
+    assert "filteredLearningCandidates" in knowledge_parts
+    assert "visibleLearningCandidates = filteredLearningCandidates.slice(0, 20)" in knowledge_parts
+    assert "LearningCandidateStatusFilter" in knowledge_parts
+    assert "LearningCandidateTargetFilter" in knowledge_parts
+    assert "setLearningStatusFilter" in knowledge_parts
+    assert "setLearningTargetFilter" in knowledge_parts
+    assert "learningCandidateStatusLabel" in knowledge_parts
+    assert "learningCandidateNeedsCompletion" in knowledge_parts
+    assert "当前筛选条件下暂无发布候选" in knowledge_parts
+    assert "显示 {visibleLearningCandidates.length}/{filteredLearningCandidates.length}" in knowledge_parts
     assert "learningCandidateStatusActions" in knowledge_parts
     assert "learningCandidateQualityReady" in knowledge_parts
     assert "learningCandidateActionBlocked" in knowledge_parts
