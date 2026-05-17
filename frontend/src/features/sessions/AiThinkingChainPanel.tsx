@@ -309,6 +309,17 @@ function runTraceGroupTone(group: RunTraceGroup) {
   return 'border-ops-success/35 bg-ops-success/10 text-ops-success'
 }
 
+function formatRunTraceDuration(durationMs?: number | null) {
+  if (durationMs === undefined || durationMs === null) return ''
+  if (!Number.isFinite(durationMs)) return ''
+  if (durationMs < 1000) return `${Math.max(0, Math.round(durationMs))}ms`
+  const seconds = durationMs / 1000
+  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`
+  const minutes = Math.floor(seconds / 60)
+  const rest = Math.round(seconds % 60)
+  return `${minutes}m ${rest}s`
+}
+
 function formatTimelineDate(timestamp: number) {
   return new Date(timestamp).toLocaleDateString('zh-CN', {
     year: 'numeric',
@@ -806,6 +817,16 @@ function RunTraceStrip({
                   <div className="mb-1.5 flex gap-1.5 text-[10px] text-ops-overlay">
                     <span className="rounded-full border border-ops-surface1 px-2 py-0.5">step {summary.step_count}</span>
                     <span className="rounded-full border border-ops-surface1 px-2 py-0.5">tool {summary.tool_count}</span>
+                    {formatRunTraceDuration(summary.duration_ms) && (
+                      <span className="rounded-full border border-ops-surface1 px-2 py-0.5">
+                        {formatRunTraceDuration(summary.duration_ms)}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {summary?.reason && (
+                  <div className="mb-1.5 line-clamp-2 rounded-lg border border-ops-alert/25 bg-ops-alert/8 px-2 py-1 text-[10px] leading-4 text-ops-alert">
+                    {summary.reason}
                   </div>
                 )}
                 <div className="space-y-1.5">

@@ -210,6 +210,31 @@ class TestSessionHistory(unittest.TestCase):
         self.assertEqual(runs[0]["tool_count"], 1)
         self.assertEqual(runs[0]["started_at"], 1.0)
         self.assertEqual(runs[0]["ended_at"], 4.0)
+        self.assertEqual(runs[0]["duration_ms"], 3000)
+
+    def test_summarize_session_run_trace_events_preserves_failure_reason(self):
+        events = [
+            {
+                "run_id": "run-failed",
+                "event_type": "run:start",
+                "event_ts": 10.0,
+                "payload": {"run_id": "run-failed"},
+                "summary": "start",
+            },
+            {
+                "run_id": "run-failed",
+                "event_type": "run:end",
+                "event_ts": 12.5,
+                "payload": {"run_id": "run-failed", "status": "failed", "reason": "工具连续失败"},
+                "summary": "failed",
+            },
+        ]
+
+        runs = summarize_session_run_trace_events(events)
+
+        self.assertEqual(runs[0]["status"], "failed")
+        self.assertEqual(runs[0]["reason"], "工具连续失败")
+        self.assertEqual(runs[0]["duration_ms"], 2500)
 
     def test_attach_legacy_exec_traces_rebuilds_tool_results_for_ui(self):
         messages = [

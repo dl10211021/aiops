@@ -268,7 +268,9 @@ export interface RunTraceRun {
   run_id: string
   started_at?: string | number | null
   ended_at?: string | number | null
+  duration_ms?: number | null
   status: string
+  reason?: string
   event_count: number
   tool_count: number
   step_count: number

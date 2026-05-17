@@ -112,7 +112,9 @@ def summarize_session_run_trace_events(events: list[dict]) -> list[dict]:
                 "run_id": run_id,
                 "started_at": None,
                 "ended_at": None,
+                "duration_ms": None,
                 "status": "running",
+                "reason": "",
                 "event_count": 0,
                 "tool_count": 0,
                 "step_count": 0,
@@ -134,11 +136,20 @@ def summarize_session_run_trace_events(events: list[dict]) -> list[dict]:
         elif event_type == "run:end":
             run["ended_at"] = event_time
             run["status"] = str(payload.get("status") or "completed").lower()
+            run["reason"] = str(payload.get("reason") or payload.get("error") or "").strip()
+            run["duration_ms"] = _run_trace_duration_ms(run["started_at"], event_time)
         elif event_type == "agent:step":
             run["step_count"] += 1
         elif event_type.startswith("tool:"):
             run["tool_count"] += 1
     return ordered_runs
+
+
+def _run_trace_duration_ms(started_at: object, ended_at: object) -> int | None:
+    if not isinstance(started_at, (int, float)) or not isinstance(ended_at, (int, float)):
+        return None
+    duration = max(0.0, (float(ended_at) - float(started_at)) * 1000.0)
+    return int(round(duration))
 
 
 def _exec_trace_matches(
