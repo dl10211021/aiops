@@ -852,6 +852,7 @@ class FileMemoryStore:
                 }
             )
             item["quality_events"] = events
+            item["review"] = self._learning_candidate_review(item)
             self._write_learning_candidate_rows(rows)
             return item
         raise FileNotFoundError(normalized_id)
@@ -937,6 +938,7 @@ class FileMemoryStore:
                 }
             ],
         }
+        item["review"] = self._learning_candidate_review(item)
         pool_path = self._learning_candidate_pool_path()
         pool_path.parent.mkdir(parents=True, exist_ok=True)
         existing_ids = {str(row.get("id")) for row in self.list_learning_candidates(limit=200)}
@@ -972,6 +974,43 @@ class FileMemoryStore:
             common.insert(3, {"key": "inputs", "label": "输入参数", "ok": False})
             common.append({"key": "tests", "label": "测试项", "ok": False})
         return common
+
+    def _learning_candidate_review(self, item: dict[str, Any]) -> dict[str, Any]:
+        checklist = item.get("quality_checklist") if isinstance(item.get("quality_checklist"), list) else []
+        missing = [
+            str(row.get("label") or row.get("key") or "").strip()
+            for row in checklist
+            if isinstance(row, dict) and not row.get("ok")
+        ]
+        missing = [label for label in missing if label]
+        has_source = any(
+            isinstance(row, dict) and row.get("key") == "source_message" and row.get("ok")
+            for row in checklist
+        )
+        has_evidence = any(
+            isinstance(row, dict) and row.get("key") == "tool_evidence" and row.get("ok")
+            for row in checklist
+        )
+        if not has_source and not has_evidence:
+            decision = "needs_human_review"
+            risk_level = "high"
+            suggestion = "来源和工具证据不足，只能保留为候选，禁止直接发布或注入上下文。"
+        elif missing:
+            decision = "needs_human_review"
+            risk_level = "medium"
+            suggestion = "补齐缺失项并保存质量清单后，再进入批准或发布流程。"
+        else:
+            decision = "accept"
+            risk_level = "low"
+            suggestion = "质量清单已齐备，可以进入人工批准或发布流程。"
+        return {
+            "reviewer": "rule_based_assistant_review",
+            "decision": decision,
+            "risk_level": risk_level,
+            "missing_items": missing[:12],
+            "suggestions": [suggestion],
+            "reviewed_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
 
     def _evidence_ref_action(self, ref: dict[str, Any]) -> str:
         if not isinstance(ref, dict):

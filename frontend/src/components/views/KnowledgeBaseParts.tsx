@@ -2069,6 +2069,9 @@ export function MemoryCandidatesPanel({
               <p className="mt-2 text-[11px] leading-5 text-ops-overlay">
                 {item.next_action || '等待人工整理和发布。'}
               </p>
+              {item.review && (
+                <LearningCandidateReviewCard item={item} compact />
+              )}
               <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-ops-overlay">
                 {item.source_session_id && <span>会话 {item.source_session_id}</span>}
                 {item.evidence_refs?.length ? <span>证据 {item.evidence_refs.length}</span> : <span>无证据引用</span>}
@@ -2204,6 +2207,9 @@ function LearningCandidateDetailContent({
           <div className="text-xs font-semibold text-ops-text">候选摘要</div>
           <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-ops-subtext">{item.summary || '暂无摘要'}</p>
         </section>
+        {item.review && (
+          <LearningCandidateReviewCard item={item} />
+        )}
         <section className="mt-3 rounded-lg border border-ops-surface0 bg-ops-dark/30 p-3">
           <div className="text-xs font-semibold text-ops-text">发布草稿</div>
           {item.published_artifact ? (
@@ -2324,6 +2330,44 @@ function LearningCandidateDetailContent({
         </section>
       </aside>
     </div>
+  )
+}
+
+function LearningCandidateReviewCard({ item, compact = false }: { item: LearningCandidate; compact?: boolean }) {
+  const review = item.review
+  if (!review) return null
+  const riskClass = review.risk_level === 'low'
+    ? 'border-emerald-300/35 text-emerald-200'
+    : review.risk_level === 'high'
+      ? 'border-rose-300/35 text-rose-200'
+      : 'border-amber-300/35 text-amber-200'
+  return (
+    <section className={`${compact ? 'mt-2 px-2 py-2' : 'mt-3 p-3'} rounded-lg border border-ops-surface0 bg-ops-dark/30`}>
+      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+        <span className="font-semibold text-ops-text">辅助审核</span>
+        <span className={`rounded-full border px-2 py-0.5 ${riskClass}`}>{review.risk_level || 'unknown'}</span>
+        <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-ops-overlay">{review.decision || 'needs_human_review'}</span>
+      </div>
+      {!compact && (
+        <div className="mt-2 text-[11px] text-ops-overlay">
+          {review.reviewer || 'rule_based_assistant_review'} · {review.reviewed_at || '-'}
+        </div>
+      )}
+      {(review.missing_items || []).length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {(review.missing_items || []).slice(0, compact ? 4 : 12).map((item) => (
+            <span key={item} className="rounded border border-amber-300/25 px-2 py-0.5 text-[10px] text-amber-200">{item}</span>
+          ))}
+        </div>
+      )}
+      {!compact && (review.suggestions || []).length > 0 && (
+        <div className="mt-2 space-y-1">
+          {(review.suggestions || []).map((suggestion) => (
+            <div key={suggestion} className="rounded bg-ops-dark/35 px-2 py-1 text-[11px] text-ops-subtext">{suggestion}</div>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 

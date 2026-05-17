@@ -1386,6 +1386,14 @@ export interface LearningCandidate {
     reason: string
     timestamp: string
   }>
+  review?: {
+    reviewer?: string
+    decision?: 'accept' | 'needs_human_review' | 'reject' | string
+    risk_level?: 'low' | 'medium' | 'high' | string
+    missing_items?: string[]
+    suggestions?: string[]
+    reviewed_at?: string
+  }
   published_artifact?: LearningCandidatePublishedArtifact
 }
 

@@ -650,3 +650,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：纯前端只读展开，不新增接口、不改变证据生成、不触发工具执行、不碰资产、告警、巡检或审批。
 - 遗留风险：仍是页面内局部展开，不是跨知识库、Run Trace、报告共用的 EvidenceRef 组件；按“功能满足即可收手”，本轮先满足可看证据详情。
 - 下一轮建议：停止继续打磨可观测卡片，转向记忆/知识库的更高价值缺口，或后续统一抽 EvidenceRef 组件。
+
+### 2026-05-17 Round 37：学习候选辅助审核元数据
+
+- 完成：Runbook/Skill 发布候选生成和质量清单保存时写入规则化辅助审核结果，包括 `accept / needs_human_review`、风险等级、缺失项和建议；知识库发布候选池和详情抽屉只读展示“辅助审核”。
+- 验证：`python -m pytest tests/test_file_memory_store.py tests/test_tool_policy_runtime_frontend.py -q`；`cd frontend && npm run build`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：学习候选不再只靠人工看清单，开始具备辅助审核元数据，向 Hermes 式“经验先评估、再沉淀”的安全学习闭环靠近。
+- OpsCore 主线影响：只增强候选池元数据和知识库展示，不调用真实模型、不自动批准、不自动发布、不影响资产、告警、巡检或工具执行。
+- 遗留风险：当前是规则化审核，尚未接入真实辅助模型输出；按“功能满足即可收手”，本轮先让审核状态可存、可更新、可见。
+- 下一轮建议：若继续学习治理，再做辅助模型审核接口；否则转向 Prompt 生命周期或 ContextEngine 这类架构缺口。
