@@ -219,6 +219,7 @@ class TestObservabilityRoutes(unittest.TestCase):
                     observability_routes.RunTraceEvidenceAppendRequest(
                         session_id="sid-db",
                         evidence_id="tev-sid-db-call-db-1",
+                        task_id=f"{investigation_id}-summary",
                     ),
                 )
             )
@@ -232,6 +233,7 @@ class TestObservabilityRoutes(unittest.TestCase):
         self.assertEqual(evidence["tool_evidence"]["tool_call_id"], "call-db-1")
         self.assertEqual(evidence["tool_evidence"]["tool_name"], "db_execute_query")
         self.assertEqual(evidence["tool_evidence"]["tool_family"], "database")
+        self.assertEqual(evidence["task_id"], f"{investigation_id}-summary")
         self.assertIn("select count(*)", evidence["summary"])
         self.assertEqual(response.data["investigation"]["evidence_count"], 1)
 

@@ -37,6 +37,7 @@ class EvidenceAppendRequest(BaseModel):
 
 class RunTraceEvidenceAppendRequest(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=120)
+    task_id: str | None = Field(default=None, max_length=120)
     evidence_id: str = Field(default="", max_length=160)
     tool_call_id: str = Field(default="", max_length=160)
     tool: str = Field(default="", max_length=120)
@@ -211,6 +212,7 @@ async def append_observability_run_trace_evidence(investigation_id: str, req: Ru
         investigation_id,
         session_id=req.session_id,
         trace_result=trace_result,
+        task_id=req.task_id,
         title=req.title,
         summary=req.summary,
         confidence=req.confidence,

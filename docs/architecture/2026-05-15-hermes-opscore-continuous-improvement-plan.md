@@ -956,3 +956,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只补审计事件和前端展示，不改变审核判定规则、不自动批准、不自动发布、不改执行 gate、告警、巡检或资产中心。
 - 遗留风险：当前审核仍是规则型辅助审核，不是多模型交叉审核；后续可把主/副模型审核结果写入同一 `review_events`。
 - 下一轮建议：这个功能到此收手。后续更高价值方向是把子 Agent Run Trace 结果自动关联到可观测任务，或把主/副模型审核接入学习候选 review_events。
+
+### 2026-05-18 Round 71：可观测任务关联 Run Trace 证据
+
+- 完成：`/observability/investigations/{id}/run-trace-evidence` 支持 `task_id`，Run Trace 工具证据可归属到具体 Agent 任务；可观测任务行展示已关联证据数和 Run Trace 证据数。
+- 验证：`python -m pytest tests/test_observability_routes.py tests/test_observability_frontend.py tests/test_observability_investigation.py -q`；`python -m compileall core api`；`cd frontend && npm run build`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：多 Agent 排查从“任务输出手动回填”推进到“任务和真实运行证据能绑定”，后续可以把子 Agent run_id/evidence_id 自动写入同一证据链。
+- OpsCore 主线影响：只扩展证据归属和前端可见性，不改多 Agent 调度、不自动执行、不自动生成根因、不影响告警、巡检或资产中心。
+- 遗留风险：当前仍需要调用方提供 `task_id` 和 Run Trace 查询参数；真正的子 Agent 自动回填需要调度层把 task_id 传入执行上下文。
+- 下一轮建议：这个功能到此收手。后续更高价值方向是让多 Agent 调度层携带 task_id/run_id，或接入主/副模型对学习候选的交叉审核事件。

@@ -110,6 +110,7 @@ export async function appendObservabilityEvidence(investigationId: string, paylo
 
 export async function appendObservabilityRunTraceEvidence(investigationId: string, payload: {
   session_id: string
+  task_id?: string
   evidence_id?: string
   tool_call_id?: string
   tool?: string

@@ -33,6 +33,7 @@ def test_observability_frontend_surfaces_run_trace_evidence_refs():
 
     assert "appendObservabilityRunTraceEvidence" in api
     assert "/run-trace-evidence" in api
+    assert "task_id?: string" in api
     assert "session_id: string" in api
     assert "tool_evidence: Record<string, unknown>" in types
     assert "EvidenceReferenceChip" in view
@@ -40,6 +41,9 @@ def test_observability_frontend_surfaces_run_trace_evidence_refs():
     assert "runTraceEvidenceId(evidence)" in view
     assert "runTraceEvidenceSessionId(evidence)" in view
     assert "runTraceEvidenceToolName(evidence)" in view
+    assert "taskEvidenceCounts" in view
+    assert "Run Trace {counts.runTrace}" in view
+    assert "acc[evidence.task_id]" in view
 
 
 def test_observability_frontend_builds_multi_agent_dispatch_draft():

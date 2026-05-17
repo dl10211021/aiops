@@ -1149,6 +1149,14 @@ function InvestigationCard({
   onComposeDispatchDraft: () => void
 }) {
   const [expandedEvidenceId, setExpandedEvidenceId] = useState<string | null>(null)
+  const taskEvidenceCounts = (investigation.evidence || []).reduce<Record<string, { total: number; runTrace: number }>>((acc, evidence) => {
+    if (!evidence.task_id) return acc
+    const current = acc[evidence.task_id] || { total: 0, runTrace: 0 }
+    current.total += 1
+    if (runTraceEvidenceId(evidence)) current.runTrace += 1
+    acc[evidence.task_id] = current
+    return acc
+  }, {})
 
   return (
     <div className="rounded-lg border border-ops-surface0/80 bg-ops-surface0/35 p-4">
@@ -1186,17 +1194,27 @@ function InvestigationCard({
               started_at: '',
               finished_at: '',
               error_message: '',
-            }))).map((task, index) => (
-              <div key={task.id} className="grid gap-1 rounded bg-ops-dark/30 px-3 py-2 text-xs text-ops-subtext md:grid-cols-[24px_130px_1fr_auto_auto]">
-                <span className="font-mono text-ops-accent">{index + 1}</span>
-                <span className="font-bold text-ops-text">{task.agent_role}</span>
-                <span>{task.output_summary}</span>
-                <span className="font-mono text-ops-overlay">{task.status}</span>
-                <button className="text-xs font-bold text-ops-accent hover:text-ops-accent2" onClick={() => onAppendTaskEvidence(task)}>
-                  回填证据
-                </button>
-              </div>
-            ))}
+            }))).map((task, index) => {
+              const counts = taskEvidenceCounts[task.id] || { total: 0, runTrace: 0 }
+              return (
+                <div key={task.id} className="grid gap-1 rounded bg-ops-dark/30 px-3 py-2 text-xs text-ops-subtext md:grid-cols-[24px_130px_1fr_auto_auto]">
+                  <span className="font-mono text-ops-accent">{index + 1}</span>
+                  <span className="font-bold text-ops-text">{task.agent_role}</span>
+                  <span>{task.output_summary}</span>
+                  <span className="font-mono text-ops-overlay">{task.status}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {counts.total > 0 && (
+                      <span className="rounded border border-ops-surface1 px-2 py-0.5 text-[11px] text-ops-overlay">
+                        证据 {counts.total} · Run Trace {counts.runTrace}
+                      </span>
+                    )}
+                    <button className="text-xs font-bold text-ops-accent hover:text-ops-accent2" onClick={() => onAppendTaskEvidence(task)}>
+                      回填证据
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
         <div>
