@@ -587,3 +587,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只增加模型可调用的只读检索工具，不改变会话写入、审批、工具执行、资产、巡检或告警链路。
 - 遗留风险：当前是 bounded scan，不是 SQLite FTS5/CJK trigram 索引；跨全部历史很多时性能和召回仍有限。
 - 下一轮建议：功能满足即可先收手。后续若实际搜索慢或召回差，再单独做 FTS/CJK 索引和前端入口。
+
+### 2026-05-17 Round 30：多 Agent 权限继承
+
+- 完成：`dispatch_sub_agents` 的底层分发在调用子会话前计算最终权限：`父级允许读写 && 子会话允许读写`；父级全局/组模式切到只读时，下面子会话不会被分发为读写；结果里返回最终 `allow_modifications` 和 `session_mode`，便于审计。
+- 验证：`python -m pytest tests/test_agent_task_dispatch.py tests/test_dispatcher_session_tools.py tests/test_agent_headless_setup.py -q` 通过，12 passed；`python -m compileall core api scripts` 通过。
+- Hermes 差距变化：多 Agent 分发开始具备 OpsCore 自己的权限上限继承，不把 Hermes 的 delegate 作为无边界子任务复制进来。
+- OpsCore 主线影响：只收紧分发权限上限，不改变工具执行、审批策略、资产连接、巡检或告警逻辑。
+- 遗留风险：这只是后端分发层的最小闭环；前端全局模式/组模式的批量切换状态仍需要后续单独验收。
+- 下一轮建议：功能满足先收手。后续再做前端组/全局模式显示和批量只读/读写切换的一致性。

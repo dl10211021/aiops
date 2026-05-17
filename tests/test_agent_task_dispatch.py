@@ -17,7 +17,7 @@ class AgentTaskDispatchTests(unittest.TestCase):
                 [{"target_session_id": "sid-1", "task_description": "检查磁盘"}],
                 True,
                 task_runner=runner,
-                active_sessions={"sid-1": {"info": {"remark": "数据库"}}},
+                active_sessions={"sid-1": {"info": {"remark": "数据库", "allow_modifications": True}}},
             )
         )
 
@@ -28,10 +28,42 @@ class AgentTaskDispatchTests(unittest.TestCase):
                 {
                     "session_id": "sid-1",
                     "status": "SUCCESS",
+                    "allow_modifications": True,
+                    "session_mode": "readwrite",
                     "report": "done:sid-1:检查磁盘:True",
                 }
             ],
         )
+
+    def test_child_task_cannot_exceed_parent_or_target_permissions(self):
+        calls = []
+
+        async def runner(session_id, task_description, allow_mod):
+            calls.append((session_id, allow_mod))
+            return f"mode:{allow_mod}"
+
+        parent_readwrite_results = asyncio.run(
+            dispatch_group_tasks(
+                [{"target_session_id": "sid-readonly", "task_description": "检查"}],
+                True,
+                task_runner=runner,
+                active_sessions={"sid-readonly": {"info": {"allow_modifications": False}}},
+            )
+        )
+        parent_readonly_results = asyncio.run(
+            dispatch_group_tasks(
+                [{"target_session_id": "sid-readwrite", "task_description": "检查"}],
+                False,
+                task_runner=runner,
+                active_sessions={"sid-readwrite": {"info": {"allow_modifications": True}}},
+            )
+        )
+
+        self.assertEqual(calls, [("sid-readonly", False), ("sid-readwrite", False)])
+        self.assertFalse(parent_readwrite_results[0]["allow_modifications"])
+        self.assertEqual(parent_readwrite_results[0]["session_mode"], "readonly")
+        self.assertFalse(parent_readonly_results[0]["allow_modifications"])
+        self.assertEqual(parent_readonly_results[0]["session_mode"], "readonly")
 
     def test_rejects_invalid_task_definition_before_running(self):
         async def runner(session_id, task_description, allow_mod):

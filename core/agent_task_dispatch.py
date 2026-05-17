@@ -49,6 +49,7 @@ async def dispatch_group_tasks(
 
         target_info = active_sessions.get(target_sid, {}).get("info", {})
         target_name = target_info.get("remark") or target_info.get("host") or target_sid
+        effective_allow_mod = bool(allow_mod and target_info.get("allow_modifications", False))
 
         log.warning(
             f"🤖 [Swarm 协同] 指挥官 Agent 正在向子会话 {target_name} ({target_sid}) 下达自然语言任务: {task_desc}"
@@ -56,12 +57,14 @@ async def dispatch_group_tasks(
 
         try:
             result = await asyncio.wait_for(
-                task_runner(target_sid, task_desc, allow_mod),
+                task_runner(target_sid, task_desc, effective_allow_mod),
                 timeout=timeout_seconds,
             )
             return {
                 "session_id": target_sid,
                 "status": "SUCCESS",
+                "allow_modifications": effective_allow_mod,
+                "session_mode": "readwrite" if effective_allow_mod else "readonly",
                 "report": result,
             }
         except asyncio.TimeoutError:
