@@ -785,3 +785,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：仅新增后端基础能力；分组模式硬校验 `group_name`，组外目标只进入 `skipped_sessions`，不会被修改；不改变告警、巡检、资产中心或工具执行。
 - 遗留风险：前端还没有接入目标选择器和执行前影响预览；本轮只补后端基础，避免 UI 和调度一次性耦合。
 - 下一轮建议：做前端影响范围预览和权限同步按钮，再把多 Agent 任务下发只绑定到已选会话。
+
+### 2026-05-18 Round 52：全局/分组权限按钮接入批量同步
+
+- 完成：侧边栏现有 `全部只读/全部读写` 和 `全组只读/全组读写` 复用新的 `/sessions/multi-agent/permissions`，全局传 `scope=global`，分组传 `scope=group + group_name`。
+- 验证：`python -m pytest tests/test_session_sidebar_frontend.py -q`；`cd frontend && npm run build`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：前端权限切换不再逐个调用单会话接口，而是通过多 Agent 目标权限同步接口写回会话状态，符合全局/分组统一改变单独会话状态的规则。
+- OpsCore 主线影响：保留单会话 `updatePermission` 作为失败回退和 TopBar 单会话切换；不改变多 Agent 任务下发、不碰告警、巡检或资产中心。
+- 遗留风险：当前仍是全局全部或组内全部，尚未提供多选目标选择器和执行前预览；本轮只完成现有按钮的正确后端路径。
+- 下一轮建议：增加全局/分组的目标多选与影响范围预览，再把任务下发绑定到已选目标。

@@ -13,7 +13,7 @@ def test_session_group_header_exposes_bulk_permission_actions():
     assert "onClick={() => onSetGroupPermission(group, true)}" in group_list
     assert "onSetGroupPermission={model.handleSetGroupPermission}" in sidebar
     assert "handleSetGroupPermission" in model
-    assert "syncSessionsPermissionToBackend(affected, allowModifications, updateSession, addToast)" in model
+    assert "syncSessionsPermissionToBackend(affected, allowModifications, updateSession, addToast, 'group', currentName)" in model
 
 
 def test_session_sidebar_exposes_global_permission_actions():
@@ -25,7 +25,7 @@ def test_session_sidebar_exposes_global_permission_actions():
     assert "model.handleSetAllSessionsPermission(false)" in sidebar
     assert "model.handleSetAllSessionsPermission(true)" in sidebar
     assert "handleSetAllSessionsPermission" in model
-    assert "syncSessionsPermissionToBackend(sessionList, allowModifications, updateSession, addToast)" in model
+    assert "syncSessionsPermissionToBackend(sessionList, allowModifications, updateSession, addToast, 'global')" in model
     assert "暂无活跃会话" in model
 
 
@@ -35,6 +35,20 @@ def test_session_group_bulk_permission_sync_is_optimistic_and_rolls_back_failure
     assert "export async function syncSessionsPermissionToBackend" in effects
     assert "items.filter((session) => session.isReadWriteMode !== allowModifications)" in effects
     assert "updateSession(session.id, { isReadWriteMode: allowModifications })" in effects
+    assert "syncMultiAgentPermissions({" in effects
+    assert "permission_mode: allowModifications ? 'readwrite' : 'readonly'" in effects
+    assert "target_session_ids: changed.map((session) => session.id)" in effects
+    assert "已同步 ${response.data.target_count} 个会话，跳过 ${response.data.skipped_count} 个" in effects
     assert "updatePermission(session.id, allowModifications)" in effects
     assert "updateSession(item.session.id, { isReadWriteMode: item.session.isReadWriteMode })" in effects
     assert "部分会话权限同步失败，已回退失败项" in effects
+
+
+def test_session_connection_exposes_multi_agent_permission_sync_api():
+    api = Path("frontend/src/api/sessionConnection.ts").read_text(encoding="utf-8")
+
+    assert "export async function syncMultiAgentPermissions" in api
+    assert "scope: 'global' | 'group'" in api
+    assert "permission_mode: 'readonly' | 'readwrite'" in api
+    assert "target_session_ids?: string[]" in api
+    assert "'/sessions/multi-agent/permissions'" in api

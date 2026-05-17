@@ -50,6 +50,32 @@ export async function updatePermission(sessionId: string, allowModifications: bo
   })
 }
 
+export async function syncMultiAgentPermissions(params: {
+  scope: 'global' | 'group'
+  permission_mode: 'readonly' | 'readwrite'
+  group_name?: string
+  target_session_ids?: string[]
+}) {
+  return request<{
+    scope: 'global' | 'group'
+    group_name: string
+    permission_mode: 'readonly' | 'readwrite'
+    allow_modifications: boolean
+    changed_sessions: Array<{
+      session_id: string
+      group_name: string
+      previous_allow_modifications: boolean
+      allow_modifications: boolean
+    }>
+    skipped_sessions: Array<{ session_id: string; reason: string; group_name?: string }>
+    target_count: number
+    skipped_count: number
+  }>('/sessions/multi-agent/permissions', {
+    method: 'PUT',
+    body: JSON.stringify(params),
+  })
+}
+
 export async function updateHeartbeat(sessionId: string, enabled: boolean, masterInterval?: number) {
   return request(`/session/${sessionId}/heartbeat`, {
     method: 'PUT', body: JSON.stringify({ heartbeat_enabled: enabled, master_interval: masterInterval }),

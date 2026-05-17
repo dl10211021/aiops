@@ -241,7 +241,7 @@ export function useSessionSidebarModel() {
       addToast('该会话组暂无会话', 'info')
       return
     }
-    void syncSessionsPermissionToBackend(affected, allowModifications, updateSession, addToast)
+    void syncSessionsPermissionToBackend(affected, allowModifications, updateSession, addToast, 'group', currentName)
   }, [addToast, grouped, updateSession])
 
   const handleSetAllSessionsPermission = useCallback((allowModifications: boolean) => {
@@ -249,7 +249,7 @@ export function useSessionSidebarModel() {
       addToast('暂无活跃会话', 'info')
       return
     }
-    void syncSessionsPermissionToBackend(sessionList, allowModifications, updateSession, addToast)
+    void syncSessionsPermissionToBackend(sessionList, allowModifications, updateSession, addToast, 'global')
   }, [addToast, sessionList, updateSession])
 
   const handleSelectSession = useCallback((sessionId: string, group: string) => {

@@ -1,4 +1,4 @@
-import { disconnectSession, updatePermission, updateSessionGroup, updateSessionMetadata } from '@/api/client'
+import { disconnectSession, syncMultiAgentPermissions, updatePermission, updateSessionGroup, updateSessionMetadata } from '@/api/client'
 import type { Session } from '@/types'
 
 type AddToast = (message: string, type?: 'success' | 'error' | 'info') => void
@@ -21,31 +21,56 @@ export async function syncSessionsPermissionToBackend(
   allowModifications: boolean,
   updateSession: (sessionId: string, patch: Partial<Session>) => void,
   addToast: AddToast,
+  scope: 'global' | 'group' = 'global',
+  groupName = '',
 ) {
   const changed = items.filter((session) => session.isReadWriteMode !== allowModifications)
   if (changed.length === 0) {
-    addToast(allowModifications ? '该组已经全部是读写模式' : '该组已经全部是只读模式', 'info')
+    addToast(allowModifications ? '选中会话已经全部是读写模式' : '选中会话已经全部是只读模式', 'info')
     return
   }
 
   changed.forEach((session) => updateSession(session.id, { isReadWriteMode: allowModifications }))
-  const results = await Promise.allSettled(
-    changed.map((session) => updatePermission(session.id, allowModifications)),
-  )
-  const failed = results
-    .map((result, index) => ({ result, session: changed[index] }))
-    .filter((item) => item.result.status === 'rejected')
+  try {
+    const response = await syncMultiAgentPermissions({
+      scope,
+      permission_mode: allowModifications ? 'readwrite' : 'readonly',
+      group_name: scope === 'group' ? groupName : undefined,
+      target_session_ids: changed.map((session) => session.id),
+    })
+    const changedIds = new Set(response.data.changed_sessions.map((session) => session.session_id))
+    changed.forEach((session) => {
+      if (!changedIds.has(session.id)) updateSession(session.id, { isReadWriteMode: session.isReadWriteMode })
+    })
+    if (response.data.skipped_count > 0) {
+      addToast(`已同步 ${response.data.target_count} 个会话，跳过 ${response.data.skipped_count} 个`, 'info')
+      return
+    }
+    addToast(
+      allowModifications ? `已将 ${response.data.target_count} 个会话切到读写模式` : `已将 ${response.data.target_count} 个会话切到只读模式`,
+      'success',
+    )
+  } catch {
+    changed.forEach((session) => updateSession(session.id, { isReadWriteMode: session.isReadWriteMode }))
+    const results = await Promise.allSettled(
+      changed.map((session) => updatePermission(session.id, allowModifications)),
+    )
+    const failed = results
+      .map((result, index) => ({ result, session: changed[index] }))
+      .filter((item) => item.result.status === 'rejected')
 
-  if (failed.length > 0) {
-    failed.forEach((item) => updateSession(item.session.id, { isReadWriteMode: item.session.isReadWriteMode }))
-    addToast('部分会话权限同步失败，已回退失败项', 'error')
+    if (failed.length > 0) {
+      failed.forEach((item) => updateSession(item.session.id, { isReadWriteMode: item.session.isReadWriteMode }))
+      addToast('部分会话权限同步失败，已回退失败项', 'error')
+      return
+    }
+    changed.forEach((session) => updateSession(session.id, { isReadWriteMode: allowModifications }))
+    addToast(
+      allowModifications ? `已将 ${changed.length} 个会话切到读写模式` : `已将 ${changed.length} 个会话切到只读模式`,
+      'success',
+    )
     return
   }
-
-  addToast(
-    allowModifications ? `已将 ${changed.length} 个会话切到读写模式` : `已将 ${changed.length} 个会话切到只读模式`,
-    'success',
-  )
 }
 
 export async function disconnectSidebarSession(
