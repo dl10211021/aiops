@@ -700,6 +700,11 @@ class FileMemoryStore:
         lines.extend(self._render_publish_evidence_refs(evidence_refs))
         lines.extend([
             "",
+            f"## {label} 草稿模板",
+        ])
+        lines.extend(self._render_publish_artifact_template(target_type=target_type, summary=summary))
+        lines.extend([
+            "",
             "## 草稿说明",
             "- 已通过运行时质量门禁并标记为已发布。",
             "- 上线前请补齐审批与灰度计划；仅用于人工审核与运行时接入。",
@@ -729,6 +734,71 @@ class FileMemoryStore:
             lines.append(f"  - action: {action}")
             lines.append(f"  - evidence_family: {family}")
         return lines
+
+    def _render_publish_artifact_template(self, *, target_type: str, summary: str) -> list[str]:
+        summary_text = self._preview(summary)
+        if target_type == "skill":
+            return [
+                "### Skill 基本信息",
+                "- skill_id: 待命名",
+                "- 适用资产/协议: 待补齐",
+                "- 触发条件: 待从候选摘要和证据中确认",
+                "- 来源经验:",
+                f"  - {summary_text}",
+                "",
+                "### 建议目录结构",
+                "- SKILL.md",
+                "- scripts/",
+                "- references/",
+                "- tests/",
+                "",
+                "### 输入参数",
+                "- asset_id/session_id: 待补齐",
+                "- readonly/readwrite: 必须显式声明",
+                "- dry_run: 建议默认开启",
+                "",
+                "### 安全边界",
+                "- 只读动作优先；写入、外发、破坏性动作必须走审批。",
+                "- 不保存密码、Token、Cookie 或临时验证码。",
+                "- 运行前必须重新读取实时资产状态，不能只依赖历史记忆。",
+                "",
+                "### 验证计划",
+                "- 静态校验: `validate_skill_candidate`。",
+                "- 单元测试: 覆盖参数校验、失败路径和 dry_run。",
+                "- 沙箱试跑: 使用测试资产或 mock session。",
+                "",
+                "### 回滚方案",
+                "- 保留上一版本 Skill 文件和校验记录。",
+                "- 发布失败时撤回到候选池，不进入生产技能目录。",
+            ]
+        return [
+            "### Runbook 基本信息",
+            "- runbook_id: 待命名",
+            "- 适用资产/协议: 待补齐",
+            "- 适用场景: 待从候选摘要和证据中确认",
+            "- 来源经验:",
+            f"  - {summary_text}",
+            "",
+            "### 执行前检查",
+            "- 确认资产、会话模式、审批策略和通知渠道。",
+            "- 确认当前指标/日志/数据库状态，不直接复用旧结论。",
+            "- 写入类步骤必须提前声明影响范围和回滚点。",
+            "",
+            "### 执行步骤",
+            "- Step 1: 采集只读证据。",
+            "- Step 2: 判断是否满足执行条件。",
+            "- Step 3: 如需变更，提交审批并记录真实动作。",
+            "- Step 4: 执行后验证并生成报告。",
+            "",
+            "### 验证与退出标准",
+            "- 关键指标恢复或问题被定位。",
+            "- 工具 trace、证据 ID、通知结果已归档。",
+            "- 未满足条件时必须停止，不进入写入步骤。",
+            "",
+            "### 回滚方案",
+            "- 记录变更前状态和恢复命令。",
+            "- 回滚动作必须单独审批并生成新的证据链。",
+        ]
 
     def _learning_candidate_publish_artifact_path(self, *, artifact_id: str, target_type: str) -> Path:
         safe_target_type = safe_memory_segment(target_type or "runbook")

@@ -328,6 +328,10 @@ class FileMemoryStoreTests(unittest.TestCase):
         artifact_content = artifact_file.read_text(encoding="utf-8")
         self.assertIn(str(published_candidate["id"]), artifact_content)
         self.assertIn("发布草稿", artifact_content)
+        self.assertIn("## Runbook 草稿模板", artifact_content)
+        self.assertIn("### 执行前检查", artifact_content)
+        self.assertIn("### 执行步骤", artifact_content)
+        self.assertIn("### 回滚方案", artifact_content)
         republish = self.store.update_learning_candidate_status(
             learning_candidates[0]["id"],
             status="published",
@@ -403,6 +407,49 @@ class FileMemoryStoreTests(unittest.TestCase):
             self.store.search(scope_ids=["sid-1"], query="可以整理成 Skill", limit=5),
             [],
         )
+
+    def test_published_skill_candidate_artifact_uses_skill_template(self):
+        self.store.append_memory(
+            scope_id="sid-1",
+            summary=(
+                "【记忆类型】用户认可回答\n"
+                "【候选状态】待人工确认\n"
+                "【核心记忆】可以整理成 Skill。\n"
+                "【使用提醒】人工确认后才可作为当前会话后续参考。"
+            ),
+            source_session_id="sid-1",
+            metadata={
+                "source": "answer_feedback_candidate",
+                "memory_kind": "success_experience",
+                "candidate_type": "feedback_success_experience",
+                "review_status": "pending",
+                "retrieval_enabled": False,
+            },
+        )
+        candidate = self.store.list_candidate_entries(limit=10)[0]
+        self.store.resolve_candidate_entry(candidate["candidate_id"], "to_skill")
+        learning_candidate = self.store.list_learning_candidates(limit=10, target_type="skill")[0]
+        self.store.update_learning_candidate_quality_checklist(
+            learning_candidate["id"],
+            checklist=[{**row, "ok": True, "note": "已补齐"} for row in learning_candidate["quality_checklist"]],
+            actor="tester",
+            reason="补齐 Skill 发布前检查项",
+        )
+
+        published_candidate = self.store.update_learning_candidate_status(
+            learning_candidate["id"],
+            status="published",
+            actor="tester",
+            reason="生成 Skill 发布草稿",
+        )
+
+        artifact_file = self.tmp_path / published_candidate["published_artifact"]["file_path"]
+        artifact_content = artifact_file.read_text(encoding="utf-8")
+        self.assertIn("## Skill 草稿模板", artifact_content)
+        self.assertIn("### 建议目录结构", artifact_content)
+        self.assertIn("### 输入参数", artifact_content)
+        self.assertIn("### 安全边界", artifact_content)
+        self.assertIn("validate_skill_candidate", artifact_content)
 
     def test_update_learning_candidate_status_validates_reason_and_id(self):
         with self.assertRaises(FileNotFoundError):

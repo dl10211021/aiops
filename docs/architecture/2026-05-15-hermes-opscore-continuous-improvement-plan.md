@@ -344,3 +344,12 @@
 - OpsCore 主线影响：门禁只约束学习候选状态流转，不自动执行、不自动发布，不影响资产、巡检、告警。
 - 遗留风险：门禁目前要求全部清单项通过，尚未区分必填项和建议项；正式 Runbook/Skill 版本产物仍未生成。
 - 下一轮建议：增加正式发布产物草稿，把 `published` 候选转换为 Runbook/Skill 草稿文件或记录，同时保留来源证据链。
+
+### 2026-05-17 Round 15：发布产物草稿模板
+
+- 完成：`published` 学习候选生成的 Markdown 发布草稿升级为 Runbook/Skill 分类型模板；Runbook 草稿包含适用场景、执行前检查、执行步骤、验证退出标准和回滚方案；Skill 草稿包含建议目录结构、输入参数、安全边界、验证计划和回滚方案。
+- 验证：`python -m pytest tests/test_file_memory_store.py tests/test_knowledge_routes.py -q` 通过，41 passed；`pytest tests/test_tool_policy_runtime_frontend.py -q` 通过，13 passed；`python scripts/preflight.py --check-git` 通过，1280 tests。
+- Hermes 差距变化：从“候选可发布”推进到“候选能形成可审查的运维资产草稿”，更接近 Hermes 的技能学习和演进产物，但仍不自动安装、不自动执行。
+- OpsCore 主线影响：只增强知识库学习候选的草稿内容，不改变资产、巡检、告警或工具执行链路。
+- 遗留风险：草稿仍是 Markdown 审核产物，尚未生成正式 Skill 目录、Runbook 版本表、灰度发布记录或回滚版本。
+- 下一轮建议：增加发布草稿校验结果，Skill 草稿接入 `validate_skill_candidate` 风格的结构检查，Runbook 草稿接入必备章节检查。
