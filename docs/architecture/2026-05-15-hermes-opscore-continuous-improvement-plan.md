@@ -911,3 +911,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只读聚合和展示，不改变工具执行、不改变 timeout/retry/concurrency_safe 策略本身，不影响审批、告警、巡检、资产中心或 Hermes 参考目录。
 - 遗留风险：当前聚合范围仍跟随在线会话 Run Trace，不是独立审计仓库；老事件没有 runtime 元数据时只进入“未跟踪”统计。
 - 下一轮建议：停止继续打磨总览审计小面板。后续更高价值方向是让可观测任务生成多 Agent 指令草稿，或把审计数据沉淀为离线报表。
+
+### 2026-05-18 Round 66：可观测任务生成多 Agent 指令草稿
+
+- 完成：可观测排查事件新增“生成协同指令”，把 investigation 的候选 Agent 任务转换成聊天草稿；草稿要求先 `list_active_sessions`，再用明确的在线 `target_session_id` 调用 `dispatch_sub_agents`，默认 `dispatch_scope=global` 且保持只读排查。
+- 验证：`python -m pytest tests/test_observability_frontend.py::test_observability_frontend_builds_multi_agent_dispatch_draft -q`；提交前继续跑 frontend build、preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：可观测任务从“只展示计划”推进到“可交给多 Agent 编排执行前确认”，但仍不自动下发，保留人工确认和执行层 gate。
+- OpsCore 主线影响：只改前端草稿生成，不新增后端调度 API，不改 `dispatch_sub_agents` 执行边界，不影响告警、巡检、资产中心或审批。
+- 遗留风险：当前目标匹配交给主会话模型基于 `list_active_sessions` 决定；还没有在可观测页直接展示会话多选器。
+- 下一轮建议：这个功能到此收手。后续更高价值方向是可观测调查结果回填证据，或做离线审计报表。

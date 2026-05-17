@@ -40,3 +40,17 @@ def test_observability_frontend_surfaces_run_trace_evidence_refs():
     assert "runTraceEvidenceId(evidence)" in view
     assert "runTraceEvidenceSessionId(evidence)" in view
     assert "runTraceEvidenceToolName(evidence)" in view
+
+
+def test_observability_frontend_builds_multi_agent_dispatch_draft():
+    view = Path("frontend/src/components/views/ObservabilityCenter.tsx").read_text(encoding="utf-8")
+    chat_window = Path("frontend/src/components/chat/ChatWindow.tsx").read_text(encoding="utf-8")
+
+    assert "生成协同指令" in view
+    assert "composeInvestigationDispatchDraft" in view
+    assert "dispatch_sub_agents" in view
+    assert "dispatch_scope: global" in view
+    assert "target_session_id 必须由 list_active_sessions 返回" in view
+    assert "window.dispatchEvent(new CustomEvent('opscore:chat-draft'" in view
+    assert "setView('chat')" in view
+    assert "window.addEventListener('opscore:chat-draft'" in chat_window

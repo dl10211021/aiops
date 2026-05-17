@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import PageHeader from '@/components/layout/PageHeader'
 import { EvidenceReferenceChip } from './EvidenceReferenceChip'
+import { useStore } from '@/store'
 import {
   appendObservabilityEvidence,
   appendObservabilityRootCause,
@@ -131,6 +132,10 @@ export default function ObservabilityCenter() {
     time_window: '最近 2 小时',
     severity: 'warning',
   })
+  const sessions = useStore((state) => state.sessions)
+  const currentSessionId = useStore((state) => state.currentSessionId)
+  const setCurrentSession = useStore((state) => state.setCurrentSession)
+  const setView = useStore((state) => state.setView)
 
   const load = async () => {
     setLoading(true)
@@ -414,6 +419,23 @@ export default function ObservabilityCenter() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const composeInvestigationDispatchDraft = (investigation: ObservabilityInvestigation) => {
+    const sessionIds = Object.keys(sessions)
+    const activeSessionId = currentSessionId || sessionIds[0]
+    if (!activeSessionId) {
+      setError('请先建立一个会话，再生成多 Agent 协同指令草稿')
+      return
+    }
+    if (activeSessionId !== currentSessionId) setCurrentSession(activeSessionId)
+    setView('chat')
+    const message = buildInvestigationDispatchDraft(investigation)
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('opscore:chat-draft', {
+        detail: { sessionId: activeSessionId, message },
+      }))
+    }, 0)
   }
 
   const orderedLayers = useMemo(() => {
@@ -763,6 +785,7 @@ export default function ObservabilityCenter() {
                       investigation={item}
                       onAppendEvidence={() => void appendSampleEvidence(item.id)}
                       onAppendRootCause={() => void appendEvidenceRootCause(item)}
+                      onComposeDispatchDraft={() => composeInvestigationDispatchDraft(item)}
                     />
                   ))}
                 </div>
@@ -1087,10 +1110,12 @@ function InvestigationCard({
   investigation,
   onAppendEvidence,
   onAppendRootCause,
+  onComposeDispatchDraft,
 }: {
   investigation: ObservabilityInvestigation
   onAppendEvidence: () => void
   onAppendRootCause: () => void
+  onComposeDispatchDraft: () => void
 }) {
   const [expandedEvidenceId, setExpandedEvidenceId] = useState<string | null>(null)
 
@@ -1108,6 +1133,9 @@ function InvestigationCard({
           </button>
           <button className="ops-control rounded-lg px-3 py-1.5 text-xs font-bold" onClick={onAppendRootCause}>
             生成根因候选
+          </button>
+          <button className="ops-primary-action rounded-lg px-3 py-1.5 text-xs font-bold" onClick={onComposeDispatchDraft}>
+            生成协同指令
           </button>
         </div>
       </div>
@@ -1216,6 +1244,32 @@ function InvestigationCard({
       )}
     </div>
   )
+}
+
+function buildInvestigationDispatchDraft(investigation: ObservabilityInvestigation): string {
+  const taskLines = (investigation.tasks || []).map((task, index) => (
+    `- ${index + 1}. ${task.agent_role} | ${task.task_type} | ${task.output_summary} | input=${JSON.stringify(task.input_json || {})}`
+  ))
+  return [
+    '请基于以下可观测排查事件生成多 Agent 协同任务草稿，先确认任务内容后再调用 dispatch_sub_agents。',
+    'dispatch_scope: global',
+    'group_name: ',
+    `investigation_id: ${investigation.id}`,
+    `title: ${investigation.title}`,
+    `symptom: ${investigation.symptom || '-'}`,
+    `time_window: ${investigation.time_window || '最近 2 小时'}`,
+    `severity: ${investigation.severity || 'unknown'}`,
+    '',
+    '候选任务：',
+    ...(taskLines.length ? taskLines : ['- Summary Agent | correlate_evidence | 汇总时间线、证据和根因候选 | input={"read_only":true}']),
+    '',
+    '执行要求：',
+    '- 先调用 list_active_sessions，只能从返回的在线会话里选择目标。',
+    '- target_session_id 必须由 list_active_sessions 返回，不能凭空填写。',
+    '- 对每个可匹配目标生成一条 tasks 记录，再调用 dispatch_sub_agents。',
+    '- 所有任务保持只读排查，不做写入、重启、变更或通知外发。',
+    '- 如果目标无法匹配，先说明缺少哪个会话/资产，不要扩大范围。',
+  ].join('\n')
 }
 
 function runTraceEvidenceId(evidence: ObservabilityEvidence): string {
