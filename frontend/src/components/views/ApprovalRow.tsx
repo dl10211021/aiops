@@ -33,6 +33,7 @@ export function ApprovalRow({
   const toolPolicy = approval.metadata?.tool_policy
   const policyActions = approval.metadata?.policy?.actions || []
   const primaryAction = approval.metadata?.policy?.primary_action
+  const requestedAction = approval.metadata?.requested_action
   const canExecuteRollback = approval.status === 'approved' && approval.tool_name === 'rollback_skill' && !approval.execution
   const sessionMode = sessionModeResolution?.mode
   const sessionModeSource = sessionModeResolution?.source ?? 'inferred_unknown'
@@ -46,6 +47,14 @@ export function ApprovalRow({
           {primaryAction && (
             <span className={`rounded-full border px-2.5 py-1 text-[11px] ${approvalPolicyActionTone(primaryAction.severity)}`}>
               {primaryAction.label}
+            </span>
+          )}
+          {requestedAction?.label && (
+            <span
+              className="rounded-full border border-ops-accent/35 bg-ops-accent/10 px-2.5 py-1 text-[11px] text-ops-accent"
+              title={requestedAction.kind || 'requested_action'}
+            >
+              实际动作：{requestedAction.label}
             </span>
           )}
           <span className="text-xs text-ops-overlay">{approval.id}</span>

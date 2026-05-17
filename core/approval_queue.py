@@ -11,6 +11,11 @@ from typing import Any
 
 from core.redaction import redact_json_text, redact_value
 from core.skill_lifecycle import validate_skill_candidate
+from core.tool_trace_policy import (
+    trace_command_action_summary,
+    trace_http_action_summary,
+    trace_sql_action_summary,
+)
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -149,6 +154,32 @@ def _policy_metadata(tool_name: str, args: dict[str, Any], context: dict[str, An
     return metadata
 
 
+def _requested_action_metadata(
+    tool_name: str,
+    args: dict[str, Any],
+    tool_policy: dict[str, Any] | None,
+) -> dict[str, str]:
+    payload_args: Any = args or {}
+    result_meta: dict[str, Any] = {"tool_policy": tool_policy or {}}
+    if tool_name == "db_execute_query" and isinstance(args, dict):
+        payload_args = args.get("sql") or args
+    elif isinstance(args, dict) and args.get("method"):
+        result_meta["method"] = args.get("method")
+    trace = {
+        "tool": tool_name,
+        "args": payload_args,
+        "resultMeta": result_meta,
+    }
+    for kind, summary in (
+        ("sql", trace_sql_action_summary(trace)),
+        ("http", trace_http_action_summary(trace)),
+        ("command", trace_command_action_summary(trace)),
+    ):
+        if summary:
+            return {"kind": kind, "label": summary}
+    return {}
+
+
 def _approval_source_metadata(
     *,
     reason: str,
@@ -263,6 +294,9 @@ def _approval_metadata(
     policy = _policy_metadata(tool_name, args, context)
     if policy:
         metadata["policy"] = policy
+    requested_action = _requested_action_metadata(tool_name, args, tool_policy)
+    if requested_action:
+        metadata["requested_action"] = redact_value(requested_action)
     metadata["approval_sources"] = redact_value(
         _approval_source_metadata(
             reason=reason,

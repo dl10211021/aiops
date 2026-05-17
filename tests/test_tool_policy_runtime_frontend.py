@@ -248,3 +248,13 @@ def test_frontend_shows_actual_command_action_separately_from_tool_policy():
     assert "{commandAction && (" in trace_list
     assert "const commandAction = commandActionFromTrace(trace)" in thinking_panel
     assert "commandAction?.searchText" in thinking_panel
+
+
+def test_approval_row_shows_requested_action_separately_from_policy():
+    approval_row = Path("frontend/src/components/views/ApprovalRow.tsx").read_text(encoding="utf-8")
+    types = Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
+
+    assert "requested_action?:" in types
+    assert "const requestedAction = approval.metadata?.requested_action" in approval_row
+    assert "实际动作：{requestedAction.label}" in approval_row
+    assert "title={requestedAction.kind || 'requested_action'}" in approval_row

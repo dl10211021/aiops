@@ -38,6 +38,8 @@ class TestApprovalQueue(unittest.TestCase):
         self.assertEqual(pending[0]["args"]["password"], "***")
         self.assertEqual(pending[0]["metadata"]["policy"]["primary_action"]["id"], "sql.data_write")
         self.assertEqual(pending[0]["metadata"]["policy"]["primary_action"]["label"], "数据库数据写入")
+        self.assertEqual(pending[0]["metadata"]["requested_action"]["kind"], "sql")
+        self.assertEqual(pending[0]["metadata"]["requested_action"]["label"], "写入/DDL (UPDATE)")
         self.assertEqual(pending[0]["metadata"]["tool_policy"]["name"], "db_execute_query")
         self.assertEqual(pending[0]["metadata"]["tool_policy"]["operation_mode"], "read_write")
         self.assertEqual(pending[0]["metadata"]["tool_policy"]["evidence_family"], "database")
@@ -84,6 +86,8 @@ class TestApprovalQueue(unittest.TestCase):
             pending = approval_queue.list_approval_requests(status="pending")
 
         self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0]["metadata"]["requested_action"]["kind"], "sql")
+        self.assertEqual(pending[0]["metadata"]["requested_action"]["label"], "只读查询 (SELECT)")
         self.assertNotIn("allow_modifications", pending[0]["context"])
 
     def test_evolve_skill_approval_records_summary_instead_of_full_content(self):

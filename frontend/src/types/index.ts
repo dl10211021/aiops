@@ -1634,6 +1634,10 @@ export interface ApprovalRequest {
       actions?: SafetyPolicyAction[]
       primary_action?: SafetyPolicyAction | null
     }
+    requested_action?: {
+      kind?: 'sql' | 'http' | 'command' | string
+      label?: string
+    }
     approval_sources?: Array<{
       layer?: string
       label?: string
