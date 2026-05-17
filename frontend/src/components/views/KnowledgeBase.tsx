@@ -85,6 +85,7 @@ export default function KnowledgeBase() {
     creatingMemory,
     deleting,
     error,
+    exportingMemoryQuality,
     exportingMemory,
     files,
     searchingVault,
@@ -93,6 +94,7 @@ export default function KnowledgeBase() {
     handleSearchKnowledgeVault,
     handleDeleteMemory,
     handleCreateMemory,
+    handleExportMemoryQuality,
     handleExportMemory,
     handleOpenMemory,
     handleConfirmMemoryCandidate,
@@ -714,6 +716,8 @@ export default function KnowledgeBase() {
                     onGoGovern={() => setMemoryStep('govern')}
                     onOpen={handleOpenMemoryPath}
                     onRefresh={() => void loadMemories()}
+                    onExport={() => void handleExportMemoryQuality()}
+                    exporting={exportingMemoryQuality}
                   />
                 </div>
               </div>

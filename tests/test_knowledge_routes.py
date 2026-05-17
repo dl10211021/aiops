@@ -327,6 +327,43 @@ class TestKnowledgeRoutes(unittest.TestCase):
                 self.limit = limit
                 return [{"version_id": "v1", "operation": "created", "path": "sessions/sid-1/memory.md"}]
 
+            def analyze_quality(
+                self,
+                stale_days=180,
+                pending_conflicts=None,
+                recent_versions=None,
+                max_candidates=8,
+            ):
+                self.quality_args = (stale_days, pending_conflicts, recent_versions, max_candidates)
+                return {
+                    "summary": {
+                        "memory_count": 1,
+                        "entry_count": 13,
+                        "store_count": 1,
+                        "pending_conflict_count": len(pending_conflicts or []),
+                        "stale_review_count": 1,
+                        "compression_candidate_count": 1,
+                        "duplicate_entry_count": 0,
+                        "recent_version_count": len(recent_versions or []),
+                        "health_score": 82,
+                    },
+                    "stores": [{"store_id": "sessions", "store_name": "会话记忆", "memories": 1, "entries": 13, "size": 2048}],
+                    "compression_candidates": [
+                        {
+                            "path": "sessions/sid-1/memory.md",
+                            "store_id": "sessions",
+                            "store_name": "会话记忆",
+                            "entries": 13,
+                            "size": 2048,
+                            "priority": "high",
+                            "score": 50,
+                            "reason": "条目较多",
+                            "recommended_action": "生成压缩草稿",
+                        }
+                    ],
+                    "policy": {"mode": "candidate_only", "stale_days": stale_days, "auto_apply": False, "rule": "只生成候选，不自动覆盖。"},
+                }
+
             def list_candidate_entries(self, limit=50, review_statuses=None):
                 self.candidate_limit = limit
                 self.candidate_review_statuses = review_statuses
@@ -334,6 +371,9 @@ class TestKnowledgeRoutes(unittest.TestCase):
 
             def list_learning_candidates(self, limit=50, target_type="", statuses=None):
                 self.learning_candidate_query = (limit, target_type, statuses)
+                if not hasattr(self, "learning_candidate_queries"):
+                    self.learning_candidate_queries = []
+                self.learning_candidate_queries.append(self.learning_candidate_query)
                 return [{"id": "learncand_1", "target_type": "runbook", "status": "draft"}]
 
             def update_learning_candidate_status(self, candidate_id, status, actor="user", reason=""):
@@ -459,6 +499,7 @@ class TestKnowledgeRoutes(unittest.TestCase):
                 )
             )
             review_response = asyncio.run(knowledge_routes.list_memory_review_items(180, 20))
+            quality_export_response = asyncio.run(knowledge_routes.export_memory_quality_report(180, 8))
             update_response = asyncio.run(
                 knowledge_routes.update_memory_item(
                     knowledge_routes.MemoryUpdateRequest(content="# changed", content_sha256="sha"),
@@ -501,7 +542,8 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(fake_db.file_memory_store.candidate_limit, 20)
         self.assertEqual(fake_db.file_memory_store.candidate_review_statuses, ["pending", "runbook_candidate"])
         self.assertEqual(learning_candidates_response.data, {"items": [{"id": "learncand_1", "target_type": "runbook", "status": "draft"}]})
-        self.assertEqual(fake_db.file_memory_store.learning_candidate_query, (12, "runbook", ["draft", "reviewing"]))
+        self.assertIn((12, "runbook", ["draft", "reviewing"]), fake_db.file_memory_store.learning_candidate_queries)
+        self.assertIn((200, "", None), fake_db.file_memory_store.learning_candidate_queries)
         self.assertEqual(learning_candidate_status_response.message, "发布候选状态已更新")
         self.assertEqual(learning_candidate_publish_response.message, "发布候选状态已更新")
         self.assertIn("published_artifact", learning_candidate_publish_response.data["item"])
@@ -515,6 +557,12 @@ class TestKnowledgeRoutes(unittest.TestCase):
         self.assertEqual(candidate_resolve_response.message, "候选记忆已处理")
         self.assertEqual(fake_db.file_memory_store.candidate_resolved, ("memcand_1", "to_runbook"))
         self.assertEqual(review_response.data, {"items": [{"path": "sessions/sid-1/memory.md", "age_days": 181}]})
+        self.assertEqual(quality_export_response.message, "记忆质量报表已生成")
+        self.assertIn("# OpsCore 记忆质量报表", quality_export_response.data["markdown"])
+        self.assertIn("## 学习候选", quality_export_response.data["markdown"])
+        self.assertIn("sessions/sid-1/memory.md", quality_export_response.data["markdown"])
+        self.assertEqual(quality_export_response.data["learning_candidate_stats"]["total"], 1)
+        self.assertEqual(fake_db.file_memory_store.quality_args[0], 180)
         self.assertEqual(update_response.message, "记忆已更新")
         self.assertEqual(restore_response.message, "记忆版本已恢复")
         self.assertEqual(redact_response.message, "记忆版本已脱敏")

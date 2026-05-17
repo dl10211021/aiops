@@ -938,3 +938,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只读导出，不新增审计仓库，不改变 Run Trace 采集、工具执行、审批、告警、巡检或资产中心。
 - 遗留风险：报表仍基于当前在线会话聚合，不是全历史审计仓库；大规模长期审计需要单独落库和分页。
 - 下一轮建议：这个功能到此收手。后续更高价值方向是把子 Agent Run Trace 结果自动关联到对应可观测任务，或做记忆/学习质量报表。
+
+### 2026-05-18 Round 69：记忆/学习质量离线报表
+
+- 完成：新增 `/knowledge/memory/quality/export` 只读接口，基于现有记忆质量分析和学习候选池生成 Markdown 报表；知识库“记忆质量仪表盘”新增“导出质量报表”，可下载健康分、冲突/过期/压缩候选、记忆库分布和 Runbook/Skill 学习候选质量摘要。
+- 验证：`python -m pytest tests/test_knowledge_routes.py tests/test_tool_policy_runtime_frontend.py -q`；提交前继续跑 frontend build、preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：记忆与学习候选不再只是在线面板，开始具备可复盘、可留档的治理报表；仍保持候选式学习，不自动发布、不自动覆盖正式记忆。
+- OpsCore 主线影响：只读导出和前端下载，不改记忆写入、不改学习候选状态、不改辅助模型审核、不影响告警、巡检、资产中心或执行 gate。
+- 遗留风险：报表是当前快照，不是周期性治理任务；后续如需要趋势，需要单独做定时采样或审计仓库。
+- 下一轮建议：这个功能到此收手。后续更高价值方向是子 Agent Run Trace 结果自动关联到可观测任务，或把辅助模型对学习候选的审核结论变成可追踪事件。

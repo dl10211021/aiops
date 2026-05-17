@@ -215,9 +215,16 @@ def test_memory_candidates_panel_splits_runbook_and_skill_candidates():
 def test_memory_quality_panel_summarizes_learning_publish_quality():
     knowledge = Path("frontend/src/components/views/KnowledgeBase.tsx").read_text(encoding="utf-8")
     knowledge_parts = Path("frontend/src/components/views/KnowledgeBaseParts.tsx").read_text(encoding="utf-8")
+    knowledge_api = Path("frontend/src/api/knowledge.ts").read_text(encoding="utf-8")
+    knowledge_hook = Path("frontend/src/components/views/useKnowledgeBaseData.ts").read_text(encoding="utf-8")
 
     assert "learningCandidates={learningCandidates}" in knowledge
+    assert "onExport={() => void handleExportMemoryQuality()}" in knowledge
+    assert "exporting={exportingMemoryQuality}" in knowledge
     assert "learningCandidates: LearningCandidate[]" in knowledge_parts
+    assert "onExport: () => void" in knowledge_parts
+    assert "导出质量报表" in knowledge_parts
+    assert "导出中..." in knowledge_parts
     assert "learningCandidateStats" in knowledge_parts
     assert "学习发布质量" in knowledge_parts
     assert "Runbook/Skill 发布候选" in knowledge_parts
@@ -228,6 +235,11 @@ def test_memory_quality_panel_summarizes_learning_publish_quality():
     assert "质量清单或辅助审核未通过" in knowledge_parts
     assert "不会自动批准或发布" in knowledge_parts
     assert "查看候选" in knowledge_parts
+    assert "exportMemoryQualityReport" in knowledge_api
+    assert "/knowledge/memory/quality/export" in knowledge_api
+    assert "handleExportMemoryQuality" in knowledge_hook
+    assert "opscore-memory-quality" in knowledge_hook
+    assert "text/markdown;charset=utf-8" in knowledge_hook
 
 
 def test_empty_tool_policy_is_not_rendered_as_unknown_chips():

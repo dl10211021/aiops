@@ -399,6 +399,164 @@ async def get_memory_quality(
     return ResponseModel(**memory_quality_response_kwargs(quality))
 
 
+def _learning_candidate_quality_stats(items: list[dict]) -> dict:
+    stats = {
+        "total": len(items),
+        "draft": 0,
+        "reviewing": 0,
+        "published": 0,
+        "rejected": 0,
+        "runbook": 0,
+        "skill": 0,
+        "needs_completion": 0,
+        "ready": 0,
+        "high_risk": 0,
+    }
+    for item in items:
+        status = str(item.get("status") or "draft")
+        target_type = str(item.get("target_type") or "")
+        if status in stats:
+            stats[status] += 1
+        if target_type in stats:
+            stats[target_type] += 1
+        checklist = item.get("quality_checklist") or []
+        checklist_total = len(checklist) if isinstance(checklist, list) else 0
+        checklist_passed = sum(1 for entry in checklist if isinstance(entry, dict) and entry.get("ok"))
+        review = item.get("review") if isinstance(item.get("review"), dict) else {}
+        decision = str(review.get("decision") or "")
+        risk_level = str(review.get("risk_level") or "")
+        missing_items = review.get("missing_items") or []
+        missing_count = len(missing_items) if isinstance(missing_items, list) else 0
+        ready = (
+            checklist_total > 0
+            and checklist_passed == checklist_total
+            and decision != "reject"
+            and missing_count == 0
+            and risk_level != "high"
+        )
+        if risk_level == "high":
+            stats["high_risk"] += 1
+        if ready and status not in {"published", "rejected"}:
+            stats["ready"] += 1
+        elif status not in {"published", "rejected"}:
+            stats["needs_completion"] += 1
+    return stats
+
+
+def _format_memory_quality_markdown(
+    quality: dict,
+    learning_candidates: list[dict],
+    *,
+    stale_days: int,
+) -> str:
+    summary = quality.get("summary") or {}
+    stores = quality.get("stores") or []
+    compression_candidates = quality.get("compression_candidates") or []
+    policy = quality.get("policy") or {}
+    learning_stats = _learning_candidate_quality_stats(learning_candidates)
+
+    lines = [
+        "# OpsCore 记忆质量报表",
+        "",
+        "## 总览",
+        "",
+        f"- 健康分: {summary.get('health_score', 0)}",
+        f"- 记忆文件: {summary.get('memory_count', 0)}",
+        f"- 记忆条目: {summary.get('entry_count', 0)}",
+        f"- 记忆库: {summary.get('store_count', 0)}",
+        f"- 待处理冲突: {summary.get('pending_conflict_count', 0)}",
+        f"- 超过 {stale_days} 天待复核: {summary.get('stale_review_count', 0)}",
+        f"- 待压缩候选: {summary.get('compression_candidate_count', 0)}",
+        f"- 重复片段: {summary.get('duplicate_entry_count', 0)}",
+        "",
+        "## 学习候选",
+        "",
+        f"- 总数: {learning_stats['total']}",
+        f"- Runbook: {learning_stats['runbook']}",
+        f"- Skill: {learning_stats['skill']}",
+        f"- 草稿: {learning_stats['draft']}",
+        f"- 评审中: {learning_stats['reviewing']}",
+        f"- 可推进: {learning_stats['ready']}",
+        f"- 需补齐: {learning_stats['needs_completion']}",
+        f"- 高风险: {learning_stats['high_risk']}",
+        f"- 已发布: {learning_stats['published']}",
+        f"- 已拒绝: {learning_stats['rejected']}",
+        "",
+        "## 记忆库分布",
+        "",
+    ]
+
+    if stores:
+        lines.extend(["| 记忆库 | 文件 | 条目 | 大小 |", "| --- | ---: | ---: | ---: |"])
+        for store in stores:
+            lines.append(
+                f"| {store.get('store_name') or store.get('store_id') or '-'} "
+                f"| {store.get('memories', 0)} "
+                f"| {store.get('entries', 0)} "
+                f"| {store.get('size', 0)} |"
+            )
+    else:
+        lines.append("- 暂无记忆库质量数据。")
+
+    lines.extend(["", "## 待压缩候选", ""])
+    if compression_candidates:
+        lines.extend(["| 优先级 | 评分 | 路径 | 原因 |", "| --- | ---: | --- | --- |"])
+        for candidate in compression_candidates:
+            reason = str(candidate.get("reason") or "").replace("\n", " ")
+            lines.append(
+                f"| {candidate.get('priority') or '-'} "
+                f"| {candidate.get('score', 0)} "
+                f"| {candidate.get('path') or '-'} "
+                f"| {reason or '-'} |"
+            )
+    else:
+        lines.append("- 当前没有明显需要压缩的记忆。")
+
+    lines.extend(
+        [
+            "",
+            "## 策略",
+            "",
+            f"- 模式: {policy.get('mode') or 'candidate_only'}",
+            f"- 自动应用: {'是' if policy.get('auto_apply') else '否'}",
+            f"- 规则: {policy.get('rule') or '只生成候选，不自动覆盖正式记忆。'}",
+        ]
+    )
+    return "\n".join(lines).strip() + "\n"
+
+
+@router.get("/knowledge/memory/quality/export", response_model=ResponseModel)
+async def export_memory_quality_report(
+    stale_days: int = Query(180, ge=1, le=3650),
+    limit: int = Query(8, ge=1, le=50),
+):
+    from core.memory import memory_db
+
+    pending = memory_db.list_pending_memory_conflicts(limit=200)
+    versions = memory_db.file_memory_store.list_versions(limit=200)
+    quality = memory_db.file_memory_store.analyze_quality(
+        stale_days=stale_days,
+        pending_conflicts=pending,
+        recent_versions=versions,
+        max_candidates=limit,
+    )
+    learning_candidates = memory_db.file_memory_store.list_learning_candidates(limit=200)
+    markdown = _format_memory_quality_markdown(
+        quality,
+        learning_candidates,
+        stale_days=stale_days,
+    )
+    return ResponseModel(
+        status="success",
+        message="记忆质量报表已生成",
+        data={
+            "markdown": markdown,
+            "quality": quality,
+            "learning_candidate_stats": _learning_candidate_quality_stats(learning_candidates),
+        },
+    )
+
+
 @router.put("/knowledge/memory", response_model=ResponseModel)
 async def update_memory_item(req: MemoryUpdateRequest, path: str = Query(..., min_length=1)):
     from core.memory import memory_db

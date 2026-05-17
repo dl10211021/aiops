@@ -314,6 +314,14 @@ export async function getMemoryQuality(staleDays = 180, limit = 8, options?: Req
   return request<{ quality: MemoryQualityReport }>(`/knowledge/memory/quality?stale_days=${staleDays}&limit=${limit}`, options)
 }
 
+export async function exportMemoryQualityReport(staleDays = 180, limit = 8) {
+  return request<{
+    markdown: string
+    quality: MemoryQualityReport
+    learning_candidate_stats: Record<string, number>
+  }>(`/knowledge/memory/quality/export?stale_days=${staleDays}&limit=${limit}`)
+}
+
 export async function resolveMemoryPendingConflict(versionId: string, action: 'accept_new' | 'keep_old' | 'merged') {
   return request<{ version: MemoryVersion }>('/knowledge/memory/pending/resolve', {
     method: 'POST',

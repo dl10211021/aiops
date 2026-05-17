@@ -3038,12 +3038,16 @@ export function MemoryQualityPanel({
   onGoGovern,
   onOpen,
   onRefresh,
+  onExport,
+  exporting,
 }: {
   report: MemoryQualityReport | null
   learningCandidates: LearningCandidate[]
   onGoGovern: () => void
   onOpen: (path: string) => void
   onRefresh: () => void
+  onExport: () => void
+  exporting: boolean
 }) {
   const summary = report?.summary
   const stores = report?.stores || []
@@ -3080,6 +3084,13 @@ export function MemoryQualityPanel({
         <div className="flex flex-wrap gap-2">
           <button onClick={onRefresh} className="rounded-md border border-ops-surface1 px-3 py-1.5 text-xs text-ops-subtext hover:border-ops-accent hover:text-ops-text">
             刷新质量
+          </button>
+          <button
+            onClick={onExport}
+            disabled={exporting}
+            className="rounded-md border border-ops-surface1 px-3 py-1.5 text-xs text-ops-subtext hover:border-ops-accent hover:text-ops-text disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exporting ? '导出中...' : '导出质量报表'}
           </button>
           <button onClick={onGoGovern} className="rounded-md border border-ops-accent/50 bg-ops-accent/10 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent hover:text-ops-dark">
             去治理

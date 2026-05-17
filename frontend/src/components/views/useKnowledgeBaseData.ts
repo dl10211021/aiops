@@ -7,6 +7,7 @@ import {
   deleteKnowledgeDocument,
   deleteMemoryItem,
   exportKnowledgeVault,
+  exportMemoryQualityReport,
   exportMemoryStore,
   getMemoryQuality,
   graphKnowledgeVault,
@@ -118,6 +119,7 @@ export function useKnowledgeBaseData() {
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeFile | null>(null)
   const [memoryDeleteTarget, setMemoryDeleteTarget] = useState<MemoryItem | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [exportingMemoryQuality, setExportingMemoryQuality] = useState(false)
   const [deletingMemory, setDeletingMemory] = useState(false)
   const [savingMemory, setSavingMemory] = useState(false)
   const [creatingMemory, setCreatingMemory] = useState(false)
@@ -845,6 +847,25 @@ export function useKnowledgeBaseData() {
     }
   }
 
+  const handleExportMemoryQuality = async () => {
+    setExportingMemoryQuality(true)
+    try {
+      const res = await exportMemoryQualityReport()
+      const blob = new Blob([res.data.markdown], { type: 'text/markdown;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `opscore-memory-quality-${Date.now()}.md`
+      a.click()
+      URL.revokeObjectURL(url)
+      addToast('记忆质量报表已导出', 'success')
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : '导出记忆质量报表失败', 'error')
+    } finally {
+      setExportingMemoryQuality(false)
+    }
+  }
+
   return {
     deleteTarget,
     documentExtension,
@@ -859,6 +880,7 @@ export function useKnowledgeBaseData() {
     creatingMemory,
     deleting,
     error,
+    exportingMemoryQuality,
     exportingMemory,
     exportingVault,
     files,
@@ -892,6 +914,7 @@ export function useKnowledgeBaseData() {
     handleSaveKnowledgeCandidate,
     handleDeleteMemory,
     handleCreateMemory,
+    handleExportMemoryQuality,
     handleExportMemory,
     handleExportKnowledgeVault,
     handleImportKnowledgeVault,
