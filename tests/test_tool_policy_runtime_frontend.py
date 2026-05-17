@@ -250,6 +250,24 @@ def test_run_trace_approval_refs_open_readonly_approval_detail():
     assert "暂未找到该审批记录，当前 Run Trace 仅保留审批引用 ID。" in source
 
 
+def test_run_trace_learning_preview_is_exposed_as_readonly_ui():
+    source = Path(
+        "frontend/src/features/sessions/AiThinkingChainPanel.tsx"
+    ).read_text(encoding="utf-8")
+    session_api = Path("frontend/src/api/sessionHistory.ts").read_text(encoding="utf-8")
+    types = Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
+
+    assert "export interface SessionRunLearningPreview" in types
+    assert "getSessionRunLearningPreview" in session_api
+    assert "/history/run-trace/learning-preview?" in session_api
+    assert "onOpenLearningPreview={(runId) => void openRunTraceLearningPreview(runId)}" in source
+    assert "Run Trace 学习预览" in source
+    assert "只读预览，不会自动写入记忆或发布 Skill。" in source
+    assert "学习预览" in source
+    assert "可进入候选池" in source
+    assert "证据引用" in source
+
+
 def test_frontend_shows_actual_http_action_separately_from_tool_policy():
     presentation = Path(
         "frontend/src/features/sessions/toolPolicyPresentation.ts"

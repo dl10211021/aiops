@@ -278,6 +278,26 @@ export interface RunTraceRun {
   latest_summary?: string
 }
 
+export interface SessionRunLearningPreview {
+  session_id: string
+  run_id?: string
+  source: string
+  candidate_type: 'runbook' | 'skill' | string
+  eligible: boolean
+  title: string
+  summary: string
+  event_count: number
+  run_count: number
+  tool_count: number
+  status_counts: Record<string, number>
+  evidence_refs: MemoryCandidateRef[]
+  draft?: {
+    title?: string
+    outline?: string[]
+  }
+  next_action?: string
+}
+
 export interface ToolEvidence {
   evidence_id: string
   session_id: string

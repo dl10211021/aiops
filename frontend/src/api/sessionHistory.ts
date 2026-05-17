@@ -1,5 +1,12 @@
 import { request } from './http'
-import type { ExecTraceItem, MemoryReference, RunTraceEvent, RunTraceRun, SessionMemoryActivity } from '@/types'
+import type {
+  ExecTraceItem,
+  MemoryReference,
+  RunTraceEvent,
+  RunTraceRun,
+  SessionMemoryActivity,
+  SessionRunLearningPreview,
+} from '@/types'
 
 interface SessionHistoryApiMessage {
   role: string
@@ -68,6 +75,17 @@ export async function getSessionRunTrace(sessionId: string, limit = 120, options
   if (runId) search.set('run_id', runId)
   return request<{ events: RunTraceEvent[]; runs?: RunTraceRun[] }>(
     `/session/${sessionId}/history/run-trace?${search.toString()}`,
+    requestOptions,
+  )
+}
+
+export async function getSessionRunLearningPreview(sessionId: string, limit = 200, options?: SessionRunTraceRequestOptions) {
+  const { runId, ...requestOptions } = options || {}
+  const search = new URLSearchParams()
+  search.set('limit', String(limit))
+  if (runId) search.set('run_id', runId)
+  return request<{ preview: SessionRunLearningPreview }>(
+    `/session/${sessionId}/history/run-trace/learning-preview?${search.toString()}`,
     requestOptions,
   )
 }

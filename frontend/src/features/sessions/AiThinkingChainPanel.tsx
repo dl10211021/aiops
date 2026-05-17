@@ -1,9 +1,23 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { ApprovalRequest, ChatMessage, ChatRuntimeEvent, ExecTraceItem, RunTraceEvent, RunTraceRun, SessionMemoryActivity } from '@/types'
+import type {
+  ApprovalRequest,
+  ChatMessage,
+  ChatRuntimeEvent,
+  ExecTraceItem,
+  RunTraceEvent,
+  RunTraceRun,
+  SessionMemoryActivity,
+  SessionRunLearningPreview,
+} from '@/types'
 import { getApproval } from '@/api/approvals'
 import { isAbortError } from '@/api/http'
-import { getSessionHistoryEvidenceTrace, getSessionMemoryActivity, getSessionRunTrace } from '@/api/sessionHistory'
+import {
+  getSessionHistoryEvidenceTrace,
+  getSessionMemoryActivity,
+  getSessionRunLearningPreview,
+  getSessionRunTrace,
+} from '@/api/sessionHistory'
 import { toolLabel } from '@/utils/assetDisplay'
 import { ApprovalInfo, ApprovalStatusBadge } from '@/components/views/ApprovalCenterShared'
 import { ApprovalSourceSummary } from './ApprovalSourceSummary'
@@ -304,6 +318,13 @@ interface RunTraceApprovalDetail {
   error?: string
 }
 
+interface RunTraceLearningPreviewDetail {
+  runId?: string
+  preview?: SessionRunLearningPreview | null
+  loading?: boolean
+  error?: string
+}
+
 function eventRunId(event: RunTraceEvent, index: number) {
   const payloadRunId = typeof event.payload?.run_id === 'string' ? event.payload.run_id : ''
   return event.run_id || payloadRunId || `ungrouped-${event.event_ts || event.created_at || index}`
@@ -408,6 +429,7 @@ export default function AiThinkingChainPanel({
   const [selectedRunTraceId, setSelectedRunTraceId] = useState('')
   const [runTraceEvidenceDetail, setRunTraceEvidenceDetail] = useState<RunTraceEvidenceDetail | null>(null)
   const [runTraceApprovalDetail, setRunTraceApprovalDetail] = useState<RunTraceApprovalDetail | null>(null)
+  const [runTraceLearningPreview, setRunTraceLearningPreview] = useState<RunTraceLearningPreviewDetail | null>(null)
   const [runTraceLoading, setRunTraceLoading] = useState(false)
   const deferredMessages = useDeferredValue(messages)
   const displayTab = fixedTab || activeTab
@@ -437,6 +459,7 @@ export default function AiThinkingChainPanel({
 
   useEffect(() => {
     setSelectedRunTraceId('')
+    setRunTraceLearningPreview(null)
   }, [sessionId])
 
   useEffect(() => {
@@ -563,6 +586,24 @@ export default function AiThinkingChainPanel({
     }
   }
 
+  const openRunTraceLearningPreview = async (runId: string) => {
+    if (!sessionId) return
+    const targetRunId = runId || selectedRunTraceId
+    setRunTraceLearningPreview({ runId: targetRunId || undefined, loading: true })
+    try {
+      const response = await getSessionRunLearningPreview(sessionId, 300, {
+        runId: targetRunId || undefined,
+      })
+      setRunTraceLearningPreview({ runId: targetRunId || undefined, preview: response.data.preview })
+    } catch (error: unknown) {
+      setRunTraceLearningPreview({
+        runId: targetRunId || undefined,
+        preview: null,
+        error: error instanceof Error ? error.message : '加载学习预览失败',
+      })
+    }
+  }
+
   return (
     <section className="min-h-0 flex min-w-0 flex-1 flex-col overflow-hidden border-t border-ops-surface0/80">
       <header className="space-y-2 border-b border-ops-surface0/80 bg-ops-dark/55 px-3 py-2.5">
@@ -635,6 +676,7 @@ export default function AiThinkingChainPanel({
               onSelectRun={setSelectedRunTraceId}
               onOpenEvidence={(event) => void openRunTraceEvidence(event)}
               onOpenApproval={(event) => void openRunTraceApproval(event)}
+              onOpenLearningPreview={(runId) => void openRunTraceLearningPreview(runId)}
             />
             {traceGroups.length === 0 ? (
               <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
@@ -863,6 +905,10 @@ export default function AiThinkingChainPanel({
         detail={runTraceApprovalDetail}
         onClose={() => setRunTraceApprovalDetail(null)}
       />
+      <RunTraceLearningPreviewDialog
+        detail={runTraceLearningPreview}
+        onClose={() => setRunTraceLearningPreview(null)}
+      />
     </section>
   )
 }
@@ -876,6 +922,7 @@ function RunTraceStrip({
   onSelectRun,
   onOpenEvidence,
   onOpenApproval,
+  onOpenLearningPreview,
 }: {
   events: RunTraceEvent[]
   runs: RunTraceRun[]
@@ -885,6 +932,7 @@ function RunTraceStrip({
   onSelectRun: (runId: string) => void
   onOpenEvidence: (event: RunTraceEvent) => void
   onOpenApproval: (event: RunTraceEvent) => void
+  onOpenLearningPreview: (runId: string) => void
 }) {
   const recentRuns = groupRunTraceEvents(events).slice(-6).reverse()
   const runSummaries = new Map(runs.map((run) => [run.run_id, run]))
@@ -914,6 +962,15 @@ function RunTraceStrip({
           <div className="font-mono text-[10px] text-ops-overlay">
             {loading ? '同步中' : `${recentRuns.length} 次 / ${events.length} 条`}
           </div>
+          <button
+            type="button"
+            onClick={() => onOpenLearningPreview(selectedRunId)}
+            disabled={events.length === 0}
+            className="h-7 rounded-md border border-ops-surface1 px-2 text-[10px] font-semibold text-ops-subtext hover:border-ops-accent/60 hover:text-ops-accent disabled:cursor-not-allowed disabled:opacity-45"
+            title="只读生成学习候选预览，不写入记忆。"
+          >
+            学习预览
+          </button>
         </div>
       </div>
       {selectedRunId && (
@@ -951,6 +1008,14 @@ function RunTraceStrip({
                   <span className="ml-auto max-w-[42%] truncate font-mono text-[10px] text-ops-overlay" title={run.id}>
                     {run.id}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenLearningPreview(run.id)}
+                    className="shrink-0 rounded border border-ops-surface1 px-1.5 py-0.5 text-[10px] text-ops-subtext hover:border-ops-accent/60 hover:text-ops-accent"
+                    title="预览这次运行可以沉淀成什么运维经验。"
+                  >
+                    预览
+                  </button>
                 </div>
                 {summary && (summary.step_count > 0 || summary.tool_count > 0) && (
                   <div className="mb-1.5 flex gap-1.5 text-[10px] text-ops-overlay">
@@ -1021,6 +1086,131 @@ function RunTraceStrip({
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function RunTraceLearningPreviewDialog({
+  detail,
+  onClose,
+}: {
+  detail: RunTraceLearningPreviewDetail | null
+  onClose: () => void
+}) {
+  if (!detail) return null
+  const preview = detail.preview || null
+  const statusEntries = preview ? Object.entries(preview.status_counts || {}) : []
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+      <section className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-xl border border-ops-surface1 bg-ops-panel shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-ops-surface0 px-4 py-3">
+          <div>
+            <div className="text-sm font-semibold text-ops-text">Run Trace 学习预览</div>
+            <div className="mt-1 text-[11px] text-ops-overlay">
+              只读预览，不会自动写入记忆或发布 Skill。
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-ops-surface0 px-2 py-1 text-xs text-ops-subtext hover:border-ops-accent/45 hover:text-ops-accent"
+          >
+            关闭
+          </button>
+        </div>
+        <div className="max-h-[72vh] space-y-3 overflow-y-auto p-4">
+          {detail.loading && (
+            <div className="rounded border border-ops-accent/30 bg-ops-accent/10 px-3 py-2 text-xs text-ops-accent">
+              正在生成学习预览...
+            </div>
+          )}
+          {detail.error && (
+            <div className="rounded border border-ops-alert/35 bg-ops-alert/10 px-3 py-2 text-xs text-ops-alert">
+              {detail.error}
+            </div>
+          )}
+          {preview ? (
+            <>
+              <div className="rounded-lg border border-ops-surface0 bg-ops-dark/35 px-3 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                    preview.eligible
+                      ? 'border-ops-success/35 bg-ops-success/10 text-ops-success'
+                      : 'border-ops-surface1 bg-ops-dark/25 text-ops-overlay'
+                  }`}>
+                    {preview.eligible ? '可进入候选池' : '证据不足'}
+                  </span>
+                  {preview.run_id && (
+                    <span className="font-mono text-[11px] text-ops-overlay">{preview.run_id}</span>
+                  )}
+                </div>
+                <div className="mt-2 text-sm font-semibold text-ops-text">{preview.title}</div>
+                <div className="mt-1 text-xs leading-5 text-ops-subtext">{preview.summary}</div>
+              </div>
+              <div className="grid gap-2 text-xs md:grid-cols-4">
+                <RunTracePreviewMetric label="运行" value={preview.run_count} />
+                <RunTracePreviewMetric label="事件" value={preview.event_count} />
+                <RunTracePreviewMetric label="工具" value={preview.tool_count} />
+                <RunTracePreviewMetric label="证据" value={preview.evidence_refs?.length || 0} />
+              </div>
+              {statusEntries.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {statusEntries.map(([status, count]) => (
+                    <span key={status} className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-subtext">
+                      {status}: {count}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="rounded-lg border border-ops-surface0 bg-ops-dark/25 px-3 py-3">
+                <div className="mb-2 text-xs font-semibold text-ops-text">{preview.draft?.title || 'Runbook 草稿'}</div>
+                <div className="space-y-1.5">
+                  {(preview.draft?.outline || []).map((item, index) => (
+                    <div key={`${item}-${index}`} className="flex gap-2 text-xs leading-5 text-ops-subtext">
+                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-ops-accent" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-lg border border-ops-surface0 bg-ops-dark/25 px-3 py-3">
+                <div className="mb-2 text-xs font-semibold text-ops-text">证据引用</div>
+                {preview.evidence_refs?.length ? (
+                  <div className="space-y-1.5">
+                    {preview.evidence_refs.slice(0, 8).map((ref, index) => (
+                      <div key={`${ref.id || index}-${ref.tool || ''}`} className="flex min-w-0 flex-wrap items-center gap-2 rounded border border-ops-surface0 bg-ops-panel/35 px-2 py-1.5 text-[11px] text-ops-subtext">
+                        <span className="font-mono text-ops-overlay">{ref.id || '-'}</span>
+                        {ref.tool && <span>{toolLabel(ref.tool)}</span>}
+                        {ref.status && <span className="rounded-full border border-ops-surface1 px-1.5 py-0.5 text-[10px]">{ref.status}</span>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-ops-overlay">暂无可关联的工具证据。</div>
+                )}
+              </div>
+              {preview.next_action && (
+                <div className="rounded-lg border border-ops-accent/25 bg-ops-accent/10 px-3 py-2 text-xs leading-5 text-ops-accent">
+                  {preview.next_action}
+                </div>
+              )}
+            </>
+          ) : !detail.loading && !detail.error ? (
+            <div className="rounded border border-ops-surface0 bg-ops-dark/35 px-3 py-3 text-xs text-ops-subtext">
+              暂无学习预览。
+            </div>
+          ) : null}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function RunTracePreviewMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-ops-surface0 bg-ops-dark/25 px-3 py-2">
+      <div className="text-[10px] text-ops-overlay">{label}</div>
+      <div className="mt-1 font-mono text-sm font-semibold text-ops-text">{value}</div>
     </div>
   )
 }
