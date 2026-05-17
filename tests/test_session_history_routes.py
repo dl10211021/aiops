@@ -8,6 +8,7 @@ from api.schemas import (
     SessionMessageUpdateRequest,
     SessionRunLearningCandidateRequest,
 )
+from core.run_trace_store import RUN_TRACE_MEMORY_TYPE
 
 
 class FakeMemoryDB:
@@ -55,6 +56,7 @@ class TestSessionHistoryRoutes(unittest.TestCase):
 
         self.assertIn("/session/{session_id}/history", paths)
         self.assertIn("/session/{session_id}/history/run-trace", paths)
+        self.assertIn("/session/{session_id}/history/run-trace/audit-summary", paths)
         self.assertIn("/session/{session_id}/history/run-trace/learning-preview", paths)
         self.assertIn("/session/{session_id}/history/run-trace/learning-candidate", paths)
         self.assertIn("/session/{session_id}/history/{message_id}", paths)
@@ -89,6 +91,9 @@ class TestSessionHistoryRoutes(unittest.TestCase):
             run_trace_response = asyncio.run(session_history_routes.get_session_run_trace("sid-1"))
             run_trace_filter_response = asyncio.run(
                 session_history_routes.get_session_run_trace("sid-1", run_id="run-missing")
+            )
+            run_trace_audit_response = asyncio.run(
+                session_history_routes.get_session_run_trace_audit_summary("sid-1")
             )
             learning_preview_response = asyncio.run(
                 session_history_routes.get_session_run_learning_preview("sid-1")
@@ -137,11 +142,64 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         self.assertEqual(run_trace_response.status, "success")
         self.assertEqual(run_trace_response.data, {"events": [], "runs": []})
         self.assertEqual(run_trace_filter_response.data, {"events": [], "runs": []})
+        self.assertEqual(run_trace_audit_response.status, "success")
+        self.assertEqual(run_trace_audit_response.data["summary"]["run_count"], 0)
+        self.assertEqual(run_trace_audit_response.data["summary"]["unaudited_run_count"], 0)
         self.assertEqual(learning_preview_response.status, "success")
         self.assertEqual(learning_preview_response.data["preview"]["eligible"], False)
         self.assertEqual(learning_candidate_response.status, "success")
         self.assertEqual(learning_candidate_response.message, "学习候选已提交")
         self.assertEqual(learning_candidate_response.data["learning_candidate"]["id"], "learncand_run")
+
+    def test_session_run_trace_audit_summary_counts_context_and_prompt_modules(self):
+        memory_db = FakeMemoryDB()
+        memory_db.messages = [
+            {
+                "id": 10,
+                "memory_type": RUN_TRACE_MEMORY_TYPE,
+                "run_id": "run-1",
+                "run_event_type": "run:start",
+                "run_event_ts": 100.0,
+                "run_event_payload": {
+                    "run_id": "run-1",
+                    "context": {
+                        "context_sources": [
+                            {"source": "knowledge_base", "enabled": True, "hit": True, "reference_count": 2},
+                            {"source": "asset_profile", "enabled": True, "hit": False, "status": "error"},
+                        ],
+                        "prompt_modules": {
+                            "modules": ["evidence_contract", "rag_context"],
+                            "enabled": {"evidence_contract": True, "rag_context": False},
+                        },
+                    },
+                },
+                "content": "run start",
+            },
+            {
+                "id": 11,
+                "memory_type": RUN_TRACE_MEMORY_TYPE,
+                "run_id": "run-2",
+                "run_event_type": "run:start",
+                "run_event_ts": 200.0,
+                "run_event_payload": {"run_id": "run-2"},
+                "content": "legacy run start",
+            },
+        ]
+
+        with patch("core.memory.memory_db", memory_db):
+            response = asyncio.run(session_history_routes.get_session_run_trace_audit_summary("sid-1"))
+
+        summary = response.data["summary"]
+        self.assertEqual(summary["run_count"], 2)
+        self.assertEqual(summary["event_count"], 2)
+        self.assertEqual(summary["audited_run_count"], 1)
+        self.assertEqual(summary["unaudited_run_count"], 1)
+        self.assertEqual(summary["context_sources"], 2)
+        self.assertEqual(summary["context_hits"], 1)
+        self.assertEqual(summary["context_errors"], 1)
+        self.assertEqual(summary["prompt_modules"], 2)
+        self.assertEqual(summary["source_counts"]["knowledge_base"]["hit"], 1)
+        self.assertEqual(summary["module_counts"]["rag_context"]["disabled"], 1)
 
     def test_session_history_export_preserves_response_shape(self):
         with patch(

@@ -386,9 +386,14 @@ def test_run_trace_context_prompt_audit_summary_is_visible():
     source = Path(
         "frontend/src/features/sessions/AiThinkingChainPanel.tsx"
     ).read_text(encoding="utf-8")
+    session_api = Path("frontend/src/api/sessionHistory.ts").read_text(encoding="utf-8")
+    types = Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
 
     assert "function runTraceAuditSummary(groups: RunTraceGroup[])" in source
-    assert "const auditSummary = runTraceAuditSummary(recentRuns)" in source
+    assert "function runTraceAuditViewSummary(summary: RunTraceAuditSummary | null | undefined)" in source
+    assert "getSessionRunTraceAuditSummary(sessionId, runTraceLimit" in source
+    assert "serverAuditSummary={runTraceAuditSummary}" in source
+    assert "runTraceAuditViewSummary(serverAuditSummary) || runTraceAuditSummary(recentRuns)" in source
     assert "Context/Prompt 审计" in source
     assert "上下文源 {auditSummary.contextSources}" in source
     assert "命中 {auditSummary.contextHits}" in source
@@ -398,6 +403,9 @@ def test_run_trace_context_prompt_audit_summary_is_visible():
     assert "if (!hasAudit) acc.unauditedRuns += 1" in source
     assert "contextSources.filter((source) => source.enabled && source.hit).length" in source
     assert "promptManifest?.modules.filter((module) => module.enabled).length" in source
+    assert "export interface RunTraceAuditSummary" in types
+    assert "export async function getSessionRunTraceAuditSummary" in session_api
+    assert "/history/run-trace/audit-summary?" in session_api
 
 
 def test_frontend_shows_actual_http_action_separately_from_tool_policy():

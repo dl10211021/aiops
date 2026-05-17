@@ -150,6 +150,138 @@ def summarize_session_run_trace_events(events: list[dict]) -> list[dict]:
     return ordered_runs
 
 
+def summarize_session_run_trace_audit(events: list[dict]) -> dict:
+    runs = summarize_session_run_trace_events(events)
+    events_by_run: dict[str, list[dict]] = {}
+    for index, event in enumerate(events):
+        run_id = str(event.get("run_id") or (event.get("payload") or {}).get("run_id") or "").strip()
+        if not run_id:
+            run_id = f"ungrouped-{event.get('event_ts') or event.get('created_at') or index}"
+        events_by_run.setdefault(run_id, []).append(event)
+
+    summary = {
+        "run_count": len(runs),
+        "event_count": len(events),
+        "audited_run_count": 0,
+        "unaudited_run_count": 0,
+        "context_sources": 0,
+        "context_hits": 0,
+        "context_errors": 0,
+        "prompt_modules": 0,
+        "source_counts": {},
+        "module_counts": {},
+    }
+    for run in runs:
+        run_events = events_by_run.get(str(run.get("run_id") or ""), [])
+        context = _run_trace_audit_context(run_events)
+        context_sources = _run_trace_context_sources(context)
+        prompt_manifest = _run_trace_prompt_manifest(context)
+        has_audit = bool(context_sources or prompt_manifest.get("modules"))
+        if has_audit:
+            summary["audited_run_count"] += 1
+        else:
+            summary["unaudited_run_count"] += 1
+
+        for source in context_sources:
+            source_id = source["source"]
+            summary["context_sources"] += 1
+            if source["enabled"] and source["hit"]:
+                summary["context_hits"] += 1
+            if source["status"] == "error":
+                summary["context_errors"] += 1
+            source_counts = summary["source_counts"].setdefault(
+                source_id,
+                {"total": 0, "hit": 0, "error": 0, "disabled": 0},
+            )
+            source_counts["total"] += 1
+            if source["hit"]:
+                source_counts["hit"] += 1
+            if source["status"] == "error":
+                source_counts["error"] += 1
+            if not source["enabled"]:
+                source_counts["disabled"] += 1
+
+        for module in prompt_manifest.get("modules", []):
+            module_id = str(module.get("module") or "").strip()
+            if not module_id:
+                continue
+            summary["prompt_modules"] += 1
+            module_counts = summary["module_counts"].setdefault(
+                module_id,
+                {"total": 0, "enabled": 0, "disabled": 0},
+            )
+            module_counts["total"] += 1
+            if module.get("enabled") is False:
+                module_counts["disabled"] += 1
+            else:
+                module_counts["enabled"] += 1
+    return summary
+
+
+def _run_trace_audit_context(events: list[dict]) -> dict:
+    for event in events:
+        if event.get("event_type") != "run:start":
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        context = payload.get("context")
+        if isinstance(context, dict):
+            return context
+    for event in events:
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        context = payload.get("context")
+        if isinstance(context, dict):
+            return context
+    return {}
+
+
+def _run_trace_context_sources(context: dict) -> list[dict]:
+    sources = context.get("context_sources")
+    if not isinstance(sources, list):
+        return []
+    normalized: list[dict] = []
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        source_id = str(source.get("source") or "").strip()
+        if not source_id:
+            continue
+        try:
+            reference_count = max(0, int(source.get("reference_count") or 0))
+        except (TypeError, ValueError):
+            reference_count = 0
+        normalized.append(
+            {
+                "source": source_id,
+                "enabled": source.get("enabled") is not False,
+                "hit": source.get("hit") is True,
+                "reference_count": reference_count,
+                "status": str(source.get("status") or "ok"),
+            }
+        )
+    return normalized
+
+
+def _run_trace_prompt_manifest(context: dict) -> dict:
+    manifest = context.get("prompt_modules")
+    if not isinstance(manifest, dict):
+        return {"modules": []}
+    raw_modules = manifest.get("modules")
+    if not isinstance(raw_modules, list):
+        return {"modules": []}
+    enabled_map = manifest.get("enabled") if isinstance(manifest.get("enabled"), dict) else {}
+    modules = []
+    for module in raw_modules:
+        module_id = str(module or "").strip()
+        if not module_id:
+            continue
+        modules.append({"module": module_id, "enabled": enabled_map.get(module_id) is not False})
+    return {
+        "surface": str(manifest.get("surface") or ""),
+        "mode": str(manifest.get("mode") or ""),
+        "modules": modules,
+    }
+
+
 def build_session_run_learning_preview(
     memory_db,
     session_id: str,

@@ -12,6 +12,7 @@ from core.session_history import (
     find_session_exec_trace,
     get_user_visible_session_history,
     list_session_run_trace_events,
+    summarize_session_run_trace_audit,
     summarize_session_run_trace_events,
     update_session_message_content,
     update_session_message_feedback,
@@ -89,6 +90,25 @@ def get_session_run_trace_record(
             "events": events,
             "runs": summarize_session_run_trace_events(events),
         }
+    except Exception as exc:
+        raise SessionHistoryServiceError(500, str(exc)) from exc
+
+
+def get_session_run_trace_audit_summary_record(
+    session_id: str,
+    *,
+    limit: int = 200,
+    run_id: str = "",
+    memory_db: Any | None = None,
+) -> dict:
+    try:
+        events = list_session_run_trace_events(
+            _resolve_memory_db(memory_db),
+            session_id,
+            limit=limit,
+            run_id=run_id,
+        )
+        return summarize_session_run_trace_audit(events)
     except Exception as exc:
         raise SessionHistoryServiceError(500, str(exc)) from exc
 

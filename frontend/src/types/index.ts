@@ -278,6 +278,19 @@ export interface RunTraceRun {
   latest_summary?: string
 }
 
+export interface RunTraceAuditSummary {
+  run_count: number
+  event_count: number
+  audited_run_count: number
+  unaudited_run_count: number
+  context_sources: number
+  context_hits: number
+  context_errors: number
+  prompt_modules: number
+  source_counts?: Record<string, { total: number; hit: number; error: number; disabled: number }>
+  module_counts?: Record<string, { total: number; enabled: number; disabled: number }>
+}
+
 export interface SessionRunLearningPreview {
   session_id: string
   run_id?: string

@@ -138,6 +138,13 @@ def session_run_trace_response_kwargs(
     }
 
 
+def session_run_trace_audit_summary_response_kwargs(summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"summary": summary},
+    }
+
+
 def session_run_learning_preview_response_kwargs(preview: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "success",

@@ -2,6 +2,7 @@ import { request } from './http'
 import type {
   ExecTraceItem,
   MemoryReference,
+  RunTraceAuditSummary,
   RunTraceEvent,
   RunTraceRun,
   SessionMemoryActivity,
@@ -76,6 +77,17 @@ export async function getSessionRunTrace(sessionId: string, limit = 120, options
   if (runId) search.set('run_id', runId)
   return request<{ events: RunTraceEvent[]; runs?: RunTraceRun[] }>(
     `/session/${sessionId}/history/run-trace?${search.toString()}`,
+    requestOptions,
+  )
+}
+
+export async function getSessionRunTraceAuditSummary(sessionId: string, limit = 120, options?: SessionRunTraceRequestOptions) {
+  const { runId, ...requestOptions } = options || {}
+  const search = new URLSearchParams()
+  search.set('limit', String(limit))
+  if (runId) search.set('run_id', runId)
+  return request<{ summary: RunTraceAuditSummary }>(
+    `/session/${sessionId}/history/run-trace/audit-summary?${search.toString()}`,
     requestOptions,
   )
 }

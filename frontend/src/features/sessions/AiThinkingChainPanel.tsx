@@ -5,6 +5,7 @@ import type {
   ChatMessage,
   ChatRuntimeEvent,
   ExecTraceItem,
+  RunTraceAuditSummary,
   RunTraceEvent,
   RunTraceRun,
   SessionMemoryActivity,
@@ -18,6 +19,7 @@ import {
   getSessionMemoryActivity,
   getSessionRunLearningPreview,
   getSessionRunTrace,
+  getSessionRunTraceAuditSummary,
 } from '@/api/sessionHistory'
 import { toolLabel } from '@/utils/assetDisplay'
 import { ApprovalInfo, ApprovalStatusBadge } from '@/components/views/ApprovalCenterShared'
@@ -325,6 +327,14 @@ interface PromptManifestAudit {
   modules: PromptModuleAudit[]
 }
 
+interface RunTraceAuditViewSummary {
+  contextSources: number
+  contextHits: number
+  contextErrors: number
+  promptModules: number
+  unauditedRuns: number
+}
+
 interface RunTraceEvidenceDetail {
   evidenceId: string
   trace?: ExecTraceItem | null
@@ -498,6 +508,17 @@ function runTraceAuditSummary(groups: RunTraceGroup[]) {
   )
 }
 
+function runTraceAuditViewSummary(summary: RunTraceAuditSummary | null | undefined): RunTraceAuditViewSummary | null {
+  if (!summary) return null
+  return {
+    contextSources: Number(summary.context_sources || 0),
+    contextHits: Number(summary.context_hits || 0),
+    contextErrors: Number(summary.context_errors || 0),
+    promptModules: Number(summary.prompt_modules || 0),
+    unauditedRuns: Number(summary.unaudited_run_count || 0),
+  }
+}
+
 function formatRunTraceDuration(durationMs?: number | null) {
   if (durationMs === undefined || durationMs === null) return ''
   if (!Number.isFinite(durationMs)) return ''
@@ -564,6 +585,7 @@ export default function AiThinkingChainPanel({
   const [runTraceEvents, setRunTraceEvents] = useState<RunTraceEvent[]>([])
   const [runTraceRuns, setRunTraceRuns] = useState<RunTraceRun[]>([])
   const [runTraceRunIndex, setRunTraceRunIndex] = useState<RunTraceRun[]>([])
+  const [runTraceAuditSummary, setRunTraceAuditSummary] = useState<RunTraceAuditSummary | null>(null)
   const [selectedRunTraceId, setSelectedRunTraceId] = useState('')
   const [runTraceEvidenceDetail, setRunTraceEvidenceDetail] = useState<RunTraceEvidenceDetail | null>(null)
   const [runTraceApprovalDetail, setRunTraceApprovalDetail] = useState<RunTraceApprovalDetail | null>(null)
@@ -639,6 +661,7 @@ export default function AiThinkingChainPanel({
       setRunTraceEvents([])
       setRunTraceRuns([])
       setRunTraceRunIndex([])
+      setRunTraceAuditSummary(null)
       setSelectedRunTraceId('')
       setRunTraceLoading(false)
       return
@@ -646,14 +669,22 @@ export default function AiThinkingChainPanel({
     let cancelled = false
     const controller = new AbortController()
     setRunTraceLoading(true)
-    getSessionRunTrace(sessionId, selectedRunTraceId ? 500 : 120, {
-      signal: controller.signal,
-      runId: selectedRunTraceId || undefined,
-    })
-      .then((response) => {
+    const runTraceLimit = selectedRunTraceId ? 500 : 120
+    Promise.all([
+      getSessionRunTrace(sessionId, runTraceLimit, {
+        signal: controller.signal,
+        runId: selectedRunTraceId || undefined,
+      }),
+      getSessionRunTraceAuditSummary(sessionId, runTraceLimit, {
+        signal: controller.signal,
+        runId: selectedRunTraceId || undefined,
+      }).catch(() => null),
+    ])
+      .then(([response, auditResponse]) => {
         if (!cancelled) {
           setRunTraceEvents(response.data.events || [])
           setRunTraceRuns(response.data.runs || [])
+          setRunTraceAuditSummary(auditResponse?.data.summary || null)
           if (!selectedRunTraceId) setRunTraceRunIndex(response.data.runs || [])
         }
       })
@@ -662,6 +693,7 @@ export default function AiThinkingChainPanel({
         if (!cancelled) {
           setRunTraceEvents([])
           setRunTraceRuns([])
+          setRunTraceAuditSummary(null)
           if (!selectedRunTraceId) setRunTraceRunIndex([])
         }
       })
@@ -833,6 +865,7 @@ export default function AiThinkingChainPanel({
               events={runTraceEvents}
               runs={runTraceRuns}
               runIndex={runTraceRunIndex}
+              serverAuditSummary={runTraceAuditSummary}
               loading={runTraceLoading}
               selectedRunId={selectedRunTraceId}
               onSelectRun={setSelectedRunTraceId}
@@ -1080,6 +1113,7 @@ function RunTraceStrip({
   events,
   runs,
   runIndex,
+  serverAuditSummary,
   loading,
   selectedRunId,
   onSelectRun,
@@ -1090,6 +1124,7 @@ function RunTraceStrip({
   events: RunTraceEvent[]
   runs: RunTraceRun[]
   runIndex: RunTraceRun[]
+  serverAuditSummary?: RunTraceAuditSummary | null
   loading: boolean
   selectedRunId: string
   onSelectRun: (runId: string) => void
@@ -1100,7 +1135,7 @@ function RunTraceStrip({
   const recentRuns = groupRunTraceEvents(events).slice(-6).reverse()
   const runSummaries = new Map(runs.map((run) => [run.run_id, run]))
   const runOptions = [...runIndex].slice(-30).reverse()
-  const auditSummary = runTraceAuditSummary(recentRuns)
+  const auditSummary = runTraceAuditViewSummary(serverAuditSummary) || runTraceAuditSummary(recentRuns)
   return (
     <div className="rounded-2xl border border-ops-accent/22 bg-ops-accent/8 px-3 py-2.5">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
