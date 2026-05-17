@@ -271,6 +271,8 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertEqual(learning_candidates[0]["review"]["decision"], "needs_human_review")
         self.assertIn(learning_candidates[0]["review"]["risk_level"], {"medium", "high"})
         self.assertIn("rule_based_assistant_review", learning_candidates[0]["review"]["reviewer"])
+        self.assertEqual(learning_candidates[0]["review_events"][0]["decision"], "needs_human_review")
+        self.assertEqual(learning_candidates[0]["review_events"][0]["trigger"], "candidate_created")
         checklist = {row["key"]: row for row in learning_candidates[0]["quality_checklist"]}
         self.assertIn("source_message", checklist)
         self.assertIn("tool_evidence", checklist)
@@ -309,6 +311,9 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertEqual(updated_quality["review"]["decision"], "accept")
         self.assertEqual(updated_quality["review"]["risk_level"], "low")
         self.assertEqual(updated_quality["review"]["missing_items"], [])
+        self.assertEqual(updated_quality["review_events"][-1]["decision"], "accept")
+        self.assertEqual(updated_quality["review_events"][-1]["trigger"], "quality_checklist_updated")
+        self.assertIn("补齐发布前检查项", updated_quality["review_events"][-1]["reason"])
         approved_candidate = self.store.update_learning_candidate_status(
             learning_candidates[0]["id"],
             status="approved",
@@ -317,6 +322,8 @@ class FileMemoryStoreTests(unittest.TestCase):
         )
         self.assertEqual(approved_candidate["status"], "approved")
         self.assertEqual(approved_candidate["review"]["decision"], "accept")
+        self.assertEqual(approved_candidate["review_events"][-1]["decision"], "accept")
+        self.assertEqual(approved_candidate["review_events"][-1]["trigger"], "status_gate")
         published_candidate = self.store.update_learning_candidate_status(
             learning_candidates[0]["id"],
             status="published",

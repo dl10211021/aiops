@@ -1449,6 +1449,16 @@ export interface LearningCandidate {
     suggestions?: string[]
     reviewed_at?: string
   }
+  review_events?: Array<{
+    trigger: string
+    actor: string
+    reason?: string
+    timestamp: string
+    reviewer?: string
+    decision?: 'accept' | 'needs_human_review' | 'reject' | string
+    risk_level?: 'low' | 'medium' | 'high' | string
+    missing_items?: string[]
+  }>
   published_artifact?: LearningCandidatePublishedArtifact
 }
 

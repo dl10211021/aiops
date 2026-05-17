@@ -524,6 +524,13 @@ class FileMemoryStore:
             previous_status = str(item.get("status") or "draft")
             if normalized_status in {"approved", "published"}:
                 item["review"] = self._learning_candidate_review(item)
+                item["review_events"] = self._append_learning_candidate_review_event(
+                    item,
+                    trigger="status_gate",
+                    actor=normalized_actor,
+                    reason=normalized_reason,
+                    timestamp=now,
+                )
                 if not self._learning_candidate_review_ready(item):
                     raise ValueError("发布候选辅助审核未通过，不能批准或发布")
             item["status"] = normalized_status
@@ -876,6 +883,13 @@ class FileMemoryStore:
             )
             item["quality_events"] = events
             item["review"] = self._learning_candidate_review(item)
+            item["review_events"] = self._append_learning_candidate_review_event(
+                item,
+                trigger="quality_checklist_updated",
+                actor=normalized_actor,
+                reason=normalized_reason,
+                timestamp=now,
+            )
             self._write_learning_candidate_rows(rows)
             return item
         raise FileNotFoundError(normalized_id)
@@ -962,6 +976,13 @@ class FileMemoryStore:
             ],
         }
         item["review"] = self._learning_candidate_review(item)
+        item["review_events"] = self._append_learning_candidate_review_event(
+            item,
+            trigger="candidate_created",
+            actor=actor,
+            reason="由学习候选转换生成发布候选。",
+            timestamp=now,
+        )
         pool_path = self._learning_candidate_pool_path()
         pool_path.parent.mkdir(parents=True, exist_ok=True)
         existing_ids = {str(row.get("id")) for row in self.list_learning_candidates(limit=200)}
@@ -1034,6 +1055,33 @@ class FileMemoryStore:
             "suggestions": [suggestion],
             "reviewed_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
+
+    def _append_learning_candidate_review_event(
+        self,
+        item: dict[str, Any],
+        *,
+        trigger: str,
+        actor: str,
+        reason: str,
+        timestamp: str,
+    ) -> list[dict[str, Any]]:
+        review = item.get("review") if isinstance(item.get("review"), dict) else {}
+        events = item.get("review_events")
+        if not isinstance(events, list):
+            events = []
+        events.append(
+            {
+                "trigger": str(trigger or "review").strip() or "review",
+                "actor": str(actor or "system").strip() or "system",
+                "reason": str(reason or "").strip(),
+                "timestamp": timestamp,
+                "reviewer": str(review.get("reviewer") or "rule_based_assistant_review"),
+                "decision": str(review.get("decision") or "needs_human_review"),
+                "risk_level": str(review.get("risk_level") or "medium"),
+                "missing_items": list(review.get("missing_items") or [])[:12],
+            }
+        )
+        return events[-20:]
 
     def _evidence_ref_action(self, ref: dict[str, Any]) -> str:
         if not isinstance(ref, dict):

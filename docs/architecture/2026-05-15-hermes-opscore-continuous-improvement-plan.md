@@ -947,3 +947,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只读导出和前端下载，不改记忆写入、不改学习候选状态、不改辅助模型审核、不影响告警、巡检、资产中心或执行 gate。
 - 遗留风险：报表是当前快照，不是周期性治理任务；后续如需要趋势，需要单独做定时采样或审计仓库。
 - 下一轮建议：这个功能到此收手。后续更高价值方向是子 Agent Run Trace 结果自动关联到可观测任务，或把辅助模型对学习候选的审核结论变成可追踪事件。
+
+### 2026-05-18 Round 70：学习候选辅助审核轨迹
+
+- 完成：学习候选新增 `review_events` 审核轨迹，在候选创建、质量清单刷新、批准/发布 gate 刷新时记录辅助审核结论、风险、触发原因、操作者和时间；前端“辅助审核”卡片展示最近审核轨迹。
+- 验证：`python -m pytest tests/test_file_memory_store.py::FileMemoryStoreTests::test_resolve_candidate_entry_converts_to_runbook_candidate_without_retrieval tests/test_file_memory_store.py::FileMemoryStoreTests::test_update_learning_candidate_status_refreshes_review_gate tests/test_tool_policy_runtime_frontend.py::test_memory_candidates_panel_splits_runbook_and_skill_candidates -q`；提交前继续跑 frontend build、preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：学习候选从“只看当前审核结论”推进到“能追踪每次辅助审核为什么通过或拦截”，更接近可学习、可审计的 skill/runbook 演进链。
+- OpsCore 主线影响：只补审计事件和前端展示，不改变审核判定规则、不自动批准、不自动发布、不改执行 gate、告警、巡检或资产中心。
+- 遗留风险：当前审核仍是规则型辅助审核，不是多模型交叉审核；后续可把主/副模型审核结果写入同一 `review_events`。
+- 下一轮建议：这个功能到此收手。后续更高价值方向是把子 Agent Run Trace 结果自动关联到可观测任务，或把主/副模型审核接入学习候选 review_events。

@@ -2493,6 +2493,7 @@ function LearningCandidateDetailContent({
 function LearningCandidateReviewCard({ item, compact = false }: { item: LearningCandidate; compact?: boolean }) {
   const review = item.review
   if (!review) return null
+  const reviewEvents = item.review_events || []
   const riskClass = review.risk_level === 'low'
     ? 'border-emerald-300/35 text-emerald-200'
     : review.risk_level === 'high'
@@ -2522,6 +2523,23 @@ function LearningCandidateReviewCard({ item, compact = false }: { item: Learning
           {(review.suggestions || []).map((suggestion) => (
             <div key={suggestion} className="rounded bg-ops-dark/35 px-2 py-1 text-[11px] text-ops-subtext">{suggestion}</div>
           ))}
+        </div>
+      )}
+      {!compact && reviewEvents.length > 0 && (
+        <div className="mt-3 rounded border border-ops-surface1/70 bg-ops-panel/30 px-2 py-2">
+          <div className="text-[11px] font-semibold text-ops-overlay">审核轨迹</div>
+          <div className="mt-2 space-y-1">
+            {reviewEvents.slice(-4).reverse().map((event, index) => (
+              <div key={`${event.timestamp}-${event.trigger}-${index}`} className="flex flex-wrap items-center gap-2 text-[10px] text-ops-subtext">
+                <span className="rounded border border-ops-surface1 px-1.5 py-0.5 text-ops-overlay">{event.trigger || 'review'}</span>
+                <span>{event.decision || 'needs_human_review'}</span>
+                <span>{event.risk_level || 'medium'}</span>
+                <span>{event.actor || event.reviewer || 'system'}</span>
+                <span>{event.timestamp || '-'}</span>
+                {event.reason && <span className="min-w-0 flex-1 truncate" title={event.reason}>{event.reason}</span>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </section>
