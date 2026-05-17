@@ -363,6 +363,22 @@ def test_run_trace_prompt_modules_are_visible_without_prompt_text():
     assert "promptManifest.modules.slice(0, 10).map" in source
 
 
+def test_run_trace_context_prompt_audit_summary_is_visible():
+    source = Path(
+        "frontend/src/features/sessions/AiThinkingChainPanel.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert "function runTraceAuditSummary(groups: RunTraceGroup[])" in source
+    assert "const auditSummary = runTraceAuditSummary(recentRuns)" in source
+    assert "Context/Prompt 审计" in source
+    assert "上下文源 {auditSummary.contextSources}" in source
+    assert "命中 {auditSummary.contextHits}" in source
+    assert "失败 {auditSummary.contextErrors}" in source
+    assert "Prompt 模块 {auditSummary.promptModules}" in source
+    assert "contextSources.filter((source) => source.enabled && source.hit).length" in source
+    assert "promptManifest?.modules.filter((module) => module.enabled).length" in source
+
+
 def test_frontend_shows_actual_http_action_separately_from_tool_policy():
     presentation = Path(
         "frontend/src/features/sessions/toolPolicyPresentation.ts"

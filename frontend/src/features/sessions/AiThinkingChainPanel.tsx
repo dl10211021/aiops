@@ -480,6 +480,21 @@ function promptModuleTone(module: PromptModuleAudit) {
     : 'border-ops-surface1 bg-ops-dark/25 text-ops-overlay'
 }
 
+function runTraceAuditSummary(groups: RunTraceGroup[]) {
+  return groups.reduce(
+    (acc, group) => {
+      const contextSources = runTraceContextSources(group)
+      const promptManifest = runTracePromptManifest(group)
+      acc.contextSources += contextSources.length
+      acc.contextHits += contextSources.filter((source) => source.enabled && source.hit).length
+      acc.contextErrors += contextSources.filter((source) => source.status === 'error').length
+      acc.promptModules += promptManifest?.modules.filter((module) => module.enabled).length || 0
+      return acc
+    },
+    { contextSources: 0, contextHits: 0, contextErrors: 0, promptModules: 0 },
+  )
+}
+
 function formatRunTraceDuration(durationMs?: number | null) {
   if (durationMs === undefined || durationMs === null) return ''
   if (!Number.isFinite(durationMs)) return ''
@@ -1082,6 +1097,7 @@ function RunTraceStrip({
   const recentRuns = groupRunTraceEvents(events).slice(-6).reverse()
   const runSummaries = new Map(runs.map((run) => [run.run_id, run]))
   const runOptions = [...runIndex].slice(-30).reverse()
+  const auditSummary = runTraceAuditSummary(recentRuns)
   return (
     <div className="rounded-2xl border border-ops-accent/22 bg-ops-accent/8 px-3 py-2.5">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -1118,6 +1134,17 @@ function RunTraceStrip({
           </button>
         </div>
       </div>
+      {recentRuns.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5 rounded-lg border border-ops-surface0 bg-ops-dark/25 px-2 py-1.5 text-[10px] text-ops-overlay">
+          <span className="font-semibold text-ops-subtext">Context/Prompt 审计</span>
+          <span className="rounded-full border border-ops-surface1 px-2 py-0.5">上下文源 {auditSummary.contextSources}</span>
+          <span className="rounded-full border border-ops-accent/35 px-2 py-0.5 text-ops-accent">命中 {auditSummary.contextHits}</span>
+          <span className={`rounded-full border px-2 py-0.5 ${auditSummary.contextErrors > 0 ? 'border-ops-alert/35 text-ops-alert' : 'border-ops-surface1 text-ops-overlay'}`}>
+            失败 {auditSummary.contextErrors}
+          </span>
+          <span className="rounded-full border border-ops-surface1 px-2 py-0.5">Prompt 模块 {auditSummary.promptModules}</span>
+        </div>
+      )}
       {selectedRunId && (
         <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-ops-accent/25 bg-ops-accent/10 px-2 py-1 text-[10px] text-ops-subtext">
           <span className="min-w-0 truncate font-mono">当前只看：{selectedRunId}</span>

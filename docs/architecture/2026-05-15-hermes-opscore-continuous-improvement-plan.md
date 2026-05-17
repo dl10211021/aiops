@@ -749,3 +749,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只读前端汇总，不新增接口、不改变状态机、不自动批准、不自动发布、不影响资产、告警、巡检、工具执行或审批。
 - 遗留风险：当前统计来自前端已加载候选，不是后端聚合；按“功能满足即可收手”，本轮先让质量堵点可见。
 - 下一轮建议：停止继续打磨记忆质量卡片，后续转向全局 Prompt/Context 审计汇总或服务端聚合报表。
+
+### 2026-05-17 Round 48：Run Trace Context/Prompt 汇总条
+
+- 完成：`AIOps Run Trace` 顶部新增 `Context/Prompt 审计` 汇总条，统计最近运行的上下文源数量、命中数量、读取失败数量和已启用 Prompt 模块数量。
+- 验证：`python -m pytest tests/test_tool_policy_runtime_frontend.py -q`；`cd frontend && npm run build`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：Context/Prompt 审计从单次运行卡片推进到最近运行的聚合视图，便于快速判断本轮上下文和提示词模块是否正常注入。
+- OpsCore 主线影响：只读前端汇总，不新增接口、不展示 prompt 正文、不改变模型调用、不影响资产、告警、巡检、工具执行或审批。
+- 遗留风险：当前聚合范围是前端最近 6 次运行，不是全局后端报表；按“功能满足即可收手”，本轮只补可见汇总。
+- 下一轮建议：停止继续打磨 Run Trace 汇总条，后续转向更高价值的后端审计报表或工具执行策略可视化。
