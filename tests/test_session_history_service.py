@@ -176,6 +176,48 @@ class TestSessionHistoryService(unittest.TestCase):
         self.assertEqual(result["trace"]["tool"], "linux_execute_command")
         self.assertEqual(result["message"]["id"], 12)
 
+    def test_find_session_history_evidence_trace_falls_back_to_run_trace_tool_event(self):
+        memory_db = FakeMemoryDB(
+            [
+                {
+                    "id": 21,
+                    "role": "system",
+                    "content": "tool finished",
+                    "memory_type": "aiops_run_trace",
+                    "run_id": "run-1",
+                    "run_event_type": "tool:after",
+                    "run_event_ts": 10.0,
+                    "run_event_payload": {
+                        "run_id": "run-1",
+                        "tool_name": "db_execute_query",
+                        "tool_call_id": "call-db-1",
+                        "status": "done",
+                        "evidence_id": "tev-sid-1-call-db-1",
+                        "evidence": {
+                            "evidence_id": "tev-sid-1-call-db-1",
+                            "tool_name": "db_execute_query",
+                            "input_summary": "select 1",
+                            "result_status": "done",
+                        },
+                        "result_meta": {"row_count": 1},
+                    },
+                }
+            ]
+        )
+
+        result = find_session_history_evidence_trace(
+            "sid-1",
+            evidence_id="tev-sid-1-call-db-1",
+            memory_db=memory_db,
+        )
+
+        self.assertEqual(result["trace"]["tool"], "db_execute_query")
+        self.assertEqual(result["trace"]["toolCallId"], "call-db-1")
+        self.assertEqual(result["trace"]["evidenceId"], "tev-sid-1-call-db-1")
+        self.assertEqual(result["trace"]["resultMeta"]["row_count"], 1)
+        self.assertEqual(result["source"], "run_trace")
+        self.assertEqual(result["message"]["id"], 21)
+
     def test_find_session_history_evidence_trace_maps_missing_to_404(self):
         memory_db = FakeMemoryDB([])
 

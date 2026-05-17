@@ -68,8 +68,69 @@ def find_session_history_evidence_trace(
     except Exception as exc:
         raise SessionHistoryServiceError(500, str(exc)) from exc
     if not result:
+        result = _find_run_trace_evidence_trace(
+            _resolve_memory_db(memory_db),
+            session_id,
+            evidence_id=evidence_id,
+            tool_call_id=tool_call_id,
+            tool=tool,
+            limit=limit,
+        )
+    if not result:
         raise SessionHistoryServiceError(404, "未找到匹配的工具证据。")
     return result
+
+
+def _find_run_trace_evidence_trace(
+    memory_db: Any,
+    session_id: str,
+    *,
+    evidence_id: str = "",
+    tool_call_id: str = "",
+    tool: str = "",
+    limit: int = 200,
+) -> dict | None:
+    events = list_session_run_trace_events(memory_db, session_id, limit=limit)
+    for event in reversed(events):
+        if event.get("event_type") != "tool:after":
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
+        event_evidence_id = str(payload.get("evidence_id") or evidence.get("evidence_id") or "").strip()
+        event_tool_call_id = str(payload.get("tool_call_id") or "").strip()
+        event_tool = str(payload.get("tool_name") or payload.get("tool") or "").strip()
+        if evidence_id and evidence_id != event_evidence_id:
+            continue
+        if tool_call_id and tool_call_id != event_tool_call_id:
+            continue
+        if tool and tool != event_tool:
+            continue
+        if not any([evidence_id, tool_call_id, tool]):
+            continue
+        trace = {
+            "tool": event_tool,
+            "toolCallId": event_tool_call_id,
+            "evidenceId": event_evidence_id,
+            "status": str(payload.get("status") or evidence.get("result_status") or ""),
+            "resultMeta": payload.get("result_meta") if isinstance(payload.get("result_meta"), dict) else {},
+            "evidence": evidence,
+        }
+        return {
+            "source": "run_trace",
+            "trace": trace,
+            "message": {
+                "id": event.get("id"),
+                "role": "system",
+                "created_at": event.get("created_at") or event.get("event_ts"),
+                "preview": event.get("summary") or "",
+            },
+            "run": {
+                "run_id": event.get("run_id") or payload.get("run_id") or "",
+                "event_type": event.get("event_type") or "",
+                "event_ts": event.get("event_ts"),
+            },
+        }
+    return None
 
 
 def get_session_run_trace_record(
