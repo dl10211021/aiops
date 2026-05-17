@@ -59,6 +59,7 @@ def test_tool_trace_policy_chips_separate_mode_gate_and_evidence():
     assert "guarded_write: 'border-amber-400/40" in presentation
     assert "SQL：只读查询" in presentation
     assert "SQL：写入/DDL" in presentation
+    assert "const parsedSqlAction = recordValue(parsed, 'sql_action')" in presentation
     assert "trace.tool !== 'db_execute_query'" in presentation
 
 
@@ -220,6 +221,7 @@ def test_frontend_shows_actual_http_action_separately_from_tool_policy():
     assert "export function httpActionFromTrace(trace: ExecTraceItem)" in presentation
     assert "HTTP/API：只读请求" in presentation
     assert "HTTP/API：写入/变更" in presentation
+    assert "const parsedHttpAction = recordValue(parsed, 'http_action')" in presentation
     assert "http readonly read" in presentation
     assert "http write change" in presentation
     assert "const httpAction = httpActionFromTrace(item)" in trace_list

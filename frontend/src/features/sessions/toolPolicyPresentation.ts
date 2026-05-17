@@ -339,6 +339,21 @@ function sqlStatementTypeFromTrace(trace: ExecTraceItem) {
 
 export function sqlActionFromTrace(trace: ExecTraceItem) {
   if (trace.tool !== 'db_execute_query') return null
+  const parsed = parseJsonRecord(trace.result || '')
+  const parsedSqlAction = recordValue(parsed, 'sql_action')
+  if (parsedSqlAction) {
+    const isRead = parsedSqlAction.includes('只读')
+    const isWrite = parsedSqlAction.includes('写入') || parsedSqlAction.includes('DDL')
+    return {
+      label: `SQL：${parsedSqlAction}`,
+      className: isRead
+        ? 'border-emerald-400/35 bg-emerald-400/10 text-emerald-100'
+        : isWrite
+          ? 'border-ops-alert/40 bg-ops-alert/10 text-ops-alert'
+          : 'border-amber-300/45 bg-amber-300/10 text-amber-100',
+      searchText: `sql action ${parsedSqlAction}`,
+    }
+  }
   const statementType = sqlStatementTypeFromTrace(trace)
   if (!statementType) return null
   if (sqlReadTypes.has(statementType)) {
@@ -385,6 +400,21 @@ export function httpActionFromTrace(trace: ExecTraceItem) {
     || tool.endsWith('_request')
     || tool.endsWith('_query')
   if (!isHttpTool || tool === 'db_execute_query') return null
+  const parsed = parseJsonRecord(trace.result || '')
+  const parsedHttpAction = recordValue(parsed, 'http_action')
+  if (parsedHttpAction) {
+    const isRead = parsedHttpAction.includes('只读')
+    const isWrite = parsedHttpAction.includes('写入') || parsedHttpAction.includes('变更')
+    return {
+      label: `HTTP/API：${parsedHttpAction}`,
+      className: isRead
+        ? 'border-emerald-400/35 bg-emerald-400/10 text-emerald-100'
+        : isWrite
+          ? 'border-ops-alert/40 bg-ops-alert/10 text-ops-alert'
+          : 'border-amber-300/45 bg-amber-300/10 text-amber-100',
+      searchText: `http action ${parsedHttpAction}`,
+    }
+  }
   const method = httpMethodFromTrace(trace)
   if (!method) return null
   if (httpReadMethods.has(method)) {
