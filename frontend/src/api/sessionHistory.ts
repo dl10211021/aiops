@@ -5,6 +5,7 @@ import type {
   RunTraceEvent,
   RunTraceRun,
   SessionMemoryActivity,
+  SessionRunLearningCandidateResult,
   SessionRunLearningPreview,
 } from '@/types'
 
@@ -87,6 +88,23 @@ export async function getSessionRunLearningPreview(sessionId: string, limit = 20
   return request<{ preview: SessionRunLearningPreview }>(
     `/session/${sessionId}/history/run-trace/learning-preview?${search.toString()}`,
     requestOptions,
+  )
+}
+
+export async function createSessionRunLearningCandidate(
+  sessionId: string,
+  params: { runId?: string; actor?: string; reason?: string },
+) {
+  return request<SessionRunLearningCandidateResult>(
+    `/session/${sessionId}/history/run-trace/learning-candidate`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        run_id: params.runId || null,
+        actor: params.actor || 'user',
+        reason: params.reason || '人工提交 Run Trace 学习候选',
+      }),
+    },
   )
 }
 

@@ -10,15 +10,21 @@ from api.response_mappers.session import (
     session_history_message_updated_response_kwargs,
     session_history_response_kwargs,
     session_memory_activity_response_kwargs,
+    session_run_learning_candidate_created_response_kwargs,
     session_run_learning_preview_response_kwargs,
     session_run_trace_response_kwargs,
 )
 from api.schema_models.common import ResponseModel
-from api.schema_models.sessions import SessionMessageFeedbackRequest, SessionMessageUpdateRequest
+from api.schema_models.sessions import (
+    SessionMessageFeedbackRequest,
+    SessionMessageUpdateRequest,
+    SessionRunLearningCandidateRequest,
+)
 from connections.ssh_manager import ssh_manager
 from core.session_history_service import (
     SessionHistoryServiceError,
     clear_session_history_messages,
+    create_session_run_learning_candidate_record,
     delete_session_history_message_record,
     export_session_history_markdown_record,
     find_session_history_evidence_trace,
@@ -92,6 +98,24 @@ async def get_session_run_learning_preview(
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_run_learning_preview_response_kwargs(preview))
+
+
+@router.post("/session/{session_id}/history/run-trace/learning-candidate", response_model=ResponseModel)
+async def create_session_run_learning_candidate(
+    session_id: str,
+    req: SessionRunLearningCandidateRequest,
+):
+    """人工将 Run Trace 预览提交到学习候选池。"""
+    try:
+        result = create_session_run_learning_candidate_record(
+            session_id,
+            run_id=req.run_id or "",
+            actor=req.actor,
+            reason=req.reason,
+        )
+    except SessionHistoryServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**session_run_learning_candidate_created_response_kwargs(result))
 
 
 @router.delete("/session/{session_id}/history", response_model=ResponseModel)

@@ -91,6 +91,7 @@ from api.mappers import (
     session_history_message_feedback_response_kwargs,
     session_history_message_updated_response_kwargs,
     session_history_response_kwargs,
+    session_run_learning_candidate_created_response_kwargs,
     session_run_learning_preview_response_kwargs,
     session_run_trace_response_kwargs,
     session_poll_response_kwargs,
@@ -880,6 +881,14 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             session_run_learning_preview_response_kwargs({"eligible": True}),
             {"status": "success", "data": {"preview": {"eligible": True}}},
+        )
+        self.assertEqual(
+            session_run_learning_candidate_created_response_kwargs({"learning_candidate": {"id": "learncand_run"}}),
+            {
+                "status": "success",
+                "message": "学习候选已提交",
+                "data": {"learning_candidate": {"id": "learncand_run"}},
+            },
         )
         self.assertEqual(
             session_history_cleared_response_kwargs(),

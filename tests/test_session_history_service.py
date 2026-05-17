@@ -3,6 +3,7 @@ import unittest
 from core.session_history_service import (
     SessionHistoryServiceError,
     clear_session_history_messages,
+    create_session_run_learning_candidate_record,
     delete_session_history_message_record,
     export_session_history_markdown_record,
     find_session_history_evidence_trace,
@@ -27,6 +28,7 @@ class FakeMemoryDB:
             {"role": "user", "content": "hi"},
             {"role": "assistant", "content": "hello"},
         ]
+        self.file_memory_store = None
 
     def get_messages(self, session_id, for_ui=False):
         self.session_id = session_id
@@ -69,6 +71,39 @@ class FailingMemoryDB:
 
     def update_message_feedback(self, *_args, **_kwargs):
         raise self.exc
+
+
+class FakeFileMemoryStore:
+    def __init__(self):
+        self.appended = []
+        self.resolved = []
+        self.candidates = []
+
+    def append_memory(self, *, scope_id, summary, source_session_id, metadata=None):
+        self.appended.append((scope_id, summary, source_session_id, metadata or {}))
+        candidate = {
+            "candidate_id": "memcand_run",
+            "source_session_id": source_session_id,
+            "candidate_type": (metadata or {}).get("candidate_type"),
+            "summary": summary,
+        }
+        self.candidates.insert(0, candidate)
+        return {"version_id": "v1", "metadata": metadata or {}, "summary": summary}
+
+    def list_candidate_entries(self, limit=50, review_statuses=None):
+        return self.candidates[:limit]
+
+    def resolve_candidate_entry(self, candidate_id, action, actor="user"):
+        self.resolved.append((candidate_id, action, actor))
+        return {
+            "version_id": "v2",
+            "learning_candidate": {
+                "id": "learncand_run",
+                "target_type": "runbook",
+                "status": "draft",
+                "source_candidate_id": candidate_id,
+            },
+        }
 
 
 class TestSessionHistoryService(unittest.TestCase):
@@ -276,6 +311,54 @@ class TestSessionHistoryService(unittest.TestCase):
         self.assertTrue(preview["eligible"])
         self.assertEqual(preview["evidence_refs"][0]["id"], "tev-db")
         self.assertEqual(preview["evidence_refs"][0]["tool"], "db_execute_query")
+
+    def test_create_session_run_learning_candidate_promotes_preview_to_runbook_draft(self):
+        memory_db = FakeMemoryDB(
+            [
+                {
+                    "id": 4,
+                    "role": "system",
+                    "content": "tool done",
+                    "memory_type": "aiops_run_trace",
+                    "run_id": "run-2",
+                    "run_event_type": "tool:after",
+                    "run_event_payload": {
+                        "session_id": "sid-1",
+                        "run_id": "run-2",
+                        "tool_name": "db_execute_query",
+                        "tool_call_id": "call-db",
+                        "evidence_id": "tev-db",
+                        "status": "done",
+                    },
+                }
+            ]
+        )
+        memory_db.file_memory_store = FakeFileMemoryStore()
+
+        result = create_session_run_learning_candidate_record(
+            "sid-1",
+            run_id="run-2",
+            actor="tester",
+            memory_db=memory_db,
+        )
+
+        self.assertEqual(result["learning_candidate"]["id"], "learncand_run")
+        self.assertEqual(memory_db.file_memory_store.resolved, [("memcand_run", "to_runbook", "tester")])
+        metadata = memory_db.file_memory_store.appended[0][3]
+        self.assertEqual(metadata["source"], "run_trace_learning_preview")
+        self.assertEqual(metadata["review_status"], "pending")
+        self.assertEqual(metadata["candidate_type"], "run_trace_runbook_preview")
+        self.assertFalse(metadata["retrieval_enabled"])
+        self.assertEqual(metadata["evidence_refs"][0]["id"], "tev-db")
+
+    def test_create_session_run_learning_candidate_rejects_preview_without_evidence(self):
+        memory_db = FakeMemoryDB([])
+        memory_db.file_memory_store = FakeFileMemoryStore()
+
+        with self.assertRaises(SessionHistoryServiceError) as ctx:
+            create_session_run_learning_candidate_record("sid-1", memory_db=memory_db)
+
+        self.assertEqual(ctx.exception.status_code, 400)
 
     def test_export_session_history_markdown_maps_empty_history_to_404(self):
         memory_db = FakeMemoryDB([])

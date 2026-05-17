@@ -3,7 +3,11 @@ import unittest
 from unittest.mock import patch
 
 from api import routes, session_history_routes
-from api.schemas import SessionMessageFeedbackRequest, SessionMessageUpdateRequest
+from api.schemas import (
+    SessionMessageFeedbackRequest,
+    SessionMessageUpdateRequest,
+    SessionRunLearningCandidateRequest,
+)
 
 
 class FakeMemoryDB:
@@ -52,6 +56,7 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         self.assertIn("/session/{session_id}/history", paths)
         self.assertIn("/session/{session_id}/history/run-trace", paths)
         self.assertIn("/session/{session_id}/history/run-trace/learning-preview", paths)
+        self.assertIn("/session/{session_id}/history/run-trace/learning-candidate", paths)
         self.assertIn("/session/{session_id}/history/{message_id}", paths)
         self.assertIn("/session/{session_id}/history/{message_id}/feedback", paths)
         self.assertIn("/session/{session_id}/memory/activity", paths)
@@ -88,6 +93,16 @@ class TestSessionHistoryRoutes(unittest.TestCase):
             learning_preview_response = asyncio.run(
                 session_history_routes.get_session_run_learning_preview("sid-1")
             )
+            with patch(
+                "api.session_history_routes.create_session_run_learning_candidate_record",
+                return_value={"learning_candidate": {"id": "learncand_run"}},
+            ):
+                learning_candidate_response = asyncio.run(
+                    session_history_routes.create_session_run_learning_candidate(
+                        "sid-1",
+                        SessionRunLearningCandidateRequest(run_id="run-1"),
+                    )
+                )
 
         self.assertEqual(list_response.status, "success")
         self.assertEqual(list_response.data, {"messages": memory_db.messages})
@@ -124,6 +139,9 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         self.assertEqual(run_trace_filter_response.data, {"events": [], "runs": []})
         self.assertEqual(learning_preview_response.status, "success")
         self.assertEqual(learning_preview_response.data["preview"]["eligible"], False)
+        self.assertEqual(learning_candidate_response.status, "success")
+        self.assertEqual(learning_candidate_response.message, "学习候选已提交")
+        self.assertEqual(learning_candidate_response.data["learning_candidate"]["id"], "learncand_run")
 
     def test_session_history_export_preserves_response_shape(self):
         with patch(

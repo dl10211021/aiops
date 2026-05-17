@@ -259,11 +259,15 @@ def test_run_trace_learning_preview_is_exposed_as_readonly_ui():
 
     assert "export interface SessionRunLearningPreview" in types
     assert "getSessionRunLearningPreview" in session_api
+    assert "createSessionRunLearningCandidate" in session_api
     assert "/history/run-trace/learning-preview?" in session_api
+    assert "/history/run-trace/learning-candidate" in session_api
     assert "onOpenLearningPreview={(runId) => void openRunTraceLearningPreview(runId)}" in source
     assert "Run Trace 学习预览" in source
     assert "只读预览，不会自动写入记忆或发布 Skill。" in source
     assert "学习预览" in source
+    assert "提交候选池" in source
+    assert "提交后进入学习候选池，仍需人工审核质量清单。" in source
     assert "可进入候选池" in source
     assert "证据引用" in source
 

@@ -13,6 +13,7 @@ import type {
 import { getApproval } from '@/api/approvals'
 import { isAbortError } from '@/api/http'
 import {
+  createSessionRunLearningCandidate,
   getSessionHistoryEvidenceTrace,
   getSessionMemoryActivity,
   getSessionRunLearningPreview,
@@ -322,6 +323,8 @@ interface RunTraceLearningPreviewDetail {
   runId?: string
   preview?: SessionRunLearningPreview | null
   loading?: boolean
+  submitting?: boolean
+  submittedCandidateId?: string
   error?: string
 }
 
@@ -600,6 +603,29 @@ export default function AiThinkingChainPanel({
         runId: targetRunId || undefined,
         preview: null,
         error: error instanceof Error ? error.message : '加载学习预览失败',
+      })
+    }
+  }
+
+  const submitRunTraceLearningCandidate = async () => {
+    if (!sessionId || !runTraceLearningPreview?.preview || runTraceLearningPreview.submitting) return
+    const runId = runTraceLearningPreview.preview.run_id || runTraceLearningPreview.runId || ''
+    setRunTraceLearningPreview({ ...runTraceLearningPreview, submitting: true, error: undefined })
+    try {
+      const response = await createSessionRunLearningCandidate(sessionId, {
+        runId,
+        reason: '从 Run Trace 学习预览人工提交',
+      })
+      setRunTraceLearningPreview({
+        ...runTraceLearningPreview,
+        submitting: false,
+        submittedCandidateId: response.data.learning_candidate?.id || response.data.candidate?.candidate_id || '已提交',
+      })
+    } catch (error: unknown) {
+      setRunTraceLearningPreview({
+        ...runTraceLearningPreview,
+        submitting: false,
+        error: error instanceof Error ? error.message : '提交学习候选失败',
       })
     }
   }
@@ -907,6 +933,7 @@ export default function AiThinkingChainPanel({
       />
       <RunTraceLearningPreviewDialog
         detail={runTraceLearningPreview}
+        onSubmit={() => void submitRunTraceLearningCandidate()}
         onClose={() => setRunTraceLearningPreview(null)}
       />
     </section>
@@ -1092,9 +1119,11 @@ function RunTraceStrip({
 
 function RunTraceLearningPreviewDialog({
   detail,
+  onSubmit,
   onClose,
 }: {
   detail: RunTraceLearningPreviewDetail | null
+  onSubmit: () => void
   onClose: () => void
 }) {
   if (!detail) return null
@@ -1194,6 +1223,22 @@ function RunTraceLearningPreviewDialog({
                   {preview.next_action}
                 </div>
               )}
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-ops-surface0 pt-3">
+                {detail.submittedCandidateId && (
+                  <span className="mr-auto rounded-full border border-ops-success/35 bg-ops-success/10 px-2 py-1 text-xs text-ops-success">
+                    已提交：{detail.submittedCandidateId}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={onSubmit}
+                  disabled={!preview.eligible || detail.submitting || Boolean(detail.submittedCandidateId)}
+                  className="rounded-md border border-ops-accent/45 bg-ops-accent/12 px-3 py-1.5 text-xs font-semibold text-ops-accent hover:bg-ops-accent/18 disabled:cursor-not-allowed disabled:opacity-45"
+                  title="提交后进入学习候选池，仍需人工审核质量清单。"
+                >
+                  {detail.submitting ? '提交中...' : detail.submittedCandidateId ? '已提交候选池' : '提交候选池'}
+                </button>
+              </div>
             </>
           ) : !detail.loading && !detail.error ? (
             <div className="rounded border border-ops-surface0 bg-ops-dark/35 px-3 py-3 text-xs text-ops-subtext">

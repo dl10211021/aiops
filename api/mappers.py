@@ -112,6 +112,7 @@ from api.response_mappers.session import (
     session_history_message_feedback_response_kwargs,
     session_history_message_updated_response_kwargs,
     session_history_response_kwargs,
+    session_run_learning_candidate_created_response_kwargs,
     session_run_learning_preview_response_kwargs,
     session_run_trace_response_kwargs,
     session_permission_update_kwargs,

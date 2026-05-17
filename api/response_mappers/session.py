@@ -127,6 +127,14 @@ def session_run_learning_preview_response_kwargs(preview: dict[str, Any]) -> dic
     }
 
 
+def session_run_learning_candidate_created_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "学习候选已提交",
+        "data": result,
+    }
+
+
 def session_history_cleared_response_kwargs() -> dict[str, Any]:
     return {
         "status": "success",

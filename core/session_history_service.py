@@ -111,6 +111,96 @@ def get_session_run_learning_preview_record(
         raise SessionHistoryServiceError(500, str(exc)) from exc
 
 
+def create_session_run_learning_candidate_record(
+    session_id: str,
+    *,
+    run_id: str = "",
+    actor: str = "user",
+    reason: str = "人工提交 Run Trace 学习候选",
+    memory_db: Any | None = None,
+) -> dict:
+    try:
+        resolved_db = _resolve_memory_db(memory_db)
+        preview = build_session_run_learning_preview(
+            resolved_db,
+            session_id,
+            limit=300,
+            run_id=run_id,
+        )
+        if not preview.get("eligible"):
+            raise SessionHistoryServiceError(400, "当前 Run Trace 缺少工具证据，不能提交学习候选。")
+        store = getattr(resolved_db, "file_memory_store", None)
+        if store is None:
+            raise SessionHistoryServiceError(500, "记忆候选池不可用。")
+
+        summary = _run_learning_candidate_summary(preview)
+        version = store.append_memory(
+            scope_id=session_id,
+            summary=summary,
+            source_session_id=session_id,
+            metadata={
+                "source": "run_trace_learning_preview",
+                "memory_kind": "success_experience",
+                "candidate_type": "run_trace_runbook_preview",
+                "review_status": "pending",
+                "retrieval_enabled": False,
+                "run_id": preview.get("run_id") or run_id,
+                "submit_reason": reason,
+                "source_refs": [
+                    {"type": "session", "label": "来源会话", "id": session_id},
+                    {"type": "run_trace", "label": "Run Trace", "id": preview.get("run_id") or run_id or "all"},
+                ],
+                "evidence_refs": preview.get("evidence_refs") or [],
+            },
+        )
+        candidate = _latest_run_learning_candidate(store, session_id=session_id)
+        if not candidate:
+            raise SessionHistoryServiceError(500, "学习候选写入后未能定位。")
+        promoted = store.resolve_candidate_entry(candidate["candidate_id"], "to_runbook", actor=actor)
+        return {
+            "candidate": candidate,
+            "learning_candidate": promoted.get("learning_candidate"),
+            "version": version,
+            "preview": preview,
+        }
+    except SessionHistoryServiceError:
+        raise
+    except ValueError as exc:
+        raise SessionHistoryServiceError(400, str(exc)) from exc
+    except Exception as exc:
+        raise SessionHistoryServiceError(500, str(exc)) from exc
+
+
+def _run_learning_candidate_summary(preview: dict) -> str:
+    outline = preview.get("draft", {}).get("outline") if isinstance(preview.get("draft"), dict) else []
+    lines = [
+        "【记忆类型】Run Trace 学习候选",
+        "【候选状态】待人工确认",
+        "【保留方式】候选成功经验：确认前仅用于审计和学习中心展示，不进入模型检索上下文。",
+        f"【核心记忆】{preview.get('summary') or 'Run Trace 可沉淀为运维 Runbook 候选。'}",
+        f"【运行范围】run_id={preview.get('run_id') or 'all'}；事件={preview.get('event_count') or 0}；工具={preview.get('tool_count') or 0}；证据={len(preview.get('evidence_refs') or [])}",
+    ]
+    if isinstance(outline, list) and outline:
+        lines.append("【草稿大纲】")
+        lines.extend(f"- {item}" for item in outline[:8] if str(item or "").strip())
+    lines.append("【使用提醒】人工确认并补齐质量清单后才可整理为 Runbook；使用前仍需结合当前资产实时工具结果验证。")
+    return "\n".join(lines)
+
+
+def _latest_run_learning_candidate(store: Any, *, session_id: str) -> dict | None:
+    candidates = store.list_candidate_entries(
+        limit=20,
+        review_statuses=["pending"],
+    )
+    for item in candidates:
+        if (
+            item.get("source_session_id") == session_id
+            and item.get("candidate_type") == "run_trace_runbook_preview"
+        ):
+            return item
+    return None
+
+
 def list_session_run_trace_records(
     session_id: str,
     *,

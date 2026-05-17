@@ -14,6 +14,12 @@ class SessionMessageFeedbackRequest(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
 
 
+class SessionRunLearningCandidateRequest(BaseModel):
+    run_id: str | None = Field(default=None, max_length=120)
+    actor: str = Field(default="user", min_length=1, max_length=80)
+    reason: str = Field(default="人工提交 Run Trace 学习候选", min_length=1, max_length=500)
+
+
 class SessionProfileGenerateRequest(BaseModel):
     model_name: str | None = None
     include_inspection: bool = True

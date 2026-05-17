@@ -47,6 +47,7 @@ from api.schema_models.sessions import (
     SessionMessageFeedbackRequest,
     SessionMessageUpdateRequest,
     SessionProfileGenerateRequest,
+    SessionRunLearningCandidateRequest,
     SessionWebhookSendRequest,
     SkillsUpdateRequest,
     SlashCommandPayload,

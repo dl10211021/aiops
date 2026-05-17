@@ -298,6 +298,12 @@ export interface SessionRunLearningPreview {
   next_action?: string
 }
 
+export interface SessionRunLearningCandidateResult {
+  candidate?: MemoryCandidate
+  learning_candidate?: LearningCandidate
+  preview?: SessionRunLearningPreview
+}
+
 export interface ToolEvidence {
   evidence_id: string
   session_id: string
