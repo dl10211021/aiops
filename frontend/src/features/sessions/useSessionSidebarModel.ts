@@ -244,6 +244,14 @@ export function useSessionSidebarModel() {
     void syncSessionsPermissionToBackend(affected, allowModifications, updateSession, addToast)
   }, [addToast, grouped, updateSession])
 
+  const handleSetAllSessionsPermission = useCallback((allowModifications: boolean) => {
+    if (sessionList.length === 0) {
+      addToast('暂无活跃会话', 'info')
+      return
+    }
+    void syncSessionsPermissionToBackend(sessionList, allowModifications, updateSession, addToast)
+  }, [addToast, sessionList, updateSession])
+
   const handleSelectSession = useCallback((sessionId: string, group: string) => {
     setCurrentSession(sessionId)
     setView('chat')
@@ -310,6 +318,7 @@ export function useSessionSidebarModel() {
     handleRenameGroup,
     handleSaveSessionEdit,
     handleSelectSession,
+    handleSetAllSessionsPermission,
     handleSetGroupPermission,
     closeSessionEdit: () => setEditingSessionId(null),
     closeTerminal: () => {

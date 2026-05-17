@@ -51,6 +51,25 @@ export default function SessionSidebar() {
           onCreateGroup={model.handleCreateGroup}
         />
 
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={() => model.handleSetAllSessionsPermission(false)}
+            className="h-8 rounded-lg border border-amber-400/35 bg-amber-400/8 px-2 text-[11px] font-semibold text-amber-100 transition-colors hover:bg-amber-400/14"
+            title="将全部活跃会话切换为只读"
+          >
+            全部只读
+          </button>
+          <button
+            type="button"
+            onClick={() => model.handleSetAllSessionsPermission(true)}
+            className="h-8 rounded-lg border border-ops-success/35 bg-ops-success/8 px-2 text-[11px] font-semibold text-ops-success transition-colors hover:bg-ops-success/14"
+            title="将全部活跃会话切换为读写"
+          >
+            全部读写
+          </button>
+        </div>
+
         <div className="mt-2">
           <SessionSearchBox
             value={model.sessionSearch}

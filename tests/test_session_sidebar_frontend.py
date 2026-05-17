@@ -16,6 +16,19 @@ def test_session_group_header_exposes_bulk_permission_actions():
     assert "syncSessionsPermissionToBackend(affected, allowModifications, updateSession, addToast)" in model
 
 
+def test_session_sidebar_exposes_global_permission_actions():
+    sidebar = Path("frontend/src/features/sessions/SessionSidebar.tsx").read_text(encoding="utf-8")
+    model = Path("frontend/src/features/sessions/useSessionSidebarModel.ts").read_text(encoding="utf-8")
+
+    assert "全部只读" in sidebar
+    assert "全部读写" in sidebar
+    assert "model.handleSetAllSessionsPermission(false)" in sidebar
+    assert "model.handleSetAllSessionsPermission(true)" in sidebar
+    assert "handleSetAllSessionsPermission" in model
+    assert "syncSessionsPermissionToBackend(sessionList, allowModifications, updateSession, addToast)" in model
+    assert "暂无活跃会话" in model
+
+
 def test_session_group_bulk_permission_sync_is_optimistic_and_rolls_back_failures():
     effects = Path("frontend/src/features/sessions/sessionSidebarEffects.ts").read_text(encoding="utf-8")
 
