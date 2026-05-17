@@ -320,6 +320,29 @@ def test_run_trace_context_sources_are_visible_without_prompt_text():
     assert "contextSourceTone(source)" in source
 
 
+def test_run_trace_prompt_modules_are_visible_without_prompt_text():
+    source = Path(
+        "frontend/src/features/sessions/AiThinkingChainPanel.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert "function runTracePromptManifest(group: RunTraceGroup)" in source
+    assert "prompt_modules" in source
+    assert "Prompt 模块" in source
+    assert "证据契约" in source
+    assert "上下文优先级" in source
+    assert "Skill 指令" in source
+    assert "知识库上下文" in source
+    assert "长期记忆上下文" in source
+    assert "只分析模式" in source
+    assert "委派任务" in source
+    assert "工具目录" in source
+    assert "本地 Skill 路径" in source
+    assert "promptModuleTone(module)" in source
+    assert "已启用" in source
+    assert "未启用" in source
+    assert "promptManifest.modules.slice(0, 10).map" in source
+
+
 def test_frontend_shows_actual_http_action_separately_from_tool_policy():
     presentation = Path(
         "frontend/src/features/sessions/toolPolicyPresentation.ts"

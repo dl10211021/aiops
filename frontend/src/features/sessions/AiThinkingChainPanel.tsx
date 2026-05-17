@@ -313,6 +313,17 @@ interface ContextSourceAudit {
   status: string
 }
 
+interface PromptModuleAudit {
+  module: string
+  enabled: boolean
+}
+
+interface PromptManifestAudit {
+  surface: string
+  mode: string
+  modules: PromptModuleAudit[]
+}
+
 interface RunTraceEvidenceDetail {
   evidenceId: string
   trace?: ExecTraceItem | null
@@ -396,6 +407,33 @@ function runTraceContextSources(group: RunTraceGroup): ContextSourceAudit[] {
     .filter((source): source is ContextSourceAudit => Boolean(source))
 }
 
+function runTracePromptManifest(group: RunTraceGroup): PromptManifestAudit | null {
+  const startEvent = group.startedAt || group.events.find((event) => event.event_type === 'run:start')
+  const context = startEvent?.payload?.context
+  if (!context || typeof context !== 'object' || Array.isArray(context)) return null
+  const manifest = (context as Record<string, unknown>).prompt_modules
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) return null
+  const record = manifest as Record<string, unknown>
+  const rawModules = record.modules
+  if (!Array.isArray(rawModules) || rawModules.length === 0) return null
+  const enabledMap = record.enabled && typeof record.enabled === 'object' && !Array.isArray(record.enabled)
+    ? record.enabled as Record<string, unknown>
+    : {}
+  const modules = rawModules
+    .map((module) => String(module || '').trim())
+    .filter(Boolean)
+    .map((module) => ({
+      module,
+      enabled: enabledMap[module] !== false,
+    }))
+  if (modules.length === 0) return null
+  return {
+    surface: String(record.surface || ''),
+    mode: String(record.mode || ''),
+    modules,
+  }
+}
+
 function contextSourceLabel(source: string) {
   const labels: Record<string, string> = {
     system_prompt: '系统提示词',
@@ -404,6 +442,22 @@ function contextSourceLabel(source: string) {
     asset_profile: '资产画像',
   }
   return labels[source] || source
+}
+
+function promptModuleLabel(module: string) {
+  const labels: Record<string, string> = {
+    evidence_contract: '证据契约',
+    context_precedence: '上下文优先级',
+    skill_instructions: 'Skill 指令',
+    rag_context: '知识库上下文',
+    ltm_context: '长期记忆上下文',
+    asset_profile: '资产画像',
+    analysis_only: '只分析模式',
+    delegated_task: '委派任务',
+    tool_catalog: '工具目录',
+    skill_paths: '本地 Skill 路径',
+  }
+  return labels[module] || module
 }
 
 function contextSourceTone(source: ContextSourceAudit) {
@@ -418,6 +472,12 @@ function contextSourceStateText(source: ContextSourceAudit) {
   if (source.status === 'error') return '读取失败'
   if (source.hit) return `命中 ${source.referenceCount}`
   return '未命中'
+}
+
+function promptModuleTone(module: PromptModuleAudit) {
+  return module.enabled
+    ? 'border-ops-accent/35 bg-ops-accent/10 text-ops-accent'
+    : 'border-ops-surface1 bg-ops-dark/25 text-ops-overlay'
 }
 
 function formatRunTraceDuration(durationMs?: number | null) {
@@ -1082,6 +1142,7 @@ function RunTraceStrip({
             const latest = run.endedAt || run.events[run.events.length - 1]
             const previewEvents = run.events.slice(-5).reverse()
             const contextSources = runTraceContextSources(run)
+            const promptManifest = runTracePromptManifest(run)
             return (
               <div key={run.id} className="rounded-xl border border-ops-surface0/75 bg-ops-panel/35 px-2.5 py-2">
                 <div className="mb-1.5 flex min-w-0 items-center gap-2">
@@ -1132,6 +1193,39 @@ function RunTraceStrip({
                           {contextSourceLabel(source.source)} · {contextSourceStateText(source)}
                         </span>
                       ))}
+                    </div>
+                  </div>
+                )}
+                {promptManifest && (
+                  <div className="mb-1.5 rounded-lg border border-ops-surface0 bg-ops-dark/25 px-2 py-1.5">
+                    <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-ops-overlay">
+                      <span>Prompt 模块</span>
+                      {promptManifest.surface && (
+                        <span className="rounded-full border border-ops-surface1 px-1.5 py-0.5 font-mono font-normal text-ops-overlay">
+                          {promptManifest.surface}
+                        </span>
+                      )}
+                      {promptManifest.mode && (
+                        <span className="rounded-full border border-ops-surface1 px-1.5 py-0.5 font-mono font-normal text-ops-overlay">
+                          {promptManifest.mode}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {promptManifest.modules.slice(0, 10).map((module) => (
+                        <span
+                          key={module.module}
+                          className={`rounded-full border px-2 py-0.5 text-[10px] ${promptModuleTone(module)}`}
+                          title={`${promptModuleLabel(module.module)}：${module.enabled ? '已启用' : '未启用'}`}
+                        >
+                          {promptModuleLabel(module.module)} · {module.enabled ? '已启用' : '未启用'}
+                        </span>
+                      ))}
+                      {promptManifest.modules.length > 10 && (
+                        <span className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-overlay">
+                          +{promptManifest.modules.length - 10}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}

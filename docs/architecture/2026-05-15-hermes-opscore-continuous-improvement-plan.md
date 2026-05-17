@@ -722,3 +722,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只改知识库前端展示和筛选，不新增接口、不改变后端状态机、不自动批准、不影响资产、告警、巡检、工具执行或通知。
 - 遗留风险：当前仍是前端内存筛选，候选上百上千时还需要后端分页和服务端过滤；按“功能满足即可收手”，本轮先解决几十条候选的可用性。
 - 下一轮建议：停止继续打磨候选池 UI，下一步转向 Context/Prompt 汇总审计，或后续单独做服务端分页。
+
+### 2026-05-17 Round 45：Run Trace Prompt 模块可见
+
+- 完成：右侧 `AIOps Run Trace` 从 `run:start` 上下文读取 `prompt_modules` manifest，展示本轮启用的 Prompt 模块、surface 和 mode；只展示模块名与启用状态，不展示完整 prompt、RAG 正文、LTM 正文或密钥。
+- 验证：`python -m pytest tests/test_tool_policy_runtime_frontend.py -q` 通过，20 passed；`cd frontend && npm run build` 通过；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：Prompt 生命周期审计从后端元数据推进到前端可见，用户能复盘本轮到底启用了哪些提示词模块，更接近 Hermes 式 prompt/context trace。
+- OpsCore 主线影响：只改 Run Trace 前端展示，不新增接口、不改变 prompt 生成、不改变模型调用、不影响资产、告警、巡检、工具执行或审批。
+- 遗留风险：当前仍是单次运行卡片级展示，不是全局 Prompt 审计报表；按“功能满足即可收手”，本轮只解决“已有 manifest 不可见”的问题。
+- 下一轮建议：停止继续打磨 Run Trace 卡片，后续可转向全局 Prompt/Context 审计汇总或知识库服务端分页。
