@@ -710,6 +710,7 @@ export default function KnowledgeBase() {
                   />
                   <MemoryQualityPanel
                     report={memoryQuality}
+                    learningCandidates={learningCandidates}
                     onGoGovern={() => setMemoryStep('govern')}
                     onOpen={handleOpenMemoryPath}
                     onRefresh={() => void loadMemories()}

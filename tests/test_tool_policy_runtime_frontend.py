@@ -198,6 +198,24 @@ def test_memory_candidates_panel_splits_runbook_and_skill_candidates():
     assert "const actionable = (item.review_status || 'pending') === 'pending'" in knowledge_parts
 
 
+def test_memory_quality_panel_summarizes_learning_publish_quality():
+    knowledge = Path("frontend/src/components/views/KnowledgeBase.tsx").read_text(encoding="utf-8")
+    knowledge_parts = Path("frontend/src/components/views/KnowledgeBaseParts.tsx").read_text(encoding="utf-8")
+
+    assert "learningCandidates={learningCandidates}" in knowledge
+    assert "learningCandidates: LearningCandidate[]" in knowledge_parts
+    assert "learningCandidateStats" in knowledge_parts
+    assert "学习发布质量" in knowledge_parts
+    assert "Runbook/Skill 发布候选" in knowledge_parts
+    assert "发布候选" in knowledge_parts
+    assert "需补齐" in knowledge_parts
+    assert "可推进" in knowledge_parts
+    assert "已发布" in knowledge_parts
+    assert "质量清单或辅助审核未通过" in knowledge_parts
+    assert "不会自动批准或发布" in knowledge_parts
+    assert "查看候选" in knowledge_parts
+
+
 def test_empty_tool_policy_is_not_rendered_as_unknown_chips():
     presentation = Path(
         "frontend/src/features/sessions/toolPolicyPresentation.ts"

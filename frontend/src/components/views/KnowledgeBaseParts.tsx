@@ -2957,11 +2957,13 @@ export function MemoryStoresPanel({ stores }: { stores: MemoryStoreInfo[] }) {
 
 export function MemoryQualityPanel({
   report,
+  learningCandidates,
   onGoGovern,
   onOpen,
   onRefresh,
 }: {
   report: MemoryQualityReport | null
+  learningCandidates: LearningCandidate[]
   onGoGovern: () => void
   onOpen: (path: string) => void
   onRefresh: () => void
@@ -2977,6 +2979,17 @@ export function MemoryQualityPanel({
     ['待处理', `${(summary?.pending_conflict_count ?? 0) + (summary?.stale_review_count ?? 0)}`, '冲突与过期内容建议复核'],
     ['待压缩', `${summary?.compression_candidate_count ?? 0}`, '先生成摘要建议，不自动覆盖已保存记忆'],
   ]
+  const learningCandidateStats = learningCandidates.reduce(
+    (acc, item) => {
+      const status = item.status || 'draft'
+      acc.total += 1
+      if (status === 'published') acc.published += 1
+      if (learningCandidateNeedsCompletion(item)) acc.needsCompletion += 1
+      if (learningCandidateQualityReady(item) && status !== 'published' && status !== 'rejected') acc.ready += 1
+      return acc
+    },
+    { total: 0, needsCompletion: 0, ready: 0, published: 0 },
+  )
 
   return (
     <section className="rounded-xl border border-ops-surface0 bg-gradient-to-br from-ops-panel/85 via-ops-panel/55 to-ops-dark/70 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.22)]">
@@ -3004,6 +3017,37 @@ export function MemoryQualityPanel({
             <div className="mt-1 text-[11px] leading-4 text-ops-subtext">{hint}</div>
           </div>
         ))}
+      </div>
+      <div className="mt-3 rounded-lg border border-ops-surface0 bg-ops-dark/35 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-xs font-semibold text-ops-text">学习发布质量</div>
+            <p className="mt-1 text-[11px] leading-5 text-ops-subtext">
+              统计 Runbook/Skill 发布候选的质量清单和发布状态，只读展示，不会自动批准或发布。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onGoGovern}
+            className="rounded-md border border-ops-surface1 px-2 py-1 text-[11px] text-ops-subtext hover:border-ops-accent/55 hover:text-ops-accent"
+          >
+            查看候选
+          </button>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-4">
+          {[
+            ['发布候选', learningCandidateStats.total, '进入 Runbook/Skill 生命周期'],
+            ['需补齐', learningCandidateStats.needsCompletion, '质量清单或辅助审核未通过'],
+            ['可推进', learningCandidateStats.ready, '质量清单已通过，等待评审或发布'],
+            ['已发布', learningCandidateStats.published, '已有发布状态或草稿记录'],
+          ].map(([label, value, hint]) => (
+            <div key={label} className="rounded-md border border-ops-surface1/70 bg-ops-panel/35 px-3 py-2">
+              <div className="text-[11px] text-ops-overlay">{label}</div>
+              <div className="mt-1 text-lg font-black text-ops-text">{value}</div>
+              <div className="mt-0.5 text-[10px] leading-4 text-ops-subtext">{hint}</div>
+            </div>
+          ))}
+        </div>
       </div>
       <div className="mt-4 grid gap-3 lg:grid-cols-[0.95fr_1.2fr]">
         <div className="rounded-lg border border-ops-surface0 bg-ops-dark/35 p-3">
