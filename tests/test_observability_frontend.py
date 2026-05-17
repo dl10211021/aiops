@@ -54,6 +54,9 @@ def test_observability_frontend_builds_multi_agent_dispatch_draft():
     assert "composeInvestigationDispatchDraft" in view
     assert "dispatch_sub_agents" in view
     assert "dispatch_scope: global" in view
+    assert "task_id=${task.id}" in view
+    assert "observability_task_id" in view
+    assert "回填 Run Trace 证据时必须带 task_id" in view
     assert "target_session_id 必须由 list_active_sessions 返回" in view
     assert "window.dispatchEvent(new CustomEvent('opscore:chat-draft'" in view
     assert "setView('chat')" in view

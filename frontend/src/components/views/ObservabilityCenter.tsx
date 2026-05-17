@@ -1305,7 +1305,11 @@ function InvestigationCard({
 
 function buildInvestigationDispatchDraft(investigation: ObservabilityInvestigation): string {
   const taskLines = (investigation.tasks || []).map((task, index) => (
-    `- ${index + 1}. ${task.agent_role} | ${task.task_type} | ${task.output_summary} | input=${JSON.stringify(task.input_json || {})}`
+    `- ${index + 1}. task_id=${task.id} | ${task.agent_role} | ${task.task_type} | ${task.output_summary} | input=${JSON.stringify({
+      ...(task.input_json || {}),
+      observability_task_id: task.id,
+      investigation_id: investigation.id,
+    })}`
   ))
   return [
     '请基于以下可观测排查事件生成多 Agent 协同任务草稿，先确认任务内容后再调用 dispatch_sub_agents。',
@@ -1324,6 +1328,8 @@ function buildInvestigationDispatchDraft(investigation: ObservabilityInvestigati
     '- 先调用 list_active_sessions，只能从返回的在线会话里选择目标。',
     '- target_session_id 必须由 list_active_sessions 返回，不能凭空填写。',
     '- 对每个可匹配目标生成一条 tasks 记录，再调用 dispatch_sub_agents。',
+    '- 每条 tasks 记录必须把 observability_task_id 保留为上面的 task_id。',
+    '- 回填 Run Trace 证据时必须带 task_id，保证证据能归属到对应 Agent 任务。',
     '- 所有任务保持只读排查，不做写入、重启、变更或通知外发。',
     '- 如果目标无法匹配，先说明缺少哪个会话/资产，不要扩大范围。',
   ].join('\n')
