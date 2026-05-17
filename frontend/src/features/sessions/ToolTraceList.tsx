@@ -20,6 +20,7 @@ import {
   httpActionFromTrace,
   operationLabel,
   operationToneClass,
+  objectRecord,
   recordValue,
   runtimeExecutionLabels,
   runtimePolicyLabels,
@@ -272,6 +273,14 @@ function ToolTraceCard({
                       <span className={`rounded border px-1.5 py-0.5 font-semibold ${dispatchResultModeToneClass(child)}`}>
                         模式：{dispatchResultModeLabel(child)}
                       </span>
+                      {dispatchPermissionBoundaryLabel(child) && (
+                        <span
+                          className={`rounded border px-1.5 py-0.5 font-semibold ${dispatchPermissionBoundaryToneClass(child)}`}
+                          title={dispatchPermissionBoundaryTitle(child)}
+                        >
+                          {dispatchPermissionBoundaryLabel(child)}
+                        </span>
+                      )}
                       {preview && (
                         <span className="min-w-0 flex-1 truncate text-ops-overlay" title={preview}>
                           {preview}
@@ -329,6 +338,58 @@ function dispatchResultModeToneClass(item: Record<string, unknown>): string {
   if (mode === 'readwrite') return 'border-ops-success/35 bg-ops-success/10 text-ops-success'
   if (mode === 'readonly') return 'border-amber-400/35 bg-amber-400/10 text-amber-100'
   return 'border-ops-surface1/65 bg-ops-dark/35 text-ops-subtext'
+}
+
+function dispatchPermissionBoundary(item: Record<string, unknown>): Record<string, unknown> | null {
+  return objectRecord(item.permission_boundary)
+}
+
+function dispatchScopeLabel(scope: string): string {
+  return {
+    global: '全局',
+    group: '组',
+    session: '会话',
+  }[scope] || scope || '协同'
+}
+
+function dispatchPermissionBoundaryLabel(item: Record<string, unknown>): string {
+  const boundary = dispatchPermissionBoundary(item)
+  if (!boundary) return ''
+  const scope = dispatchScopeLabel(recordValue(boundary, 'scope'))
+  const reason = recordValue(boundary, 'reason')
+  if (recordValue(boundary, 'downgraded') === 'true') return `${scope}降权`
+  if (reason === 'parent_readonly') return `${scope}继承只读`
+  if (reason === 'target_readonly') return `${scope}目标只读`
+  return `${scope}边界`
+}
+
+function dispatchPermissionBoundaryToneClass(item: Record<string, unknown>): string {
+  const boundary = dispatchPermissionBoundary(item)
+  if (!boundary) return 'border-ops-surface1/65 bg-ops-dark/35 text-ops-subtext'
+  const reason = recordValue(boundary, 'reason')
+  if (recordValue(boundary, 'downgraded') === 'true' || reason === 'target_readonly') {
+    return 'border-amber-400/35 bg-amber-400/10 text-amber-100'
+  }
+  if (reason === 'parent_readonly') return 'border-sky-400/35 bg-sky-400/10 text-sky-100'
+  return 'border-ops-success/35 bg-ops-success/10 text-ops-success'
+}
+
+function dispatchPermissionBoundaryTitle(item: Record<string, unknown>): string {
+  const boundary = dispatchPermissionBoundary(item)
+  if (!boundary) return ''
+  return [
+    `范围：${dispatchScopeLabel(recordValue(boundary, 'scope'))}`,
+    `父级：${dispatchResultModeText(recordValue(boundary, 'parent_mode'))}`,
+    `目标：${dispatchResultModeText(recordValue(boundary, 'target_mode'))}`,
+    `最终：${dispatchResultModeText(recordValue(boundary, 'effective_mode'))}`,
+    `原因：${recordValue(boundary, 'reason') || '-'}`,
+  ].join(' / ')
+}
+
+function dispatchResultModeText(mode: string): string {
+  if (parseSessionMode(mode) === 'readwrite') return '读写'
+  if (parseSessionMode(mode) === 'readonly') return '只读'
+  return mode || '未识别'
 }
 
 function dispatchResultPreview(item: Record<string, unknown>): string {

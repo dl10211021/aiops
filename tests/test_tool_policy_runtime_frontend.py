@@ -92,6 +92,12 @@ def test_tool_trace_shows_multi_agent_child_session_modes():
     assert "recordValue(result, 'status') !== 'BATCH_COMPLETE'" in source
     assert "parseSessionMode(item.session_mode ?? item.allow_modifications)" in source
     assert "模式：{dispatchResultModeLabel(child)}" in source
+    assert "dispatchPermissionBoundaryLabel(child)" in source
+    assert "dispatchPermissionBoundaryTitle(child)" in source
+    assert "function dispatchPermissionBoundary(item: Record<string, unknown>)" in source
+    assert "objectRecord(item.permission_boundary)" in source
+    assert "return `${scope}降权`" in source
+    assert "范围：${dispatchScopeLabel(recordValue(boundary, 'scope'))}" in source
     assert "dispatchItems.slice(0, 8).map" in source
 
 
