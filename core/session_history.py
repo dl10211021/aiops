@@ -89,6 +89,7 @@ def list_session_run_trace_events(
             {
                 "id": message.get("_memory_id") or message.get("id"),
                 "created_at": message.get("created_at") or message.get("timestamp"),
+                "run_id": message.get("run_id") or (payload.get("run_id") if isinstance(payload, dict) else ""),
                 "event_type": message.get("run_event_type") or "",
                 "event_ts": message.get("run_event_ts"),
                 "payload": payload if isinstance(payload, dict) else {},

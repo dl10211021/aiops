@@ -52,6 +52,25 @@ class RunTraceStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(memory_store.appended), 1)
         self.assertEqual(memory_store.appended[0][0], "sid-1")
         self.assertEqual(memory_store.appended[0][1]["run_event_type"], "run:start")
+        self.assertTrue(memory_store.appended[0][1]["run_id"].startswith("run_"))
+        self.assertEqual(
+            memory_store.appended[0][1]["run_event_payload"]["run_id"],
+            memory_store.appended[0][1]["run_id"],
+        )
+
+    async def test_registered_hook_groups_events_by_run_id_until_run_end(self):
+        memory_store = FakeMemoryStore()
+        register_session_run_trace_hooks(memory_store)
+
+        await emit_run_hook("run:start", {"session_id": "sid-1"})
+        await emit_run_hook("agent:step", {"session_id": "sid-1", "iteration": 0})
+        await emit_run_hook("tool:before", {"session_id": "sid-1", "tool_name": "linux_execute_command"})
+        await emit_run_hook("run:end", {"session_id": "sid-1", "status": "completed"})
+        await emit_run_hook("run:start", {"session_id": "sid-1"})
+
+        run_ids = [message["run_id"] for _, message in memory_store.appended]
+        self.assertEqual(len(set(run_ids[:4])), 1)
+        self.assertNotEqual(run_ids[0], run_ids[4])
 
 
 if __name__ == "__main__":

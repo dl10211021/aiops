@@ -150,8 +150,9 @@ class TestSessionHistory(unittest.TestCase):
                 "role": "system",
                 "content": "【AIOps Run Trace】运行开始：模型=model-a",
                 "memory_type": "aiops_run_trace",
+                "run_id": "run-1",
                 "run_event_type": "run:start",
-                "run_event_payload": {"session_id": "sid-1", "model_name": "model-a"},
+                "run_event_payload": {"session_id": "sid-1", "model_name": "model-a", "run_id": "run-1"},
                 "run_event_ts": 123.0,
                 "created_at": "2026-05-17 15:00:00",
             },
@@ -161,6 +162,7 @@ class TestSessionHistory(unittest.TestCase):
         visible = get_user_visible_session_history(memory_db, "sid-1")
 
         self.assertEqual(events[0]["id"], 7)
+        self.assertEqual(events[0]["run_id"], "run-1")
         self.assertEqual(events[0]["event_type"], "run:start")
         self.assertEqual(events[0]["payload"]["model_name"], "model-a")
         self.assertEqual(visible, [{"role": "user", "content": "hi"}])

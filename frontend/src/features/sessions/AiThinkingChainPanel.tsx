@@ -267,6 +267,48 @@ function runTraceTone(event: RunTraceEvent) {
   return 'bg-ops-accent'
 }
 
+interface RunTraceGroup {
+  id: string
+  events: RunTraceEvent[]
+  startedAt?: RunTraceEvent
+  endedAt?: RunTraceEvent
+}
+
+function eventRunId(event: RunTraceEvent, index: number) {
+  const payloadRunId = typeof event.payload?.run_id === 'string' ? event.payload.run_id : ''
+  return event.run_id || payloadRunId || `ungrouped-${event.event_ts || event.created_at || index}`
+}
+
+function groupRunTraceEvents(events: RunTraceEvent[]) {
+  const groups = new Map<string, RunTraceGroup>()
+  events.forEach((event, index) => {
+    const runId = eventRunId(event, index)
+    const group = groups.get(runId) || { id: runId, events: [] }
+    group.events.push(event)
+    if (event.event_type === 'run:start') group.startedAt = event
+    if (event.event_type === 'run:end') group.endedAt = event
+    groups.set(runId, group)
+  })
+  return Array.from(groups.values())
+}
+
+function runTraceGroupStatus(group: RunTraceGroup) {
+  const terminal = group.endedAt
+  if (!terminal) return '运行中'
+  return runTraceStatus(terminal)
+}
+
+function runTraceGroupTone(group: RunTraceGroup) {
+  const terminal = group.endedAt
+  if (!terminal) return 'border-ops-accent/35 bg-ops-accent/10 text-ops-accent'
+  const status = String((terminal.payload || {}).status || '').toLowerCase()
+  if (status === 'failed' || status === 'error' || status === 'blocked') {
+    return 'border-ops-alert/35 bg-ops-alert/10 text-ops-alert'
+  }
+  if (status === 'cancelled') return 'border-amber-400/35 bg-amber-400/10 text-amber-200'
+  return 'border-ops-success/35 bg-ops-success/10 text-ops-success'
+}
+
 function formatTimelineDate(timestamp: number) {
   return new Date(timestamp).toLocaleDateString('zh-CN', {
     year: 'numeric',
@@ -718,36 +760,63 @@ function RunTraceStrip({
   events: RunTraceEvent[]
   loading: boolean
 }) {
-  const recent = events.slice(-12).reverse()
+  const recentRuns = groupRunTraceEvents(events).slice(-6).reverse()
   return (
     <div className="rounded-2xl border border-ops-accent/22 bg-ops-accent/8 px-3 py-2.5">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="text-[11px] font-black uppercase tracking-[0.18em] text-ops-accent">AIOps Run Trace</div>
-        <div className="font-mono text-[10px] text-ops-overlay">{loading ? '同步中' : `${events.length} 条`}</div>
+        <div className="font-mono text-[10px] text-ops-overlay">{loading ? '同步中' : `${recentRuns.length} 次 / ${events.length} 条`}</div>
       </div>
-      {recent.length === 0 ? (
+      {recentRuns.length === 0 ? (
         <div className="text-[11px] leading-5 text-ops-subtext">
           暂无运行事件。新会话开始执行后会显示 run、step 和 tool 生命周期。
         </div>
       ) : (
-        <div className="space-y-1.5">
-          {recent.map((event, index) => (
-            <div
-              key={`${event.id || event.event_ts || event.created_at || index}-${event.event_type}`}
-              className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-xl border border-ops-surface0/75 bg-ops-panel/35 px-2.5 py-2"
-            >
-              <span className={`mt-1.5 h-2 w-2 rounded-full ${runTraceTone(event)}`} />
-              <div className="min-w-0">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="shrink-0 text-[11px] font-semibold text-ops-text">{runTraceStatus(event)}</span>
-                  <span className="truncate font-mono text-[10px] text-ops-overlay">{formatRunTraceTime(event)}</span>
+        <div className="space-y-2">
+          {recentRuns.map((run) => {
+            const first = run.startedAt || run.events[0]
+            const latest = run.endedAt || run.events[run.events.length - 1]
+            const previewEvents = run.events.slice(-5).reverse()
+            return (
+              <div key={run.id} className="rounded-xl border border-ops-surface0/75 bg-ops-panel/35 px-2.5 py-2">
+                <div className="mb-1.5 flex min-w-0 items-center gap-2">
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${runTraceGroupTone(run)}`}>
+                    {runTraceGroupStatus(run)}
+                  </span>
+                  <span className="min-w-0 truncate font-mono text-[10px] text-ops-overlay">
+                    {formatRunTraceTime(first)} · {run.events.length} 事件
+                  </span>
+                  <span className="ml-auto max-w-[42%] truncate font-mono text-[10px] text-ops-overlay" title={run.id}>
+                    {run.id}
+                  </span>
                 </div>
-                <div className="mt-0.5 line-clamp-2 text-[11px] leading-5 text-ops-subtext">
-                  {event.summary || event.event_type}
+                <div className="space-y-1.5">
+                  {previewEvents.map((event, index) => (
+                    <div
+                      key={`${event.id || event.event_ts || event.created_at || index}-${event.event_type}`}
+                      className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-lg border border-ops-surface0/60 bg-ops-dark/20 px-2 py-1.5"
+                    >
+                      <span className={`mt-1.5 h-2 w-2 rounded-full ${runTraceTone(event)}`} />
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="shrink-0 text-[11px] font-semibold text-ops-text">{runTraceStatus(event)}</span>
+                          <span className="truncate font-mono text-[10px] text-ops-overlay">{formatRunTraceTime(event)}</span>
+                        </div>
+                        <div className="mt-0.5 line-clamp-2 text-[11px] leading-5 text-ops-subtext">
+                          {event.summary || event.event_type}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
+                {latest !== first && (
+                  <div className="mt-1.5 font-mono text-[10px] text-ops-overlay">
+                    最近更新 {formatRunTraceTime(latest)}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

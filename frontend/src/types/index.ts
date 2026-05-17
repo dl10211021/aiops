@@ -257,6 +257,7 @@ export interface ExecTraceItem {
 export interface RunTraceEvent {
   id?: string | number
   created_at?: string | number
+  run_id?: string
   event_type: string
   event_ts?: number
   payload: Record<string, unknown>
