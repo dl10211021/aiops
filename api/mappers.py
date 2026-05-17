@@ -101,6 +101,8 @@ from api.response_mappers.session import (
     custom_slash_command_saved_response_kwargs,
     custom_slash_command_updated_response_kwargs,
     custom_slash_commands_response_kwargs,
+    multi_agent_permission_sync_kwargs,
+    multi_agent_permission_synced_response_kwargs,
     session_commands_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,

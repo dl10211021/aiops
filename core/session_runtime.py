@@ -35,6 +35,82 @@ def set_session_permission(
     return info
 
 
+def _session_group(info: MutableMapping) -> str:
+    tags = info.get("tags") or []
+    return (
+        normalize_session_group_name(tags[0] if tags else None)
+        or DEFAULT_SESSION_GROUP
+    )
+
+
+def sync_multi_agent_session_permissions(
+    active_sessions: MutableMapping[str, dict],
+    *,
+    scope: str,
+    allow_modifications: bool,
+    group_name: str | None = None,
+    target_session_ids: list[str] | None = None,
+) -> dict:
+    normalized_scope = str(scope or "").strip().lower()
+    if normalized_scope not in {"global", "group"}:
+        raise SessionRuntimeError(422, "调度范围必须是 global 或 group")
+
+    normalized_group = normalize_session_group_name(group_name)
+    if normalized_scope == "group" and not normalized_group:
+        raise SessionRuntimeError(422, "分组模式必须指定会话组")
+
+    requested_ids: list[str] = []
+    seen_requested_ids: set[str] = set()
+    for item in target_session_ids or []:
+        session_id = str(item or "").strip()
+        if not session_id or session_id in seen_requested_ids:
+            continue
+        requested_ids.append(session_id)
+        seen_requested_ids.add(session_id)
+    selected_ids = requested_ids or list(active_sessions.keys())
+    changed_sessions: list[dict] = []
+    skipped_sessions: list[dict] = []
+
+    for session_id in selected_ids:
+        session_data = active_sessions.get(session_id)
+        if not session_data:
+            skipped_sessions.append({"session_id": session_id, "reason": "missing_session"})
+            continue
+        info = session_data.get("info") or {}
+        current_group = _session_group(info)
+        if normalized_scope == "group" and current_group != normalized_group:
+            skipped_sessions.append(
+                {
+                    "session_id": session_id,
+                    "reason": "group_mismatch",
+                    "group_name": current_group,
+                }
+            )
+            continue
+        previous = bool(info.get("allow_modifications", False))
+        info["allow_modifications"] = bool(allow_modifications)
+        changed_sessions.append(
+            {
+                "session_id": session_id,
+                "group_name": current_group,
+                "previous_allow_modifications": previous,
+                "allow_modifications": bool(allow_modifications),
+            }
+        )
+
+    return {
+        "scope": normalized_scope,
+        "group_name": normalized_group if normalized_scope == "group" else "",
+        "permission_mode": "readwrite" if allow_modifications else "readonly",
+        "allow_modifications": bool(allow_modifications),
+        "requested_session_ids": requested_ids,
+        "changed_sessions": changed_sessions,
+        "skipped_sessions": skipped_sessions,
+        "target_count": len(changed_sessions),
+        "skipped_count": len(skipped_sessions),
+    }
+
+
 def set_session_heartbeat(
     active_sessions: MutableMapping[str, dict],
     session_id: str,

@@ -41,6 +41,7 @@ from api.schema_models.inspection import (
 )
 from api.schema_models.sessions import (
     HeartbeatUpdateRequest,
+    MultiAgentPermissionSyncRequest,
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,
     SessionMetadataUpdateRequest,

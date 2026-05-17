@@ -9,6 +9,7 @@ from core.session_runtime import (
     set_session_metadata,
     set_session_permission,
     set_session_skills,
+    sync_multi_agent_session_permissions,
 )
 
 
@@ -128,3 +129,60 @@ class TestSessionRuntime(unittest.TestCase):
 
         self.assertEqual(group_name, "生产组")
         self.assertEqual(info["tags"], ["生产组", "P1", "数据库"])
+
+    def test_sync_multi_agent_global_permission_updates_selected_sessions(self):
+        sessions = {
+            "sid-1": {"info": {"allow_modifications": False, "tags": ["数据库"]}},
+            "sid-2": {"info": {"allow_modifications": False, "tags": ["Linux"]}},
+            "sid-3": {"info": {"allow_modifications": False, "tags": ["网络"]}},
+        }
+
+        result = sync_multi_agent_session_permissions(
+            sessions,
+            scope="global",
+            allow_modifications=True,
+            target_session_ids=["sid-1", "sid-3", "missing"],
+        )
+
+        self.assertTrue(sessions["sid-1"]["info"]["allow_modifications"])
+        self.assertFalse(sessions["sid-2"]["info"]["allow_modifications"])
+        self.assertTrue(sessions["sid-3"]["info"]["allow_modifications"])
+        self.assertEqual(result["scope"], "global")
+        self.assertEqual(result["permission_mode"], "readwrite")
+        self.assertEqual(result["target_count"], 2)
+        self.assertEqual(result["skipped_sessions"], [{"session_id": "missing", "reason": "missing_session"}])
+
+    def test_sync_multi_agent_group_permission_rejects_group_outsiders(self):
+        sessions = {
+            "sid-db": {"info": {"allow_modifications": True, "tags": ["数据库", "P0"]}},
+            "sid-linux": {"info": {"allow_modifications": True, "tags": ["Linux"]}},
+        }
+
+        result = sync_multi_agent_session_permissions(
+            sessions,
+            scope="group",
+            group_name="数据库",
+            allow_modifications=False,
+            target_session_ids=["sid-db", "sid-linux"],
+        )
+
+        self.assertFalse(sessions["sid-db"]["info"]["allow_modifications"])
+        self.assertTrue(sessions["sid-linux"]["info"]["allow_modifications"])
+        self.assertEqual(result["group_name"], "数据库")
+        self.assertEqual(result["changed_sessions"][0]["session_id"], "sid-db")
+        self.assertEqual(
+            result["skipped_sessions"],
+            [{"session_id": "sid-linux", "reason": "group_mismatch", "group_name": "Linux"}],
+        )
+
+    def test_sync_multi_agent_group_requires_group_name(self):
+        with self.assertRaises(SessionRuntimeError) as ctx:
+            sync_multi_agent_session_permissions(
+                {},
+                scope="group",
+                group_name="",
+                allow_modifications=False,
+            )
+
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(ctx.exception.detail, "分组模式必须指定会话组")

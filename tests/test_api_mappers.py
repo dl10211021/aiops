@@ -74,6 +74,8 @@ from api.mappers import (
     notification_config_saved_response_kwargs,
     providers_response_kwargs,
     providers_saved_response_kwargs,
+    multi_agent_permission_sync_kwargs,
+    multi_agent_permission_synced_response_kwargs,
     protocol_verification_overview_response_kwargs,
     safety_policy_response_kwargs,
     safety_policy_saved_response_kwargs,
@@ -128,6 +130,7 @@ from api.schemas import (
     HeartbeatUpdateRequest,
     InspectionTemplatePayload,
     MigrateRequest,
+    MultiAgentPermissionSyncRequest,
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,
     SessionProfileGenerateRequest,
@@ -207,6 +210,22 @@ class TestApiMappers(unittest.TestCase):
                 PermissionUpdateRequest(allow_modifications=True)
             ),
             {"allow_modifications": True},
+        )
+        self.assertEqual(
+            multi_agent_permission_sync_kwargs(
+                MultiAgentPermissionSyncRequest(
+                    scope="group",
+                    group_name="数据库",
+                    permission_mode="readonly",
+                    target_session_ids=["sid-1", "sid-1", " sid-2 "],
+                )
+            ),
+            {
+                "scope": "group",
+                "allow_modifications": False,
+                "group_name": "数据库",
+                "target_session_ids": ["sid-1", "sid-2"],
+            },
         )
         self.assertEqual(
             session_heartbeat_update_kwargs(
@@ -861,6 +880,14 @@ class TestApiMappers(unittest.TestCase):
         self.assertEqual(
             session_permission_updated_response_kwargs(),
             {"status": "success", "message": "权限已实时更新"},
+        )
+        self.assertEqual(
+            multi_agent_permission_synced_response_kwargs({"target_count": 2}),
+            {
+                "status": "success",
+                "message": "多 Agent 目标权限已同步",
+                "data": {"target_count": 2},
+            },
         )
         self.assertEqual(
             session_heartbeat_updated_response_kwargs(),

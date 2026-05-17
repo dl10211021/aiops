@@ -776,3 +776,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只读前端展示，不改变调度、不改变权限、不改变工具执行，不碰告警、巡检、资产中心。
 - 遗留风险：展示位置仍在工具 Trace 中，不是会话组顶部的全局权限看板；按“功能满足即可收手”，本轮只补协同结果可读性。
 - 下一轮建议：阶段 2 暂停 UI 打磨，转向单会话覆盖/组继承的规则说明或后端审计聚合。
+
+### 2026-05-17 Round 51：多 Agent 目标权限批量同步后端
+
+- 完成：新增 `PUT /sessions/multi-agent/permissions`，支持 `scope=global/group`、`permission_mode=readonly/readwrite`、可选 `target_session_ids`，直接写回选中活跃会话的 `allow_modifications`。
+- 验证：`python -m pytest tests/test_session_runtime.py tests/test_session_runtime_routes.py tests/test_api_mappers.py -q`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：多 Agent 从临时调度权限推进到实际会话状态同步，符合“全局/组切权限后，单独会话也统一改变”的产品规则。
+- OpsCore 主线影响：仅新增后端基础能力；分组模式硬校验 `group_name`，组外目标只进入 `skipped_sessions`，不会被修改；不改变告警、巡检、资产中心或工具执行。
+- 遗留风险：前端还没有接入目标选择器和执行前影响预览；本轮只补后端基础，避免 UI 和调度一次性耦合。
+- 下一轮建议：做前端影响范围预览和权限同步按钮，再把多 Agent 任务下发只绑定到已选会话。

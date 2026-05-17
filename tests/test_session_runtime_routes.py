@@ -5,7 +5,12 @@ from unittest.mock import patch
 from fastapi import HTTPException
 
 from api import routes, session_runtime_routes
-from api.schemas import HeartbeatUpdateRequest, PermissionUpdateRequest, SkillsUpdateRequest
+from api.schemas import (
+    HeartbeatUpdateRequest,
+    MultiAgentPermissionSyncRequest,
+    PermissionUpdateRequest,
+    SkillsUpdateRequest,
+)
 
 
 class FakeMemoryDB:
@@ -26,6 +31,7 @@ class TestSessionRuntimeRoutes(unittest.TestCase):
 
         self.assertIn("/session/{session_id}/stop", paths)
         self.assertIn("/session/{session_id}/permission", paths)
+        self.assertIn("/sessions/multi-agent/permissions", paths)
         self.assertIn("/session/{session_id}/heartbeat", paths)
         self.assertIn("/sessions/poll_all", paths)
         self.assertIn("/session/{session_id}/poll", paths)
@@ -76,6 +82,64 @@ class TestSessionRuntimeRoutes(unittest.TestCase):
         self.assertTrue(
             session_runtime_routes.ssh_manager.active_sessions["sid-1"]["info"]["allow_modifications"]
         )
+
+    def test_sync_multi_agent_permissions_updates_selected_global_sessions(self):
+        session_runtime_routes.ssh_manager.active_sessions.update(
+            {
+                "sid-1": {"info": {"allow_modifications": False, "tags": ["数据库"]}},
+                "sid-2": {"info": {"allow_modifications": False, "tags": ["Linux"]}},
+            }
+        )
+
+        response = asyncio.run(
+            session_runtime_routes.sync_multi_agent_permissions(
+                MultiAgentPermissionSyncRequest(
+                    scope="global",
+                    permission_mode="readwrite",
+                    target_session_ids=["sid-1"],
+                )
+            )
+        )
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.message, "多 Agent 目标权限已同步")
+        self.assertTrue(
+            session_runtime_routes.ssh_manager.active_sessions["sid-1"]["info"]["allow_modifications"]
+        )
+        self.assertFalse(
+            session_runtime_routes.ssh_manager.active_sessions["sid-2"]["info"]["allow_modifications"]
+        )
+        self.assertEqual(response.data["target_count"], 1)
+        self.assertEqual(response.data["scope"], "global")
+
+    def test_sync_multi_agent_permissions_keeps_group_scope_isolated(self):
+        session_runtime_routes.ssh_manager.active_sessions.update(
+            {
+                "sid-db": {"info": {"allow_modifications": True, "tags": ["数据库"]}},
+                "sid-web": {"info": {"allow_modifications": True, "tags": ["Web"]}},
+            }
+        )
+
+        response = asyncio.run(
+            session_runtime_routes.sync_multi_agent_permissions(
+                MultiAgentPermissionSyncRequest(
+                    scope="group",
+                    group_name="数据库",
+                    permission_mode="readonly",
+                    target_session_ids=["sid-db", "sid-web"],
+                )
+            )
+        )
+
+        self.assertFalse(
+            session_runtime_routes.ssh_manager.active_sessions["sid-db"]["info"]["allow_modifications"]
+        )
+        self.assertTrue(
+            session_runtime_routes.ssh_manager.active_sessions["sid-web"]["info"]["allow_modifications"]
+        )
+        self.assertEqual(response.data["target_count"], 1)
+        self.assertEqual(response.data["skipped_count"], 1)
+        self.assertEqual(response.data["skipped_sessions"][0]["reason"], "group_mismatch")
 
     def test_update_session_heartbeat_updates_enabled_state_and_interval(self):
         session_runtime_routes.ssh_manager.active_sessions["sid-1"] = {"info": {}}

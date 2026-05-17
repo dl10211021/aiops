@@ -11,6 +11,8 @@ from api.errors import raise_http_error
 from api.response_mappers.session import (
     active_sessions_response_kwargs,
     all_sessions_poll_response_kwargs,
+    multi_agent_permission_sync_kwargs,
+    multi_agent_permission_synced_response_kwargs,
     session_commands_response_kwargs,
     session_group_response_kwargs,
     session_group_update_kwargs,
@@ -29,6 +31,7 @@ from api.response_mappers.chat import chat_stop_response_kwargs
 from api.schema_models.common import ResponseModel
 from api.schema_models.sessions import (
     HeartbeatUpdateRequest,
+    MultiAgentPermissionSyncRequest,
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,
     SessionMetadataUpdateRequest,
@@ -50,6 +53,7 @@ from core.session_runtime import (
     set_session_metadata,
     set_session_permission,
     set_session_skills,
+    sync_multi_agent_session_permissions,
 )
 from core.session_tool_context import (
     SessionToolContextError,
@@ -93,6 +97,30 @@ async def update_session_permission(session_id: str, req: PermissionUpdateReques
     )
 
     return ResponseModel(**session_permission_updated_response_kwargs())
+
+
+@router.put("/sessions/multi-agent/permissions", response_model=ResponseModel)
+async def sync_multi_agent_permissions(req: MultiAgentPermissionSyncRequest):
+    """按全局或分组范围批量同步多 Agent 目标会话权限。"""
+    update = multi_agent_permission_sync_kwargs(req)
+    try:
+        with ssh_manager._sessions_lock:
+            result = sync_multi_agent_session_permissions(
+                ssh_manager.active_sessions,
+                **update,
+            )
+    except SessionRuntimeError as exc:
+        raise_http_error(exc)
+    logger.info(
+        "Multi-agent permission sync: scope=%s group=%s mode=%s changed=%s skipped=%s",
+        result["scope"],
+        result["group_name"],
+        result["permission_mode"],
+        result["target_count"],
+        result["skipped_count"],
+    )
+
+    return ResponseModel(**multi_agent_permission_synced_response_kwargs(result))
 
 
 @router.put("/session/{session_id}/heartbeat", response_model=ResponseModel)

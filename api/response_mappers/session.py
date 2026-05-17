@@ -4,6 +4,7 @@ from typing import Any
 
 from api.schema_models.sessions import (
     HeartbeatUpdateRequest,
+    MultiAgentPermissionSyncRequest,
     PermissionUpdateRequest,
     SessionGroupUpdateRequest,
     SessionMetadataUpdateRequest,
@@ -25,6 +26,15 @@ def session_webhook_delivery_kwargs(req: SessionWebhookSendRequest) -> dict[str,
 
 def session_permission_update_kwargs(req: PermissionUpdateRequest) -> dict[str, Any]:
     return {"allow_modifications": req.allow_modifications}
+
+
+def multi_agent_permission_sync_kwargs(req: MultiAgentPermissionSyncRequest) -> dict[str, Any]:
+    return {
+        "scope": req.scope,
+        "allow_modifications": req.permission_mode == "readwrite",
+        "group_name": req.group_name,
+        "target_session_ids": req.target_session_ids,
+    }
 
 
 def session_heartbeat_update_kwargs(req: HeartbeatUpdateRequest) -> dict[str, Any]:
@@ -86,6 +96,14 @@ def session_permission_updated_response_kwargs() -> dict[str, Any]:
     return {
         "status": "success",
         "message": "权限已实时更新",
+    }
+
+
+def multi_agent_permission_synced_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "message": "多 Agent 目标权限已同步",
+        "data": result,
     }
 
 

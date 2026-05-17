@@ -66,6 +66,29 @@ class PermissionUpdateRequest(BaseModel):
     allow_modifications: bool
 
 
+class MultiAgentPermissionSyncRequest(BaseModel):
+    scope: str = Field(..., pattern="^(global|group)$")
+    permission_mode: str = Field(..., pattern="^(readonly|readwrite)$")
+    group_name: str | None = Field(default=None, max_length=80)
+    target_session_ids: list[str] | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_scope_target(self):
+        if self.scope == "group" and not (self.group_name or "").strip():
+            raise ValueError("分组模式必须指定会话组。")
+        if self.target_session_ids is not None:
+            normalized: list[str] = []
+            seen: set[str] = set()
+            for item in self.target_session_ids:
+                session_id = str(item or "").strip()
+                if not session_id or session_id in seen:
+                    continue
+                normalized.append(session_id[:120])
+                seen.add(session_id)
+            self.target_session_ids = normalized
+        return self
+
+
 class HeartbeatUpdateRequest(BaseModel):
     heartbeat_enabled: bool
     master_interval: int | None = None
