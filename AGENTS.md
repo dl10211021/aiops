@@ -12,6 +12,18 @@
 - Run `python scripts/preflight.py --check-git` before committing OpsCore changes.
 - Use `python scripts/worktree_audit.py --check-staged` to catch generated, runtime, sensitive, or external-source files before commit.
 
+## Architecture Boundary
+
+- Keep OpsCore architecture decoupled. Do not solve new product needs by wiring observability, alerts, inspection, knowledge, memory, approval, notification, multi-agent dispatch, and asset/session runtime directly into each other.
+- Route cross-cutting work through explicit service contracts and event/run records first, then attach UI or feature-specific behavior on top. Prefer contracts such as `AIOps Run`, `Run Trace`, `Tool Policy`, `Approval Request`, `Evidence Ref`, and `Learning Candidate` over ad hoc module-to-module calls.
+- Follow the useful Hermes architecture pattern in spirit: tool registration and toolsets are composable, context handling is pluggable, memory read/write paths are separated, gateway/channel concerns are isolated, and profile/runtime state has clear ownership. Adapt those ideas to OpsCore's AIOps domain instead of copying Hermes code.
+- If a change would require a feature module to import another unrelated feature module, stop and introduce or reuse a neutral core service, DTO, or event contract instead.
+- Frontend UX should stay simple even when backend governance is rich. Hide internal state machines, quality gates, and audit internals behind concise actions and progressive detail views.
+- Preserve lifecycle hook and runtime loop boundaries. New observability, inspection, notification, approval, memory, learning, or multi-agent behavior should attach through explicit events such as `run:start`, `agent:step`, `tool:before`, `tool:after`, `approval:requested`, `approval:resolved`, `memory:candidate`, `context:compact`, `notification:sent`, and `run:end` rather than direct feature imports.
+- Runtime loops must have visible budgets and stop conditions: max turns, timeout, cancellation, heartbeat, duplicate-action/spin detection, retry limits, and structured finalization. Never add a background loop or scheduled loop without these controls.
+- Treat tool coverage as a toolset inventory problem. Compare against Hermes toolsets when adding tools, but expose only OpsCore-relevant tools through policy metadata, approval gates, evidence capture, and simple UI grouping.
+- Prompt changes are architecture changes. Keep prompts modular, versioned, evidence-first, and permission-aware. AIOps prompts must prefer live tool evidence over memory, avoid leaking credentials or hidden context, and route learning through auxiliary review plus human confirmation before durable Skill/Runbook promotion.
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 

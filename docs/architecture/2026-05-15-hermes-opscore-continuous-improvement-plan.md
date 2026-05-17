@@ -68,6 +68,9 @@
 | 技能学习 | 复杂任务后沉淀 skill，发现过时 skill 立即修 | OpsCore 有技能演进能力，但缺自动候选生成和质量闭环 | P1 | 从成功工具链、反馈和重复故障生成 skill/runbook 候选 |
 | 多 Agent 协作 | Kanban、心跳、阻塞、完成、交接 | 有会话和执行轨迹，缺运维任务板 | P2 | 做 AIOps Run Board，不做普通项目管理看板 |
 | 工具注册 | registry + toolsets + 动态可用性 | 已有工具策略元数据，执行层还在逐步收口 | P1 | 让策略、超时、重试、并发、安全门禁真正进入执行层 |
+| 生命周期 Hook | gateway/session/agent/tool/API/subagent hooks，失败不阻塞主链路 | 有 Webhook、审批、trace、通知记录，但缺统一内部 hook 面 | P1 | 建立 OpsCore Run Hook 事件面，所有跨模块动作先发事件再订阅 |
+| Agent Loop 防失控 | 迭代预算、并行分类、中断转向、任务心跳、runaway 防护 | 有 max_steps、取消、并发安全、超时重试，但 loop 状态还不够产品化 | P0-P1 | 明确 Chat/Headless/Cron/Multi-agent loop 的预算、心跳、取消、重复动作检测 |
+| Prompt 架构 | PromptBuilder、记忆指南、工具使用强制、上下文注入扫描、Skill 索引缓存 | 已有 prompt pack、权限提示、证据契约和辅助审查，但缺全局 prompt 生命周期治理 | P0 | 模块化、版本化、证据优先、安全学习、辅助模型审核 |
 | 网关通道 | 多平台 gateway 和 channel | OpsCore 通知偏运维，通用通道中心较弱 | P3 | 只围绕审批、通知、巡检、报告强化企业微信/飞书/邮件等 |
 | UI 治理 | TUI/Web/Gateway 多入口 | OpsCore 页面多，但复杂列表、报告、记忆治理仍需产品化 | P2 | 学习中心、历史证据、运行时间线、上下文状态可视化 |
 | 工程体系 | 大量 runtime/memory/context/gateway 测试 | OpsCore 测试已有基础，但关键运行时仍需补齐 | P0-P3 | 每个闭环必须带 targeted tests |
@@ -168,6 +171,111 @@
 - [ ] 读模式下写入工具显示为禁止或需切换模式，不再和读写模式同文案。
 - [ ] 读写模式下写入工具进入受控审批，不显示成完全自由执行。
 - [ ] 并发调度不会自动并发执行危险写入工具。
+
+### Phase 4.5：Hook、Loop、Toolset 和 Prompt 架构闭环
+
+目标：把 Hermes 值得借鉴的“可组合工具、生命周期 hook、受控 agent loop、提示词工程体系”转成 OpsCore 自己的 AIOps 运行时底座。这里不复制 Hermes，不引入新的耦合层，而是补 OpsCore 缺的中立合同。
+
+#### 4.5.1 OpsCore Run Hook
+
+后端先定义内部事件面，功能模块只能订阅事件，不能互相硬 import：
+
+- `run:start`：AIOps Run、巡检、排障、报告或后台任务启动。
+- `agent:step`：每次模型回合、工具回合或后台子任务回合。
+- `tool:before` / `tool:after`：工具执行前后，写入策略、审批、证据、耗时、错误。
+- `approval:requested` / `approval:resolved`：审批申请和审批结果。
+- `context:compact`：上下文压缩、证据保留和丢弃区间。
+- `memory:candidate` / `learning:candidate`：候选记忆、Runbook 候选、Skill 候选产生。
+- `notification:sent`：企业微信、飞书、邮件等通知发送结果。
+- `run:blocked` / `run:cancelled` / `run:end`：阻塞、取消、完成和最终交接。
+
+原则：
+
+- Hook 失败只能记录审计和告警，不阻断主链路，除非该 hook 明确是 policy gate。
+- Hook payload 只能携带 ID、摘要、证据引用和脱敏字段，不携带明文凭证。
+- 告警模块由其他人开发，OpsCore 这里只定义可接入事件合同，不主动改告警逻辑。
+
+#### 4.5.2 Agent Loop 和后台 Loop
+
+OpsCore 至少要把四类 loop 显式化：
+
+- Chat loop：用户会话里的模型-工具循环。
+- Headless loop：巡检、定时任务、后台协同任务。
+- Multi-agent loop：全局模式、组模式、单会话模式的多 Agent 分发与回收。
+- Cron/Inspection loop：计划任务、批量资产任务、周期报告。
+
+每个 loop 必须具备：
+
+- `max_turns` / `max_steps`：最大回合数。
+- `timeout_policy`：单工具、单目标、整轮任务超时。
+- `retry_policy`：只对允许重试的错误重试，写入/外发/破坏性动作默认不重试。
+- `cancel_token`：用户取消、暂停、恢复要进入统一状态，不在 UI 里乱跳。
+- `heartbeat`：长任务持续写入进度，前端能看到正在做什么。
+- `spin_guard`：检测重复调用同一工具、同一参数、同一失败结果，防止无限循环。
+- `finalize`：无论成功、失败、超时、取消，都生成结构化结论和证据索引。
+
+#### 4.5.3 Hermes Toolset 全量对照
+
+Hermes 当前源码里的核心 toolset 能力可分三层吸收：
+
+必须进入 OpsCore 核心目录：
+
+- Web / Browser：`web_search`、`web_extract`、浏览器导航、点击、截图、控制台、图片读取。
+- File：只读文件、搜索文件、受控写入、patch。
+- Terminal / Process：主机命令、进程管理，必须走资产权限和审批。
+- Memory / Session Search / Todo：记忆、历史会话检索、任务步骤。
+- Skills：Skill 列表、查看、管理、候选生成、审核、发布草稿。
+- Delegation / Multi-agent：子 Agent、组模式、全局模式、任务交接。
+- Cronjob：计划任务、暂停、恢复、手动触发。
+- Code execution：受控脚本执行，只允许在明确环境和权限下运行。
+
+按通道或场景接入：
+
+- Messaging：企业微信、飞书、钉钉、邮件、Slack/Telegram/Discord 等只作为通道中心能力。
+- Vision / Image / TTS / Voice：用于报告、截图分析、语音/图片场景，默认不是运维核心入口。
+- MCP：作为外部工具桥接能力，但必须继承 OpsCore 工具策略和证据记录。
+
+暂不作为核心优先级：
+
+- HomeAssistant、Spotify、游戏/媒体类、平台私有社交工具等非 AIOps 主线能力。
+- CUA 桌面控制只作为高级受控能力，不能成为默认运维路径。
+
+验收：
+
+- [ ] 生成 Hermes toolset vs OpsCore tool registry 对照表，标记 `available`、`controlled`、`not_wired`、`not_applicable`。
+- [ ] 工具中心按“运维核心 / 通道 / 学习 / 受控危险 / 暂未接入”分组展示。
+- [ ] 新增工具必须带 `operation_mode`、`approval_policy`、`evidence_family`、`timeout_policy`、`retry_policy`、`concurrency_safe`。
+
+#### 4.5.4 AIOps Prompt 让运维越来越聪明且安全
+
+Prompt 不再当成一段大文本，而是按职责组装：
+
+- Base identity：OpsCore 是 AIOps 平台，不是通用聊天玩具。
+- AIOps role：面向资产、系统、数据库、网络、存储、虚拟化、日志平台和业务链路排障。
+- Permission context：全局/组/会话权限上限、只读/读写受控、审批策略。
+- Tool context：当前可用工具、不可用工具、受控工具、证据类型和并发限制。
+- Asset/session context：资产画像、协议、凭证可用性、历史风险、当前会话目标。
+- Evidence contract：当前事实必须来自实时工具证据；历史记忆只能作为线索。
+- Memory/RAG context：记忆、知识库和历史经验必须带来源、时间和可信度。
+- Learning policy：只有经过辅助模型审核和人工确认的经验才能晋升为 Runbook/Skill。
+- Safety policy：禁止泄露凭证，禁止无审批写入，禁止把模拟结果说成真实执行。
+- Output contract：排障结论必须区分“已验证事实 / 推断 / 待验证 / 建议动作”。
+
+关键提示词规则：
+
+- 先只读验证，再提出写入或变更动作。
+- 写操作、外发通知、删除、重启、配置变更、批量任务必须经过统一 gate。
+- 如果没有工具证据，回答必须标注“不确定”或“待验证”。
+- 辅助模型负责自动审核候选记忆、Runbook、Skill、报告摘要和高风险动作说明。
+- 记忆不能保存密码、Token、私钥、Cookie、完整连接串或一次性临时状态。
+- 成功经验只能沉淀为候选，不能直接进入长期检索上下文或自动执行。
+
+验收：
+
+- [ ] Prompt pack 有版本号和变更记录。
+- [ ] 每次 Run 记录实际注入的 prompt 模块清单，不记录密钥和完整私有上下文。
+- [ ] 辅助模型能给候选学习输出 `accept / needs_human_review / reject`、风险、缺失项和建议类型。
+- [ ] 前端只显示简洁动作：查看建议、生成草稿、确认、忽略、查看证据。
 
 ### Phase 5：通道、报告和知识联动
 
@@ -353,3 +461,12 @@
 - OpsCore 主线影响：只增强知识库学习候选的草稿内容，不改变资产、巡检、告警或工具执行链路。
 - 遗留风险：草稿仍是 Markdown 审核产物，尚未生成正式 Skill 目录、Runbook 版本表、灰度发布记录或回滚版本。
 - 下一轮建议：增加发布草稿校验结果，Skill 草稿接入 `validate_skill_candidate` 风格的结构检查，Runbook 草稿接入必备章节检查。
+
+### 2026-05-17 Round 16：Hook/Loop/Tools/Prompt 架构补齐计划
+
+- 完成：把 Hermes 源码和架构文章中值得吸收的 hook、agent loop、toolset、prompt/memory guidance 归纳进本持续计划；同时在 `AGENTS.md` 增加全局架构规则，要求后续跨模块功能通过事件、运行记录、工具策略和学习候选解耦。
+- 验证：本轮为文档和架构约束更新，未改业务代码；后续提交前仍需运行 preflight 和 staged audit。
+- Hermes 差距变化：差距表从“记忆/技能学习”扩展到“运行时生命周期、loop 防失控、工具全集、提示词治理”，避免后续只在页面上修补。
+- OpsCore 主线影响：明确 OpsCore 只吸收对 AIOps 有价值的能力，不复制非运维工具；前端保持简约，复杂治理留在后端。
+- 遗留风险：目前是架构计划，还没有实现统一 Run Hook、spin guard、toolset 对照表和 prompt 版本审计。
+- 下一轮建议：优先做 Hermes toolset vs OpsCore tool registry 对照表，然后实现最小的 `run_hooks` 事件总线和 loop 心跳/重复动作检测。
