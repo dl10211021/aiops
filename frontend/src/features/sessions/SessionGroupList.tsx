@@ -22,6 +22,7 @@ interface SessionGroupListProps {
   onRenameGroup: (oldName: string, newName: string) => boolean
   onSelectGroup: (group: string) => void
   onSelectSession: (sessionId: string, group: string) => void
+  onSetGroupPermission: (group: string, allowModifications: boolean) => void
   onToggleGroup: (group: string) => void
   searching?: boolean
 }
@@ -40,6 +41,7 @@ function SessionGroupList({
   onRenameGroup,
   onSelectGroup,
   onSelectSession,
+  onSetGroupPermission,
   onToggleGroup,
   searching = false,
 }: SessionGroupListProps) {
@@ -152,6 +154,24 @@ function SessionGroupList({
                     <span className="truncate text-sm font-black text-ops-text">{group}</span>
                     <GroupMetrics sessions={items} />
                   </button>
+                  <div className={`flex shrink-0 items-center gap-1 transition-opacity ${
+                    selected ? 'opacity-90' : 'opacity-0 group-hover/session:opacity-80'
+                  }`}>
+                    <button
+                      onClick={() => onSetGroupPermission(group, false)}
+                      className="rounded-md border border-amber-400/35 bg-amber-400/8 px-1.5 py-0.5 text-[11px] font-semibold text-amber-100 transition-colors hover:bg-amber-400/14"
+                      title={`将 ${group} 组内会话切换为只读`}
+                    >
+                      全组只读
+                    </button>
+                    <button
+                      onClick={() => onSetGroupPermission(group, true)}
+                      className="rounded-md border border-ops-success/35 bg-ops-success/8 px-1.5 py-0.5 text-[11px] font-semibold text-ops-success transition-colors hover:bg-ops-success/14"
+                      title={`将 ${group} 组内会话切换为读写`}
+                    >
+                      全组读写
+                    </button>
+                  </div>
                   {!isDefaultGroup && (
                     <div className={`flex shrink-0 items-center gap-1 transition-opacity ${
                       selected ? 'opacity-90' : 'opacity-0 group-hover/session:opacity-80'
@@ -247,6 +267,7 @@ function areSessionGroupListPropsEqual(prev: SessionGroupListProps, next: Sessio
     && prev.onRenameGroup === next.onRenameGroup
     && prev.onSelectGroup === next.onSelectGroup
     && prev.onSelectSession === next.onSelectSession
+    && prev.onSetGroupPermission === next.onSetGroupPermission
     && prev.onToggleGroup === next.onToggleGroup
     && prev.searching === next.searching
 }

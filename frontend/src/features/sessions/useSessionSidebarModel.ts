@@ -16,6 +16,7 @@ import {
   saveSessionGroupToBackend,
   saveSessionMetadataToBackend,
   syncSessionsGroupToBackend,
+  syncSessionsPermissionToBackend,
 } from './sessionSidebarEffects'
 
 export function useSessionSidebarModel() {
@@ -233,6 +234,16 @@ export function useSessionSidebarModel() {
     addToast(`已删除会话组：${currentName}`, 'success')
   }
 
+  const handleSetGroupPermission = useCallback((group: string, allowModifications: boolean) => {
+    const currentName = normalizeSessionGroupName(group)
+    const affected = (grouped[currentName] || []).slice()
+    if (affected.length === 0) {
+      addToast('该会话组暂无会话', 'info')
+      return
+    }
+    void syncSessionsPermissionToBackend(affected, allowModifications, updateSession, addToast)
+  }, [addToast, grouped, updateSession])
+
   const handleSelectSession = useCallback((sessionId: string, group: string) => {
     setCurrentSession(sessionId)
     setView('chat')
@@ -299,6 +310,7 @@ export function useSessionSidebarModel() {
     handleRenameGroup,
     handleSaveSessionEdit,
     handleSelectSession,
+    handleSetGroupPermission,
     closeSessionEdit: () => setEditingSessionId(null),
     closeTerminal: () => {
       if (!activeTerminalSessionId) return

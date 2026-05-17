@@ -73,6 +73,7 @@ export default function SessionSidebar() {
         onRenameGroup={model.handleRenameGroup}
         onSelectGroup={model.setSelectedGroup}
         onSelectSession={model.handleSelectSession}
+        onSetGroupPermission={model.handleSetGroupPermission}
         onToggleGroup={model.toggleGroup}
         searching={Boolean(model.sessionSearch.trim())}
       />

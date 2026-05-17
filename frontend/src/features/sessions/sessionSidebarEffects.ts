@@ -1,4 +1,4 @@
-import { disconnectSession, updateSessionGroup, updateSessionMetadata } from '@/api/client'
+import { disconnectSession, updatePermission, updateSessionGroup, updateSessionMetadata } from '@/api/client'
 import type { Session } from '@/types'
 
 type AddToast = (message: string, type?: 'success' | 'error' | 'info') => void
@@ -14,6 +14,38 @@ export async function syncSessionsGroupToBackend(
   if (results.some((result) => result.status === 'rejected')) {
     addToast('部分会话分组同步到后端失败，刷新后可能需要重试', 'error')
   }
+}
+
+export async function syncSessionsPermissionToBackend(
+  items: Session[],
+  allowModifications: boolean,
+  updateSession: (sessionId: string, patch: Partial<Session>) => void,
+  addToast: AddToast,
+) {
+  const changed = items.filter((session) => session.isReadWriteMode !== allowModifications)
+  if (changed.length === 0) {
+    addToast(allowModifications ? '该组已经全部是读写模式' : '该组已经全部是只读模式', 'info')
+    return
+  }
+
+  changed.forEach((session) => updateSession(session.id, { isReadWriteMode: allowModifications }))
+  const results = await Promise.allSettled(
+    changed.map((session) => updatePermission(session.id, allowModifications)),
+  )
+  const failed = results
+    .map((result, index) => ({ result, session: changed[index] }))
+    .filter((item) => item.result.status === 'rejected')
+
+  if (failed.length > 0) {
+    failed.forEach((item) => updateSession(item.session.id, { isReadWriteMode: item.session.isReadWriteMode }))
+    addToast('部分会话权限同步失败，已回退失败项', 'error')
+    return
+  }
+
+  addToast(
+    allowModifications ? `已将 ${changed.length} 个会话切到读写模式` : `已将 ${changed.length} 个会话切到只读模式`,
+    'success',
+  )
 }
 
 export async function disconnectSidebarSession(
