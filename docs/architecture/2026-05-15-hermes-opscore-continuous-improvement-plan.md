@@ -677,3 +677,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只增加 headless 运行上下文元数据，不改变 prompt 文本、不改变工具执行、不改变审批 gate、不影响资产、告警、巡检或通知。
 - 遗留风险：cron/巡检等上层任务若有独立运行记录，还需要后续在其调度记录里引用同一 manifest；本轮按“功能满足即可收手”先覆盖 headless 主路径。
 - 下一轮建议：停止继续打磨 prompt manifest，转向 ContextEngine 最小只读接口或知识/记忆治理的下一处缺口。
+
+### 2026-05-17 Round 40：ContextEngine 最小只读接口
+
+- 完成：新增 `core/context_engine.py`，把聊天入口里的 LTM、知识库 RAG、资产画像和引用列表读取收束为 `ChatContextBundle`；`prepare_chat_agent_run` 只消费 bundle，不再直接关心各上下文来源的取数细节。
+- 验证：`python -m pytest tests/test_context_engine.py tests/test_agent_chat_setup.py -q` 通过，7 passed。
+- Hermes 差距变化：上下文来源从“散落在 chat setup 里”推进到“统一只读上下文包”，为后续记忆、知识库、Run Trace 和 prompt governance 解耦打基础。
+- OpsCore 主线影响：不新增前端、不新增配置项、不改变 prompt 文本、不改变工具执行、不改变 LTM/RAG/画像读取策略、不影响资产、告警、巡检或审批。
+- 遗留风险：当前 ContextEngine 只覆盖 chat 主路径；headless/cron/可观测若需要统一上下文，可后续逐条接入，不能一次性重构。
+- 下一轮建议：功能满足先收手。后续可做 ContextEngine 的上下文来源审计元数据，或转向知识/记忆候选治理的下一处缺口。

@@ -103,7 +103,7 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         }
 
         with patch(
-            "core.agent_chat_setup.build_vault_rag_context_for_prompt",
+            "core.context_engine.build_vault_rag_context_for_prompt",
             return_value={
                 "context": "RAG-CONTEXT",
                 "references": [
@@ -210,7 +210,7 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         }
 
         with patch(
-            "core.agent_chat_setup.build_vault_rag_context_for_prompt",
+            "core.context_engine.build_vault_rag_context_for_prompt",
             return_value={"context": "", "references": []},
         ):
             run = await prepare_chat_agent_run(
@@ -247,7 +247,7 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         memory_store = FakeMemoryStore()
 
         with patch(
-            "core.agent_chat_setup.build_vault_rag_context_for_prompt",
+            "core.context_engine.build_vault_rag_context_for_prompt",
             return_value={"context": "", "references": []},
         ):
             run = await prepare_chat_agent_run(
@@ -294,7 +294,7 @@ class AgentChatSetupTests(unittest.IsolatedAsyncioTestCase):
         dispatcher = FakeDispatcher()
 
         with patch(
-            "core.agent_chat_setup.build_vault_rag_context_for_prompt",
+            "core.context_engine.build_vault_rag_context_for_prompt",
             return_value={"context": "", "references": []},
         ):
             run = await prepare_chat_agent_run(

@@ -5,14 +5,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from core.agent_ltm import retrieve_ltm_context_with_references
 from core.agent_message_history import build_chat_message_history
 from core.agent_prompts import build_chat_prompt_manifest, render_chat_system_prompt
 from core.agent_session_context import AgentSessionContext, build_agent_session_context
 from core.agent_profiles import load_agent_profile_prompt
-from core.assistant_model_config import assistant_task_enabled
-from core.knowledge_base_service import build_vault_rag_context_for_prompt
-from core.session_profile import profile_to_system_prompt
+from core.context_engine import build_chat_context_bundle
 
 
 class ChatAgentMemoryStore(Protocol):
@@ -46,87 +43,6 @@ class ChatAgentDispatcher(Protocol):
 
     def get_available_tools(self, context: dict) -> list[dict]:
         ...
-
-
-def _asset_key_for_session_context(session_context: AgentSessionContext) -> str:
-    asset_type = session_context.asset_type or "asset"
-    protocol = session_context.protocol or "unknown"
-    return f"{asset_type}:{protocol}:{session_context.host}:{session_context.port or ''}"
-
-
-def _load_asset_profile_for_prompt(
-    memory_store: ChatAgentMemoryStore,
-    session_id: str,
-    session_context: AgentSessionContext,
-) -> dict | None:
-    if not assistant_task_enabled("asset_profile_prompt"):
-        return None
-    exact_loader = getattr(memory_store, "get_asset_profile", None)
-    if callable(exact_loader):
-        profile = exact_loader(session_id)
-        if profile:
-            return profile
-    return None
-
-
-def _preview_text(text: Any, limit: int = 260) -> str:
-    preview = " ".join(str(text or "").split())
-    if len(preview) <= limit:
-        return preview
-    return preview[: limit - 1].rstrip() + "..."
-
-
-def _base_prompt_reference(
-    *,
-    session_id: str,
-    agent_profile: str,
-    base_prompt: str,
-) -> dict[str, Any] | None:
-    if not str(base_prompt or "").strip():
-        return None
-    return {
-        "source_type": "system_prompt",
-        "kind": "agent_profile",
-        "kind_label": "默认提示词",
-        "title": f"会话角色：{agent_profile or 'default'}",
-        "scope_id": session_id,
-        "source_session_id": session_id,
-        "summary_preview": _preview_text(base_prompt),
-    }
-
-
-def _asset_profile_reference(
-    *,
-    session_id: str,
-    session_context: AgentSessionContext,
-    profile: dict | None,
-) -> dict[str, Any] | None:
-    if not profile:
-        return None
-    title = (
-        profile.get("role_label")
-        or profile.get("remark")
-        or profile.get("host")
-        or session_context.host
-        or "资产画像"
-    )
-    summary = (
-        profile.get("profile_prompt")
-        or profile.get("source_summary")
-        or profile.get("purpose")
-        or ""
-    )
-    return {
-        "source_type": "asset_profile",
-        "kind": "asset_profile_prompt",
-        "kind_label": "资产画像",
-        "title": str(title),
-        "scope_id": session_id,
-        "source_session_id": profile.get("session_id") or session_id,
-        "updated_at": profile.get("updated_at"),
-        "summary_preview": _preview_text(summary),
-        "path": f"asset_profiles/{profile.get('session_id') or session_id}",
-    }
 
 
 @dataclass(frozen=True)
@@ -178,34 +94,16 @@ async def prepare_chat_agent_run(
     agent_profile = session_context.agent_profile
 
     base_prompt = profile_loader(agent_profile)
-    base_prompt_ref = _base_prompt_reference(
-        session_id=session_id,
-        agent_profile=agent_profile,
-        base_prompt=base_prompt,
-    )
-    ltm_result = await retrieve_ltm_context_with_references(
+    context_bundle = await build_chat_context_bundle(
         memory_store=memory_store,
         session_id=session_id,
+        session_context=session_context,
+        agent_profile=agent_profile,
+        base_prompt=base_prompt,
         user_message=user_message,
         emb_client=emb_client,
         embedding_model=embedding_model,
-        memory_scope_ids=session_context.memory_scope_ids(),
         event_logger=event_logger,
-    )
-    rag_context = ""
-    rag_references: list[dict[str, Any]] = []
-    try:
-        rag_result = build_vault_rag_context_for_prompt(user_message, limit=4)
-        rag_context = str(rag_result.get("context") or "")
-        rag_references = list(rag_result.get("references") or [])
-    except Exception as exc:
-        event_logger.error(f"RAG retrieve error: {exc}")
-
-    asset_profile = _load_asset_profile_for_prompt(memory_store, session_id, session_context)
-    asset_profile_ref = _asset_profile_reference(
-        session_id=session_id,
-        session_context=session_context,
-        profile=asset_profile,
     )
     skill_instructions = dispatcher.get_skill_instructions(
         active_skills,
@@ -215,9 +113,9 @@ async def prepare_chat_agent_run(
         session_context=session_context,
         base_prompt=base_prompt,
         skill_instructions=skill_instructions,
-        ltm_context=ltm_result.context,
-        asset_profile_prompt=profile_to_system_prompt(asset_profile),
-        rag_context=rag_context,
+        ltm_context=context_bundle.ltm_context,
+        asset_profile_prompt=context_bundle.asset_profile_prompt,
+        rag_context=context_bundle.rag_context,
     )
     if analysis_only:
         system_prompt = f"{system_prompt}\n\n{ANALYSIS_ONLY_SYSTEM_PROMPT}"
@@ -233,9 +131,9 @@ async def prepare_chat_agent_run(
     prompt_modules = build_chat_prompt_manifest(
         session_context=session_context,
         has_skill_instructions=bool(str(skill_instructions or "").strip()),
-        has_asset_profile=bool(asset_profile_ref),
-        has_rag_context=bool(str(rag_context or "").strip()),
-        has_ltm_context=bool(str(ltm_result.context or "").strip()),
+        has_asset_profile=context_bundle.has_asset_profile,
+        has_rag_context=context_bundle.has_rag_context,
+        has_ltm_context=context_bundle.has_ltm_context,
         analysis_only=analysis_only,
     )
     context = {**session_context.tool_context(), "prompt_modules": prompt_modules}
@@ -253,9 +151,5 @@ async def prepare_chat_agent_run(
         messages=messages,
         context=context,
         tools=tools,
-        memory_references=[
-            ref
-            for ref in [base_prompt_ref, asset_profile_ref, *ltm_result.references, *rag_references]
-            if ref
-        ],
+        memory_references=context_bundle.references,
     )
