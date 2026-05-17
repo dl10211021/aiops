@@ -85,6 +85,40 @@ class HermesToolAdapterTests(unittest.TestCase):
         self.assertEqual(payload["tool"], "image_generate")
         self.assertEqual(calls, ["image_generate"])
 
+    def test_session_search_uses_opscore_session_database(self) -> None:
+        class _FakeMemory:
+            def get_messages(self, session_id: str, for_ui: bool = True, limit: int | None = None) -> list[dict]:
+                return [
+                    {
+                        "_memory_id": 7,
+                        "role": "assistant",
+                        "content": "Oracle RAC 检查完成，发现归档空间不足。",
+                        "created_at": "2026-05-17 10:00:00",
+                        "exec_trace": [
+                            {
+                                "tool": "db_execute_query",
+                                "status": "success",
+                                "evidence": {"evidence_id": "tev-oracle"},
+                            }
+                        ],
+                    }
+                ]
+
+        with mock.patch("core.memory.memory_db", _FakeMemory()):
+            payload = json.loads(
+                execute_hermes_tool(
+                    "session_search",
+                    {"query": "归档空间", "session_id": "sid-db", "limit": 3},
+                    {"session_id": "sid-current"},
+                )
+            )
+
+        self.assertEqual(payload["status"], "SUCCESS")
+        self.assertEqual(payload["result_count"], 1)
+        self.assertEqual(payload["results"][0]["session_id"], "sid-db")
+        self.assertEqual(payload["results"][0]["match_type"], "tool_evidence")
+        self.assertEqual(payload["results"][0]["evidence_refs"][0]["id"], "tev-oracle")
+
     def test_dispatcher_rejects_hermes_write_tool_without_routing(self) -> None:
         blocked_path = Path("tests/.tmp/hermes_blocked_write.txt")
         if blocked_path.exists():

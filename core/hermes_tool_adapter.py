@@ -64,7 +64,6 @@ HERMES_AGENT_EXCLUDED_TOOL_NAMES: set[str] = {
     "patch",
     "process",
     "send_message",
-    "session_search",
     "skill_manage",
     "text_to_speech",
     "web_search",
@@ -403,7 +402,9 @@ def execute_hermes_tool(name: str, args: dict[str, Any], context: dict[str, Any]
     elif resolved_name == "memory":
         kwargs["store"] = _memory_store()
     elif resolved_name == "session_search":
-        return _json_error("session_search is not wired to the OpsCore session database yet.", tool=name)
+        from core.session_search_service import search_session_records
+
+        return json.dumps(search_session_records(args), ensure_ascii=False, default=str)
     elif resolved_name == "delegate_task":
         return _json_error("delegate_task requires a live Hermes parent agent; use OpsCore dispatch_sub_agents for asset-session delegation.", tool=name)
     elif resolved_name == "clarify":

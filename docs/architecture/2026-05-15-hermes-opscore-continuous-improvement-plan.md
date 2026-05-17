@@ -578,3 +578,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只改前端反馈和类型，不新增配置、不改变候选状态机、不触碰资产、巡检、告警或审批执行。
 - 遗留风险：学习候选详情仍分散在 Run Trace 弹窗和知识库候选池中，后续可以在满足当前功能后再考虑复用组件。
 - 下一轮建议：停止继续打磨这个小功能，转向 `session_search` 或多 Agent 权限继承这类 Hermes 对标中更高价值的下一项。
+
+### 2026-05-17 Round 29：session_search 最小只读接入
+
+- 完成：`session_search` 从 Hermes adapter 的“未接入”错误升级为 OpsCore 原生只读会话搜索；工具会按查询词扫描会话消息、工具证据和 Run Trace，返回会话、消息、类型、摘要、run_id 和证据引用；工具中心同步从“未接入”改为“当前可用”。
+- 验证：`python -m pytest tests/test_hermes_tool_adapter.py tests/test_tool_catalog_routes.py -q` 通过，13 passed；`python -m compileall core api scripts` 通过；`python scripts/check_tool_policies.py` 通过，63 tools。
+- Hermes 差距变化：补上 Hermes 核心的 session recall 能力，但采用 OpsCore 的会话库、证据链和只读安全边界，不直接复制 Hermes 的 FTS/LLM 摘要路径。
+- OpsCore 主线影响：只增加模型可调用的只读检索工具，不改变会话写入、审批、工具执行、资产、巡检或告警链路。
+- 遗留风险：当前是 bounded scan，不是 SQLite FTS5/CJK trigram 索引；跨全部历史很多时性能和召回仍有限。
+- 下一轮建议：功能满足即可先收手。后续若实际搜索慢或召回差，再单独做 FTS/CJK 索引和前端入口。

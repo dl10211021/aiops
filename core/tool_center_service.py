@@ -12,7 +12,7 @@ from core.tool_display import TOOL_LABELS, TOOLSET_LABELS
 from core.tool_registry import tool_runtime_metadata
 
 
-NOT_WIRED_HERMES_TOOLS = {"delegate_task", "session_search"}
+NOT_WIRED_HERMES_TOOLS = {"delegate_task"}
 
 BUILTIN_TOOL_DESCRIPTIONS: dict[str, str] = {
     "browser_back": "返回浏览器上一页。",
@@ -36,7 +36,7 @@ BUILTIN_TOOL_DESCRIPTIONS: dict[str, str] = {
     "read_file": "读取仓库内文本文件。",
     "search_files": "搜索仓库文件或文件内容。",
     "send_message": "发送平台消息，默认受控。",
-    "session_search": "搜索历史会话，暂未接入平台链路。",
+    "session_search": "只读搜索历史会话、工具证据和 Run Trace。",
     "skill_manage": "管理技能，默认受控。",
     "skill_view": "查看技能内容。",
     "skills_list": "列出可用技能。",
