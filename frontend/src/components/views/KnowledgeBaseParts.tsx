@@ -1817,6 +1817,65 @@ function learningCandidateNeedsCompletion(item: LearningCandidate) {
   return !learningCandidateQualityReady(item) || item.review?.decision === 'needs_human_review'
 }
 
+function memoryCandidateSearchText(item: MemoryCandidate) {
+  return [
+    item.candidate_id,
+    item.path,
+    item.scope_id,
+    item.source_session_id,
+    item.memory_kind,
+    item.memory_kind_label,
+    item.candidate_type,
+    item.review_status,
+    item.timestamp,
+    item.summary,
+    item.summary_preview,
+    item.recommended_action,
+    item.feedback_target_message_id,
+    ...(item.source_refs || []).flatMap((ref) => [ref.type, ref.label, ref.id, ref.path, ref.tool]),
+    ...(item.evidence_refs || []).flatMap((ref) => [
+      ref.type,
+      ref.label,
+      ref.id,
+      ref.path,
+      ref.tool,
+      ref.status,
+      ref.evidence_family,
+      ref.sql_action,
+      ref.http_action,
+      ref.command_action,
+      ref.action_id,
+      ref.action_label,
+    ]),
+  ].filter(Boolean).join(' ').toLowerCase()
+}
+
+function learningCandidateSearchText(item: LearningCandidate) {
+  return [
+    item.id,
+    item.target_type,
+    item.status,
+    item.created_at,
+    item.updated_at,
+    item.actor,
+    item.source_candidate_id,
+    item.source_path,
+    item.source_session_id,
+    item.feedback_target_message_id,
+    item.summary,
+    item.summary_preview,
+    item.memory_kind,
+    item.next_action,
+    item.review?.decision,
+    item.review?.risk_level,
+    ...(item.review?.missing_items || []),
+    ...(item.review?.suggestions || []),
+    ...(item.source_refs || []).flatMap((ref) => [ref.type, ref.label, ref.id, ref.path, ref.tool]),
+    ...(item.evidence_refs || []).flatMap((ref) => [ref.type, ref.label, ref.id, ref.path, ref.tool, ref.status, ref.evidence_family]),
+    ...(item.status_events || []).flatMap((event) => [event.from, event.to, event.actor, event.reason, event.timestamp]),
+  ].filter(Boolean).join(' ').toLowerCase()
+}
+
 export function MemoryCandidatesPanel({
   items,
   learningCandidates,
@@ -1851,12 +1910,17 @@ export function MemoryCandidatesPanel({
   const [learningDetail, setLearningDetail] = useState<LearningCandidate | null>(null)
   const [learningStatusFilter, setLearningStatusFilter] = useState<LearningCandidateStatusFilter>('active')
   const [learningTargetFilter, setLearningTargetFilter] = useState<LearningCandidateTargetFilter>('all')
+  const [candidateSearch, setCandidateSearch] = useState('')
+  const normalizedCandidateSearch = candidateSearch.trim().toLowerCase()
+  const filteredMemoryCandidates = normalizedCandidateSearch
+    ? items.filter((item) => memoryCandidateSearchText(item).includes(normalizedCandidateSearch))
+    : items
   const groupedItems = [
     {
       key: 'pending',
       title: '待确认候选',
       hint: '可以确认沉淀、转 Runbook、转 Skill 或拒绝。',
-      items: items.filter((item) => (item.review_status || 'pending') === 'pending'),
+      items: filteredMemoryCandidates.filter((item) => (item.review_status || 'pending') === 'pending'),
       tone: 'border-ops-success/30 bg-ops-success/5',
       badge: 'border-ops-success/35 text-ops-success',
     },
@@ -1864,7 +1928,7 @@ export function MemoryCandidatesPanel({
       key: 'runbook_candidate',
       title: 'Runbook 候选',
       hint: '已从成功经验分流，等待人工整理成可复用运维流程。',
-      items: items.filter((item) => item.review_status === 'runbook_candidate'),
+      items: filteredMemoryCandidates.filter((item) => item.review_status === 'runbook_candidate'),
       tone: 'border-ops-accent/25 bg-ops-accent/5',
       badge: 'border-ops-accent/35 text-ops-accent',
     },
@@ -1872,7 +1936,7 @@ export function MemoryCandidatesPanel({
       key: 'skill_candidate',
       title: 'Skill 候选',
       hint: '已从成功经验分流，等待整理、校验并进入技能体系。',
-      items: items.filter((item) => item.review_status === 'skill_candidate'),
+      items: filteredMemoryCandidates.filter((item) => item.review_status === 'skill_candidate'),
       tone: 'border-sky-300/25 bg-sky-300/5',
       badge: 'border-sky-300/35 text-sky-200',
     },
@@ -1891,7 +1955,8 @@ export function MemoryCandidatesPanel({
       || (learningStatusFilter === 'active' && status !== 'published' && status !== 'rejected')
       || (learningStatusFilter === 'blocked' && learningCandidateNeedsCompletion(item))
       || status === learningStatusFilter
-    return targetMatches && statusMatches
+    const searchMatches = !normalizedCandidateSearch || learningCandidateSearchText(item).includes(normalizedCandidateSearch)
+    return targetMatches && statusMatches && searchMatches
   })
   const visibleLearningCandidates = filteredLearningCandidates.slice(0, 20)
   return (
@@ -1905,8 +1970,20 @@ export function MemoryCandidatesPanel({
           {items.length}
         </span>
       </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          value={candidateSearch}
+          onChange={(event) => setCandidateSearch(event.target.value)}
+          placeholder="搜索候选 ID、摘要、会话、证据、状态"
+          className="min-w-[260px] flex-1 rounded border border-ops-surface0 bg-ops-panel px-3 py-2 text-xs text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent/55"
+        />
+        <span className="text-[11px] text-ops-overlay">
+          学习候选 {filteredMemoryCandidates.length}/{items.length}，发布候选 {filteredLearningCandidates.length}/{learningCandidates.length}
+        </span>
+      </div>
       <div className="mt-3 space-y-3">
-        {items.length > 0 ? groupedItems.map((group) => (
+        {filteredMemoryCandidates.length > 0 ? groupedItems.map((group) => (
           <div key={group.key} className={`rounded-lg border ${group.tone} p-3`}>
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -2051,7 +2128,7 @@ export function MemoryCandidatesPanel({
           </div>
         )) : (
           <div className="rounded-md border border-ops-surface0 bg-ops-dark/35 px-3 py-4 text-center text-xs text-ops-overlay">
-            暂无待确认学习候选
+            {items.length > 0 ? '当前搜索条件下暂无学习候选。' : '暂无待确认学习候选'}
           </div>
         )}
       </div>

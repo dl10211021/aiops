@@ -173,6 +173,12 @@ def test_memory_candidates_panel_splits_runbook_and_skill_candidates():
     assert "visibleLearningCandidates = filteredLearningCandidates.slice(0, 20)" in knowledge_parts
     assert "LearningCandidateStatusFilter" in knowledge_parts
     assert "LearningCandidateTargetFilter" in knowledge_parts
+    assert "candidateSearch" in knowledge_parts
+    assert "memoryCandidateSearchText" in knowledge_parts
+    assert "learningCandidateSearchText" in knowledge_parts
+    assert "搜索候选 ID、摘要、会话、证据、状态" in knowledge_parts
+    assert "学习候选 {filteredMemoryCandidates.length}/{items.length}" in knowledge_parts
+    assert "发布候选 {filteredLearningCandidates.length}/{learningCandidates.length}" in knowledge_parts
     assert "setLearningStatusFilter" in knowledge_parts
     assert "setLearningTargetFilter" in knowledge_parts
     assert "learningCandidateStatusLabel" in knowledge_parts
