@@ -470,3 +470,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：明确 OpsCore 只吸收对 AIOps 有价值的能力，不复制非运维工具；前端保持简约，复杂治理留在后端。
 - 遗留风险：目前是架构计划，还没有实现统一 Run Hook、spin guard、toolset 对照表和 prompt 版本审计。
 - 下一轮建议：优先做 Hermes toolset vs OpsCore tool registry 对照表，然后实现最小的 `run_hooks` 事件总线和 loop 心跳/重复动作检测。
+
+### 2026-05-17 Round 17：Hermes/OpsCore 工具全集对照
+
+- 完成：新增 `docs/architecture/2026-05-17-hermes-opscore-toolset-inventory.md`，从 Hermes `toolsets.py` 聚合 79 个唯一工具，从 OpsCore `tool_registry` 读取 62 个当前注册工具，并按 `available`、`controlled`、`not_wired`、`adapted`、`not_applicable` 分类。
+- 验证：本轮为只读清单和文档更新，未改业务代码；后续提交前仍需运行 staged audit 和 preflight。
+- Hermes 差距变化：把“tools 之前没全”的问题拆成可执行清单，明确 OpsCore 该补的是 `session_search`、`delegate_task`、`cronjob`、`execute_code`、`process`、`patch/write_file/skill_manage` 的平台化接入，而不是复制非运维工具。
+- OpsCore 主线影响：保留 OpsCore 在资产协议、数据库、监控日志、网络、存储、虚拟化、K8s、CI/CD、大数据和通知审计上的优势；不把 Spotify、HomeAssistant、RL、Yuanbao 等非 AIOps 工具放入核心。
+- 遗留风险：当前只是文档对照，工具中心前端还没有新的分组筛选，`session_search` 和 `delegate_task` 仍未真正接入执行链。
+- 下一轮建议：实现最小 `run_hooks` 事件总线，先覆盖 `run:start`、`agent:step`、`tool:before`、`tool:after`、`run:end`，为后续 loop heartbeat 和 spin guard 做底座。
