@@ -305,6 +305,14 @@ interface RunTraceGroup {
   endedAt?: RunTraceEvent
 }
 
+interface ContextSourceAudit {
+  source: string
+  enabled: boolean
+  hit: boolean
+  referenceCount: number
+  status: string
+}
+
 interface RunTraceEvidenceDetail {
   evidenceId: string
   trace?: ExecTraceItem | null
@@ -362,6 +370,54 @@ function runTraceGroupTone(group: RunTraceGroup) {
   }
   if (status === 'cancelled') return 'border-amber-400/35 bg-amber-400/10 text-amber-200'
   return 'border-ops-success/35 bg-ops-success/10 text-ops-success'
+}
+
+function runTraceContextSources(group: RunTraceGroup): ContextSourceAudit[] {
+  const startEvent = group.startedAt || group.events.find((event) => event.event_type === 'run:start')
+  const context = startEvent?.payload?.context
+  if (!context || typeof context !== 'object' || Array.isArray(context)) return []
+  const sources = (context as Record<string, unknown>).context_sources
+  if (!Array.isArray(sources)) return []
+  return sources
+    .map((source) => {
+      if (!source || typeof source !== 'object' || Array.isArray(source)) return null
+      const record = source as Record<string, unknown>
+      const sourceId = String(record.source || '').trim()
+      if (!sourceId) return null
+      const referenceCount = Number(record.reference_count ?? 0)
+      return {
+        source: sourceId,
+        enabled: record.enabled !== false,
+        hit: record.hit === true,
+        referenceCount: Number.isFinite(referenceCount) ? Math.max(0, Math.round(referenceCount)) : 0,
+        status: String(record.status || 'ok'),
+      }
+    })
+    .filter((source): source is ContextSourceAudit => Boolean(source))
+}
+
+function contextSourceLabel(source: string) {
+  const labels: Record<string, string> = {
+    system_prompt: '系统提示词',
+    long_term_memory: '长期记忆',
+    knowledge_base: '知识库',
+    asset_profile: '资产画像',
+  }
+  return labels[source] || source
+}
+
+function contextSourceTone(source: ContextSourceAudit) {
+  if (!source.enabled) return 'border-ops-surface1 bg-ops-dark/25 text-ops-overlay'
+  if (source.status === 'error') return 'border-ops-alert/35 bg-ops-alert/10 text-ops-alert'
+  if (source.hit) return 'border-ops-accent/35 bg-ops-accent/10 text-ops-accent'
+  return 'border-ops-surface1 bg-ops-panel/30 text-ops-subtext'
+}
+
+function contextSourceStateText(source: ContextSourceAudit) {
+  if (!source.enabled) return '未启用'
+  if (source.status === 'error') return '读取失败'
+  if (source.hit) return `命中 ${source.referenceCount}`
+  return '未命中'
 }
 
 function formatRunTraceDuration(durationMs?: number | null) {
@@ -1025,6 +1081,7 @@ function RunTraceStrip({
             const first = run.startedAt || run.events[0]
             const latest = run.endedAt || run.events[run.events.length - 1]
             const previewEvents = run.events.slice(-5).reverse()
+            const contextSources = runTraceContextSources(run)
             return (
               <div key={run.id} className="rounded-xl border border-ops-surface0/75 bg-ops-panel/35 px-2.5 py-2">
                 <div className="mb-1.5 flex min-w-0 items-center gap-2">
@@ -1060,6 +1117,22 @@ function RunTraceStrip({
                 {summary?.reason && (
                   <div className="mb-1.5 line-clamp-2 rounded-lg border border-ops-alert/25 bg-ops-alert/8 px-2 py-1 text-[10px] leading-4 text-ops-alert">
                     {summary.reason}
+                  </div>
+                )}
+                {contextSources.length > 0 && (
+                  <div className="mb-1.5 rounded-lg border border-ops-surface0 bg-ops-dark/25 px-2 py-1.5">
+                    <div className="mb-1 text-[10px] font-semibold text-ops-overlay">上下文来源</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {contextSources.map((source) => (
+                        <span
+                          key={source.source}
+                          className={`rounded-full border px-2 py-0.5 text-[10px] ${contextSourceTone(source)}`}
+                          title={`${contextSourceLabel(source.source)}：${contextSourceStateText(source)}`}
+                        >
+                          {contextSourceLabel(source.source)} · {contextSourceStateText(source)}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
                 <div className="space-y-1.5">

@@ -695,3 +695,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只记录来源级元数据，不保存 prompt 正文、RAG 正文、LTM 正文或资产画像正文；不改变工具执行、模型调用、审批、资产、告警或巡检。
 - 遗留风险：当前只记录来源命中和引用数量，还没有统一展示页；按“功能满足即可收手”，本轮先把后端审计数据打通到 Run Hook。
 - 下一轮建议：停止继续打磨 ContextEngine 元数据，转向知识/记忆候选治理，或做 Run Trace 前端轻量展示。
+
+### 2026-05-17 Round 42：Run Trace 上下文来源轻量展示
+
+- 完成：右侧 `AIOps Run Trace` 每次运行卡片从 `run:start` 事件读取 `context_sources`，以 chips 展示系统提示词、长期记忆、知识库和资产画像的命中状态、引用数量或读取失败状态。
+- 验证：`python -m pytest tests/test_tool_policy_runtime_frontend.py -q` 通过，19 passed；`cd frontend && npm run build` 通过。
+- Hermes 差距变化：后端已有 context trace 元数据，现在前端也能直接看到本轮上下文来源，减少“模型为什么这么判断”的黑盒感。
+- OpsCore 主线影响：只改 Run Trace 前端展示，不新增后端接口，不展示 prompt/RAG/LTM/画像正文，不改变模型调用、工具执行、审批、资产、告警或巡检。
+- 遗留风险：当前是卡片级轻量展示，不是完整上下文审计详情页；按“功能满足即可收手”，本轮只解决“看不到来源命中”的问题。
+- 下一轮建议：停止继续打磨 Run Trace UI，转向知识/记忆候选治理或学习候选辅助模型审核接口。

@@ -293,6 +293,24 @@ def test_run_trace_learning_preview_is_exposed_as_readonly_ui():
     assert "证据引用" in source
 
 
+def test_run_trace_context_sources_are_visible_without_prompt_text():
+    source = Path(
+        "frontend/src/features/sessions/AiThinkingChainPanel.tsx"
+    ).read_text(encoding="utf-8")
+
+    assert "function runTraceContextSources(group: RunTraceGroup)" in source
+    assert "context_sources" in source
+    assert "上下文来源" in source
+    assert "系统提示词" in source
+    assert "长期记忆" in source
+    assert "知识库" in source
+    assert "资产画像" in source
+    assert "命中 ${source.referenceCount}" in source
+    assert "读取失败" in source
+    assert "未命中" in source
+    assert "contextSourceTone(source)" in source
+
+
 def test_frontend_shows_actual_http_action_separately_from_tool_policy():
     presentation = Path(
         "frontend/src/features/sessions/toolPolicyPresentation.ts"
