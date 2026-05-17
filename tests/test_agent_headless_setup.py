@@ -85,6 +85,30 @@ class AgentHeadlessSetupTests(unittest.TestCase):
         assert run is not None
         self.assertFalse(run.context["allow_modifications"])
 
+    def test_preserves_observability_task_metadata_in_context(self):
+        run = prepare_headless_agent_run(
+            session_id="sid-1",
+            task_description="排查订单库",
+            inherited_allow_mod=False,
+            model_name="chosen",
+            active_sessions={
+                "sid-1": {"info": {"host": "10.0.0.1", "allow_modifications": False}}
+            },
+            dispatcher=FakeDispatcher(),
+            default_model_resolver=lambda: "default",
+            model_client_resolver=lambda model: (object(), None),
+            profile_loader=lambda profile: f"BASE:{profile}",
+            task_metadata={
+                "observability_task_id": "inv-1-db",
+                "investigation_id": "inv-1",
+            },
+        )
+
+        self.assertIsNotNone(run)
+        assert run is not None
+        self.assertEqual(run.context["observability_task_id"], "inv-1-db")
+        self.assertEqual(run.context["investigation_id"], "inv-1")
+
     def test_validates_model_before_returning_offline_session(self):
         calls = []
 

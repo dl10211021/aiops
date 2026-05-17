@@ -135,6 +135,59 @@ class AgentHeadlessLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tool_payload["primary_action"]["id"], "linux.read.resource")
         self.assertEqual(tool_payload["actions"][0]["id"], "linux.read.resource")
 
+    async def test_tool_run_hooks_include_observability_context_and_evidence(self):
+        messages = [{"role": "system", "content": "sys"}]
+        context = {
+            "session_id": "sid",
+            "observability_task_id": "inv-1-db",
+            "investigation_id": "inv-1",
+        }
+        dispatcher = FakeDispatcher()
+        hook_events = []
+
+        async def hook_emitter(event_type, payload):
+            hook_events.append((event_type, payload))
+
+        await run_headless_agent_loop(
+            model_name="model",
+            messages=messages,
+            tools=[],
+            context=context,
+            session_id="sid",
+            agent_profile="default",
+            host="host.local",
+            dispatcher=dispatcher,
+            event_logger=FakeLogger(),
+            stream_executor=stream_executor_factory(
+                [
+                    [
+                        {
+                            "type": "tool_calls",
+                            "tool_calls": [
+                                {
+                                    "id": "call-1",
+                                    "function": {
+                                        "name": "linux_execute_command",
+                                        "arguments": json.dumps({"command": "uptime"}),
+                                    },
+                                }
+                            ],
+                        },
+                    ],
+                    [{"type": "content", "content": "最终完成"}],
+                ]
+            ),
+            max_steps=3,
+            run_hook_emitter=hook_emitter,
+        )
+
+        tool_after = next(payload for event_type, payload in hook_events if event_type == "tool:after")
+        self.assertEqual(tool_after["context"]["observability_task_id"], "inv-1-db")
+        self.assertEqual(tool_after["context"]["investigation_id"], "inv-1")
+        self.assertEqual(tool_after["evidence"]["observability_task_id"], "inv-1-db")
+        self.assertEqual(tool_after["evidence"]["investigation_id"], "inv-1")
+        self.assertTrue(tool_after["evidence_id"].startswith("tev-sid-call-1"))
+
     async def test_returns_step_limit_report_when_tools_never_finish(self):
         tool_call = {
             "id": "call-1",

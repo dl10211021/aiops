@@ -39,6 +39,7 @@ def prepare_headless_agent_run(
     default_model_resolver: Callable[[], str],
     model_client_resolver: Callable[[str], tuple[Any, Any]],
     profile_loader: Callable[[str], str] = load_agent_profile_prompt,
+    task_metadata: dict[str, Any] | None = None,
 ) -> HeadlessAgentRun | None:
     if not model_name:
         model_name = default_model_resolver()
@@ -77,6 +78,10 @@ def prepare_headless_agent_run(
     context["prompt_modules"] = build_headless_prompt_manifest(
         session_context=session_context,
     )
+    for key in ("observability_task_id", "investigation_id"):
+        value = str((task_metadata or {}).get(key) or "").strip()
+        if value:
+            context[key] = value[:120]
     tools = dispatcher.get_available_tools(context)
 
     return HeadlessAgentRun(

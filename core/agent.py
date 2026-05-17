@@ -132,17 +132,23 @@ async def dispatch_group_tasks(tasks: list[dict], allow_mod: bool) -> list[dict]
         target_sid: str,
         task_desc: str,
         inherited_allow_mod: bool,
+        task: dict,
     ) -> str:
         return await headless_agent_chat(
             target_sid,
             task_desc,
             inherited_allow_mod=inherited_allow_mod,
+            task_metadata=task,
         )
+
+    async def unused_task_runner(*_args) -> str:
+        return ""
 
     return await run_group_tasks(
         tasks,
         allow_mod,
-        task_runner=run_headless_task,
+        task_runner=unused_task_runner,
+        task_runner_with_task=run_headless_task,
         event_logger=logger,
     )
 
@@ -152,6 +158,7 @@ async def headless_agent_chat(
     task_description: str,
     inherited_allow_mod: bool = False,
     model_name: str | None = None,
+    task_metadata: dict | None = None,
 ) -> str:
     """后台无头模式的 Agent 循环，用于协同任务的结果汇报。"""
     from connections.ssh_manager import ssh_manager
@@ -166,6 +173,7 @@ async def headless_agent_chat(
         dispatcher=dispatcher,
         default_model_resolver=get_default_model_id,
         model_client_resolver=get_client_for_model,
+        task_metadata=task_metadata,
     )
 
     if run is None:

@@ -9,6 +9,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 TaskRunner = Callable[[str, str, bool], Awaitable[str]]
+TaskRunnerWithTask = Callable[[str, str, bool, Mapping[str, Any]], Awaitable[str]]
 
 
 def _session_mode(allow_modifications: bool) -> str:
@@ -58,6 +59,7 @@ async def dispatch_group_tasks(
     allow_mod: bool,
     *,
     task_runner: TaskRunner,
+    task_runner_with_task: TaskRunnerWithTask | None = None,
     active_sessions: Mapping[str, Mapping[str, Any]] | None = None,
     event_logger: logging.Logger | None = None,
     max_concurrency: int = 10,
@@ -103,7 +105,11 @@ async def dispatch_group_tasks(
 
         try:
             result = await asyncio.wait_for(
-                task_runner(target_sid, task_desc, effective_allow_mod),
+                (
+                    task_runner_with_task(target_sid, task_desc, effective_allow_mod, task)
+                    if task_runner_with_task
+                    else task_runner(target_sid, task_desc, effective_allow_mod)
+                ),
                 timeout=timeout_seconds,
             )
             return {

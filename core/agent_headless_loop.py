@@ -3,14 +3,16 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 from core.agent_approval import record_headless_approval_block
 from core.agent_runtime_config import agent_max_steps
-from core.agent_tool_events import _session_mode_from_context, parse_tool_arguments
+from core.agent_tool_events import _session_mode_from_context, parse_tool_arguments, summarize_tool_result_for_sse
 from core.run_hooks import emit_run_hook
 from core.safety_policy import explain_policy_decision
+from core.tool_evidence import build_tool_evidence
 from core.tool_execution_policy import (
     ToolExecutionGate,
     evaluate_tool_execution_gate,
@@ -36,6 +38,8 @@ def _headless_hook_context(context: dict) -> dict[str, Any]:
         "port",
         "allow_modifications",
         "prompt_modules",
+        "observability_task_id",
+        "investigation_id",
     )
     return {key: context.get(key) for key in keys if key in context}
 
@@ -245,6 +249,52 @@ def _headless_tool_message_content(
     return json.dumps(payload, ensure_ascii=False, default=str)
 
 
+def _headless_tool_evidence(
+    *,
+    tool_call_id: str,
+    session_id: str,
+    context: dict,
+    tool_name: str,
+    args: dict[str, Any],
+    tool_result: Any,
+    result_meta: dict[str, Any],
+    started_at: int | None,
+    finished_at: int | None,
+    approval_ref: str | None = None,
+) -> dict[str, Any]:
+    summary = summarize_tool_result_for_sse(tool_result)
+    evidence = build_tool_evidence(
+        tool_call_id=tool_call_id,
+        session_id=session_id,
+        context=context,
+        tool_name=tool_name,
+        input_summary=json.dumps(args, ensure_ascii=False, default=str),
+        output_preview=summary["preview"],
+        result_status=summary["status"],
+        result_meta=result_meta,
+        started_at=started_at,
+        finished_at=finished_at,
+        approval_ref=approval_ref,
+    )
+    for key in ("observability_task_id", "investigation_id"):
+        value = str(context.get(key) or "").strip()
+        if value:
+            evidence[key] = value[:120]
+    return evidence
+
+
+async def _emit_headless_tool_hook(
+    emitter: Callable[[str, dict[str, Any]], Awaitable[None]],
+    event_type: str,
+    payload: dict[str, Any],
+    event_logger: logging.Logger,
+) -> None:
+    try:
+        await emitter(event_type, payload)
+    except Exception as exc:
+        event_logger.warning("Headless tool hook failed for %s: %s", event_type, exc)
+
+
 async def run_headless_agent_loop(
     *,
     model_name: str,
@@ -336,7 +386,24 @@ async def run_headless_agent_loop(
 
             for tc in tool_calls:
                 func_name, func_args = _parse_headless_tool_call(tc)
+                tool_call_id = str(tc.get("id") or "")
                 tool_policy = tool_policy_metadata(func_name)
+                started_at = int(time.time() * 1000)
+                await _emit_headless_tool_hook(
+                    run_hook_emitter,
+                    "tool:before",
+                    {
+                        "session_id": session_id,
+                        "tool_call_id": tool_call_id,
+                        "tool_name": func_name,
+                        "args": func_args,
+                        "iteration": iteration,
+                        "context": _headless_hook_context(context),
+                        "tool_policy": tool_policy,
+                        "started_at": started_at,
+                    },
+                    event_logger,
+                )
                 gate = _headless_execution_gate(
                     tool_name=func_name,
                     args=func_args,
@@ -384,8 +451,10 @@ async def run_headless_agent_loop(
                         runtime_stats=runtime_execution,
                     )
 
+                finished_at = int(time.time() * 1000)
+                result_meta = {}
                 tool_msg = {
-                    "tool_call_id": tc.get("id", ""),
+                    "tool_call_id": tool_call_id,
                     "role": "tool",
                     "name": func_name,
                     "content": _headless_tool_message_content(
@@ -397,6 +466,54 @@ async def run_headless_agent_loop(
                         context,
                     ),
                 }
+                try:
+                    parsed_tool_payload = json.loads(tool_msg["content"])
+                except Exception:
+                    parsed_tool_payload = {}
+                if isinstance(parsed_tool_payload, dict):
+                    result_meta = {
+                        key: parsed_tool_payload[key]
+                        for key in (
+                            "tool_policy",
+                            "runtime_policy",
+                            "session_mode",
+                            "primary_action",
+                            "actions",
+                            "approval_id",
+                        )
+                        if key in parsed_tool_payload
+                    }
+                evidence = _headless_tool_evidence(
+                    tool_call_id=tool_call_id,
+                    session_id=session_id,
+                    context=context,
+                    tool_name=func_name,
+                    args=func_args,
+                    tool_result=tool_res,
+                    result_meta=result_meta,
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    approval_ref=str(parsed_tool_payload.get("approval_id") or "") if isinstance(parsed_tool_payload, dict) else "",
+                )
+                await _emit_headless_tool_hook(
+                    run_hook_emitter,
+                    "tool:after",
+                    {
+                        "session_id": session_id,
+                        "tool_call_id": tool_call_id,
+                        "tool_name": func_name,
+                        "args": func_args,
+                        "iteration": iteration,
+                        "context": _headless_hook_context(context),
+                        "status": evidence.get("result_status") or "done",
+                        "result_meta": result_meta,
+                        "evidence_id": evidence.get("evidence_id") or "",
+                        "evidence": evidence,
+                        "started_at": started_at,
+                        "finished_at": finished_at,
+                    },
+                    event_logger,
+                )
                 messages.append(tool_msg)
         else:
             run_reason = "step_limit"

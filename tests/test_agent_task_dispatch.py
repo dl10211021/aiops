@@ -142,6 +142,32 @@ class AgentTaskDispatchTests(unittest.TestCase):
         self.assertEqual(results[0]["observability_task_id"], "inv-1-summary")
         self.assertEqual(results[0]["investigation_id"], "inv-1")
 
+    def test_dispatch_can_pass_original_task_to_metadata_runner(self):
+        calls = []
+
+        async def runner(session_id, task_description, allow_mod, task):
+            calls.append((session_id, task_description, allow_mod, task["observability_task_id"]))
+            return "done"
+
+        results = asyncio.run(
+            dispatch_group_tasks(
+                [
+                    {
+                        "target_session_id": "sid-1",
+                        "task_description": "检查订单库",
+                        "observability_task_id": "inv-1-summary",
+                    }
+                ],
+                False,
+                task_runner=lambda *_args: (_ for _ in ()).throw(AssertionError("fallback runner should not be used")),
+                task_runner_with_task=runner,
+                active_sessions={"sid-1": {"info": {"allow_modifications": False}}},
+            )
+        )
+
+        self.assertEqual(calls, [("sid-1", "检查订单库", False, "inv-1-summary")])
+        self.assertEqual(results[0]["status"], "SUCCESS")
+
     def test_rejects_invalid_task_definition_before_running(self):
         async def runner(session_id, task_description, allow_mod):
             raise AssertionError("runner should not be called")

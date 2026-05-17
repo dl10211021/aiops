@@ -983,3 +983,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只保留审计/回填元数据，不改变子 Agent 执行策略、不自动执行、不新增调度 API、不影响告警、巡检、资产中心或审批。
 - 遗留风险：当前仍没有把子 Agent 真实 run_id 自动写入可观测任务；下一步需要在执行上下文中产生可关联的 run/evidence 引用。
 - 下一轮建议：这个功能到此收手。后续更高价值方向是做子 Agent Run Trace 自动回填，或把主/副模型审核结果接入学习候选 `review_events`。
+
+### 2026-05-18 Round 74：子 Agent Run Trace 携带可观测任务标识
+
+- 完成：多 Agent 调度可把原始 task 交给 headless 子 Agent；headless 上下文保留 `observability_task_id/investigation_id`；headless 工具执行新增 `tool:before/tool:after` Run Trace 事件，`tool:after` 的 evidence 同步携带可观测任务标识。
+- 验证：`python -m pytest tests/test_agent_task_dispatch.py tests/test_agent_headless_setup.py tests/test_agent_headless_loop.py tests/test_run_trace_store.py tests/test_observability_routes.py tests/test_session_history_service.py -q`；`python -m compileall core`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：子 Agent 不再只有最终自然语言报告，后台工具执行也能进入 Run Trace 证据链，并且能按可观测任务 ID 回挂到 investigation。
+- OpsCore 主线影响：只增加运行事件和证据元数据，不自动调用可观测服务、不改变工具执行权限、不改变审批、不影响告警、巡检或资产中心。
+- 遗留风险：当前证据已经具备可关联标识，但还没有做“自动把匹配 Run Trace evidence 写入 investigation”的后台任务；下一步可在可观测页或服务层提供一键同步。
+- 下一轮建议：这个功能到此收手。后续更高价值方向是做可观测 Run Trace 证据一键同步，或把主/副模型审核接入学习候选 `review_events`。
