@@ -652,6 +652,7 @@ export interface DashboardOverview {
   by_protocol: Record<string, number>
   by_type: Record<string, number>
   active_by_protocol: Record<string, number>
+  run_trace_audit?: DashboardRunTraceAuditOverview
   alerts?: {
     total: number
     by_status: Record<string, number>
@@ -675,6 +676,35 @@ export interface DashboardOverview {
     targets_error: number
     recent_failures: InspectionRun[]
   }
+}
+
+export interface DashboardRunTraceAuditOverview {
+  session_count: number
+  sessions_with_trace: number
+  sessions_with_audit: number
+  sessions_with_gaps: number
+  session_errors: number
+  run_count: number
+  event_count: number
+  audited_run_count: number
+  unaudited_run_count: number
+  context_sources: number
+  context_hits: number
+  context_errors: number
+  prompt_modules: number
+  source_counts?: Record<string, { total: number; hit: number; error: number; disabled: number }>
+  module_counts?: Record<string, { total: number; enabled: number; disabled: number }>
+  sessions: Array<{
+    session_id: string
+    label: string
+    host: string
+    protocol: string
+    group_name: string
+    run_count: number
+    audited_run_count: number
+    unaudited_run_count: number
+    context_errors: number
+  }>
 }
 
 export interface AlertTrendPoint {

@@ -5,6 +5,8 @@ from core import dashboard_service
 
 
 class FakeDashboardMemory:
+    messages = []
+
     def get_all_assets(self):
         return [
             {
@@ -17,6 +19,10 @@ class FakeDashboardMemory:
                 "extra_args": {"category": "os"},
             }
         ]
+
+    def get_messages(self, session_id, for_ui=False, limit=None):
+        messages = [item for item in self.messages if item.get("session_id") == session_id]
+        return messages[-limit:] if limit else messages
 
 
 class TestDashboardService(unittest.TestCase):
@@ -45,6 +51,64 @@ class TestDashboardService(unittest.TestCase):
         self.assertEqual(payload["alerts"]["open"], 2)
         self.assertEqual(payload["jobs"]["scheduled"], 1)
         self.assertEqual(payload["inspection_runs"]["success_rate"], 100.0)
+        self.assertEqual(payload["run_trace_audit"]["session_count"], 1)
+
+    def test_run_trace_audit_overview_aggregates_active_sessions(self):
+        memory = FakeDashboardMemory()
+        memory.messages = [
+            {
+                "id": 1,
+                "session_id": "sid-1",
+                "memory_type": "aiops_run_trace",
+                "run_id": "run-1",
+                "run_event_type": "run:start",
+                "run_event_ts": 1.0,
+                "run_event_payload": {
+                    "run_id": "run-1",
+                    "context": {
+                        "context_sources": [
+                            {"source": "knowledge_base", "enabled": True, "hit": True},
+                            {"source": "asset_profile", "enabled": True, "hit": False, "status": "error"},
+                        ],
+                        "prompt_modules": {
+                            "modules": ["evidence_contract", "rag_context"],
+                            "enabled": {"evidence_contract": True, "rag_context": False},
+                        },
+                    },
+                },
+            },
+            {
+                "id": 2,
+                "session_id": "sid-2",
+                "memory_type": "aiops_run_trace",
+                "run_id": "run-2",
+                "run_event_type": "run:start",
+                "run_event_ts": 2.0,
+                "run_event_payload": {"run_id": "run-2"},
+            },
+        ]
+
+        payload = dashboard_service.build_run_trace_audit_overview(
+            {
+                "sid-1": {"info": {"remark": "生产数据库", "host": "db.local", "protocol": "mysql", "tags": ["数据库"]}},
+                "sid-2": {"info": {"remark": "旧会话", "protocol": "ssh"}},
+            },
+            memory_db=memory,
+        )
+
+        self.assertEqual(payload["session_count"], 2)
+        self.assertEqual(payload["sessions_with_trace"], 2)
+        self.assertEqual(payload["sessions_with_audit"], 1)
+        self.assertEqual(payload["sessions_with_gaps"], 1)
+        self.assertEqual(payload["run_count"], 2)
+        self.assertEqual(payload["audited_run_count"], 1)
+        self.assertEqual(payload["unaudited_run_count"], 1)
+        self.assertEqual(payload["context_hits"], 1)
+        self.assertEqual(payload["context_errors"], 1)
+        self.assertEqual(payload["prompt_modules"], 2)
+        self.assertEqual(payload["source_counts"]["knowledge_base"]["hit"], 1)
+        self.assertEqual(payload["module_counts"]["rag_context"]["disabled"], 1)
+        self.assertEqual(payload["sessions"][0]["session_id"], "sid-2")
 
     def test_alert_trend_and_risk_ranking_payloads_use_alert_store(self):
         alerts = [

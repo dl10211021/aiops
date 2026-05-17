@@ -19,8 +19,18 @@ export default function Dashboard() {
   const alerts = overview?.alerts
   const jobs = overview?.jobs
   const inspectionRuns = overview?.inspection_runs
+  const runTraceAudit = overview?.run_trace_audit
   const enabledTools = (toolsets?.toolsets || []).flatMap((set) => set.tools.filter((tool) => tool.enabled))
   const enabledToolsets = (toolsets?.toolsets || []).filter((set) => set.enabled)
+  const auditCoverage = runTraceAudit?.run_count
+    ? Math.round(((runTraceAudit.audited_run_count || 0) / runTraceAudit.run_count) * 100)
+    : 0
+  const auditSources = Object.entries(runTraceAudit?.source_counts || {})
+    .sort((a, b) => (b[1].total || 0) - (a[1].total || 0))
+    .slice(0, 4)
+  const auditModules = Object.entries(runTraceAudit?.module_counts || {})
+    .sort((a, b) => (b[1].total || 0) - (a[1].total || 0))
+    .slice(0, 4)
 
   return (
     <div className="ops-page">
@@ -45,12 +55,13 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           <MetricCard label="资产总数" value={summary.asset_total || 0} hint="数据中心资产" />
           <MetricCard label="在线会话" value={summary.active_sessions || 0} hint="活跃 AI 会话" tone="green" />
           <MetricCard label="待处理告警" value={alerts?.by_status?.open || alerts?.total || 0} hint={`总告警 ${alerts?.total || 0}`} tone="red" />
           <MetricCard label="巡检任务" value={jobs?.total || 0} hint={`运行 ${jobs?.scheduled || 0} / 暂停 ${jobs?.paused || 0}`} tone="amber" />
           <MetricCard label="巡检成功率" value={inspectionRuns?.success_rate || 0} suffix="%" hint={`${inspectionRuns?.completed || 0}/${inspectionRuns?.total_runs || 0} 次运行`} tone="green" />
+          <MetricCard label="AI审计覆盖" value={auditCoverage} suffix="%" hint={`未审计 ${runTraceAudit?.unaudited_run_count || 0} / 运行 ${runTraceAudit?.run_count || 0}`} tone={runTraceAudit?.unaudited_run_count ? 'amber' : 'green'} />
         </div>
 
         <div className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
@@ -85,6 +96,50 @@ export default function Dashboard() {
                   ))}
                   {enabledToolsets.length === 0 && <span className="text-xs text-ops-overlay">暂无工具集数据</span>}
                 </div>
+              </div>
+              <div className="ops-data-panel p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-ops-text">Context/Prompt 审计</div>
+                    <div className="mt-1 text-xs text-ops-subtext">
+                      会话 {runTraceAudit?.sessions_with_trace || 0}/{runTraceAudit?.session_count || 0} · 未审计 {runTraceAudit?.unaudited_run_count || 0}
+                    </div>
+                  </div>
+                  <span className={`rounded-lg px-2.5 py-1 font-mono text-xs font-bold ${runTraceAudit?.unaudited_run_count ? 'bg-ops-accent/12 text-ops-accent' : 'bg-ops-success/12 text-ops-success'}`}>
+                    {auditCoverage}%
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-3">
+                  <AuditMiniStat label="上下文命中" value={runTraceAudit?.context_hits || 0} hint={`来源 ${runTraceAudit?.context_sources || 0}`} />
+                  <AuditMiniStat label="读取失败" value={runTraceAudit?.context_errors || 0} hint={`会话错误 ${runTraceAudit?.session_errors || 0}`} tone={runTraceAudit?.context_errors ? 'warn' : 'ok'} />
+                  <AuditMiniStat label="Prompt 模块" value={runTraceAudit?.prompt_modules || 0} hint={`已审计 ${runTraceAudit?.audited_run_count || 0}`} />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {auditSources.map(([source, counts]) => (
+                    <span key={source} className="ops-control px-2.5 py-1 text-[11px] text-ops-subtext">
+                      {source} {counts.hit || 0}/{counts.total || 0}
+                    </span>
+                  ))}
+                  {auditModules.map(([module, counts]) => (
+                    <span key={module} className="ops-control px-2.5 py-1 text-[11px] text-ops-subtext">
+                      {module} {counts.enabled || 0}/{counts.total || 0}
+                    </span>
+                  ))}
+                  {auditSources.length === 0 && auditModules.length === 0 && (
+                    <span className="text-xs text-ops-overlay">暂无 Run Trace 审计数据</span>
+                  )}
+                </div>
+                {(runTraceAudit?.sessions || []).length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {runTraceAudit?.sessions.slice(0, 3).map((session) => (
+                      <div key={session.session_id} className="flex items-center gap-2 rounded-lg bg-ops-surface0/55 px-3 py-2 text-xs">
+                        <span className="min-w-0 flex-1 truncate text-ops-text" title={session.label}>{session.label}</span>
+                        <span className="font-mono text-ops-overlay">{session.protocol || '-'}</span>
+                        <span className="rounded bg-ops-accent/12 px-2 py-0.5 text-ops-accent">未审计 {session.unaudited_run_count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -167,6 +222,27 @@ export default function Dashboard() {
 
         {loading && <div className="mt-4 text-xs text-ops-overlay">正在刷新总览数据...</div>}
       </div>
+    </div>
+  )
+}
+
+function AuditMiniStat({
+  label,
+  value,
+  hint,
+  tone = 'default',
+}: {
+  label: string
+  value: number
+  hint: string
+  tone?: 'default' | 'ok' | 'warn'
+}) {
+  const toneClass = tone === 'warn' ? 'text-ops-accent' : tone === 'ok' ? 'text-ops-success' : 'text-ops-text'
+  return (
+    <div className="rounded-lg border border-ops-surface0/80 bg-ops-surface0/35 px-3 py-2">
+      <div className="text-[11px] text-ops-overlay">{label}</div>
+      <div className={`mt-1 font-mono text-lg font-black ${toneClass}`}>{value}</div>
+      <div className="text-[11px] text-ops-subtext">{hint}</div>
     </div>
   )
 }

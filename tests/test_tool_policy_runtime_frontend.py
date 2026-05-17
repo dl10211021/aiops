@@ -408,6 +408,19 @@ def test_run_trace_context_prompt_audit_summary_is_visible():
     assert "/history/run-trace/audit-summary?" in session_api
 
 
+def test_dashboard_shows_global_run_trace_audit_overview():
+    dashboard = Path("frontend/src/components/views/Dashboard.tsx").read_text(encoding="utf-8")
+    types = Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
+
+    assert "const runTraceAudit = overview?.run_trace_audit" in dashboard
+    assert "AI审计覆盖" in dashboard
+    assert "Context/Prompt 审计" in dashboard
+    assert "未审计 {runTraceAudit?.unaudited_run_count || 0}" in dashboard
+    assert "function AuditMiniStat" in dashboard
+    assert "export interface DashboardRunTraceAuditOverview" in types
+    assert "run_trace_audit?: DashboardRunTraceAuditOverview" in types
+
+
 def test_frontend_shows_actual_http_action_separately_from_tool_policy():
     presentation = Path(
         "frontend/src/features/sessions/toolPolicyPresentation.ts"

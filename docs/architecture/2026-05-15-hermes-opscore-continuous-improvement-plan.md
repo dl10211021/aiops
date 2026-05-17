@@ -866,3 +866,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只读聚合，不改 hook payload、不改 prompt 构建、不改执行 gate、不影响告警、巡检、资产中心或记忆写入。
 - 遗留风险：聚合仍基于会话消息中的 Run Trace 事件，不是全局跨会话报表；按“功能满足即可收手”，先把单会话服务端审计摘要打通。
 - 下一轮建议：停止继续打磨单会话 Run Trace；后续更高价值方向是全局 Context/Prompt 审计页，或可观测证据与 Run Trace 的统一查询接口。
+
+### 2026-05-18 Round 61：总览全局 Run Trace 审计入口
+
+- 完成：`/dashboard/overview` 追加 `run_trace_audit` 只读摘要，按当前在线会话聚合 Run Trace 的 context sources、prompt modules、审计覆盖、未审计 run 和异常来源；总览大屏新增 `AI审计覆盖` 指标和 `Context/Prompt 审计` 小面板。
+- 验证：`python -m pytest tests/test_dashboard_service.py tests/test_tool_policy_runtime_frontend.py -q`；`cd frontend && npm run build`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：Prompt/Context trace 从“单会话可看”推进到“平台总览能看到覆盖缺口”，更接近 Hermes 式运行治理入口。
+- OpsCore 主线影响：只读总览聚合，不新增写入、不改模型调用、不改执行 gate、不影响告警、巡检、资产中心或记忆发布。
+- 遗留风险：当前聚合范围是在线会话，不扫描历史离线会话；按“功能满足即可收手”，本轮先补平台首页治理信号。
+- 下一轮建议：停止继续打磨总览小面板。后续更高价值方向是可观测证据与 Run Trace 的统一查询接口，或审批/策略执行结果审计聚合。
