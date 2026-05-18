@@ -150,6 +150,7 @@ export function useSessionSidebarModel() {
     () => [...multiAgentTargetIds].map((sid) => sessionsById[sid]).filter(Boolean) as Session[],
     [multiAgentTargetIds, sessionsById],
   )
+  const multiAgentTargetMetrics = useMemo(() => summarizeSessions(multiAgentTargets), [multiAgentTargets])
   const multiAgentTargetGroups = useMemo(() => {
     return [...new Set(multiAgentTargets.map((session) => sessionPrimaryGroup(session)))]
   }, [multiAgentTargets])
@@ -302,7 +303,7 @@ export function useSessionSidebarModel() {
     const scope = multiAgentDraftScope
     const groupName = scope === 'group' ? multiAgentTargetGroups[0] : ''
     const targetLines = multiAgentTargets.map((session) => (
-      `- ${session.id} | ${session.remark || session.host} | ${session.user}@${session.host} | ${session.asset_type}/${session.protocol}`
+      `- ${session.id} | ${session.remark || session.host} | ${session.user}@${session.host} | ${session.asset_type}/${session.protocol} | 当前权限: ${session.isReadWriteMode ? 'readwrite' : 'readonly'}`
     ))
     const message = [
       '请按以下目标执行多 Agent 协同任务，先确认任务内容后再调用 dispatch_sub_agents。',
@@ -318,6 +319,7 @@ export function useSessionSidebarModel() {
       '- 对每个目标生成一条 tasks 记录，target_session_id 必须使用上面列出的 ID。',
       '- task_description 使用“任务内容”并结合目标资产信息。',
       '- group 模式必须带 group_name；global 模式不要扩大到未列出的目标。',
+      '- 只读目标不会因为全局或分组协同自动放大为读写；需要变更时先单独切换目标会话权限并走审批。',
     ].join('\n')
     window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent('opscore:chat-draft', {
@@ -425,6 +427,8 @@ export function useSessionSidebarModel() {
     multiAgentTargetCount: multiAgentTargets.length,
     multiAgentTargetIds,
     multiAgentTargetGroups,
+    multiAgentTargetReadonlyCount: multiAgentTargetMetrics.readonly,
+    multiAgentTargetReadwriteCount: multiAgentTargetMetrics.readwrite,
     selectedGroup,
     sessionList: visibleSessions.sessionList,
     sessionSearch,

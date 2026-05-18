@@ -79,6 +79,8 @@ export default function SessionSidebar() {
           count={model.multiAgentTargetCount}
           scope={model.multiAgentDraftScope}
           groups={model.multiAgentTargetGroups}
+          readonlyCount={model.multiAgentTargetReadonlyCount}
+          readwriteCount={model.multiAgentTargetReadwriteCount}
           onCompose={model.handleComposeMultiAgentDraft}
           onClear={model.handleClearMultiAgentTargets}
         />
@@ -169,12 +171,16 @@ function MultiAgentTargetBar({
   count,
   scope,
   groups,
+  readonlyCount,
+  readwriteCount,
   onCompose,
   onClear,
 }: {
   count: number
   scope: string
   groups: string[]
+  readonlyCount: number
+  readwriteCount: number
   onCompose: () => void
   onClear: () => void
 }) {
@@ -184,6 +190,7 @@ function MultiAgentTargetBar({
     <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded-lg border border-ops-accent/30 bg-ops-accent/8 px-2 py-1 text-[10px] text-ops-subtext">
       <span className="truncate" title={`已选 ${count} 个多 Agent 目标，范围：${scopeText}`}>
         已选 {count} 个目标 · {scopeText}
+        <span className="ml-1 text-ops-overlay">权限：只读 {readonlyCount} / 读写 {readwriteCount}</span>
       </span>
       <button
         type="button"

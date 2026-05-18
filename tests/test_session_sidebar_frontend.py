@@ -72,6 +72,19 @@ def test_session_sidebar_builds_multi_agent_target_draft():
     assert "setDraftsBySession((prev) => ({ ...prev, [targetSessionId]: message }))" in chat_window
 
 
+def test_session_sidebar_shows_multi_agent_target_permission_boundary():
+    sidebar = Path("frontend/src/features/sessions/SessionSidebar.tsx").read_text(encoding="utf-8")
+    model = Path("frontend/src/features/sessions/useSessionSidebarModel.ts").read_text(encoding="utf-8")
+
+    assert "multiAgentTargetReadonlyCount" in model
+    assert "multiAgentTargetReadwriteCount" in model
+    assert "readonlyCount={model.multiAgentTargetReadonlyCount}" in sidebar
+    assert "readwriteCount={model.multiAgentTargetReadwriteCount}" in sidebar
+    assert "权限：只读 {readonlyCount} / 读写 {readwriteCount}" in sidebar
+    assert "当前权限: ${session.isReadWriteMode ? 'readwrite' : 'readonly'}" in model
+    assert "只读目标不会因为全局或分组协同自动放大为读写" in model
+
+
 def test_session_group_bulk_permission_sync_is_optimistic_and_rolls_back_failures():
     effects = Path("frontend/src/features/sessions/sessionSidebarEffects.ts").read_text(encoding="utf-8")
 

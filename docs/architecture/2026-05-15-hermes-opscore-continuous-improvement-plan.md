@@ -1028,3 +1028,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只读前端查询，不改变会话消息、不自动注入上下文、不触发工具执行或审批，不影响告警、巡检或资产中心。
 - 遗留风险：当前只支持当前会话搜索，定位消息仍依赖现有滚动事件；跨会话搜索、FTS/CJK、高亮匹配词和审批记录独立结果仍待后续切片。
 - 下一轮建议：这个功能到此收手。后续更高价值方向是做多 Agent 全局/分组权限上限的产品化入口，或为 Session Search 增加跨会话索引。
+
+### 2026-05-18 Round 79：多 Agent 目标权限边界提示
+
+- 完成：会话侧边栏的多 Agent 目标栏新增所选目标权限分布，直接展示“只读 / 读写”数量；生成协同指令草稿时，每个目标行带出当前 `readonly/readwrite` 权限，并明确只读目标不会因全局或分组协同自动放大为读写。
+- 验证：`python -m pytest tests/test_session_sidebar_frontend.py::test_session_sidebar_shows_multi_agent_target_permission_boundary -q`；`python -m pytest tests/test_session_sidebar_frontend.py -q`；`cd frontend && npm run build`。
+- Hermes 差距变化：多 Agent 下发前不再只知道选中了哪些目标，也能看到这些目标的权限边界，符合“全局/分组权限上限必须可见、不可隐式放大”的安全要求。
+- OpsCore 主线影响：只改前端提示和草稿内容，不改变会话权限同步、不改变 `dispatch_sub_agents` 执行 gate，不影响告警、巡检、资产中心或 Hermes 参考目录。
+- 遗留风险：当前仍是人工确认草稿，不是独立任务编排页面；按“功能满足即可收手”，这一轮不继续扩展多 Agent UI。
+- 下一轮建议：多 Agent 权限产品化已达到可用闭环，后续转向更缺的记忆学习质量报表或全局 Context/Prompt 审计页。
