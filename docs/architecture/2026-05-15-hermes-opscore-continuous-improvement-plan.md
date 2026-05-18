@@ -1010,3 +1010,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只记录审核投影和前端只读展示，不接真实 LLM 调用、不自动批准、不自动发布、不写入长期检索上下文，不影响告警、巡检、资产中心或执行 gate。
 - 遗留风险：当前主/副模型审核仍复用规则审核结论作为结构化投影，尚未接入真实主模型和辅助模型调用；下一步应先做审核执行器接口和失败降级，再考虑异步模型复核。
 - 下一轮建议：这个功能到此收手。后续更高价值方向是做 Session Search / Context Engine 的最小检索闭环，或继续补多 Agent 全局/分组权限上限。
+
+### 2026-05-18 Round 77：Session Search 最小 API 闭环
+
+- 完成：新增 `/session/{session_id}/history/search` 只读检索入口，统一搜索当前会话的用户可见消息、消息内工具证据和 AIOps Run Trace 事件；返回 `results`、`summary.by_type`、证据引用、run_id/event_type、消息定位信息，作为后续 Context Engine 和多 Agent 历史检索的最小合同。
+- 验证：`python -m pytest tests/test_session_history_service.py tests/test_session_history_routes.py -q`；`python -m compileall core api`；提交前继续跑 preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：OpsCore 从“只能按单会话拉历史/查证据”推进到“有正式会话搜索 API”，开始补 Hermes 的 Session Search 能力，但仍保持 OpsCore 的证据和 Run Trace 结构。
+- OpsCore 主线影响：只读 API，不改会话写入、不改工具执行、不改审批、不自动注入 prompt，不影响告警、巡检或资产中心。
+- 遗留风险：当前使用有界内存扫描和关键词匹配，尚未接入 SQLite FTS5/CJK、跨会话检索、审批记录独立索引和前端搜索面板；大规模历史检索需要后续索引化。
+- 下一轮建议：这个功能到此收手。后续更高价值方向是把该搜索入口接入前端会话面板，或做多 Agent 全局/分组权限上限的产品化入口。

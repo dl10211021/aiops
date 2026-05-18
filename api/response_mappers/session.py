@@ -121,6 +121,13 @@ def session_history_response_kwargs(messages: list[dict[str, Any]]) -> dict[str,
     }
 
 
+def session_history_search_response_kwargs(search: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "success",
+        "data": {"search": search},
+    }
+
+
 def session_history_evidence_response_kwargs(result: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": "success",

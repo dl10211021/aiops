@@ -9,6 +9,7 @@ from api.response_mappers.session import (
     session_history_message_feedback_response_kwargs,
     session_history_message_updated_response_kwargs,
     session_history_response_kwargs,
+    session_history_search_response_kwargs,
     session_memory_activity_response_kwargs,
     session_run_learning_candidate_created_response_kwargs,
     session_run_learning_preview_response_kwargs,
@@ -34,6 +35,7 @@ from core.session_history_service import (
     get_session_run_trace_record,
     get_session_memory_activity_record,
     list_session_history_messages,
+    search_session_context_records,
     update_session_history_message_feedback_record,
     update_session_history_message_record,
 )
@@ -50,6 +52,20 @@ async def get_session_history(session_id: str, limit: int | None = None):
     except SessionHistoryServiceError as exc:
         raise_http_error(exc)
     return ResponseModel(**session_history_response_kwargs(messages))
+
+
+@router.get("/session/{session_id}/history/search", response_model=ResponseModel)
+async def search_session_history(
+    session_id: str,
+    query: str = Query(..., min_length=1, max_length=200),
+    limit: int = Query(50, ge=1, le=100),
+):
+    """统一搜索会话消息、工具证据和 Run Trace。"""
+    try:
+        search = search_session_context_records(session_id, query=query, limit=limit)
+    except SessionHistoryServiceError as exc:
+        raise_http_error(exc)
+    return ResponseModel(**session_history_search_response_kwargs(search))
 
 
 @router.get("/session/{session_id}/history/evidence", response_model=ResponseModel)

@@ -13,6 +13,7 @@ from core.session_history_service import (
     collect_observability_run_trace_evidence_records,
     list_session_run_trace_records,
     list_session_history_messages,
+    search_session_context_records,
     update_session_history_message_feedback_record,
     update_session_history_message_record,
 )
@@ -226,6 +227,61 @@ class TestSessionHistoryService(unittest.TestCase):
             find_session_history_evidence_trace("sid-1", evidence_id="missing", memory_db=memory_db)
 
         self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_search_session_context_records_matches_messages_and_run_trace(self):
+        memory_db = FakeMemoryDB(
+            [
+                {
+                    "id": 12,
+                    "role": "assistant",
+                    "content": "Oracle 连接池异常，建议查看慢 SQL。",
+                    "created_at": "2026-05-18 10:00:00",
+                    "exec_trace": [
+                        {
+                            "tool": "db_execute_query",
+                            "toolCallId": "call-db-1",
+                            "evidence": {"evidence_id": "tev-db-1", "output_preview": "slow sql found"},
+                            "status": "done",
+                        }
+                    ],
+                },
+                {
+                    "id": 21,
+                    "role": "system",
+                    "content": "【AIOps Run Trace】tool after",
+                    "memory_type": "aiops_run_trace",
+                    "run_id": "run-1",
+                    "run_event_type": "tool:after",
+                    "run_event_ts": 10.0,
+                    "run_event_payload": {
+                        "run_id": "run-1",
+                        "tool_name": "db_execute_query",
+                        "tool_call_id": "call-db-1",
+                        "status": "done",
+                        "evidence_id": "tev-db-1",
+                        "evidence": {
+                            "evidence_id": "tev-db-1",
+                            "tool_name": "db_execute_query",
+                            "output_preview": "Oracle slow SQL evidence",
+                        },
+                        "result_meta": {"approval_ref": "approval-db-1"},
+                    },
+                },
+            ]
+        )
+
+        result = search_session_context_records("sid-1", query="Oracle slow", memory_db=memory_db)
+
+        self.assertEqual(result["query"], "Oracle slow")
+        self.assertEqual(result["summary"]["total"], 2)
+        self.assertEqual(result["summary"]["by_type"]["message"], 1)
+        self.assertEqual(result["summary"]["by_type"]["run_trace"], 1)
+        self.assertEqual(result["results"][0]["type"], "message")
+        self.assertEqual(result["results"][0]["message_id"], 12)
+        self.assertEqual(result["results"][0]["evidence_refs"][0]["id"], "tev-db-1")
+        self.assertEqual(result["results"][1]["type"], "run_trace")
+        self.assertEqual(result["results"][1]["run_id"], "run-1")
+        self.assertEqual(result["results"][1]["evidence_refs"][0]["id"], "tev-db-1")
 
     def test_collect_observability_run_trace_evidence_records_matches_investigation(self):
         memory_db = FakeMemoryDB(

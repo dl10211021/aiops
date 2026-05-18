@@ -764,3 +764,192 @@ def build_session_memory_activity(memory_db, session_id: str) -> dict:
         "feedback": feedback_rows,
         "pending_conflicts": pending_conflicts,
     }
+
+
+def search_session_context(
+    memory_db,
+    session_id: str,
+    *,
+    query: str,
+    limit: int = 50,
+) -> dict:
+    normalized_query = str(query or "").strip()
+    if not normalized_query:
+        raise ValueError("搜索关键词不能为空")
+    try:
+        result_limit = max(1, min(int(limit or 50), 100))
+    except (TypeError, ValueError):
+        result_limit = 50
+    terms = [term.lower() for term in normalized_query.split() if term.strip()]
+    if not terms:
+        raise ValueError("搜索关键词不能为空")
+
+    results: list[dict] = []
+    messages = get_user_visible_session_history(memory_db, session_id, limit=300)
+    for message in messages:
+        searchable = _searchable_message_text(message)
+        if not _text_matches_terms(searchable, terms):
+            continue
+        results.append(
+            {
+                "type": "message",
+                "session_id": session_id,
+                "message_id": message.get("_memory_id") or message.get("id"),
+                "role": message.get("role") or "",
+                "created_at": message.get("created_at") or message.get("timestamp"),
+                "title": _message_search_title(message),
+                "preview": _message_preview(message),
+                "score": _term_match_score(searchable, terms),
+                "evidence_refs": _message_evidence_refs(message),
+            }
+        )
+
+    for event in list_session_run_trace_events(memory_db, session_id, limit=300):
+        searchable = _searchable_run_trace_text(event)
+        if not _text_matches_terms(searchable, terms):
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        results.append(
+            {
+                "type": "run_trace",
+                "session_id": session_id,
+                "message_id": event.get("id"),
+                "run_id": event.get("run_id") or payload.get("run_id") or "",
+                "event_type": event.get("event_type") or "",
+                "created_at": event.get("created_at"),
+                "event_ts": event.get("event_ts"),
+                "title": _run_trace_search_title(event),
+                "preview": _run_trace_search_preview(event),
+                "score": _term_match_score(searchable, terms),
+                "evidence_refs": _run_trace_event_evidence_refs(event),
+            }
+        )
+
+    results.sort(key=_session_search_sort_key, reverse=True)
+    limited = results[:result_limit]
+    by_type: dict[str, int] = {}
+    for item in limited:
+        item_type = str(item.get("type") or "unknown")
+        by_type[item_type] = by_type.get(item_type, 0) + 1
+    return {
+        "query": normalized_query,
+        "session_id": session_id,
+        "limit": result_limit,
+        "results": limited,
+        "summary": {
+            "total": len(limited),
+            "matched_total": len(results),
+            "by_type": by_type,
+        },
+    }
+
+
+def _session_search_sort_key(item: Mapping) -> tuple[int, str]:
+    return (
+        int(item.get("score") or 0),
+        str(item.get("created_at") or item.get("event_ts") or ""),
+    )
+
+
+def _searchable_message_text(message: Mapping) -> str:
+    parts = [
+        str(message.get("role") or ""),
+        str(message.get("content") or ""),
+    ]
+    traces = message.get("exec_trace") or message.get("execTrace") or []
+    if isinstance(traces, list):
+        for trace in traces:
+            if isinstance(trace, Mapping):
+                parts.append(str(trace.get("tool") or ""))
+                parts.append(json.dumps(trace, ensure_ascii=False, sort_keys=True))
+    return "\n".join(parts).lower()
+
+
+def _searchable_run_trace_text(event: Mapping) -> str:
+    payload = event.get("payload") if isinstance(event.get("payload"), Mapping) else {}
+    return "\n".join(
+        [
+            str(event.get("run_id") or ""),
+            str(event.get("event_type") or ""),
+            str(event.get("summary") or ""),
+            json.dumps(payload, ensure_ascii=False, sort_keys=True),
+        ]
+    ).lower()
+
+
+def _text_matches_terms(text: str, terms: list[str]) -> bool:
+    return all(term in text for term in terms)
+
+
+def _term_match_score(text: str, terms: list[str]) -> int:
+    return sum(text.count(term) for term in terms)
+
+
+def _message_search_title(message: Mapping) -> str:
+    role = str(message.get("role") or "message")
+    message_id = message.get("_memory_id") or message.get("id") or ""
+    return f"{role} #{message_id}".strip()
+
+
+def _message_evidence_refs(message: Mapping) -> list[dict]:
+    refs: list[dict] = []
+    seen: set[str] = set()
+    traces = message.get("exec_trace") or message.get("execTrace") or []
+    if not isinstance(traces, list):
+        return refs
+    for trace in traces:
+        if not isinstance(trace, Mapping):
+            continue
+        evidence = trace.get("evidence") if isinstance(trace.get("evidence"), Mapping) else {}
+        evidence_id = str(
+            trace.get("evidenceId")
+            or trace.get("evidence_id")
+            or evidence.get("evidence_id")
+            or ""
+        ).strip()
+        tool_call_id = str(trace.get("toolCallId") or trace.get("tool_call_id") or "").strip()
+        ref_id = evidence_id or tool_call_id
+        if not ref_id or ref_id in seen:
+            continue
+        seen.add(ref_id)
+        refs.append(
+            {
+                "type": "tool_evidence" if evidence_id else "tool_trace",
+                "id": ref_id,
+                "tool": str(trace.get("tool") or evidence.get("tool_name") or "").strip(),
+                "status": str(trace.get("status") or evidence.get("result_status") or "").strip(),
+            }
+        )
+    return refs
+
+
+def _run_trace_search_title(event: Mapping) -> str:
+    event_type = str(event.get("event_type") or "run_trace")
+    run_id = str(event.get("run_id") or "").strip()
+    return f"{event_type} {run_id}".strip()
+
+
+def _run_trace_search_preview(event: Mapping) -> str:
+    summary = str(event.get("summary") or "").strip()
+    if summary:
+        return summary[:240]
+    payload = event.get("payload") if isinstance(event.get("payload"), Mapping) else {}
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)[:240]
+
+
+def _run_trace_event_evidence_refs(event: Mapping) -> list[dict]:
+    payload = event.get("payload") if isinstance(event.get("payload"), Mapping) else {}
+    evidence = payload.get("evidence") if isinstance(payload.get("evidence"), Mapping) else {}
+    evidence_id = str(payload.get("evidence_id") or evidence.get("evidence_id") or "").strip()
+    tool_call_id = str(payload.get("tool_call_id") or evidence.get("tool_call_id") or "").strip()
+    ref_id = evidence_id or tool_call_id
+    if not ref_id:
+        return []
+    return [
+        {
+            "type": "tool_evidence" if evidence_id else "tool_trace",
+            "id": ref_id,
+            "tool": str(payload.get("tool_name") or payload.get("tool") or evidence.get("tool_name") or "").strip(),
+            "status": str(payload.get("status") or evidence.get("result_status") or "").strip(),
+        }
+    ]

@@ -55,6 +55,7 @@ class TestSessionHistoryRoutes(unittest.TestCase):
         paths = {route.path for route in routes.router.routes}
 
         self.assertIn("/session/{session_id}/history", paths)
+        self.assertIn("/session/{session_id}/history/search", paths)
         self.assertIn("/session/{session_id}/history/run-trace", paths)
         self.assertIn("/session/{session_id}/history/run-trace/audit-summary", paths)
         self.assertIn("/session/{session_id}/history/run-trace/learning-preview", paths)
@@ -69,6 +70,7 @@ class TestSessionHistoryRoutes(unittest.TestCase):
 
         with patch("core.memory.memory_db", memory_db):
             list_response = asyncio.run(session_history_routes.get_session_history("sid-1"))
+            search_response = asyncio.run(session_history_routes.search_session_history("sid-1", query="hello"))
             clear_response = asyncio.run(session_history_routes.delete_session_history("sid-1"))
             update_response = asyncio.run(
                 session_history_routes.update_session_history_message(
@@ -111,6 +113,9 @@ class TestSessionHistoryRoutes(unittest.TestCase):
 
         self.assertEqual(list_response.status, "success")
         self.assertEqual(list_response.data, {"messages": memory_db.messages})
+        self.assertEqual(search_response.status, "success")
+        self.assertEqual(search_response.data["search"]["summary"]["total"], 1)
+        self.assertEqual(search_response.data["search"]["results"][0]["type"], "message")
         self.assertEqual(clear_response.status, "success")
         self.assertEqual(clear_response.message, "会话记录已清空")
         self.assertEqual(update_response.status, "success")

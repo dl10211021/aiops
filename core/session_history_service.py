@@ -12,6 +12,7 @@ from core.session_history import (
     find_session_exec_trace,
     get_user_visible_session_history,
     list_session_run_trace_events,
+    search_session_context,
     summarize_session_run_trace_audit,
     summarize_session_run_trace_events,
     update_session_message_content,
@@ -41,6 +42,26 @@ def list_session_history_messages(
             session_id,
             limit=limit,
         )
+    except Exception as exc:
+        raise SessionHistoryServiceError(500, str(exc)) from exc
+
+
+def search_session_context_records(
+    session_id: str,
+    *,
+    query: str,
+    limit: int = 50,
+    memory_db: Any | None = None,
+) -> dict:
+    try:
+        return search_session_context(
+            _resolve_memory_db(memory_db),
+            session_id,
+            query=query,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise SessionHistoryServiceError(400, str(exc)) from exc
     except Exception as exc:
         raise SessionHistoryServiceError(500, str(exc)) from exc
 
