@@ -449,6 +449,30 @@ def test_run_trace_context_prompt_audit_summary_is_visible():
     assert "/history/run-trace/audit-summary?" in session_api
 
 
+def test_session_context_search_is_exposed_in_thinking_panel():
+    source = Path(
+        "frontend/src/features/sessions/AiThinkingChainPanel.tsx"
+    ).read_text(encoding="utf-8")
+    session_api = Path("frontend/src/api/sessionHistory.ts").read_text(encoding="utf-8")
+    types = Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
+
+    assert "export interface SessionContextSearchResult" in types
+    assert "export interface SessionContextSearchResponse" in types
+    assert "export async function searchSessionContext" in session_api
+    assert "/history/search?" in session_api
+    assert "getSessionContextSearch" not in session_api
+    assert "searchSessionContext," in source
+    assert "const [sessionSearchQuery, setSessionSearchQuery] = useState('')" in source
+    assert "const [sessionSearchResult, setSessionSearchResult] = useState<SessionContextSearchResponse | null>(null)" in source
+    assert "会话搜索" in source
+    assert "搜索当前会话消息、工具证据和 Run Trace" in source
+    assert "SearchSessionPanel" in source
+    assert "searchSessionContext(sessionId, sessionSearchQuery" in source
+    assert "result.type === 'run_trace'" in source
+    assert "result.evidence_refs" in source
+    assert "定位消息" in source
+
+
 def test_dashboard_shows_global_run_trace_audit_overview():
     dashboard = Path("frontend/src/components/views/Dashboard.tsx").read_text(encoding="utf-8")
     dashboard_api = Path("frontend/src/api/dashboard.ts").read_text(encoding="utf-8")

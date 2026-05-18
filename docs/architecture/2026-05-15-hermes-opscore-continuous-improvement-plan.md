@@ -1019,3 +1019,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只读 API，不改会话写入、不改工具执行、不改审批、不自动注入 prompt，不影响告警、巡检或资产中心。
 - 遗留风险：当前使用有界内存扫描和关键词匹配，尚未接入 SQLite FTS5/CJK、跨会话检索、审批记录独立索引和前端搜索面板；大规模历史检索需要后续索引化。
 - 下一轮建议：这个功能到此收手。后续更高价值方向是把该搜索入口接入前端会话面板，或做多 Agent 全局/分组权限上限的产品化入口。
+
+### 2026-05-18 Round 78：会话搜索前端入口
+
+- 完成：`AiThinkingChainPanel` 新增“搜索”Tab，接入 `searchSessionContext` API，可在当前会话内搜索消息、工具证据和 Run Trace；搜索结果展示消息/Run Trace 类型、run_id、event_type、证据引用、摘要和“定位消息”入口。
+- 验证：`python -m pytest tests/test_tool_policy_runtime_frontend.py::test_session_context_search_is_exposed_in_thinking_panel -q`；`cd frontend && npm run build`；提交前继续跑 frontend 相关测试、preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：Session Search 不再只是后端 API 或工具能力，开始成为会话侧可用的用户入口，补齐从“搜得到”到“看得到、点得到”的最小闭环。
+- OpsCore 主线影响：只读前端查询，不改变会话消息、不自动注入上下文、不触发工具执行或审批，不影响告警、巡检或资产中心。
+- 遗留风险：当前只支持当前会话搜索，定位消息仍依赖现有滚动事件；跨会话搜索、FTS/CJK、高亮匹配词和审批记录独立结果仍待后续切片。
+- 下一轮建议：这个功能到此收手。后续更高价值方向是做多 Agent 全局/分组权限上限的产品化入口，或为 Session Search 增加跨会话索引。

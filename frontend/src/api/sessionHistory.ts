@@ -5,6 +5,7 @@ import type {
   RunTraceAuditSummary,
   RunTraceEvent,
   RunTraceRun,
+  SessionContextSearchResponse,
   SessionMemoryActivity,
   SessionRunLearningCandidateResult,
   SessionRunLearningPreview,
@@ -66,6 +67,16 @@ export async function getSessionHistoryEvidenceTrace(
     `/session/${sessionId}/history/evidence?${search.toString()}`,
     options,
 )
+}
+
+export async function searchSessionContext(sessionId: string, query: string, limit = 20, options?: RequestInit) {
+  const search = new URLSearchParams()
+  search.set('query', query)
+  search.set('limit', String(limit))
+  return request<{ search: SessionContextSearchResponse }>(
+    `/session/${sessionId}/history/search?${search.toString()}`,
+    options,
+  )
 }
 
 type SessionRunTraceRequestOptions = RequestInit & { runId?: string }

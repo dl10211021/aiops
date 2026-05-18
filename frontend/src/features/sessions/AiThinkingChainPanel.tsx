@@ -8,6 +8,7 @@ import type {
   RunTraceAuditSummary,
   RunTraceEvent,
   RunTraceRun,
+  SessionContextSearchResponse,
   SessionMemoryActivity,
   SessionRunLearningPreview,
 } from '@/types'
@@ -20,6 +21,7 @@ import {
   getSessionRunLearningPreview,
   getSessionRunTrace,
   getSessionRunTraceAuditSummary,
+  searchSessionContext,
 } from '@/api/sessionHistory'
 import { toolLabel } from '@/utils/assetDisplay'
 import { ApprovalInfo, ApprovalStatusBadge } from '@/components/views/ApprovalCenterShared'
@@ -579,7 +581,11 @@ export default function AiThinkingChainPanel({
   const [query, setQuery] = useState('')
   const [selectedGroupId, setSelectedGroupId] = useState('all')
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'trace' | 'memory'>(defaultTab)
+  const [activeTab, setActiveTab] = useState<'trace' | 'memory' | 'search'>(defaultTab)
+  const [sessionSearchQuery, setSessionSearchQuery] = useState('')
+  const [sessionSearchResult, setSessionSearchResult] = useState<SessionContextSearchResponse | null>(null)
+  const [sessionSearchLoading, setSessionSearchLoading] = useState(false)
+  const [sessionSearchError, setSessionSearchError] = useState('')
   const [memoryActivity, setMemoryActivity] = useState<SessionMemoryActivity | null>(null)
   const [memoryLoading, setMemoryLoading] = useState(false)
   const [runTraceEvents, setRunTraceEvents] = useState<RunTraceEvent[]>([])
@@ -620,7 +626,47 @@ export default function AiThinkingChainPanel({
   useEffect(() => {
     setSelectedRunTraceId('')
     setRunTraceLearningPreview(null)
+    setSessionSearchResult(null)
+    setSessionSearchError('')
   }, [sessionId])
+
+  useEffect(() => {
+    if (displayTab !== 'search') {
+      setSessionSearchLoading(false)
+      return
+    }
+    const needle = sessionSearchQuery.trim()
+    if (!sessionId || needle.length < 2) {
+      setSessionSearchResult(null)
+      setSessionSearchError('')
+      setSessionSearchLoading(false)
+      return
+    }
+    let cancelled = false
+    const controller = new AbortController()
+    setSessionSearchLoading(true)
+    searchSessionContext(sessionId, sessionSearchQuery, 20, { signal: controller.signal })
+      .then((response) => {
+        if (!cancelled) {
+          setSessionSearchResult(response.data.search)
+          setSessionSearchError('')
+        }
+      })
+      .catch((error) => {
+        if (isAbortError(error)) return
+        if (!cancelled) {
+          setSessionSearchResult(null)
+          setSessionSearchError(error instanceof Error ? error.message : '会话搜索失败')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSessionSearchLoading(false)
+      })
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [displayTab, sessionId, sessionSearchQuery, deferredMessages.length])
 
   useEffect(() => {
     if (displayTab !== 'memory') {
@@ -820,14 +866,34 @@ export default function AiThinkingChainPanel({
               >
                 记忆
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('search')}
+                className={`rounded px-2 py-1 ${activeTab === 'search' ? 'bg-ops-accent text-ops-ink' : 'text-ops-subtext hover:text-ops-text'}`}
+              >
+                搜索
+              </button>
             </div>
           )}
           <span className="font-mono text-[10px] font-normal text-ops-overlay">
             {displayTab === 'trace'
               ? (sessionId ? `${traceGroups.length} 轮 / ${runTraceEvents.length} 事件` : '未绑定')
-              : (sessionId ? `${memoryActivity?.summary.referenced_count || 0} 引用` : '未绑定')}
+              : displayTab === 'memory'
+                ? (sessionId ? `${memoryActivity?.summary.referenced_count || 0} 引用` : '未绑定')
+                : (sessionId ? `${sessionSearchResult?.summary.total || 0} 命中` : '未绑定')}
           </span>
         </div>
+        {displayTab === 'search' && (
+          <div className="space-y-2">
+            <input
+              value={sessionSearchQuery}
+              onChange={(event) => setSessionSearchQuery(event.target.value)}
+              className="h-9 w-full rounded-xl border border-ops-surface1/80 bg-ops-panel/65 px-3 text-xs text-ops-text outline-none placeholder:text-ops-overlay focus:border-ops-accent/60"
+              placeholder="搜索当前会话消息、工具证据和 Run Trace"
+            />
+            <div className="text-[10px] text-ops-overlay">会话搜索只读返回历史证据，采用前仍要结合当前资产实时状态。</div>
+          </div>
+        )}
         {displayTab === 'trace' && (
           <>
             <input
@@ -859,6 +925,14 @@ export default function AiThinkingChainPanel({
       <div className="min-h-0 flex-1 overflow-y-auto bg-transparent px-3 py-3">
         {displayTab === 'memory' ? (
           <MemoryActivityPanel activity={memoryActivity} loading={memoryLoading} />
+        ) : displayTab === 'search' ? (
+          <SearchSessionPanel
+            query={sessionSearchQuery}
+            result={sessionSearchResult}
+            loading={sessionSearchLoading}
+            error={sessionSearchError}
+            onLocateMessage={(messageId) => scrollChatMessage(`mem-${messageId}`)}
+          />
         ) : (
           <div className="space-y-3">
             <RunTraceStrip
@@ -1616,6 +1690,95 @@ function RunTraceApprovalDialog({
             </div>
           ) : null}
         </div>
+      </section>
+    </div>
+  )
+}
+
+function SearchSessionPanel({
+  query,
+  result,
+  loading,
+  error,
+  onLocateMessage,
+}: {
+  query: string
+  result: SessionContextSearchResponse | null
+  loading: boolean
+  error: string
+  onLocateMessage: (messageId: string | number) => void
+}) {
+  const trimmed = query.trim()
+  if (trimmed.length < 2) {
+    return (
+      <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
+        输入至少 2 个字符，搜索当前会话消息、工具证据和 Run Trace。
+      </div>
+    )
+  }
+  if (loading) {
+    return (
+      <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
+        正在搜索会话历史...
+      </div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="rounded-md border border-ops-alert/35 bg-ops-alert/10 px-2.5 py-3 text-xs text-ops-alert">
+        {error}
+      </div>
+    )
+  }
+  if (!result || result.results.length === 0) {
+    return (
+      <div className="rounded-md border border-ops-surface0/80 bg-ops-dark/30 px-2.5 py-3 text-xs text-ops-subtext">
+        当前会话没有匹配的历史消息、工具证据或 Run Trace。
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-3 gap-2">
+        <MemoryStat label="总命中" value={result.summary.total} />
+        <MemoryStat label="消息" value={result.summary.by_type.message || 0} />
+        <MemoryStat label="Run Trace" value={result.summary.by_type.run_trace || 0} />
+      </div>
+      <section className="space-y-2">
+        <h4 className="text-xs font-semibold text-ops-text">会话搜索</h4>
+        {result.results.map((result, index) => (
+          <article key={`${result.type}-${result.message_id || result.run_id || index}`} className="rounded-md border border-ops-surface0 bg-ops-dark/30 px-3 py-2">
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              <span className={`rounded-full border px-2 py-0.5 font-semibold ${result.type === 'run_trace' ? 'border-ops-accent/35 text-ops-accent' : 'border-ops-surface1 text-ops-subtext'}`}>
+                {result.type === 'run_trace' ? 'Run Trace' : '消息'}
+              </span>
+              {result.run_id && <span className="max-w-[160px] truncate font-mono text-[10px] text-ops-overlay">{result.run_id}</span>}
+              {result.event_type && <span className="rounded border border-ops-surface1 px-1.5 py-0.5 text-[10px] text-ops-overlay">{result.event_type}</span>}
+              <span className="ml-auto font-mono text-[10px] text-ops-overlay">{result.created_at || result.event_ts || ''}</span>
+            </div>
+            <div className="mt-2 text-xs font-semibold text-ops-text">{result.title || '历史命中'}</div>
+            <p className="mt-1 line-clamp-3 text-xs leading-5 text-ops-subtext">{result.preview || '暂无摘要'}</p>
+            {result.evidence_refs && result.evidence_refs.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {result.evidence_refs.slice(0, 4).map((ref, refIndex) => (
+                  <span key={`${ref.id || ref.tool || refIndex}`} className="rounded-full border border-ops-surface1 px-2 py-0.5 text-[10px] text-ops-overlay">
+                    {ref.tool || 'evidence'} {ref.id ? `· ${ref.id}` : ''}
+                  </span>
+                ))}
+              </div>
+            )}
+            {result.message_id !== undefined && (
+              <button
+                type="button"
+                onClick={() => onLocateMessage(result.message_id as string | number)}
+                className="mt-2 rounded border border-ops-surface1 px-2 py-1 text-[10px] text-ops-subtext hover:border-ops-accent/60 hover:text-ops-accent"
+              >
+                定位消息
+              </button>
+            )}
+          </article>
+        ))}
       </section>
     </div>
   )

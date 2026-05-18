@@ -291,6 +291,38 @@ export interface RunTraceAuditSummary {
   module_counts?: Record<string, { total: number; enabled: number; disabled: number }>
 }
 
+export interface SessionContextSearchResult {
+  type: 'message' | 'run_trace' | string
+  session_id: string
+  message_id?: string | number
+  role?: string
+  run_id?: string
+  event_type?: string
+  created_at?: string | number
+  event_ts?: number
+  title?: string
+  preview?: string
+  score?: number
+  evidence_refs?: Array<{
+    type?: string
+    id?: string
+    tool?: string
+    status?: string
+  }>
+}
+
+export interface SessionContextSearchResponse {
+  query: string
+  session_id: string
+  limit: number
+  results: SessionContextSearchResult[]
+  summary: {
+    total: number
+    matched_total: number
+    by_type: Record<string, number>
+  }
+}
+
 export interface SessionRunLearningPreview {
   session_id: string
   run_id?: string
