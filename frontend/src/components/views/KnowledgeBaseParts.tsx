@@ -2494,6 +2494,7 @@ function LearningCandidateReviewCard({ item, compact = false }: { item: Learning
   const review = item.review
   if (!review) return null
   const reviewEvents = item.review_events || []
+  const modelReviews = item.model_reviews || []
   const riskClass = review.risk_level === 'low'
     ? 'border-emerald-300/35 text-emerald-200'
     : review.risk_level === 'high'
@@ -2525,6 +2526,28 @@ function LearningCandidateReviewCard({ item, compact = false }: { item: Learning
           ))}
         </div>
       )}
+      {!compact && modelReviews.length > 0 && (
+        <div className="mt-3 rounded border border-ops-surface1/70 bg-ops-panel/30 px-2 py-2">
+          <div className="text-[11px] font-semibold text-ops-overlay">模型交叉审核</div>
+          <div className="mt-2 grid gap-2 md:grid-cols-2">
+            {modelReviews.map((modelReview, index) => {
+              const label = modelReview.reviewer_role === 'primary' ? '主模型审核' : '辅助模型审核'
+              return (
+                <div key={`${modelReview.reviewer_role || 'model'}-${modelReview.reviewed_at || index}`} className="rounded border border-ops-surface1/70 bg-ops-dark/35 px-2 py-2">
+                  <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                    <span className="font-semibold text-ops-text">{label}</span>
+                    <span className="rounded border border-ops-surface1 px-1.5 py-0.5 text-ops-overlay">{modelReview.decision || 'needs_human_review'}</span>
+                    <span className="rounded border border-ops-surface1 px-1.5 py-0.5 text-ops-overlay">{modelReview.risk_level || 'medium'}</span>
+                  </div>
+                  <div className="mt-1 truncate text-[10px] text-ops-overlay" title={modelReview.model_id || modelReview.reviewer || ''}>
+                    {modelReview.model_id || modelReview.reviewer || 'model_review'}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
       {!compact && reviewEvents.length > 0 && (
         <div className="mt-3 rounded border border-ops-surface1/70 bg-ops-panel/30 px-2 py-2">
           <div className="text-[11px] font-semibold text-ops-overlay">审核轨迹</div>
@@ -2532,6 +2555,7 @@ function LearningCandidateReviewCard({ item, compact = false }: { item: Learning
             {reviewEvents.slice(-4).reverse().map((event, index) => (
               <div key={`${event.timestamp}-${event.trigger}-${index}`} className="flex flex-wrap items-center gap-2 text-[10px] text-ops-subtext">
                 <span className="rounded border border-ops-surface1 px-1.5 py-0.5 text-ops-overlay">{event.trigger || 'review'}</span>
+                {event.reviewer_role && <span>{event.reviewer_role}</span>}
                 <span>{event.decision || 'needs_human_review'}</span>
                 <span>{event.risk_level || 'medium'}</span>
                 <span>{event.actor || event.reviewer || 'system'}</span>

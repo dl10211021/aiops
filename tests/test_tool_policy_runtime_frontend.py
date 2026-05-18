@@ -200,12 +200,18 @@ def test_memory_candidates_panel_splits_runbook_and_skill_candidates():
     assert "onUpdateLearningQuality" in knowledge_parts
     assert "quality_events" in Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
     assert "review_events" in Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
+    assert "model_reviews" in Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
+    assert "reviewer_role" in Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
     assert "review?: {" in Path("frontend/src/types/index.ts").read_text(encoding="utf-8")
     assert "LearningCandidateReviewCard" in knowledge_parts
     assert "辅助审核" in knowledge_parts
+    assert "主模型审核" in knowledge_parts
+    assert "辅助模型审核" in knowledge_parts
     assert "审核轨迹" in knowledge_parts
+    assert "item.model_reviews" in knowledge_parts
     assert "item.review_events" in knowledge_parts
     assert "event.trigger" in knowledge_parts
+    assert "event.reviewer_role" in knowledge_parts
     assert "review.missing_items" in knowledge_parts
     assert "review.suggestions" in knowledge_parts
     assert "查看详情" in knowledge_parts

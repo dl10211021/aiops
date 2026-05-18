@@ -1001,3 +1001,12 @@ Prompt 不再当成一段大文本，而是按职责组装：
 - OpsCore 主线影响：只做显式按钮同步，不后台自动写入、不自动生成根因、不改变工具执行权限或审批、不影响告警、巡检、资产中心。
 - 遗留风险：当前同步范围默认是在线会话最近 Run Trace；离线历史、大规模分页和自动定时同步仍需要单独设计。
 - 下一轮建议：这个功能到此收手。后续更高价值方向是把主/副模型审核接入学习候选 `review_events`，或做可观测排查证据的根因排序辅助。
+
+### 2026-05-18 Round 76：学习候选主/副模型审核轨迹
+
+- 完成：学习候选在创建、质量清单刷新、批准/发布 gate 刷新时新增 `model_reviews`，分别记录主模型审核和辅助模型审核的角色、模型标识、决策、风险、缺失项和建议；`review_events` 同步投影主/副模型审核事件，前端“辅助审核”卡片增加“模型交叉审核”只读展示。
+- 验证：`python -m pytest tests/test_file_memory_store.py tests/test_tool_policy_runtime_frontend.py -q`；`python -m compileall core`；提交前继续跑 frontend build、preflight、staged audit 和 GitNexus staged detect。
+- Hermes 差距变化：学习候选从“单一辅助审核结论”推进到“主模型/辅助模型均可追踪”的交叉审核轨迹，更接近 Hermes 式可审计、可迭代的 skill/runbook 学习链。
+- OpsCore 主线影响：只记录审核投影和前端只读展示，不接真实 LLM 调用、不自动批准、不自动发布、不写入长期检索上下文，不影响告警、巡检、资产中心或执行 gate。
+- 遗留风险：当前主/副模型审核仍复用规则审核结论作为结构化投影，尚未接入真实主模型和辅助模型调用；下一步应先做审核执行器接口和失败降级，再考虑异步模型复核。
+- 下一轮建议：这个功能到此收手。后续更高价值方向是做 Session Search / Context Engine 的最小检索闭环，或继续补多 Agent 全局/分组权限上限。

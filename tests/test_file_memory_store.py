@@ -271,8 +271,16 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertEqual(learning_candidates[0]["review"]["decision"], "needs_human_review")
         self.assertIn(learning_candidates[0]["review"]["risk_level"], {"medium", "high"})
         self.assertIn("rule_based_assistant_review", learning_candidates[0]["review"]["reviewer"])
+        model_reviews = learning_candidates[0]["model_reviews"]
+        self.assertEqual([review["reviewer_role"] for review in model_reviews], ["primary", "assistant"])
+        self.assertEqual(model_reviews[0]["decision"], "needs_human_review")
+        self.assertEqual(model_reviews[1]["decision"], "needs_human_review")
+        self.assertEqual(model_reviews[0]["trigger"], "candidate_created")
+        self.assertEqual(model_reviews[1]["trigger"], "candidate_created")
         self.assertEqual(learning_candidates[0]["review_events"][0]["decision"], "needs_human_review")
         self.assertEqual(learning_candidates[0]["review_events"][0]["trigger"], "candidate_created")
+        self.assertEqual(learning_candidates[0]["review_events"][1]["reviewer_role"], "primary")
+        self.assertEqual(learning_candidates[0]["review_events"][2]["reviewer_role"], "assistant")
         checklist = {row["key"]: row for row in learning_candidates[0]["quality_checklist"]}
         self.assertIn("source_message", checklist)
         self.assertIn("tool_evidence", checklist)
@@ -313,7 +321,10 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertEqual(updated_quality["review"]["missing_items"], [])
         self.assertEqual(updated_quality["review_events"][-1]["decision"], "accept")
         self.assertEqual(updated_quality["review_events"][-1]["trigger"], "quality_checklist_updated")
+        self.assertEqual(updated_quality["review_events"][-1]["reviewer_role"], "assistant")
         self.assertIn("补齐发布前检查项", updated_quality["review_events"][-1]["reason"])
+        self.assertEqual(updated_quality["model_reviews"][-1]["decision"], "accept")
+        self.assertEqual(updated_quality["model_reviews"][-1]["reviewer_role"], "assistant")
         approved_candidate = self.store.update_learning_candidate_status(
             learning_candidates[0]["id"],
             status="approved",
@@ -324,6 +335,7 @@ class FileMemoryStoreTests(unittest.TestCase):
         self.assertEqual(approved_candidate["review"]["decision"], "accept")
         self.assertEqual(approved_candidate["review_events"][-1]["decision"], "accept")
         self.assertEqual(approved_candidate["review_events"][-1]["trigger"], "status_gate")
+        self.assertEqual(approved_candidate["review_events"][-1]["reviewer_role"], "assistant")
         published_candidate = self.store.update_learning_candidate_status(
             learning_candidates[0]["id"],
             status="published",

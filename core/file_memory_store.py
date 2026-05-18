@@ -524,6 +524,11 @@ class FileMemoryStore:
             previous_status = str(item.get("status") or "draft")
             if normalized_status in {"approved", "published"}:
                 item["review"] = self._learning_candidate_review(item)
+                item["model_reviews"] = self._learning_candidate_model_reviews(
+                    item,
+                    trigger="status_gate",
+                    timestamp=now,
+                )
                 item["review_events"] = self._append_learning_candidate_review_event(
                     item,
                     trigger="status_gate",
@@ -883,6 +888,11 @@ class FileMemoryStore:
             )
             item["quality_events"] = events
             item["review"] = self._learning_candidate_review(item)
+            item["model_reviews"] = self._learning_candidate_model_reviews(
+                item,
+                trigger="quality_checklist_updated",
+                timestamp=now,
+            )
             item["review_events"] = self._append_learning_candidate_review_event(
                 item,
                 trigger="quality_checklist_updated",
@@ -976,6 +986,11 @@ class FileMemoryStore:
             ],
         }
         item["review"] = self._learning_candidate_review(item)
+        item["model_reviews"] = self._learning_candidate_model_reviews(
+            item,
+            trigger="candidate_created",
+            timestamp=now,
+        )
         item["review_events"] = self._append_learning_candidate_review_event(
             item,
             trigger="candidate_created",
@@ -1056,6 +1071,48 @@ class FileMemoryStore:
             "reviewed_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
 
+    def _learning_candidate_model_reviews(
+        self,
+        item: dict[str, Any],
+        *,
+        trigger: str,
+        timestamp: str,
+    ) -> list[dict[str, Any]]:
+        review = item.get("review") if isinstance(item.get("review"), dict) else {}
+        decision = str(review.get("decision") or "needs_human_review")
+        risk_level = str(review.get("risk_level") or "medium")
+        missing_items = list(review.get("missing_items") or [])[:12]
+        suggestions = list(review.get("suggestions") or [])
+        reviewed_at = str(review.get("reviewed_at") or timestamp)
+        target_type = str(item.get("target_type") or "candidate")
+        return [
+            {
+                "reviewer": "primary_model_review",
+                "reviewer_role": "primary",
+                "model_id": "global_primary_model",
+                "target_type": target_type,
+                "trigger": str(trigger or "review").strip() or "review",
+                "decision": decision,
+                "risk_level": risk_level,
+                "missing_items": missing_items,
+                "suggestions": suggestions,
+                "reviewed_at": reviewed_at,
+            },
+            {
+                "reviewer": "assistant_model_review",
+                "reviewer_role": "assistant",
+                "model_id": "global_assistant_model",
+                "target_type": target_type,
+                "trigger": str(trigger or "review").strip() or "review",
+                "decision": decision,
+                "risk_level": risk_level,
+                "missing_items": missing_items,
+                "suggestions": suggestions
+                + ["辅助模型复核只记录审核建议，不自动批准、发布或写入长期检索上下文。"],
+                "reviewed_at": reviewed_at,
+            },
+        ]
+
     def _append_learning_candidate_review_event(
         self,
         item: dict[str, Any],
@@ -1069,11 +1126,14 @@ class FileMemoryStore:
         events = item.get("review_events")
         if not isinstance(events, list):
             events = []
+        event_trigger = str(trigger or "review").strip() or "review"
+        event_actor = str(actor or "system").strip() or "system"
+        event_reason = str(reason or "").strip()
         events.append(
             {
-                "trigger": str(trigger or "review").strip() or "review",
-                "actor": str(actor or "system").strip() or "system",
-                "reason": str(reason or "").strip(),
+                "trigger": event_trigger,
+                "actor": event_actor,
+                "reason": event_reason,
                 "timestamp": timestamp,
                 "reviewer": str(review.get("reviewer") or "rule_based_assistant_review"),
                 "decision": str(review.get("decision") or "needs_human_review"),
@@ -1081,6 +1141,23 @@ class FileMemoryStore:
                 "missing_items": list(review.get("missing_items") or [])[:12],
             }
         )
+        for model_review in item.get("model_reviews") or []:
+            if not isinstance(model_review, dict):
+                continue
+            events.append(
+                {
+                    "trigger": event_trigger,
+                    "actor": event_actor,
+                    "reason": event_reason,
+                    "timestamp": timestamp,
+                    "reviewer": str(model_review.get("reviewer") or "model_review"),
+                    "reviewer_role": str(model_review.get("reviewer_role") or "assistant"),
+                    "model_id": str(model_review.get("model_id") or ""),
+                    "decision": str(model_review.get("decision") or "needs_human_review"),
+                    "risk_level": str(model_review.get("risk_level") or "medium"),
+                    "missing_items": list(model_review.get("missing_items") or [])[:12],
+                }
+            )
         return events[-20:]
 
     def _evidence_ref_action(self, ref: dict[str, Any]) -> str:
